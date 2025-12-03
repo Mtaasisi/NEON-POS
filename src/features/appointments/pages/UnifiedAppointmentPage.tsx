@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
+import GlassTabs from '../../../features/shared/components/ui/GlassTabs';
 import SearchBar from '../../../features/shared/components/ui/SearchBar';
 import GlassSelect from '../../../features/shared/components/ui/GlassSelect';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
@@ -190,36 +191,20 @@ const UnifiedAppointmentPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Top Tabs Navigation */}
-        <GlassCard className="p-0 overflow-hidden">
-          <div className="border-b border-gray-200">
-            <nav className="flex space-x-0" role="tablist">
-              {availableTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => handleTabChange(tab.id)}
-                  className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-all duration-200 border-b-2 ${
-                    activeTab === tab.id
-                      ? `border-${tab.color}-500 text-${tab.color}-600 bg-${tab.color}-50`
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                  role="tab"
-                  aria-selected={activeTab === tab.id}
-                >
-                  <div className={`${activeTab === tab.id ? `text-${tab.color}-600` : 'text-gray-400'}`}>
-                    {tab.icon}
-                  </div>
-                  <span>{tab.label}</span>
-                  {tab.adminOnly && (
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                      Admin
-                    </span>
-                  )}
-                </button>
-              ))}
-            </nav>
-          </div>
-        </GlassCard>
+        {/* Modern Top Tabs Navigation */}
+        <GlassTabs
+          tabs={availableTabs.map(tab => ({
+            id: tab.id,
+            label: tab.label,
+            icon: tab.icon,
+            description: tab.description,
+            badge: tab.adminOnly ? 'Admin' : undefined
+          }))}
+          activeTab={activeTab}
+          onTabChange={(tabId) => handleTabChange(tabId as AppointmentTab)}
+          variant="modern"
+          size="md"
+        />
 
         {/* Appointment Content */}
         <div className="w-full">

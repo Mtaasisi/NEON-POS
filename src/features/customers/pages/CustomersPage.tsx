@@ -15,7 +15,7 @@ import {
   Star, UserCheck, Tag, Download, MessageSquare, Trash2, Plus, Grid, List, Filter, SortAsc,
   AlertCircle, UserPlus, FileSpreadsheet, Users, DollarSign, Activity, MessageCircle, BarChart3, Award,
   Clock, Phone, Mail, Edit, Eye, CheckCircle, XCircle, BarChart2, Crown, Calendar, RotateCcw, RefreshCw,
-  ChevronLeft, ChevronRight, Gift, CalendarDays, Clock3, UserPlus2, AlertTriangle, X
+  ChevronLeft, ChevronRight, Gift, CalendarDays, Clock3, UserPlus2, AlertTriangle, X, Upload
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import BulkSMSModal from '../../reports/components/BulkSMSModal';
@@ -1389,14 +1389,22 @@ const CustomersPage = () => {
                 New Customer
               </GlassButton>
               {['admin', 'customer-care'].includes(currentUser?.role || '') && (
-                <div className="relative">
+                <>
+                  <GlassButton
+                    onClick={() => setShowExcelImport(true)}
+                    icon={<FileSpreadsheet size={18} />}
+                    className="bg-gradient-to-r from-green-500 to-emerald-600 text-white"
+                  >
+                    Import Excel
+                  </GlassButton>
+                  <div className="relative">
                   <div ref={importButtonRef}>
                     <GlassButton
                       onClick={() => setShowImportMenu(!showImportMenu)}
-                      icon={<FileSpreadsheet size={18} />}
-                      className="bg-gradient-to-r from-green-500 to-emerald-600 text-white"
+                      icon={<Download size={18} />}
+                      variant="secondary"
                     >
-                      Import / Update
+                      More Actions
                       <ChevronRight 
                         size={16} 
                         className={`ml-1 transition-transform ${showImportMenu ? 'rotate-90' : ''}`} 
@@ -1412,16 +1420,6 @@ const CustomersPage = () => {
                     <div className="py-1 min-w-[200px]">
                       <button
                         onClick={() => {
-                          setShowExcelImport(true);
-                          setShowImportMenu(false);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                      >
-                        <FileSpreadsheet size={16} />
-                        Import New Customers
-                      </button>
-                      <button
-                        onClick={() => {
                           setShowCustomerUpdateImport(true);
                           setShowImportMenu(false);
                         }}
@@ -1433,8 +1431,9 @@ const CustomersPage = () => {
                     </div>
                   </DropdownPortal>
                 </div>
-              )}
-            </>
+              </>
+            )}
+          </>
           ) : (
             <>
               <GlassButton

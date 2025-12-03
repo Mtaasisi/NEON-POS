@@ -23,6 +23,7 @@ import {
 import toast from 'react-hot-toast';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
+import GlassTabs from '../../../features/shared/components/ui/GlassTabs';
 import { supabase } from '../../../lib/supabaseClient';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
@@ -477,39 +478,52 @@ const IntegrationSettingsPage: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-          <SettingsIcon className="w-8 h-8 text-blue-600" />
-          Integration Settings
-        </h1>
-        <p className="text-gray-600 mt-2">
-          Configure SMS, WhatsApp, Mobile Money, and Email integrations
-        </p>
+      {/* Header - Enhanced Modal Style */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-8">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+            <SettingsIcon className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">Integration Settings</h1>
+            <p className="text-sm text-gray-600">Configure SMS, WhatsApp, Mobile Money, and Email integrations</p>
+          </div>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200 overflow-x-auto">
-        {[
-          { id: 'sms', label: 'SMS', icon: Smartphone },
-          { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
-          { id: 'mobile-money', label: 'Mobile Money', icon: CreditCard },
-          { id: 'email', label: 'Email', icon: Mail }
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 ${
-              activeTab === tab.id
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <tab.icon className="w-5 h-5" />
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Modern Tabs */}
+      <GlassTabs
+        tabs={[
+          { 
+            id: 'sms', 
+            label: 'SMS', 
+            icon: <Smartphone className="w-5 h-5" />,
+            badge: config.sms.enabled ? '✓' : undefined
+          },
+          { 
+            id: 'whatsapp', 
+            label: 'WhatsApp', 
+            icon: <MessageCircle className="w-5 h-5" />,
+            badge: config.whatsapp.enabled ? '✓' : undefined
+          },
+          { 
+            id: 'mobile-money', 
+            label: 'Mobile Money', 
+            icon: <CreditCard className="w-5 h-5" />,
+            badge: (config.mpesa.enabled || config.tigopesa.enabled || config.airtelmoney.enabled) ? '✓' : undefined
+          },
+          { 
+            id: 'email', 
+            label: 'Email', 
+            icon: <Mail className="w-5 h-5" />,
+            badge: config.email.enabled ? '✓' : undefined
+          }
+        ]}
+        activeTab={activeTab}
+        onTabChange={(tabId) => setActiveTab(tabId as any)}
+        variant="modern"
+        size="md"
+      />
 
       {/* SMS Settings */}
       {activeTab === 'sms' && (

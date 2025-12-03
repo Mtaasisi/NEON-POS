@@ -2594,10 +2594,10 @@ const registerOrderCardRef = useCallback(
                       <DollarSign className="w-5 h-5 text-green-600" />
                     </div>
                     <div className="text-2xl font-bold text-gray-900">
-                      {formatCurrency(filteredOrders.reduce((sum, order) => sum + (order.totalAmountBaseCurrency || order.totalAmount), 0), 'TZS')}
+                      {formatCurrency(filteredOrders.reduce((sum, order) => sum + (parseFloat(order.totalAmountBaseCurrency) || parseFloat(order.totalAmount) || 0), 0), 'TZS')}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
-                      Avg: {formatCurrency(filteredOrders.length > 0 ? filteredOrders.reduce((sum, order) => sum + (order.totalAmountBaseCurrency || order.totalAmount), 0) / filteredOrders.length : 0, 'TZS')}
+                      Avg: {formatCurrency(filteredOrders.length > 0 ? filteredOrders.reduce((sum, order) => sum + (parseFloat(order.totalAmountBaseCurrency) || parseFloat(order.totalAmount) || 0), 0) / filteredOrders.length : 0, 'TZS')}
                     </div>
                   </div>
                   <div className="p-4 bg-white rounded-xl shadow-sm border border-gray-200">

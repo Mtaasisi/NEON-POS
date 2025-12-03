@@ -9,7 +9,6 @@ import ManualTransactionModal from './ManualTransactionModal';
 import TransferModal from './TransferModal';
 import TransactionReversalModal from './TransactionReversalModal';
 import TransactionDetailsModal from './TransactionDetailsModal';
-import ScheduledTransfersView from './ScheduledTransfersView';
 import CustomerTooltip from '../../lats/components/pos/CustomerTooltip';
 import { 
   Settings, Plus, Edit3, Trash2, Save, X, 
@@ -17,9 +16,9 @@ import {
   TrendingUp, TrendingDown, Eye, EyeOff, Wallet,
   BarChart3, DollarSign, CreditCard, Building, Smartphone,
   History, Filter, Calendar, ArrowUpRight, ArrowDownRight, ArrowRightLeft,
-  RepeatIcon, Download, FileText, Search, ChevronDown, ChevronUp,
+  Download, FileText, Search, ChevronDown, ChevronUp,
   Copy, ExternalLink, Info, ArrowRight, User, Phone, Mail, MapPin,
-  List, LayoutGrid, Package
+  List, LayoutGrid, Package, RepeatIcon
 } from 'lucide-react';
 
 // Alias for FileText to avoid conflicts
@@ -97,9 +96,6 @@ const PaymentAccountManagement: React.FC = () => {
   // Transaction details modal state
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [showTransactionDetailsModal, setShowTransactionDetailsModal] = useState(false);
-
-  // View state - toggle between accounts and scheduled transfers
-  const [activeView, setActiveView] = useState<'accounts' | 'scheduled'>('accounts');
 
   // Form state
   const [formData, setFormData] = useState<Partial<FinanceAccount>>({
@@ -632,28 +628,47 @@ const PaymentAccountManagement: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-1">Payment Accounts</h2>
-            <p className="text-gray-500">Track balances and manage your payment methods</p>
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Combined Container - All sections in one */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section - Enhanced Modal Style */}
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            {/* Left: Icon + Text */}
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                <Wallet className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">Payment Accounts</h1>
+                <p className="text-sm text-gray-600">Track balances and manage your payment methods</p>
+              </div>
+            </div>
           </div>
-          <div className="flex gap-3">
+        </div>
+
+        {/* Action Bar - Enhanced Design */}
+        <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
+          <div className="flex gap-3 flex-wrap">
+            {/* Add Account Button */}
             <button
-              onClick={fetchAccounts}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 hover:border-gray-300 hover:shadow-sm text-gray-700 rounded-xl transition-all font-medium"
+              onClick={handleAdd}
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl"
             >
-              <RefreshCw size={18} />
-              <span>Refresh</span>
+              <Plus size={18} />
+              <span>Add Account</span>
             </button>
+
+            {/* Transfer Button */}
             <button
               onClick={() => setShowTransferModal(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl transition-all font-medium shadow-lg shadow-purple-500/30"
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg hover:from-purple-600 hover:to-purple-700 hover:shadow-xl"
             >
               <ArrowRightLeft size={18} />
               <span>Transfer</span>
             </button>
+
+            {/* Refresh Button */}
             <button
               onClick={async () => {
                 console.log('🔄 Manual refresh triggered');
@@ -661,220 +676,127 @@ const PaymentAccountManagement: React.FC = () => {
                 await fetchAccounts();
                 setIsLoading(false);
               }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl transition-all font-medium shadow-lg shadow-green-500/30"
-              title="Refresh account balances from database"
+              disabled={isLoading}
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 disabled:opacity-50 bg-white shadow-sm"
             >
-              <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+              {isLoading ? (
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
               <span>Refresh</span>
             </button>
-            <button
-              onClick={handleAdd}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl transition-all font-medium shadow-lg shadow-blue-500/30"
-            >
-              <Plus size={18} />
-              <span>Add Account</span>
-            </button>
           </div>
         </div>
 
-        {/* View Steps */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <nav className="flex items-center justify-center">
-            <ol className="flex items-center w-full">
-              {/* Step 1: Payment Accounts */}
-              <li className="flex items-center flex-1">
-                <button
-                  onClick={() => setActiveView('accounts')}
-                  className="flex items-center w-full group"
-                >
-                  <div className="flex items-center flex-1">
-                    <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
-                      activeView === 'accounts'
-                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/50'
-                        : 'bg-white border-gray-300 text-gray-400 group-hover:border-blue-400 group-hover:text-blue-500'
-                    }`}>
-                      {activeView === 'accounts' ? (
-                        <Wallet size={20} />
-                      ) : (
-                        <span className="font-semibold text-sm">1</span>
-                      )}
+        {/* Main Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
+              {/* Currency Filter Section */}
+              <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
+                <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
+                  <div className="flex flex-col lg:flex-row gap-4">
+                    <div className="flex items-center gap-3 flex-1">
+                      <Filter size={18} className="text-gray-400" />
+                      <select
+                        value={currencyFilter}
+                        onChange={(e) => setCurrencyFilter(e.target.value)}
+                        className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 bg-white font-medium min-w-[200px]"
+                      >
+                        <option value="all">All Currencies</option>
+                        <option value="TZS">Tanzanian Shilling (TZS)</option>
+                        <option value="USD">US Dollar (USD)</option>
+                        <option value="EUR">Euro (EUR)</option>
+                        <option value="GBP">British Pound (GBP)</option>
+                      </select>
                     </div>
-                    <div className="ml-4 flex-1">
-                      <div className={`text-sm font-semibold transition-colors ${
-                        activeView === 'accounts'
-                          ? 'text-blue-600'
-                          : 'text-gray-500 group-hover:text-gray-700'
-                      }`}>
-                        Payment Accounts
+                    {currencyFilter !== 'all' && (
+                      <button
+                        onClick={() => setCurrencyFilter('all')}
+                        className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-2 px-4 py-2"
+                      >
+                        <X size={14} />
+                        Clear Filter
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Summary Statistics Section */}
+              <div className="p-6 pb-0 flex-shrink-0">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Total Accounts */}
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                        <Wallet className="w-6 h-6 text-white" />
                       </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        Manage your accounts
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-1">Total Accounts</p>
+                        <p className="text-2xl font-bold text-gray-900">{summaryStats.totalAccounts}</p>
                       </div>
                     </div>
                   </div>
-                </button>
-                {/* Connector Line */}
-                <div className={`flex-1 h-0.5 mx-4 transition-colors ${
-                  activeView === 'scheduled'
-                    ? 'bg-blue-600'
-                    : 'bg-gray-200'
-                }`} />
-              </li>
-              
-              {/* Step 2: Scheduled Transfers */}
-              <li className="flex items-center flex-1">
-                <button
-                  onClick={() => setActiveView('scheduled')}
-                  className="flex items-center w-full group"
-                >
-                  <div className="flex items-center flex-1">
-                    <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
-                      activeView === 'scheduled'
-                        ? 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-500/50'
-                        : 'bg-white border-gray-300 text-gray-400 group-hover:border-purple-400 group-hover:text-purple-500'
-                    }`}>
-                      {activeView === 'scheduled' ? (
-                        <RepeatIcon size={20} />
-                      ) : (
-                        <span className="font-semibold text-sm">2</span>
-                      )}
-                    </div>
-                    <div className="ml-4 flex-1">
-                      <div className={`text-sm font-semibold transition-colors ${
-                        activeView === 'scheduled'
-                          ? 'text-purple-600'
-                          : 'text-gray-500 group-hover:text-gray-700'
-                      }`}>
-                        Scheduled Transfers
+
+                  {/* Total Balance */}
+                  <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                        <DollarSign className="w-6 h-6 text-white" />
                       </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        Recurring payments
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-1">Total Balance</p>
+                        <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.totalBalance, currencyFilter !== 'all' ? currencyFilter : 'TZS')}</p>
                       </div>
                     </div>
                   </div>
-                </button>
-              </li>
-            </ol>
-          </nav>
-        </div>
 
-        {/* Conditional View Rendering */}
-        {activeView === 'scheduled' ? (
-          <ScheduledTransfersView onRefresh={fetchAccounts} />
-        ) : (
-          <React.Fragment>
-        {/* Currency Filter */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Filter size={18} className="text-gray-400" />
-              <select
-                value={currencyFilter}
-                onChange={(e) => setCurrencyFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 text-sm font-medium"
-              >
-                <option value="all">All Currencies</option>
-                <option value="TZS">Tanzanian Shilling (TZS)</option>
-                <option value="USD">US Dollar (USD)</option>
-                <option value="EUR">Euro (EUR)</option>
-                <option value="GBP">British Pound (GBP)</option>
-              </select>
-            </div>
-            {currencyFilter !== 'all' && (
-              <button
-                onClick={() => setCurrencyFilter('all')}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-              >
-                <X size={14} />
-                Clear Filter
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Summary Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {/* Total Accounts */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-4">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg shadow-blue-500/30">
-                <Wallet className="w-5 h-5 text-white" />
+                  {/* Net Flow */}
+                  <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                        <BarChart3 className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-1">Net Flow</p>
+                        <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.netFlow, currencyFilter !== 'all' ? currencyFilter : 'TZS')}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 font-medium mb-1">Total Accounts</p>
-              <p className="text-3xl font-bold text-gray-900">{summaryStats.totalAccounts}</p>
-            </div>
-          </div>
 
-          {/* Total Balance */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-4">
-              <div className="p-3 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-lg shadow-emerald-500/30">
-                <DollarSign className="w-5 h-5 text-white" />
-              </div>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 font-medium mb-1">Total Balance</p>
-              <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.totalBalance, currencyFilter !== 'all' ? currencyFilter : 'TZS')}</p>
-            </div>
-          </div>
-
-          {/* Active Accounts */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-4">
-              <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg shadow-purple-500/30">
-                <CheckCircle className="w-5 h-5 text-white" />
-              </div>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 font-medium mb-1">Active Accounts</p>
-              <p className="text-3xl font-bold text-gray-900">{summaryStats.activeAccounts}</p>
-            </div>
-          </div>
-
-          {/* Net Flow */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-4">
-              <div className="p-3 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg shadow-orange-500/30">
-                <BarChart3 className="w-5 h-5 text-white" />
-              </div>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 font-medium mb-1">Net Flow</p>
-              <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.netFlow, currencyFilter !== 'all' ? currencyFilter : 'TZS')}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Accounts Grid */}
-        {filteredAccounts.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
-            <Wallet className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Payment Accounts</h3>
-            <p className="text-gray-500 mb-6">
-              {accounts.length === 0 
-                ? "You haven't created any payment accounts yet. Create your first account to get started."
-                : `No accounts found for currency filter: ${currencyFilter}. Try changing the filter.`}
-            </p>
-            <button
-              onClick={handleAdd}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl transition-all font-medium shadow-lg shadow-blue-500/30"
-            >
-              <Plus size={18} />
-              Create Account
-            </button>
-            {accounts.length > 0 && (
-              <div className="mt-4">
-                <p className="text-sm text-gray-500 mb-2">Debug Info:</p>
-                <p className="text-xs text-gray-400">Total accounts in state: {accounts.length}</p>
-                <p className="text-xs text-gray-400">Filtered accounts: {filteredAccounts.length}</p>
-                <p className="text-xs text-gray-400">Currency filter: {currencyFilter}</p>
-              </div>
-            )}
-          </div>
-        ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Accounts List - Scrollable */}
+              <div className="p-6">
+                {filteredAccounts.length === 0 ? (
+                  <div className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-2xl p-16 text-center border-2 border-dashed border-gray-300">
+                    <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl">
+                      <Wallet className="w-12 h-12 text-white" />
+                    </div>
+                    <p className="text-gray-800 text-xl font-bold mb-2">No Payment Accounts</p>
+                    <p className="text-gray-500 text-sm mb-6">
+                      {accounts.length === 0 
+                        ? "You haven't created any payment accounts yet. Create your first account to get started."
+                        : `No accounts found for currency filter: ${currencyFilter}. Try changing the filter.`}
+                    </p>
+                    <button
+                      onClick={handleAdd}
+                      className="px-8 py-3.5 rounded-xl font-semibold bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl inline-flex items-center gap-2"
+                    >
+                      <Plus size={20} />
+                      Create First Account
+                    </button>
+                    {accounts.length > 0 && (
+                      <div className="mt-4">
+                        <p className="text-sm text-gray-500 mb-2">Debug Info:</p>
+                        <p className="text-xs text-gray-400">Total accounts in state: {accounts.length}</p>
+                        <p className="text-xs text-gray-400">Filtered accounts: {filteredAccounts.length}</p>
+                        <p className="text-xs text-gray-400">Currency filter: {currencyFilter}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredAccounts.map((account) => (
             <div 
               key={account.id} 
@@ -1035,9 +957,12 @@ const PaymentAccountManagement: React.FC = () => {
                 </div>
               </div>
             </div>
-          ))}
+                  ))}
+                  </div>
+                )}
+              </div>
         </div>
-        )}
+      </div>
 
       {/* Add/Edit Modal */}
       {showAddModal && (
@@ -1312,8 +1237,6 @@ const PaymentAccountManagement: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
-        </React.Fragment>
       )}
 
       {/* Transaction History Modal */}
@@ -2044,6 +1967,38 @@ const PaymentAccountManagement: React.FC = () => {
                                         
                                         const productsMap = new Map((productsResult.data || []).map((p: any) => [p.id, p]));
                                         const variantsMap = new Map((variantsResult.data || []).map((v: any) => [v.id, v]));
+                                        
+                                        // Fetch product images
+                                        if (productIds.length > 0) {
+                                          const { data: productImages } = await supabase
+                                            .from('product_images')
+                                            .select('id, product_id, image_url, thumbnail_url, is_primary')
+                                            .in('product_id', productIds)
+                                            .order('is_primary', { ascending: false });
+                                          
+                                          // Attach images to products
+                                          if (productImages) {
+                                            productImages.forEach((image: any) => {
+                                              const product = productsMap.get(image.product_id);
+                                              if (product) {
+                                                if (!product.images) {
+                                                  product.images = [];
+                                                }
+                                                const imageObj = {
+                                                  id: image.id,
+                                                  url: image.thumbnail_url || image.image_url,
+                                                  thumbnailUrl: image.thumbnail_url,
+                                                  isPrimary: image.is_primary || false
+                                                };
+                                                if (image.is_primary) {
+                                                  product.images.unshift(imageObj);
+                                                } else {
+                                                  product.images.push(imageObj);
+                                                }
+                                              }
+                                            });
+                                          }
+                                        }
                                         
                                         const enhancedItems = (saleItems || []).map((item: any) => ({
                                           ...item,

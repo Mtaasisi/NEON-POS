@@ -549,14 +549,15 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
 
   return createPortal(
       <div 
-      className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]" 
+      className="fixed bg-black/60 flex items-center justify-center p-4" 
         style={{
         top: 0, 
         left: 0, 
           right: 0,
           bottom: 0,
         overflow: 'hidden',
-        overscrollBehavior: 'none'
+        overscrollBehavior: 'none',
+        zIndex: 100004
         }}
       role="dialog" 
       aria-modal="true" 

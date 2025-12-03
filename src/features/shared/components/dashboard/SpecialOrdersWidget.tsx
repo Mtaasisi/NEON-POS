@@ -80,7 +80,7 @@ export const SpecialOrdersWidget: React.FC<SpecialOrdersWidgetProps> = ({ classN
       //   if (!o.due_date) return false;
       //   return new Date(o.due_date) < new Date();
       // }).length || 0;
-      const totalValue = orders?.reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0;
+      const totalValue = orders?.reduce((sum, o) => sum + (parseFloat(o.total_amount) || 0), 0) || 0;
 
       setMetrics({
         totalOrders: total,

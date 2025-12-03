@@ -113,15 +113,13 @@ const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = ''
 
   if (loading) {
     return (
-      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm ${
+      <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl shadow-sm border backdrop-blur-sm transition-all ${
         isDark 
-          ? 'bg-blue-600' 
-          : 'bg-blue-600'
-      } text-white ${className}`}>
-        <div className="p-1 rounded bg-white/15">
-          <Building2 className="w-3.5 h-3.5 text-white animate-pulse" />
-        </div>
-        <span className="text-xs font-medium text-white">Loading...</span>
+          ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' 
+          : 'bg-white/80 hover:bg-white border-gray-200'
+      } ${className}`}>
+        <Building2 className={`w-4 h-4 animate-pulse ${isDark ? 'text-gray-300' : 'text-gray-600'}`} />
+        <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Loading...</span>
       </div>
     );
   }
@@ -130,76 +128,66 @@ const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = ''
 
   if (!currentBranch) {
     return (
-      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm ${
+      <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl shadow-sm border backdrop-blur-sm ${
         isDark 
-          ? 'bg-gray-600' 
-          : 'bg-gray-500'
-      } text-white ${className}`}>
-        <div className="p-1 rounded bg-white/15">
-          <Building2 className="w-3.5 h-3.5 text-white" />
-        </div>
-        <span className="text-xs font-medium text-white">No branches</span>
+          ? 'bg-slate-800/60 border-slate-600' 
+          : 'bg-white/80 border-gray-200'
+      } ${className}`}>
+        <Building2 className={`w-4 h-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+        <span className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>No branches</span>
       </div>
     );
   }
 
-  // Always make it clickable - even with one branch, show option to add more
-  // REMOVED: Static display for single branch
-  // Now always shows as dropdown
-
-  const getIsolationIcon = (mode?: string) => {
-    if (mode === 'shared') return '🌐';
-    if (mode === 'isolated') return '🔒';
-    if (mode === 'hybrid') return '⚖️';
-    return '🏪';
-  };
-
-  const getIsolationColor = (mode?: string) => {
-    if (mode === 'shared') return 'text-blue-600';
-    if (mode === 'isolated') return 'text-red-600';
-    if (mode === 'hybrid') return 'text-purple-600';
-    return 'text-gray-600';
-  };
-
   return (
     <div className={`relative ${className}`}>
-      <button
-        onClick={() => {
-          console.log('🖱️ Branch selector clicked!', { isOpen, branchesCount: branches.length });
-          setIsOpen(!isOpen);
-        }}
-        className={`group flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 cursor-pointer ${
-          isOpen ? 'shadow-md scale-105' : 'shadow-sm'
-        } ${
-          isDark 
-            ? 'bg-blue-600 hover:bg-blue-500' 
-            : 'bg-blue-600 hover:bg-blue-700'
-        } text-white`}
-        title="Click to switch branches"
-      >
-        {/* Icon with subtle animation on hover */}
-        <div className="p-1 rounded transition-all bg-white/15 group-hover:bg-white/25">
-          <Building2 className="w-3.5 h-3.5 text-white" />
-        </div>
-        
-        {/* Branch Info */}
-        <div className="flex flex-col items-start flex-1 min-w-0">
-          <span className="text-xs font-semibold text-white truncate w-full leading-tight">
+      <div className="relative group">
+        <button
+          onClick={() => {
+            console.log('🖱️ Branch selector clicked!', { isOpen, branchesCount: branches.length });
+            setIsOpen(!isOpen);
+          }}
+          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer backdrop-blur-sm border shadow-sm hover:shadow-md ${
+            isDark 
+              ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' 
+              : 'bg-white/80 hover:bg-white border-gray-200'
+          }`}
+        >
+          {/* Branch Icon */}
+          <Building2 className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-200' : 'text-gray-700'}`} />
+          
+          {/* Branch Name */}
+          <span className={`text-sm font-medium truncate ${
+            isDark ? 'text-gray-200' : 'text-gray-700'
+          }`}>
             {currentBranch.name}
           </span>
-          <div className="flex items-center gap-1 text-[10px] text-white/80">
-            <MapPin className="w-2.5 h-2.5 flex-shrink-0" />
-            <span className="truncate">{currentBranch.city}</span>
+          
+          {/* Chevron with smooth rotation */}
+          <ChevronDown 
+            className={`w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 ${
+              isDark ? 'text-gray-400' : 'text-gray-500'
+            } ${isOpen ? 'rotate-180' : ''}`} 
+          />
+        </button>
+
+        {/* Tooltip with tail */}
+        <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${
+          isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'
+        } backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50 pointer-events-none`}>
+          {/* Tail/Arrow pointing up */}
+          <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent ${
+            isDark ? 'border-b-slate-800/95' : 'border-b-white/95'
+          }`}></div>
+          <div className="flex flex-col gap-0.5">
+            <span className="font-semibold">{currentBranch.name}</span>
+            <div className="flex items-center gap-1 text-[10px]">
+              <MapPin className={`w-2.5 h-2.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+              <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>{currentBranch.city}</span>
+            </div>
           </div>
         </div>
-        
-        {/* Chevron with smooth rotation */}
-        <ChevronDown 
-          className={`w-3.5 h-3.5 text-white/70 flex-shrink-0 transition-transform duration-300 ${
-            isOpen ? 'rotate-180' : ''
-          }`} 
-        />
-      </button>
+      </div>
 
       {isOpen && (
         <>
@@ -210,122 +198,116 @@ const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = ''
           />
 
           {/* Dropdown */}
-          <div className={`absolute top-full mt-2 right-0 w-80 rounded-lg shadow-xl border-2 z-50 max-h-96 overflow-auto ${
+          <div className={`absolute top-full mt-2 right-0 w-80 rounded-xl shadow-xl border z-50 max-h-96 overflow-auto backdrop-blur-xl ${
             isDark 
-              ? 'bg-slate-800 border-blue-500' 
-              : 'bg-white border-blue-300'
+              ? 'bg-slate-800/95 border-slate-700/60' 
+              : 'bg-white/95 border-gray-200/60'
           }`}>
-            {/* Header with flat blue */}
+            {/* Header */}
             <div className={`px-4 py-3 border-b ${
               isDark 
-                ? 'bg-blue-600 border-blue-500' 
-                : 'bg-blue-600 border-blue-500'
+                ? 'border-slate-700' 
+                : 'border-gray-200'
             }`}>
-              <div className="flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-white" />
-                <h3 className="text-xs font-bold uppercase text-white">
-                  Switch Branch ({branches.length})
-                </h3>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Building2 className={`w-4 h-4 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+                  <h3 className={`text-sm font-semibold ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
+                    Branches
+                  </h3>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  isDark ? 'bg-slate-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {branches.length}
+                </span>
               </div>
             </div>
             
-            <div className="p-2">
-              
+            <div className="p-3 space-y-1">
               {branches.map((branch) => {
                 const isCurrent = branch.id === currentBranchId;
-                const icon = getIsolationIcon(branch.data_isolation_mode);
-                const color = getIsolationColor(branch.data_isolation_mode);
 
                 return (
                   <button
                     key={branch.id}
                     onClick={() => handleSwitchBranch(branch.id)}
-                    className={`w-full flex items-start gap-3 px-3 py-2 rounded-lg transition-colors ${
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
                       isCurrent
                         ? isDark 
-                          ? 'bg-blue-900/30 border-2 border-blue-600' 
-                          : 'bg-blue-50 border-2 border-blue-200'
+                          ? 'bg-blue-600/20 border border-blue-500' 
+                          : 'bg-blue-50 border border-blue-200'
                         : isDark
-                          ? 'hover:bg-slate-700/50 border-2 border-transparent'
-                          : 'hover:bg-gray-50 border-2 border-transparent'
+                          ? 'hover:bg-slate-700/50 border border-transparent'
+                          : 'hover:bg-gray-50 border border-transparent'
                     }`}
                   >
-                    <div className="flex-shrink-0 mt-1">
+                    <div className="flex-shrink-0">
                       {isCurrent ? (
-                        <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
+                        <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                          isDark ? 'bg-blue-500' : 'bg-blue-600'
+                        }`}>
                           <Check className="w-3 h-3 text-white" />
                         </div>
                       ) : (
-                        <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                        <div className={`w-4 h-4 border-2 rounded-full ${
+                          isDark ? 'border-gray-600' : 'border-gray-300'
+                        }`} />
                       )}
                     </div>
 
                     <div className="flex-1 text-left min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className={`font-medium truncate ${
+                        <span className={`text-sm font-medium truncate ${
                           isCurrent 
-                            ? isDark ? 'text-blue-300' : 'text-blue-900'
+                            ? isDark ? 'text-blue-300' : 'text-blue-700'
                             : isDark ? 'text-gray-200' : 'text-gray-900'
                         }`}>
                           {branch.name}
                         </span>
                         {branch.is_main && (
-                          <span className={`px-1.5 py-0.5 text-xs font-semibold rounded ${
+                          <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-md ${
                             isDark 
-                              ? 'bg-green-900/30 text-green-400' 
-                              : 'bg-green-100 text-green-700'
+                              ? 'bg-emerald-900/30 text-emerald-400' 
+                              : 'bg-emerald-100 text-emerald-700'
                           }`}>
-                            Main
+                            MAIN
                           </span>
                         )}
                       </div>
                       
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{branch.code}</span>
-                        <span className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-300'}`}>•</span>
-                        <div className="flex items-center gap-1">
-                          <MapPin className={`w-3 h-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                          <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{branch.city}</span>
-                        </div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <MapPin className={`w-2.5 h-2.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                          {branch.city}
+                        </span>
                       </div>
-
-                      {branch.data_isolation_mode && (
-                        <div className="flex items-center gap-1 mt-1">
-                          <span className="text-sm">{icon}</span>
-                          <span className={`text-xs font-medium ${color}`}>
-                            {branch.data_isolation_mode === 'shared' ? 'Shared' :
-                             branch.data_isolation_mode === 'isolated' ? 'Isolated' :
-                             'Hybrid'}
-                          </span>
-                        </div>
-                      )}
                     </div>
                   </button>
                 );
               })}
             </div>
 
-            <div className={`border-t p-3 ${
+            <div className={`border-t px-4 py-3 ${
               isDark 
-                ? 'border-blue-500 bg-slate-900' 
-                : 'border-blue-300 bg-gray-50'
+                ? 'border-slate-700' 
+                : 'border-gray-200'
             }`}>
-              <div className="text-center space-y-2">
-                <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-                  {branches.length} branch{branches.length !== 1 ? 'es' : ''} available
-                </p>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsOpen(false);
-                    window.location.href = '/admin-settings?section=stores';
-                  }}
-                  className="text-xs font-semibold flex items-center gap-1 mx-auto px-3 py-1.5 rounded-md transition-all bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <Building2 className="w-3 h-3" />
-                  Manage Stores
-                </button>
-              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOpen(false);
+                  window.location.href = '/admin-settings?section=stores';
+                }}
+                className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 font-medium text-sm ${
+                  isDark
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white'
+                    : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white'
+                }`}
+              >
+                <Building2 className="w-4 h-4" />
+                Manage Stores
+              </button>
             </div>
           </div>
         </>

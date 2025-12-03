@@ -103,6 +103,38 @@ class DraftProductsService {
       // Map data for easy lookup
       const productsMap = new Map(productsResult.data?.map(p => [p.id, p]) || []);
       const poItemsMap = new Map(poItemsResult.data?.map(item => [item.id, item]) || []);
+      
+      // Fetch product images
+      if (productIds.length > 0) {
+        const { data: productImages } = await supabase
+          .from('product_images')
+          .select('id, product_id, image_url, thumbnail_url, is_primary')
+          .in('product_id', productIds)
+          .order('is_primary', { ascending: false });
+        
+        // Attach images to products
+        if (productImages) {
+          productImages.forEach((image: any) => {
+            const product = productsMap.get(image.product_id);
+            if (product) {
+              if (!product.images) {
+                product.images = [];
+              }
+              const imageObj = {
+                id: image.id,
+                url: image.thumbnail_url || image.image_url,
+                thumbnailUrl: image.thumbnail_url,
+                isPrimary: image.is_primary || false
+              };
+              if (image.is_primary) {
+                product.images.unshift(imageObj);
+              } else {
+                product.images.push(imageObj);
+              }
+            }
+          });
+        }
+      }
 
       // Combine data
       return cargoItems.map(item => ({
@@ -400,6 +432,41 @@ class DraftProductsService {
           ? supabase.from('lats_purchase_order_items').select('*').in('id', poItemIds)
           : Promise.resolve({ data: [], error: null })
       ]);
+      
+      // Map products for easy lookup
+      const productsMap = new Map(productsResult.data?.map(p => [p.id, p]) || []);
+      
+      // Fetch product images
+      if (productIds.length > 0) {
+        const { data: productImages } = await supabase
+          .from('product_images')
+          .select('id, product_id, image_url, thumbnail_url, is_primary')
+          .in('product_id', productIds)
+          .order('is_primary', { ascending: false });
+        
+        // Attach images to products
+        if (productImages) {
+          productImages.forEach((image: any) => {
+            const product = productsMap.get(image.product_id);
+            if (product) {
+              if (!product.images) {
+                product.images = [];
+              }
+              const imageObj = {
+                id: image.id,
+                url: image.thumbnail_url || image.image_url,
+                thumbnailUrl: image.thumbnail_url,
+                isPrimary: image.is_primary || false
+              };
+              if (image.is_primary) {
+                product.images.unshift(imageObj);
+              } else {
+                product.images.push(imageObj);
+              }
+            }
+          });
+        }
+      }
 
       // Get unique purchase order IDs from PO items
       const poIds = poItemsResult.data?.map(item => item.purchase_order_id).filter(Boolean) || [];

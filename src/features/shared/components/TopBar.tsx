@@ -1033,7 +1033,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
     <header ref={headerRef} className={`fixed top-0 left-0 right-0 z-20 transition-all duration-500 ${isNavCollapsed ? 'md:ml-[5.5rem]' : 'md:ml-72'}`}>
       {/* Main TopBar */}
       <div className={`topbar ${isDark ? 'bg-slate-900/90' : 'bg-white/80'} backdrop-blur-xl ${isDark ? 'border-slate-700/50' : 'border-white/30'} border-b shadow-lg`}>
-        <div className="flex items-center justify-between px-6 py-3">
+        <div className="flex items-center justify-between px-3 lg:px-6 py-2.5 lg:py-3">
           {/* Left Section - Menu Toggle & Back Button */}
           <div className="flex items-center gap-2">
             <button
@@ -1053,82 +1053,86 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
             </button>
           </div>
 
-          {/* Center Section - Search & Action Buttons */}
-          <div className="hidden md:flex items-center gap-2 flex-1 max-w-5xl mx-6">
+          {/* Center Section - Search & Action Buttons - Responsive with horizontal scroll */}
+          <div className="hidden md:flex items-center gap-2 flex-1 mx-2 lg:mx-4 overflow-x-auto transition-all" style={{ scrollBehavior: 'smooth' }}>
+            <div className="flex items-center gap-2 min-w-max">
             {/* Search Button */}
             <button
               onClick={() => openSearch()}
-              className={`p-3 rounded-xl transition-all duration-200 ${
+                className={`p-2.5 lg:p-3 rounded-xl transition-all duration-200 flex-shrink-0 ${
                 isDark 
                   ? 'bg-slate-800/60 hover:bg-slate-700/60 text-gray-300 border border-slate-700' 
                   : 'bg-white/80 hover:bg-white text-gray-700 border border-gray-200'
               } cursor-pointer backdrop-blur-sm shadow-sm hover:shadow-md`}
               title="Search (⌘K)"
             >
-              <Search size={20} />
+                <Search size={18} />
             </button>
 
             {/* Divider */}
-            <div className={`h-8 w-px mx-1 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
+              <div className={`h-8 w-px mx-0.5 lg:mx-1 flex-shrink-0 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
 
             {/* Quick Actions Group */}
-            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 lg:gap-2 flex-shrink-0">
               {/* Quick Reminder Button - All roles */}
               <button
                 onClick={() => setShowQuickReminder(true)}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-200 shadow-sm hover:shadow-md"
+                  className="flex items-center justify-center gap-1.5 lg:gap-2 px-3 lg:px-4 py-2 lg:py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-200 shadow-sm hover:shadow-md"
                 title="Quick Reminder (⚡ Fast Entry)"
               >
-                <Bell size={18} />
-                <span className="hidden xl:inline font-medium">Reminder</span>
+                  <Bell size={16} className="lg:w-[18px] lg:h-[18px]" />
+                  <span className="hidden xl:inline font-medium text-sm">Reminder</span>
               </button>
 
               {/* Quick Expense Button - Admins only */}
               {currentUser?.role === 'admin' && (
                 <button
                   onClick={() => setShowQuickExpense(true)}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-200 shadow-sm hover:shadow-md"
+                    className="flex items-center justify-center gap-1.5 lg:gap-2 px-3 lg:px-4 py-2 lg:py-2.5 rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-200 shadow-sm hover:shadow-md"
                   title="Quick Expense (⚡ Fast Entry)"
                 >
-                  <DollarSign size={18} />
-                  <span className="hidden xl:inline font-medium">Expense</span>
+                    <DollarSign size={16} className="lg:w-[18px] lg:h-[18px]" />
+                    <span className="hidden xl:inline font-medium text-sm">Expense</span>
                 </button>
               )}
             </div>
 
             {/* Divider */}
-            <div className={`h-8 w-px mx-1 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
+              <div className={`h-8 w-px mx-0.5 lg:mx-1 flex-shrink-0 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
 
             {/* Dynamic Quick Access Buttons - Context-aware */}
             {getContextualQuickActions.length > 0 && (
               <>
-                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 lg:gap-2 flex-shrink-0">
                   {getContextualQuickActions.slice(0, 4).map((action, index) => (
                     <button
                       key={`${action.path}-${index}`}
                       onClick={() => navigate(action.path)}
-                      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r ${action.color} ${action.hoverColor} text-white transition-all duration-200 shadow-sm hover:shadow-md font-medium whitespace-nowrap`}
+                        className={`flex items-center justify-center gap-1.5 lg:gap-2 px-3 lg:px-4 py-2 lg:py-2.5 rounded-xl bg-gradient-to-r ${action.color} ${action.hoverColor} text-white transition-all duration-200 shadow-sm hover:shadow-md font-medium whitespace-nowrap text-sm`}
                       title={action.label}
                     >
-                      {action.icon}
+                        {React.cloneElement(action.icon as React.ReactElement, { 
+                          size: 16, 
+                          className: "lg:w-[18px] lg:h-[18px]" 
+                        })}
                       <span className="hidden xl:inline">{action.label}</span>
                     </button>
                   ))}
                 </div>
-                <div className={`h-8 w-px mx-1 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
+                  <div className={`h-8 w-px mx-0.5 lg:mx-1 flex-shrink-0 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
               </>
             )}
 
             {/* Business Actions Group */}
-            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 lg:gap-2 flex-shrink-0">
               {/* Installment Plans Button */}
               {(currentUser?.role === 'admin' || currentUser?.permissions?.includes('all') || currentUser?.permissions?.includes('view_installments')) && (
                 <button
                   onClick={() => setShowInstallmentManagementModal(true)}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white transition-all duration-200 shadow-sm hover:shadow-md font-medium"
+                    className="flex items-center justify-center gap-1.5 lg:gap-2 px-3 lg:px-4 py-2 lg:py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
                   title="Installment Plans"
                 >
-                  <Calendar size={18} />
+                    <Calendar size={16} className="lg:w-[18px] lg:h-[18px]" />
                   <span className="hidden lg:inline">Installments</span>
                 </button>
               )}
@@ -1137,10 +1141,10 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               {(currentUser?.role === 'admin' || currentUser?.permissions?.includes('manage_inventory') || currentUser?.permissions?.includes('all')) && (
                 <button
                   onClick={() => navigate('/lats/purchase-order/create')}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white transition-all duration-200 shadow-sm hover:shadow-md font-medium"
+                    className="flex items-center justify-center gap-1.5 lg:gap-2 px-3 lg:px-4 py-2 lg:py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
                   title="Create Purchase Order (⌘⇧O)"
                 >
-                  <Truck size={18} />
+                    <Truck size={16} className="lg:w-[18px] lg:h-[18px]" />
                   <span className="hidden lg:inline">PO</span>
                 </button>
               )}
@@ -1150,12 +1154,12 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                 <div className="relative" ref={createDropdownRef}>
                   <button
                     onClick={() => setShowCreateDropdown(!showCreateDropdown)}
-                    className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white transition-all duration-200 shadow-sm hover:shadow-md font-medium"
+                      className="flex items-center justify-center gap-1.5 lg:gap-2 px-3 lg:px-4 py-2 lg:py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
                     title="Create new items"
                   >
-                    <Plus size={18} />
+                      <Plus size={16} className="lg:w-[18px] lg:h-[18px]" />
                     <span className="hidden lg:inline">Create</span>
-                    <ChevronDown size={16} className={`transition-transform duration-200 ${showCreateDropdown ? 'rotate-180' : ''}`} />
+                      <ChevronDown size={14} className={`transition-transform duration-200 ${showCreateDropdown ? 'rotate-180' : ''}`} />
                   </button>
               
               {/* Create Dropdown Menu */}
@@ -1192,15 +1196,16 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                     )}
             </div>
           )}
+              </div>
           </div>
           </div>
 
           {/* Technician Quick Actions */}
           {currentUser?.role === 'technician' && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={() => navigate('/lats/spare-parts')}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white transition-all duration-200 shadow-sm hover:shadow-md font-medium"
+                className="flex items-center gap-1.5 lg:gap-2 px-3 lg:px-4 py-2 lg:py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
               >
                 <Package size={16} />
                 <span>Spare Parts</span>
@@ -1210,17 +1215,17 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
 
           {/* Divider */}
           {currentUser?.role !== 'technician' && (
-            <div className={`hidden lg:block h-8 w-px mx-2 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
+            <div className={`hidden lg:block h-8 w-px mx-1 flex-shrink-0 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
           )}
 
           {/* Navigation Icons - Clean & Essential Only */}
           {currentUser?.role !== 'technician' && (
-            <div className="hidden lg:flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-1.5 flex-shrink-0">
               {/* POS System - Priority for Customer Care */}
               <div className="relative group">
                 <button 
                   onClick={() => navigate('/pos')}
-                  className={`p-3 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
+                  className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
                     location.pathname.includes('/pos') 
                       ? 'bg-emerald-500 text-white border-emerald-400 scale-105' 
                       : isDark
@@ -1229,7 +1234,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                   }`}
                   title="POS System"
                 >
-                  <ShoppingCart size={18} className={location.pathname.includes('/pos') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
+                  <ShoppingCart size={16} className={location.pathname.includes('/pos') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
                 </button>
                 <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
                   POS System
@@ -1241,7 +1246,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               <div className="relative group">
                 <button 
                   onClick={() => navigate('/customers')}
-                  className={`p-3 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
+                  className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
                     location.pathname.includes('/customers') 
                       ? 'bg-purple-500 text-white border-purple-400 scale-105' 
                       : isDark
@@ -1250,7 +1255,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                   }`}
                   title="Customers"
                 >
-                  <Users size={18} className={location.pathname.includes('/customers') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
+                  <Users size={16} className={location.pathname.includes('/customers') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
                 </button>
                 <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
                   Customers
@@ -1262,7 +1267,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               <div className="relative group">
                 <button 
                   onClick={() => navigate('/devices')}
-                  className={`p-3 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
+                  className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
                     location.pathname.includes('/devices') 
                       ? 'bg-blue-500 text-white border-blue-400 scale-105' 
                       : isDark
@@ -1271,7 +1276,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                   }`}
                   title="Devices"
                 >
-                  <Smartphone size={18} className={location.pathname.includes('/devices') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
+                  <Smartphone size={16} className={location.pathname.includes('/devices') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
                 </button>
                 <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
                   Devices
@@ -1283,7 +1288,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               <div className="relative group">
                 <button 
                   onClick={() => navigate('/reminders')}
-                  className={`p-3 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm relative ${
+                  className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm relative ${
                     location.pathname.includes('/reminders') 
                       ? 'bg-yellow-500 text-white border-yellow-400 scale-105' 
                       : isDark
@@ -1292,7 +1297,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                   }`}
                   title="Reminders"
                 >
-                  <Clock size={18} className={location.pathname.includes('/reminders') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
+                  <Clock size={16} className={location.pathname.includes('/reminders') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
                   {reminderCount > 0 && (
                     <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                       <span className="text-[10px] text-white font-bold">
@@ -1314,7 +1319,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                   <div className="relative group">
                     <button 
                       onClick={() => navigate('/lats/unified-inventory')}
-                      className={`p-3 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
+                      className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
                         location.pathname.includes('/lats/unified-inventory') 
                           ? 'bg-orange-500 text-white border-orange-400 scale-105' 
                           : isDark
@@ -1323,7 +1328,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                       }`}
                       title="Inventory"
                     >
-                      <Warehouse size={18} className={location.pathname.includes('/lats/unified-inventory') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
+                      <Warehouse size={16} className={location.pathname.includes('/lats/unified-inventory') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
                     </button>
                     <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
                       Inventory
@@ -1336,53 +1341,53 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
           )}
 
           {/* Divider */}
-          <div className={`hidden lg:block h-8 w-px mx-2 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
+          <div className={`hidden lg:block h-8 w-px mx-1 flex-shrink-0 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
 
           {/* Right Section - Status & Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 lg:gap-2 flex-shrink-0">
 
             {/* Activity Pills - Real Counts Only */}
-            <div className="hidden xl:flex items-center gap-2 mr-2">
+            <div className="hidden xl:flex items-center gap-1.5 mr-1.5">
               {activityCounts.activeDevices > 0 && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 backdrop-blur-sm border border-blue-200 shadow-sm">
-                  <Smartphone size={13} />
+                <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-blue-100 text-blue-700 backdrop-blur-sm border border-blue-200 shadow-sm">
+                  <Smartphone size={12} />
                   <span className="text-xs font-bold">{formatNumber(activityCounts.activeDevices)}</span>
                 </div>
               )}
               {activityCounts.overdueDevices > 0 && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-100 text-red-700 backdrop-blur-sm border border-red-200 shadow-sm">
-                  <Clock size={13} />
+                <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-red-100 text-red-700 backdrop-blur-sm border border-red-200 shadow-sm">
+                  <Clock size={12} />
                   <span className="text-xs font-bold">{formatNumber(activityCounts.overdueDevices)}</span>
                 </div>
               )}
               
               {/* Show customer count only for non-technicians */}
               {currentUser?.role !== 'technician' && activityCounts.newCustomers > 0 && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-100 text-green-700 backdrop-blur-sm border border-green-200 shadow-sm">
-                  <Users size={13} />
+                <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-green-100 text-green-700 backdrop-blur-sm border border-green-200 shadow-sm">
+                  <Users size={12} />
                   <span className="text-xs font-bold">{formatNumber(activityCounts.newCustomers)}</span>
                 </div>
               )}
             </div>
 
             {/* Status Indicator */}
-            <div className="hidden sm:flex items-center justify-center w-8 h-8">
-              <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} animate-pulse shadow-sm`}></div>
+            <div className="hidden sm:flex items-center justify-center w-7 h-7">
+              <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} animate-pulse shadow-sm`}></div>
             </div>
 
             {/* Divider */}
-            <div className={`hidden sm:block h-8 w-px mx-1 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
+            <div className={`hidden sm:block h-8 w-px mx-0.5 flex-shrink-0 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
 
             {/* Fullscreen Toggle */}
             <button
               onClick={toggleFullscreen}
-              className={`p-3 rounded-xl ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' : 'bg-white/80 hover:bg-white border-gray-200'} transition-all duration-200 backdrop-blur-sm border shadow-sm`}
+              className={`p-2.5 rounded-xl ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' : 'bg-white/80 hover:bg-white border-gray-200'} transition-all duration-200 backdrop-blur-sm border shadow-sm`}
               title={isFullscreen ? "Exit Fullscreen (ESC)" : "Enter Fullscreen"}
             >
               {isFullscreen ? (
-                <Minimize2 size={18} className={isDark ? 'text-gray-200' : 'text-gray-700'} />
+                <Minimize2 size={16} className={isDark ? 'text-gray-200' : 'text-gray-700'} />
               ) : (
-                <Maximize2 size={18} className={isDark ? 'text-gray-200' : 'text-gray-700'} />
+                <Maximize2 size={16} className={isDark ? 'text-gray-200' : 'text-gray-700'} />
               )}
             </button>
 
@@ -1391,17 +1396,17 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               variant="icon"
               size="md"
               showConfirmation={true}
-              className={`${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' : 'bg-white/80 hover:bg-white border-gray-200'} ${isDark ? 'text-gray-200 hover:text-blue-400' : 'text-gray-700 hover:text-blue-600'}`}
+              className={`${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' : 'bg-white/80 hover:bg-white border-gray-200'} ${isDark ? 'text-gray-200 hover:text-blue-400' : 'text-gray-700 hover:text-blue-600'} !p-2.5`}
             />
 
             {/* Notifications */}
             <div className="relative" ref={notificationsRef}>
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className={`p-3 rounded-xl ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' : 'bg-white/80 hover:bg-white border-gray-200'} transition-all duration-200 backdrop-blur-sm border relative shadow-sm`}
+                className={`p-2.5 rounded-xl ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' : 'bg-white/80 hover:bg-white border-gray-200'} transition-all duration-200 backdrop-blur-sm border relative shadow-sm`}
                 title="Notifications"
               >
-                <Bell size={18} className={isDark ? 'text-gray-200' : 'text-gray-700'} />
+                <Bell size={16} className={isDark ? 'text-gray-200' : 'text-gray-700'} />
                 {unreadNotifications.length > 0 && (
                   <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full notification-badge border-2 border-white shadow-sm flex items-center justify-center">
                     <span className="text-xs text-white font-bold">
@@ -1552,14 +1557,14 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                       loadTestUsers();
                     }
                   }}
-                  className={`p-3 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
+                  className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
                     isImpersonating
                       ? 'bg-red-500 text-white border-red-400 hover:bg-red-600'
                       : 'bg-purple-500 text-white border-purple-400 hover:bg-purple-600'
                   }`}
                   title={isImpersonating ? 'Stop User Testing (Currently impersonating)' : 'Test as Different User'}
                 >
-                  <User size={18} className={isImpersonating ? 'text-white' : 'text-white'} />
+                  <User size={16} className={isImpersonating ? 'text-white' : 'text-white'} />
                 </button>
 
                 {/* User Selector Dropdown */}

@@ -4,6 +4,7 @@ import { X, Save, Settings, Search } from 'lucide-react';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 import { useAuth } from '../../../../context/AuthContext';
 import { useTranslation } from '../../lib/i18n/useTranslation';
+import GlassTabs from '../../../shared/components/ui/GlassTabs';
 
 // Import settings tabs - NEW SIMPLIFIED STRUCTURE (6 tabs now)
 import GeneralSettingsTab from './GeneralSettingsTab';
@@ -243,49 +244,25 @@ const POSSettingsModal = forwardRef<POSSettingsModalRef, POSSettingsModalProps>(
 
               {/* Settings Tabs */}
               <div className="mt-6">
-            <div className="flex rounded-lg bg-gray-100 p-1 gap-1 overflow-x-auto">
-              {filteredTabs.map(tab => {
-                // Assign unique colors to each tab - only when active
-                const getTabColors = (tabId: string, isActive: boolean) => {
-                  if (!isActive) {
-                    return 'text-gray-600 hover:text-gray-900 hover:bg-gray-50';
-                  }
-                  
-                  const colors = {
-                    general: 'bg-blue-600 text-white shadow-lg',
-                    pricing: 'bg-green-600 text-white shadow-lg',
-                    receipt: 'bg-purple-600 text-white shadow-lg',
-                    notifications: 'bg-orange-600 text-white shadow-lg',
-                    features: 'bg-indigo-600 text-white shadow-lg',
-                    permissions: 'bg-pink-600 text-white shadow-lg',
-                  };
-                  return colors[tabId as keyof typeof colors] || 'bg-white text-gray-900 shadow-sm';
-                };
-
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveSettingsTab(tab.id);
-                      onTabChange?.(tab.id);
-                    }}
-                    className={`flex-1 px-4 py-2.5 text-base font-medium rounded-md transition-all whitespace-nowrap ${
-                      getTabColors(tab.id, activeSettingsTab === tab.id)
-                    }`}
-                  >
-                    {tab.name}
-                  </button>
-                );
-              })}
-            </div>
-            
-            {filteredTabs.length === 0 && searchQuery && (
+            {filteredTabs.length > 0 ? (
+              <GlassTabs
+                tabs={filteredTabs.map(tab => ({
+                  id: tab.id,
+                  label: tab.name
+                }))}
+                activeTab={activeSettingsTab}
+                onTabChange={(tabId) => {
+                  setActiveSettingsTab(tabId);
+                  onTabChange?.(tabId);
+                }}
+                variant="modern"
+                size="md"
+              />
+            ) : searchQuery ? (
               <div className="text-gray-500 text-sm py-2 text-center mt-2">
                 {t('settings.noSettingsFound')} "{searchQuery}"
               </div>
-            )}
+            ) : null}
               </div>
             </div>
 

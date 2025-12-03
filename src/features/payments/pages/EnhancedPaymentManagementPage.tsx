@@ -6,6 +6,7 @@ import GlassButton from '../../shared/components/ui/GlassButton';
 import GlassSelect from '../../shared/components/ui/GlassSelect';
 import GlassBadge from '../../shared/components/ui/GlassBadge';
 import GlassCard from '../../shared/components/ui/GlassCard';
+import GlassTabs from '../../shared/components/ui/GlassTabs';
 import SearchBar from '../../shared/components/ui/SearchBar';
 import { BackButton } from '../../shared/components/ui/BackButton';
 import { 
@@ -454,73 +455,55 @@ Reference: ${transaction.reference || 'N/A'}`;
     <PageErrorBoundary pageName="Payment Management" showDetails={true}>
       <div className="p-6 flex justify-center">
         <div className="w-full max-w-7xl">
-          <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Payment Management</h1>
-            <p className="text-gray-600">Manage payments, providers, and purchase orders</p>
-          </div>
-
-        {/* Tab Navigation */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="flex space-x-8 px-6">
-                <button
-                  onClick={() => setActiveTab('providers')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-                    activeTab === 'providers'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <Wallet size={16} />
-                  Payment Accounts
-                </button>
-                <button
-                  onClick={() => setActiveTab('purchase-orders')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-                    activeTab === 'purchase-orders'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <ShoppingCart size={16} />
-                  Purchase Orders
-                </button>
-                <button
-                  onClick={() => setActiveTab('history')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-                    activeTab === 'history'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <History size={16} />
-                  Transactions
-                </button>
-                <button
-                  onClick={() => setActiveTab('expenses')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-                    activeTab === 'expenses'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <TrendingDown size={16} />
-                  Expenses
-                </button>
-                <button
-                  onClick={() => setActiveTab('recurring')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-                    activeTab === 'recurring'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <Repeat size={16} />
-                  Recurring
-                </button>
-              </nav>
+          {/* Header - Enhanced Modal Style */}
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-8 mb-6">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                <Wallet className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">Payment Management</h1>
+                <p className="text-sm text-gray-600">Manage payments, providers, and purchase orders</p>
+              </div>
             </div>
           </div>
+
+        {/* Modern Tab Navigation */}
+        <div className="mb-6">
+          <GlassTabs
+            tabs={[
+              {
+                id: 'providers',
+                label: 'Payment Accounts',
+                icon: <Wallet size={20} />
+              },
+              {
+                id: 'purchase-orders',
+                label: 'Purchase Orders',
+                icon: <ShoppingCart size={20} />
+              },
+              {
+                id: 'history',
+                label: 'Transactions',
+                icon: <History size={20} />
+              },
+              {
+                id: 'expenses',
+                label: 'Expenses',
+                icon: <TrendingDown size={20} />
+              },
+              {
+                id: 'recurring',
+                label: 'Recurring',
+                icon: <Repeat size={20} />
+              }
+            ]}
+            activeTab={activeTab}
+            onTabChange={(tabId) => setActiveTab(tabId as 'providers' | 'purchase-orders' | 'history' | 'expenses' | 'recurring')}
+            variant="modern"
+            size="md"
+          />
+        </div>
 
           {/* Tab Content */}
           <div>

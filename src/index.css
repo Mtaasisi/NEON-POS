@@ -1340,6 +1340,47 @@ body {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
+/* TopBar Horizontal Scrollbar - Thin & Smooth */
+.topbar ::-webkit-scrollbar {
+  height: 3px;
+}
+
+.topbar ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.topbar ::-webkit-scrollbar-thumb {
+  background: rgba(203, 213, 225, 0.5);
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.topbar ::-webkit-scrollbar-thumb:hover {
+  background: rgba(203, 213, 225, 0.8);
+}
+
+/* Firefox scrollbar for topbar */
+.topbar * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(203, 213, 225, 0.5) transparent;
+}
+
+/* Dark mode topbar scrollbar */
+.theme-dark .topbar ::-webkit-scrollbar-thumb,
+.theme-dark-cards .topbar ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+}
+
+.theme-dark .topbar ::-webkit-scrollbar-thumb:hover,
+.theme-dark-cards .topbar ::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+.theme-dark .topbar *,
+.theme-dark-cards .topbar * {
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
 /* TopBar animations */
 .topbar-enter {
   animation: topbar-slide-down 0.3s ease-out;

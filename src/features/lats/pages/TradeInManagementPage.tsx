@@ -8,6 +8,7 @@ import { History, DollarSign, Settings } from 'lucide-react';
 import TradeInHistoryTab from '../components/tradeIn/TradeInHistoryTab';
 import TradeInPricingTab from '../components/tradeIn/TradeInPricingTab';
 import { TradeInSettingsModal } from '../components/tradeIn/TradeInSettingsModal';
+import GlassTabs from '../../shared/components/ui/GlassTabs';
 
 type TabType = 'history' | 'pricing';
 
@@ -32,66 +33,43 @@ export const TradeInManagementPage: React.FC = () => {
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <History className="w-8 h-8 text-blue-600" />
-            Trade-In Management
-          </h1>
-          <p className="text-gray-600 mt-2">
-            Manage device trade-ins, pricing, and transaction history
-          </p>
+      {/* Header - Enhanced Modal Style */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-8 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+              <History className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-1">Trade-In Management</h1>
+              <p className="text-sm text-gray-600">Manage device trade-ins, pricing, and transaction history</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl hover:from-purple-600 hover:to-purple-700 transition-all font-semibold flex items-center gap-2 shadow-lg hover:shadow-xl"
+            title="Trade-In Settings"
+          >
+            <Settings className="w-5 h-5" />
+            Settings
+          </button>
         </div>
-        <button
-          onClick={() => setShowSettings(true)}
-          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center gap-2"
-          title="Trade-In Settings"
-        >
-          <Settings className="w-5 h-5" />
-          Settings
-        </button>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="bg-white rounded-lg shadow-sm mb-6 border border-gray-200">
-        <div className="flex border-b border-gray-200">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 px-6 py-4 text-left transition-all ${
-                  isActive
-                    ? 'border-b-2 border-blue-600 bg-blue-50'
-                    : 'hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Icon
-                    className={`w-5 h-5 ${
-                      isActive ? 'text-blue-600' : 'text-gray-400'
-                    }`}
-                  />
-                  <div>
-                    <div
-                      className={`font-semibold ${
-                        isActive ? 'text-blue-600' : 'text-gray-700'
-                      }`}
-                    >
-                      {tab.label}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      {tab.description}
-                    </div>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+      {/* Modern Tabs */}
+      <div className="mb-6">
+        <GlassTabs
+          tabs={tabs.map(tab => ({
+            id: tab.id,
+            label: tab.label,
+            icon: <tab.icon className="w-5 h-5" />,
+            description: tab.description
+          }))}
+          activeTab={activeTab}
+          onTabChange={(tabId) => setActiveTab(tabId as TabType)}
+          variant="cards"
+          size="md"
+        />
       </div>
 
       {/* Tab Content */}

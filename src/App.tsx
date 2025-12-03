@@ -82,6 +82,7 @@ const UserManagementPage = lazy(() => import('./features/users/pages/UserManagem
 const EnhancedSupplierManagementPage = lazy(() => import('./features/settings/pages/EnhancedSupplierManagementPage'));
 import { SuppliersProvider } from './context/SuppliersContext';
 const SMSControlCenterPage = lazy(() => import('./features/sms/pages/SMSControlCenterPage'));
+const WhatsAppInboxPage = lazy(() => import('./features/whatsapp/pages/WhatsAppInboxPage'));
 const EnhancedPaymentManagementPage = lazy(() => import('./features/payments/pages/EnhancedPaymentManagementPage'));
 const ExpensesPage = lazy(() => import('./features/payments/pages/ExpensesPage'));
 const EmployeeManagementPage = lazy(() => import('./features/employees/pages/EmployeeManagementPage'));
@@ -800,6 +801,15 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             <RoleProtectedRoute allowedRoles={['admin']}>
               <Suspense fallback={<DynamicPageLoader />}>
                 <SMSSettingsPage />
+              </Suspense>
+            </RoleProtectedRoute>
+          } />
+          
+          {/* WhatsApp Module Routes */}
+          <Route path="/whatsapp/inbox" element={
+            <RoleProtectedRoute allowedRoles={['admin', 'customer-care']}>
+              <Suspense fallback={<DynamicPageLoader />}>
+                <WhatsAppInboxPage />
               </Suspense>
             </RoleProtectedRoute>
           } />

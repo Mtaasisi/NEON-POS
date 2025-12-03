@@ -1,0 +1,25 @@
+📦 FILES TO UPLOAD TO HOSTINGER:
+
+1️⃣ test-webhook-simple.php
+   → Upload to: public_html/test-webhook-simple.php
+   Location: public/test-webhook-simple.php
+
+2️⃣ view-test-results.php
+   → Upload to: public_html/view-test-results.php
+   Location: public/view-test-results.php
+
+3️⃣ webhook.php (with debug)
+   → Upload to: public_html/api/whatsapp/webhook.php
+   Location: public/api/whatsapp/webhook.php
+
+📋 AFTER UPLOAD:
+
+Step 1: Configure test webhook URL in WasenderAPI:
+   https://dukani.site/test-webhook-simple.php
+
+Step 2: Test it and view results:
+   https://dukani.site/view-test-results.php
+
+Step 3: Take screenshot and send to me!
+
+🎯 Read: DEBUG_INSTRUCTIONS.md for full details

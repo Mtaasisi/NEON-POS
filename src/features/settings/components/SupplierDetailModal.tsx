@@ -8,6 +8,7 @@ import {
 import { extractProductCategories, getCategoryColor } from '../../../utils/supplierUtils';
 import SupplierOrderHistoryTab from './SupplierOrderHistoryTab';
 import { Supplier, deleteSupplier } from '../../../lib/supplierApi';
+import GlassTabs from '../../shared/components/ui/GlassTabs';
 import { toast } from 'react-hot-toast';
 
 interface SupplierDetailModalProps {
@@ -135,31 +136,20 @@ const SupplierDetailModal: React.FC<SupplierDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Tab Navigation - Fixed */}
-        <div className="px-6 pt-4 pb-0 border-b border-gray-200 bg-white flex-shrink-0">
-          <div className="flex w-full overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 min-w-fit py-3 px-4 border-b-2 font-semibold text-sm transition-colors whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'border-orange-500 text-orange-600 bg-orange-50'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                {tab.icon}
-                  <span className="hidden sm:inline">{tab.label}</span>
-                {tab.badge && (
-                    <span className="px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full text-xs font-medium">
-                    {tab.badge}
-                  </span>
-                )}
-                </div>
-              </button>
-            ))}
-          </div>
+        {/* Modern Tab Navigation */}
+        <div className="px-6 pt-4 pb-0 bg-white flex-shrink-0">
+          <GlassTabs
+            tabs={tabs.map(tab => ({
+              id: tab.id,
+              label: tab.label,
+              icon: tab.icon,
+              badge: tab.badge
+            }))}
+            activeTab={activeTab}
+            onTabChange={(tabId) => setActiveTab(tabId as TabId)}
+            variant="modern"
+            size="sm"
+          />
         </div>
 
         {/* Scrollable Content */}

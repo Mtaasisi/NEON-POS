@@ -1037,7 +1037,7 @@ const AttendanceSettings: React.FC<{
 }> = ({ settings, onSave, getStatusIcon, getStatusColor }) => {
   const [localSettings, setLocalSettings] = useState(settings);
   const [saving, setSaving] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<string>('security-mode');
+  const [expandedSection, setExpandedSection] = useState<string>('general');
   const [securityModeTab, setSecurityModeTab] = useState<string>('mode-type');
 
   // Update local settings when settings prop changes

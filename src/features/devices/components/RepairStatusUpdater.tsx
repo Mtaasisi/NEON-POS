@@ -777,9 +777,6 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
 
     setSmsLoading(true);
     try {
-      // Import SMS service
-      const { default: smsService } = await import('../../../services/smsService');
-      
       // Get customer phone number
       const { data: customerData, error: customerError } = await supabase
         .from('customers')
@@ -794,6 +791,7 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
 
       // Send SMS or WhatsApp based on type
       if (type === 'sms') {
+        const { default: smsService } = await import('../../../services/smsService');
         const result = await smsService.sendSMS(customerData.phone, smsMessage);
         if (result.success) {
           toast.success('SMS sent successfully');
@@ -802,7 +800,8 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
         }
       } else {
         // For WhatsApp, use the WhatsApp service
-        const result = await smsService.sendSMS(customerData.phone, smsMessage);
+        const whatsappService = (await import('../../../services/whatsappService')).default;
+        const result = await whatsappService.sendMessage(customerData.phone, smsMessage);
         if (result.success) {
           toast.success('WhatsApp message sent successfully');
         } else {

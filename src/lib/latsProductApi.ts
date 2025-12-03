@@ -1070,18 +1070,33 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
       // Get images for this product - combine image_url field and product_images table
       const images: string[] = [];
       
-      // Add image_url if it exists (from main products table)
-      if (product.image_url) {
-        images.push(product.image_url);
-      }
-      
-      // Add images from product_images table
+      // Add images from product_images table (prioritize primary images)
       const productImagesArray = imagesByProductId.get(product.id) || [];
+      
+      // First, add primary images (prefer thumbnail_url if available for better performance)
       productImagesArray.forEach(img => {
-        if (img.image_url && !images.includes(img.image_url)) {
-          images.push(img.image_url);
+        if (img.is_primary) {
+          const imageUrl = img.thumbnail_url || img.image_url;
+          if (imageUrl && !images.includes(imageUrl)) {
+            images.push(imageUrl);
+          }
         }
       });
+      
+      // Then, add non-primary images (prefer thumbnail_url if available)
+      productImagesArray.forEach(img => {
+        if (!img.is_primary) {
+          const imageUrl = img.thumbnail_url || img.image_url;
+          if (imageUrl && !images.includes(imageUrl)) {
+            images.push(imageUrl);
+          }
+        }
+      });
+      
+      // Finally, add image_url from products table as fallback if no images found
+      if (images.length === 0 && product.image_url) {
+        images.push(product.image_url);
+      }
 
       const productVariants = variantsByProductId.get(product.id) || [];
       const firstVariant = productVariants[0];

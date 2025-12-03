@@ -20,7 +20,7 @@ const CommunicationModal: React.FC<CommunicationModalProps> = ({
   onClose, 
   customer 
 }) => {
-  const [communicationType, setCommunicationType] = useState<'sms' | 'email'>('sms');
+  const [communicationType, setCommunicationType] = useState<'sms' | 'email' | 'whatsapp'>('sms');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState('');
@@ -29,22 +29,27 @@ const CommunicationModal: React.FC<CommunicationModalProps> = ({
   const messageTemplates = {
     welcome: {
       sms: "Welcome to our loyalty program! You've earned {points} points. Thank you for choosing us!",
+      whatsapp: "Welcome to our loyalty program! 🎉 You've earned {points} points. Thank you for choosing us!",
       email: "Welcome to our loyalty program! You've earned {points} points on your first purchase. We're excited to have you as a valued customer."
     },
     pointsUpdate: {
       sms: "You've earned {points} points! Total balance: {totalPoints} points.",
+      whatsapp: "🎊 Great news! You've earned {points} points! Your total balance is now {totalPoints} points.",
       email: "Great news! You've earned {points} points on your recent purchase. Your total balance is now {totalPoints} points."
     },
     tierUpgrade: {
       sms: "Congratulations! You've been upgraded to {tier} tier!",
+      whatsapp: "🎉 Congratulations! You've been upgraded to {tier} tier! Enjoy exclusive benefits and rewards!",
       email: "Congratulations! You've been upgraded to {tier} tier! Enjoy exclusive benefits and rewards."
     },
     rewardAvailable: {
       sms: "You have {points} points available for redemption!",
+      whatsapp: "🎁 You have {points} points available for redemption! Visit us to claim your rewards.",
       email: "You have {points} points available for redemption! Visit us to claim your rewards."
     },
     custom: {
       sms: "",
+      whatsapp: "",
       email: ""
     }
   };
@@ -84,6 +89,14 @@ const CommunicationModal: React.FC<CommunicationModalProps> = ({
         case 'sms':
           const smsResult = await smsService.sendSMS(customer.phone, message);
           success = smsResult.success;
+          break;
+        case 'whatsapp':
+          const whatsappService = (await import('../../../services/whatsappService')).default;
+          const whatsappResult = await whatsappService.sendMessage(customer.phone, message);
+          success = whatsappResult.success;
+          if (!success) {
+            toast.error(`WhatsApp failed: ${whatsappResult.error}`);
+          }
           break;
         case 'email':
           if (customer.email) {

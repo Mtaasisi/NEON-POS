@@ -860,10 +860,10 @@ const DeviceRepairDetailModal: React.FC<DeviceRepairDetailModalProps> = ({
         .from('customer_communications')
         .insert({
           customer_id: customer.id,
-          device_id: device.id,
           type: 'sms',
           message: message,
           status: 'sent',
+          phone_number: customer.phone || customer.whatsapp,
           sent_by: currentUser?.id,
           sent_at: new Date().toISOString()
         });

@@ -387,7 +387,7 @@ const MobileClientDetail: React.FC = () => {
 
   // Calculate customer analytics
   const calculateCustomerAnalytics = (customerId: string, posSales: any[], devices: any[], payments: any[]) => {
-    const totalPosSpent = posSales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+    const totalPosSpent = posSales.reduce((sum, sale) => sum + (parseFloat(sale.total_amount) || 0), 0);
     
     const customerDevices = devices.filter(device => device.customer_id === customerId);
     const customerDeviceIds = customerDevices.map(device => device.id);

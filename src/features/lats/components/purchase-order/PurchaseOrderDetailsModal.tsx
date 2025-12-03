@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   X,
   FileText,
@@ -13,14 +14,24 @@ import {
   AlertCircle,
   TrendingUp,
   ShoppingCart,
-  Receipt
+  Receipt,
+  Send,
+  Edit,
+  Trash2,
+  Copy,
+  Eye
 } from 'lucide-react';
-import { LoadingSpinner } from '../../../components/ui/LoadingSpinner';
+import LoadingSpinner from '../../../../components/ui/LoadingSpinner';
+import { toast } from 'react-hot-toast';
+import { useInventoryStore } from '../../stores/useInventoryStore';
+import { useDialog } from '../../../shared/hooks/useDialog';
+import { useAuth } from '../../../../context/AuthContext';
 
 interface PurchaseOrderDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   order: any; // Using any for now, should be properly typed
+  onOrderUpdate?: () => void; // Callback to refresh parent component
 }
 
 type TabType = 'overview' | 'items' | 'payments' | 'history';
@@ -28,10 +39,28 @@ type TabType = 'overview' | 'items' | 'payments' | 'history';
 const PurchaseOrderDetailsModal: React.FC<PurchaseOrderDetailsModalProps> = ({
   isOpen,
   onClose,
-  order
+  order,
+  onOrderUpdate
 }) => {
+  const navigate = useNavigate();
+  const { confirm } = useDialog();
+  const { currentUser } = useAuth();
+  const {
+    approvePurchaseOrder,
+    updatePurchaseOrder,
+    deletePurchaseOrder,
+    loadPurchaseOrders
+  } = useInventoryStore();
+  
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Action loading states
+  const [isApproving, setIsApproving] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [isReceiving, setIsReceiving] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
@@ -84,6 +113,231 @@ const PurchaseOrderDetailsModal: React.FC<PurchaseOrderDetailsModalProps> = ({
     { key: 'payments' as TabType, label: 'Payments', icon: CreditCard },
     { key: 'history' as TabType, label: 'History', icon: History }
   ];
+
+  // Action handlers - matching PurchaseOrdersPage functionality
+  const handleApproveAndSend = async () => {
+    if (!order) return;
+    
+    if (order.status !== 'draft') {
+      toast.error('Only draft orders can be approved');
+      return;
+    }
+    
+    if (!order.items || order.items.length === 0) {
+      toast.error('Cannot approve order without items');
+      return;
+    }
+    
+    try {
+      setIsApproving(true);
+      const response = await approvePurchaseOrder(order.id);
+      if (response.ok) {
+        const sendResponse = await updatePurchaseOrder(order.id, { status: 'sent' });
+        if (sendResponse.ok) {
+          toast.success('Order approved and sent to supplier');
+          await loadPurchaseOrders();
+          onOrderUpdate?.();
+        } else {
+          toast.success('Order approved (send manually from details)');
+          await loadPurchaseOrders();
+          onOrderUpdate?.();
+        }
+      } else {
+        toast.error(response.message || 'Failed to approve order');
+      }
+    } catch (error) {
+      console.error('Error approving and sending order:', error);
+      toast.error('Failed to process order');
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleReceiveOrder = () => {
+    if (!order) return;
+    navigate(`/lats/purchase-orders/${order.id}?action=receive`);
+    onClose();
+  };
+
+  const handleCompleteOrder = async () => {
+    if (!order) return;
+    
+    if (order.status !== 'received') {
+      toast.error('Order must be received before completing');
+      return;
+    }
+    
+    const confirmed = await confirm('Are you sure you want to complete this purchase order?');
+    if (!confirmed) return;
+    
+    try {
+      setIsCompleting(true);
+      const response = await updatePurchaseOrder(order.id, { status: 'completed' });
+      if (response.ok) {
+        toast.success('Purchase order completed successfully');
+        await loadPurchaseOrders();
+        onOrderUpdate?.();
+      } else {
+        toast.error(response.message || 'Failed to complete purchase order');
+      }
+    } catch (error) {
+      console.error('Error completing purchase order:', error);
+      toast.error('Failed to complete purchase order');
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!order) return;
+    
+    if (order.status !== 'draft') {
+      toast.error('Only draft orders can be deleted');
+      return;
+    }
+    
+    const confirmed = await confirm('Are you sure you want to delete this purchase order? This action cannot be undone.');
+    if (!confirmed) return;
+    
+    try {
+      setIsDeleting(true);
+      const response = await deletePurchaseOrder(order.id);
+      if (response.ok) {
+        toast.success('Purchase order deleted successfully');
+        await loadPurchaseOrders();
+        onOrderUpdate?.();
+        onClose();
+      } else {
+        toast.error(response.message || 'Failed to delete purchase order');
+      }
+    } catch (error) {
+      console.error('Error deleting purchase order:', error);
+      toast.error('Failed to delete purchase order');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleEditOrder = () => {
+    if (!order) return;
+    navigate(`/lats/purchase-order/create?edit=${order.id}`);
+    onClose();
+  };
+
+  const handleDuplicateOrder = () => {
+    if (!order) return;
+    navigate(`/lats/purchase-order/create?duplicate=${order.id}`);
+    onClose();
+  };
+
+  const handleViewDetails = () => {
+    if (!order) return;
+    navigate(`/lats/purchase-orders/${order.id}`);
+    onClose();
+  };
+
+  // Get smart action buttons based on order status - matching PurchaseOrdersPage
+  const getSmartActionButtons = () => {
+    const actions = [];
+    const validStatuses = ['draft', 'sent', 'confirmed', 'partial_received', 'received', 'completed', 'cancelled'];
+    const orderStatus = validStatuses.includes(order.status) ? order.status : 'draft';
+    
+    switch (orderStatus) {
+      case 'draft':
+        actions.push({
+          type: 'send',
+          label: 'Send to Supplier',
+          icon: <Send className="w-4 h-4" />,
+          color: 'bg-green-600 hover:bg-green-700',
+          onClick: handleApproveAndSend,
+          loading: isApproving
+        });
+        actions.push({
+          type: 'delete',
+          label: 'Delete',
+          icon: <Trash2 className="w-4 h-4" />,
+          color: 'bg-red-600 hover:bg-red-700',
+          onClick: handleDeleteOrder,
+          loading: isDeleting
+        });
+        break;
+      
+      case 'sent':
+      case 'confirmed':
+        actions.push({
+          type: 'receive',
+          label: 'Receive Items',
+          icon: <Package className="w-4 h-4" />,
+          color: 'bg-green-600 hover:bg-green-700',
+          onClick: handleReceiveOrder
+        });
+        break;
+      
+      case 'partial_received':
+        const totalOrdered = order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0;
+        const totalReceived = order.items?.reduce((sum: number, item: any) => sum + (item.receivedQuantity || 0), 0) || 0;
+        const remaining = totalOrdered - totalReceived;
+        
+        actions.push({
+          type: 'receive',
+          label: `Continue (${remaining} left)`,
+          icon: <Package className="w-4 h-4" />,
+          color: 'bg-orange-600 hover:bg-orange-700',
+          onClick: handleReceiveOrder
+        });
+        break;
+      
+      case 'received':
+        actions.push({
+          type: 'complete',
+          label: 'Complete',
+          icon: <CheckCircle className="w-4 h-4" />,
+          color: 'bg-green-600 hover:bg-green-700',
+          onClick: handleCompleteOrder,
+          loading: isCompleting
+        });
+        break;
+
+      case 'completed':
+        actions.push({
+          type: 'duplicate',
+          label: 'Duplicate',
+          icon: <Copy className="w-4 h-4" />,
+          color: 'bg-blue-600 hover:bg-blue-700',
+          onClick: handleDuplicateOrder
+        });
+        break;
+    }
+    
+    // Always add secondary actions
+    if (['draft', 'sent', 'confirmed', 'shipped'].includes(orderStatus)) {
+      actions.push({
+        type: 'edit',
+        label: 'Edit',
+        icon: <Edit className="w-4 h-4" />,
+        color: 'bg-purple-600 hover:bg-purple-700',
+        onClick: handleEditOrder
+      });
+    }
+    
+    actions.push({
+      type: 'view',
+      label: 'View Details',
+      icon: <Eye className="w-4 h-4" />,
+      color: 'bg-blue-600 hover:bg-blue-700',
+      onClick: handleViewDetails
+    });
+    
+    actions.push({
+      type: 'duplicate',
+      label: 'Duplicate',
+      icon: <Copy className="w-4 h-4" />,
+      color: 'bg-indigo-600 hover:bg-indigo-700',
+      onClick: handleDuplicateOrder
+    });
+    
+    return actions;
+  };
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
@@ -357,14 +611,59 @@ const PurchaseOrderDetailsModal: React.FC<PurchaseOrderDetailsModalProps> = ({
           )}
         </div>
 
-        {/* Enhanced Footer */}
-        <div className="p-6 border-t bg-gradient-to-r from-gray-50 to-gray-100/50 flex justify-end rounded-b-[36px]">
-          <button
-            onClick={onClose}
-            className="px-8 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-2xl font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg shadow-gray-600/20"
-          >
-            Close
-          </button>
+        {/* Enhanced Footer with Action Buttons */}
+        <div className="p-6 border-t bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-b-[36px]">
+          {/* Action Buttons Section */}
+          <div className="mb-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {getSmartActionButtons().slice(0, 4).map((action, index) => (
+                <button
+                  key={`${action.type}-${index}`}
+                  onClick={action.onClick}
+                  disabled={action.loading}
+                  className={`flex items-center justify-center gap-2 px-4 py-3 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 ${action.color}`}
+                >
+                  {action.loading ? (
+                    <LoadingSpinner size="sm" color="white" />
+                  ) : (
+                    action.icon
+                  )}
+                  {action.label}
+                </button>
+              ))}
+            </div>
+            
+            {/* Secondary Actions */}
+            {getSmartActionButtons().length > 4 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                {getSmartActionButtons().slice(4).map((action, index) => (
+                  <button
+                    key={`${action.type}-${index + 4}`}
+                    onClick={action.onClick}
+                    disabled={action.loading}
+                    className={`flex items-center justify-center gap-2 px-4 py-2.5 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 ${action.color}`}
+                  >
+                    {action.loading ? (
+                      <LoadingSpinner size="sm" color="white" />
+                    ) : (
+                      action.icon
+                    )}
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {/* Close Button */}
+          <div className="flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-8 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-2xl font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg shadow-gray-600/20"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>

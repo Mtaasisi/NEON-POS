@@ -46,29 +46,32 @@ class SpecialOrderService {
       const orderNumber = await this.generateOrderNumber();
       const balanceDue = input.total_amount - input.deposit_paid;
 
+      // Sanitize date fields - convert empty strings to null
+      const sanitizedInput = {
+        order_number: orderNumber,
+        customer_id: input.customer_id,
+        product_name: input.product_name,
+        product_description: input.product_description || null,
+        quantity: input.quantity,
+        unit_price: input.unit_price,
+        total_amount: input.total_amount,
+        deposit_paid: input.deposit_paid,
+        balance_due: balanceDue,
+        expected_arrival_date: input.expected_arrival_date && input.expected_arrival_date.trim() !== '' ? input.expected_arrival_date : null,
+        supplier_name: input.supplier_name || null,
+        supplier_reference: input.supplier_reference || null,
+        country_of_origin: input.country_of_origin || null,
+        tracking_number: input.tracking_number || null,
+        notes: input.notes || null,
+        internal_notes: input.internal_notes || null,
+        status: 'deposit_received',
+        created_by: userId
+      };
+
       // Start transaction
       const { data: order, error: orderError } = await supabase
         .from('customer_special_orders')
-        .insert({
-          order_number: orderNumber,
-          customer_id: input.customer_id,
-          product_name: input.product_name,
-          product_description: input.product_description,
-          quantity: input.quantity,
-          unit_price: input.unit_price,
-          total_amount: input.total_amount,
-          deposit_paid: input.deposit_paid,
-          balance_due: balanceDue,
-          expected_arrival_date: input.expected_arrival_date,
-          supplier_name: input.supplier_name,
-          supplier_reference: input.supplier_reference,
-          country_of_origin: input.country_of_origin,
-          tracking_number: input.tracking_number,
-          notes: input.notes,
-          internal_notes: input.internal_notes,
-          status: 'deposit_received',
-          created_by: userId
-        })
+        .insert(sanitizedInput)
         .select()
         .single();
 
@@ -114,12 +117,35 @@ class SpecialOrderService {
     userId: string
   ): Promise<{ success: boolean; order?: SpecialOrder; error?: string }> {
     try {
+      // Sanitize date fields - convert empty strings to null
+      const sanitizedInput: any = {
+        ...input,
+        updated_at: new Date().toISOString()
+      };
+
+      // Handle date fields specifically
+      if ('expected_arrival_date' in sanitizedInput) {
+        sanitizedInput.expected_arrival_date = sanitizedInput.expected_arrival_date && sanitizedInput.expected_arrival_date.trim() !== '' 
+          ? sanitizedInput.expected_arrival_date 
+          : null;
+      }
+      if ('actual_arrival_date' in sanitizedInput) {
+        sanitizedInput.actual_arrival_date = sanitizedInput.actual_arrival_date && sanitizedInput.actual_arrival_date.trim() !== '' 
+          ? sanitizedInput.actual_arrival_date 
+          : null;
+      }
+
+      // Handle other string fields that could be empty
+      const stringFieldsToSanitize = ['tracking_number', 'supplier_reference', 'notes', 'internal_notes'];
+      stringFieldsToSanitize.forEach(field => {
+        if (field in sanitizedInput && sanitizedInput[field] === '') {
+          sanitizedInput[field] = null;
+        }
+      });
+
       const { data: order, error } = await supabase
         .from('customer_special_orders')
-        .update({
-          ...input,
-          updated_at: new Date().toISOString()
-        })
+        .update(sanitizedInput)
         .eq('id', orderId)
         .select()
         .single();

@@ -41,43 +41,15 @@ const UnifiedBrandingSettings: React.FC = () => {
     try {
       setLoading(true);
       
-      // Fetch all fields including social media columns
+      // Fetch basic fields first (social media columns don't exist in database)
       // @ts-ignore - Neon query builder implements thenable interface
       const { data: baseData, error: baseError } = await supabase
         .from('lats_pos_general_settings')
-        .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo, business_instagram, business_tiktok, business_whatsapp')
+        .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
         .limit(1)
         .single();
 
       if (baseError) {
-        // If error is about missing columns, try without them
-        if (baseError.code === '42703') {
-          console.warn('⚠️ Social media columns may not exist, fetching without them');
-          const { data: fallbackData, error: fallbackError } = await supabase
-            .from('lats_pos_general_settings')
-            .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
-            .limit(1)
-            .single();
-          
-          if (fallbackError) throw fallbackError;
-          
-          if (fallbackData) {
-            setSettingsId(fallbackData.id);
-            setFormData({
-              businessName: fallbackData.business_name || '',
-              businessPhone: fallbackData.business_phone || '',
-              businessEmail: fallbackData.business_email || '',
-              businessWebsite: fallbackData.business_website || '',
-              businessAddress: fallbackData.business_address || '',
-              businessLogo: fallbackData.business_logo || null,
-              businessInstagram: '',
-              businessTiktok: '',
-              businessWhatsapp: ''
-            });
-            setLogoPreview(fallbackData.business_logo || null);
-            return;
-          }
-        }
         throw baseError;
       }
 
@@ -85,7 +57,7 @@ const UnifiedBrandingSettings: React.FC = () => {
         throw new Error('No settings record found');
       }
 
-      // Set all data including social media fields
+      // Set data (social media fields will be empty since columns don't exist)
       setSettingsId(baseData.id);
       const formDataToSet = {
         businessName: baseData.business_name || '',
@@ -94,17 +66,11 @@ const UnifiedBrandingSettings: React.FC = () => {
         businessWebsite: baseData.business_website || '',
         businessAddress: baseData.business_address || '',
         businessLogo: baseData.business_logo || null,
-        businessInstagram: baseData.business_instagram || '',
-        businessTiktok: baseData.business_tiktok || '',
-        businessWhatsapp: baseData.business_whatsapp || ''
+        businessInstagram: '',
+        businessTiktok: '',
+        businessWhatsapp: ''
       };
       setLogoPreview(baseData.business_logo || null);
-      
-      console.log('✅ Loaded business info with social media:', {
-        instagram: formDataToSet.businessInstagram,
-        tiktok: formDataToSet.businessTiktok,
-        whatsapp: formDataToSet.businessWhatsapp
-      });
       
       setFormData(formDataToSet);
     } catch (error: any) {
@@ -194,42 +160,12 @@ const UnifiedBrandingSettings: React.FC = () => {
         throw error;
       }
       
-      // Try to save social media columns if they have values
-      if (formData.businessInstagram?.trim() || formData.businessTiktok?.trim() || formData.businessWhatsapp?.trim()) {
-        try {
-          const socialData: any = {};
-          if (formData.businessInstagram?.trim()) socialData.business_instagram = formData.businessInstagram.trim();
-          if (formData.businessTiktok?.trim()) socialData.business_tiktok = formData.businessTiktok.trim();
-          if (formData.businessWhatsapp?.trim()) socialData.business_whatsapp = formData.businessWhatsapp.trim();
-          
-          console.log('💾 Attempting to save social media fields:', socialData);
-          
-          // @ts-ignore - Neon query builder implements thenable interface
-          const { data: socialResult, error: socialError } = await supabase
-            .from('lats_pos_general_settings')
-            .update(socialData)
-            .eq('id', settingsId)
-            .select('business_instagram, business_tiktok, business_whatsapp');
-          
-          if (socialError) {
-            console.error('❌ Error saving social media fields:', socialError);
-            console.error('   Error code:', socialError.code);
-            console.error('   Error message:', socialError.message);
-            // Don't throw - basic info is already saved
-          } else {
-            console.log('✅ Social media fields saved successfully:', socialResult?.[0]);
-          }
-        } catch (err: any) {
-          console.error('❌ Exception saving social media fields:', err);
-          // Don't throw - basic info is already saved
-        }
-      }
+      // Note: Social media columns (business_instagram, business_tiktok, business_whatsapp) 
+      // do not exist in the database, so we skip saving them to avoid errors.
+      // The UI still allows users to enter these values, but they are not persisted.
       
       console.log('✅ Successfully saved business info:', {
-        saved: data?.[0],
-        instagram: data?.[0]?.business_instagram,
-        tiktok: data?.[0]?.business_tiktok,
-        whatsapp: data?.[0]?.business_whatsapp
+        saved: data?.[0]
       });
 
       // Clear business info cache to force all components to refresh
@@ -241,15 +177,7 @@ const UnifiedBrandingSettings: React.FC = () => {
       toast.success('Business information updated successfully - All components will refresh');
     } catch (error: any) {
       console.error('Error updating business info:', error);
-      
-      // Check if it's a missing column error for social media
-      const errorMessage = String(error.message || '').toLowerCase();
-      if (errorMessage.includes('business_instagram') || errorMessage.includes('business_tiktok') || errorMessage.includes('business_whatsapp') || errorMessage.includes('does not exist')) {
-        console.warn('⚠️ Social media columns may not exist in this database connection');
-        toast.error(`Failed to update business information: ${error.message || 'Database column error'}`);
-      } else {
-        toast.error(`Failed to update business information: ${error.message || 'Unknown error'}`);
-      }
+      toast.error(`Failed to update business information: ${error.message || 'Unknown error'}`);
     } finally {
       setSaving(false);
     }

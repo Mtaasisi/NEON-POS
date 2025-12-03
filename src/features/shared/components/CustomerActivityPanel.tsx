@@ -153,7 +153,7 @@ const CustomerActivityPanel: React.FC<CustomerActivityPanelProps> = ({
       }
 
       // Calculate totals
-      const totalSpent = (sales || []).reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+      const totalSpent = (sales || []).reduce((sum, sale) => sum + (parseFloat(sale.total_amount) || 0), 0);
       
       // Find last activity - using correct column names
       const allDates = [

@@ -295,6 +295,23 @@ export function getIntegrationTemplates(): IntegrationTemplate[] {
         { name: 'delay_send_ms', label: 'Delay Between Messages (ms)', type: 'number', required: false, placeholder: '1000' },
       ],
     },
+    // WhatsApp - WasenderAPI
+    {
+      integration_name: 'WHATSAPP_WASENDER',
+      integration_type: 'whatsapp',
+      provider_name: 'WasenderAPI',
+      icon: 'MessageCircle',
+      description: 'Send WhatsApp messages, receipts, and media via WasenderAPI',
+      credentials_fields: [
+        { name: 'api_key', label: 'API Key (Bearer Token)', type: 'password', required: true, placeholder: 'Your WasenderAPI bearer token' },
+        { name: 'session_id', label: 'WhatsApp Session ID', type: 'text', required: true, placeholder: 'Your WhatsApp session ID' },
+      ],
+      config_fields: [
+        { name: 'api_url', label: 'API Base URL', type: 'url', required: false, placeholder: 'https://wasenderapi.com/api' },
+        { name: 'webhook_url', label: 'Webhook URL', type: 'url', required: false, placeholder: 'https://yourapp.com/api/whatsapp/webhook' },
+        { name: 'webhook_token', label: 'Webhook Token', type: 'password', required: false, placeholder: 'Webhook verification token' },
+      ],
+    },
     // Email - SendGrid
     {
       integration_name: 'EMAIL_SERVICE',

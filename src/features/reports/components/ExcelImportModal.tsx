@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-import { X, Upload, Download, AlertCircle, CheckCircle, UserPlus, FileText, Info, Shield } from 'lucide-react';
+import { X, Upload, Download, AlertCircle, CheckCircle, UserPlus, FileText, Info, Shield, FileSpreadsheet, XCircle, CheckCheck } from 'lucide-react';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassButton from '../../shared/components/ui/GlassButton';
 import { Customer } from '../../../types';
@@ -666,40 +666,87 @@ Alice Brown,alice@example.com,655123456,female,DSM,655123456,June,10,INSTAGRAM,S
   if (!isOpen || currentUser?.role !== 'admin') return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <GlassCard className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Shield className="w-5 h-5 text-green-500" />
-            Import Customers from Excel (Admin Only)
-          </h2>
-          <button
-            onClick={handleClose}
-            className="p-2 hover:bg-white/10 rounded-full transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[99999] p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Header with Step Indicator */}
+        <div className="p-8 bg-gradient-to-r from-green-600 to-emerald-600 flex-shrink-0">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg">
+                <Upload className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-1">
+                  Import Customers from Excel
+                </h2>
+                <p className="text-base text-green-100 font-medium">
+                  {currentStep === 'upload' && 'Step 1: Upload File or Manual Entry'}
+                  {currentStep === 'preview' && 'Step 2: Review & Edit Data'}
+                  {currentStep === 'import' && 'Step 3: Import Progress'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleClose}
+              disabled={isImporting}
+              className="w-9 h-9 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full flex items-center justify-center transition-colors disabled:opacity-50"
+            >
+              <X className="w-5 h-5 text-white" />
+            </button>
+          </div>
+          
+          {/* Progress Steps */}
+          <div className="flex items-center justify-between">
+            {[1, 2, 3].map((step) => {
+              const stepMap = { 1: 'upload', 2: 'preview', 3: 'import' };
+              const stepNames = ['upload', 'preview', 'import'];
+              const currentStepIndex = stepNames.indexOf(currentStep) + 1;
+              
+              return (
+                <div key={step} className="flex items-center flex-1">
+                  <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold text-base shadow-lg ${
+                    currentStepIndex > step ? 'bg-green-500 text-white' :
+                    currentStepIndex === step ? 'bg-white text-green-600' :
+                    'bg-white/20 text-white/60'
+                  }`}>
+                    {currentStepIndex > step ? '✓' : step}
+                  </div>
+                  {step < 3 && (
+                    <div className={`flex-1 h-2 mx-2 rounded-full ${
+                      currentStepIndex > step ? 'bg-green-500' : 'bg-white/20'
+                    }`}></div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-8">
+
+        {/* STEP 1: Upload */}
         {currentStep === 'upload' && (
           <div className="space-y-6">
-            <div className="text-center">
+            <div className="text-center bg-green-50 border-2 border-green-200 rounded-2xl p-8">
               <div className="mb-4">
-                <Upload className="w-12 h-12 mx-auto text-blue-500 mb-2" />
-                <h3 className="text-lg font-medium mb-2">Upload Customer Data</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Import customers from Excel/CSV file. Download the template below for the correct format.
+                <div className="w-20 h-20 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                  <FileSpreadsheet className="w-10 h-10 text-white" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-3">Upload Customer Data</h3>
+                <p className="text-base text-gray-600 mb-6">
+                  Import customers from Excel/CSV file or enter them manually. Download the template below for the correct format.
                 </p>
               </div>
               
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isProcessing}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+                  className="px-6 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-base font-bold transition-all shadow-lg flex items-center justify-center gap-2"
                 >
-                  <Upload className="w-4 h-4 mr-2 inline" />
-                  {isProcessing ? 'Processing...' : 'Choose File'}
+                  <Upload className="w-5 h-5" />
+                  {isProcessing ? 'Processing...' : 'Upload Excel/CSV'}
                 </button>
                 
                 <button
@@ -721,23 +768,19 @@ Alice Brown,alice@example.com,655123456,female,DSM,655123456,June,10,INSTAGRAM,S
                       colorTag: 'new'
                     }]);
                   }}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium transition-colors"
+                  className="px-6 py-4 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 text-base font-bold transition-all shadow-lg flex items-center justify-center gap-2"
                 >
-                  <UserPlus className="w-4 h-4 mr-2 inline" />
+                  <UserPlus className="w-5 h-5" />
                   Manual Entry
                 </button>
                 
                 <button
                   onClick={downloadTemplate}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium transition-colors"
+                  className="px-6 py-4 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-xl hover:from-gray-700 hover:to-gray-800 text-base font-bold transition-all shadow-lg flex items-center justify-center gap-2"
                 >
-                  <Download className="w-4 h-4 mr-2 inline" />
+                  <Download className="w-5 h-5" />
                   Download Template
                 </button>
-                
-                <div className="flex items-center justify-center text-sm text-gray-500">
-                  or
-                </div>
               </div>
               
               <input
@@ -749,54 +792,98 @@ Alice Brown,alice@example.com,655123456,female,DSM,655123456,June,10,INSTAGRAM,S
               />
             </div>
             
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <h4 className="font-medium text-green-800 mb-2 flex items-center gap-2">
-                <Info className="w-4 h-4" />
-                Dropdown Values for Excel:
+            {/* Required Fields Info */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
+              <h4 className="font-bold text-blue-900 mb-4 text-lg flex items-center gap-2">
+                <Info className="w-5 h-5" />
+                Required Columns in Your Excel/CSV:
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-green-700">
-                <div>
-                  <strong>Gender:</strong> male, female, other
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-lg p-3 border border-blue-200">
+                  <p className="font-bold text-gray-900 text-sm mb-1">✓ Name</p>
+                  <p className="text-xs text-gray-600">Customer's full name (Required)</p>
                 </div>
-                <div>
-                  <strong>Loyalty Level:</strong> bronze, silver, gold, platinum
+                <div className="bg-white rounded-lg p-3 border border-blue-200">
+                  <p className="font-bold text-gray-900 text-sm mb-1">✓ Phone</p>
+                  <p className="text-xs text-gray-600">Phone number (Required)</p>
                 </div>
-                <div>
-                  <strong>Color Tag:</strong> new, vip, complainer, purchased
+                <div className="bg-white rounded-lg p-3">
+                  <p className="font-semibold text-gray-700 text-sm mb-1">Gender</p>
+                  <p className="text-xs text-gray-500">male, female, other</p>
                 </div>
-                <div>
-                  <strong>Referral Source:</strong> MTANDAONI, RECOMMENDATION, PHYSICALLY, INSTAGRAM, FACEBOOK, GOOGLE, FRIEND, FAMILY, OTHER
+                <div className="bg-white rounded-lg p-3">
+                  <p className="font-semibold text-gray-700 text-sm mb-1">City</p>
+                  <p className="text-xs text-gray-500">Customer's city</p>
+                </div>
+                <div className="bg-white rounded-lg p-3">
+                  <p className="font-semibold text-gray-700 text-sm mb-1">WhatsApp</p>
+                  <p className="text-xs text-gray-500">WhatsApp number (optional)</p>
+                </div>
+                <div className="bg-white rounded-lg p-3">
+                  <p className="font-semibold text-gray-700 text-sm mb-1">Birthday</p>
+                  <p className="text-xs text-gray-500">Format: 15-Mar or DD-MMM</p>
                 </div>
               </div>
             </div>
             
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <h4 className="font-medium text-yellow-800 mb-2 flex items-center gap-2">
-                <Info className="w-4 h-4" />
-                How to Add Dropdowns in Excel:
+            {/* Dropdown Values Reference */}
+            <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-6">
+              <h4 className="font-bold text-purple-900 mb-4 text-base flex items-center gap-2">
+                📝 Valid Values for Dropdown Fields:
               </h4>
-              <ol className="text-sm text-yellow-700 space-y-1">
-                <li>1. Select the column you want to add dropdown to (e.g., Gender column)</li>
-                <li>2. Go to <strong>Data</strong> tab → <strong>Data Validation</strong></li>
-                <li>3. Choose <strong>List</strong> from "Allow" dropdown</li>
-                <li>4. In "Source" field, enter values separated by commas (e.g., male,female,other)</li>
-                <li>5. Click <strong>OK</strong> to apply</li>
-              </ol>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div className="bg-white rounded-lg p-3 border border-purple-200">
+                  <strong className="text-gray-900">Loyalty Level:</strong>
+                  <p className="text-gray-700 mt-1">bronze, silver, gold, platinum</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-purple-200">
+                  <strong className="text-gray-900">Color Tag:</strong>
+                  <p className="text-gray-700 mt-1">new, vip, complainer, purchased</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-purple-200 md:col-span-2">
+                  <strong className="text-gray-900">Referral Source:</strong>
+                  <p className="text-gray-700 mt-1">MTANDAONI, RECOMMENDATION, PHYSICALLY, INSTAGRAM, FACEBOOK, GOOGLE, FRIEND, FAMILY, OTHER</p>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
+        {/* STEP 2: Preview & Edit */}
         {currentStep === 'preview' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium">
-                {importedData.length > 0 ? 'Preview Data' : 'Manual Entry'}
-              </h3>
-                            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">
-                  {importedData.length > 0 ? `${importedData.length} customers found` : 'No file uploaded - manual entry mode'}
+            {/* Step Info */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-blue-900 mb-2">
+                    {importedData.length > 0 ? '📊 Preview & Edit Data' : '✍️ Manual Entry Mode'}
+                  </h3>
+                  <p className="text-sm text-blue-700">
+                    {importedData.length > 0 ? `${importedData.length} customers found in file` : 'Add customers manually one by one'}
+                  </p>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsEditMode(!isEditMode)}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                      isEditMode 
+                        ? "bg-blue-600 text-white hover:bg-blue-700 shadow-md" 
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    {isEditMode ? "✓ Edit Mode ON" : "Edit Mode OFF"}
+                  </button>
+                  <button
+                    onClick={() => setIsCompactView(!isCompactView)}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                      isCompactView 
+                        ? "bg-purple-600 text-white hover:bg-purple-700 shadow-md" 
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    {isCompactView ? "Compact" : "Normal"}
+                  </button>
                   <div className="relative">
                     <button
                       data-dropdown-button
@@ -806,9 +893,9 @@ Alice Brown,alice@example.com,655123456,female,DSM,655123456,June,10,INSTAGRAM,S
                           dropdown.classList.toggle('hidden');
                         }
                       }}
-                      className="px-3 py-1 bg-gray-100 text-gray-700 rounded text-xs font-medium hover:bg-gray-200 transition-colors"
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-semibold transition-all"
                     >
-                      Expand Columns
+                      Columns ▼
                     </button>
                     <div id="column-expand-dropdown" className="hidden absolute top-full right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 min-w-48">
                       <div className="p-2 text-xs text-gray-500 border-b">Select columns to expand:</div>
@@ -841,26 +928,6 @@ Alice Brown,alice@example.com,655123456,female,DSM,655123456,June,10,INSTAGRAM,S
                       ))}
                     </div>
                   </div>
-                  <button
-                    onClick={() => setIsCompactView(!isCompactView)}
-                    className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                      isCompactView 
-                        ? "bg-blue-500 text-white hover:bg-blue-600" 
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    {isCompactView ? "Normal View" : "Compact View"}
-                  </button>
-                  <button
-                    onClick={() => setIsEditMode(!isEditMode)}
-                    className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                      isEditMode 
-                        ? "bg-blue-500 text-white hover:bg-blue-600" 
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    {isEditMode ? "View Mode" : "Edit Mode"}
-                  </button>
                 </div>
               </div>
             </div>
@@ -1170,116 +1237,156 @@ Alice Brown,alice@example.com,655123456,female,DSM,655123456,June,10,INSTAGRAM,S
               </div>
             </div>
             
-            <div className="flex gap-3">
+            {/* Footer Buttons */}
+            <div className="flex gap-4 pt-4">
               <button
                 onClick={() => setCurrentStep('upload')}
-                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium transition-colors"
+                className="px-8 py-4 bg-white border-2 border-gray-300 text-gray-700 rounded-full hover:bg-gray-50 transition-all font-bold text-base"
               >
-                Back
+                ← Back
               </button>
               <button
                 onClick={() => setCurrentStep('import')}
-                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium transition-colors"
+                className="flex-1 px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-full hover:from-green-600 hover:to-emerald-700 transition-all font-bold shadow-lg text-base flex items-center justify-center gap-2"
               >
-                {validationErrors.length > 0 ? 'Continue (Skip Invalid Rows)' : 'Continue to Import'}
+                <CheckCircle className="w-5 h-5" />
+                {validationErrors.length > 0 ? `Import ${editableData.filter((c, i) => validateCustomerData(c, i + 2).length === 0).length} Valid Customers` : `Import ${editableData.length} Customers`}
               </button>
             </div>
           </div>
         )}
 
+        {/* STEP 3: Import Progress */}
         {currentStep === 'import' && (
           <div className="space-y-6">
             {isImporting ? (
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <h3 className="text-lg font-medium mb-2">Importing Customers</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Progress: {Math.round(importProgress)}% ({importResults.length}/{importedData.length})
-                </p>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${importProgress}%` }}
-                  ></div>
+              <div className="p-8 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border-2 border-blue-200 shadow-lg">
+                <div className="text-center mb-8">
+                  <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse shadow-xl">
+                    <Upload className="w-10 h-10 text-white" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-blue-900 mb-2">Importing Customers...</h3>
+                  <p className="text-base text-blue-700 font-medium">Please keep this window open</p>
+                </div>
+                
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-base font-bold text-blue-900">Progress</span>
+                    <span className="text-2xl font-bold text-blue-700">
+                      {importResults.length} / {importedData.length}
+                    </span>
+                  </div>
+                  <div className="w-full bg-blue-200 rounded-full h-6 overflow-hidden shadow-inner">
+                    <div 
+                      className="h-6 bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-300 flex items-center justify-end pr-3"
+                      style={{ width: `${importProgress}%` }}
+                    >
+                      <span className="text-sm text-white font-bold">{Math.round(importProgress)}%</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-5 bg-white rounded-xl border-2 border-green-200 shadow-sm">
+                    <p className="text-sm text-gray-600 mb-2 font-medium">Successful</p>
+                    <p className="text-4xl font-bold text-green-600">✓ {importResults.filter(r => r.success).length}</p>
+                  </div>
+                  <div className="p-5 bg-white rounded-xl border-2 border-red-200 shadow-sm">
+                    <p className="text-sm text-gray-600 mb-2 font-medium">Failed</p>
+                    <p className="text-4xl font-bold text-red-600">✗ {importResults.filter(r => !r.success).length}</p>
+                  </div>
                 </div>
               </div>
             ) : (
-              <>
+              <div className="p-8 bg-green-50 border-2 border-green-200 rounded-2xl shadow-lg">
                 <div className="text-center">
-                  <CheckCircle className="w-12 h-12 mx-auto text-green-500 mb-2" />
-                  <h3 className="text-lg font-medium mb-2">Import Complete</h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Import results for {importedData.length} customers
+                  <div className="w-24 h-24 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl">
+                    <CheckCircle className="w-12 h-12 text-white" />
+                  </div>
+                  <h3 className="text-3xl font-bold text-green-900 mb-3">✅ Import Complete!</h3>
+                  <p className="text-base text-green-700 font-medium mb-6">
+                    Processed {importedData.length} customers from your file
                   </p>
+                  
+                  {/* Results Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="bg-white border-2 border-green-300 rounded-xl p-5 shadow-sm">
+                      <h4 className="font-semibold text-green-800 mb-2">Successful</h4>
+                      <p className="text-4xl font-bold text-green-900">
+                        {importResults.filter(r => r.success).length}
+                      </p>
+                    </div>
+                    <div className="bg-white border-2 border-red-300 rounded-xl p-5 shadow-sm">
+                      <h4 className="font-semibold text-red-800 mb-2">Failed</h4>
+                      <p className="text-4xl font-bold text-red-900">
+                        {importResults.filter(r => !r.success).length}
+                      </p>
+                    </div>
+                    <div className="bg-white border-2 border-blue-300 rounded-xl p-5 shadow-sm">
+                      <h4 className="font-semibold text-blue-800 mb-2">Total</h4>
+                      <p className="text-4xl font-bold text-blue-900">
+                        {importResults.length}
+                      </p>
+                    </div>
+                  </div>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <h4 className="font-medium text-green-800 mb-1">Successful</h4>
-                    <p className="text-2xl font-bold text-green-900">
-                      {importResults.filter(r => r.success).length}
-                    </p>
-                  </div>
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <h4 className="font-medium text-red-800 mb-1">Failed</h4>
-                    <p className="text-2xl font-bold text-red-900">
-                      {importResults.filter(r => !r.success).length}
-                    </p>
-                  </div>
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h4 className="font-medium text-blue-800 mb-1">Total</h4>
-                    <p className="text-2xl font-bold text-blue-900">
-                      {importResults.length}
-                    </p>
-                  </div>
-                </div>
-                
+                {/* Error List */}
                 {importResults.filter(r => !r.success).length > 0 && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <h4 className="font-medium text-red-800 mb-2">Failed Imports:</h4>
-                    <div className="max-h-32 overflow-y-auto">
-                      <ul className="text-sm text-red-700 space-y-1">
+                  <div className="bg-white border-2 border-red-200 rounded-xl p-5">
+                    <h4 className="font-bold text-red-800 mb-3 text-base flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5" />
+                      Failed Imports ({importResults.filter(r => !r.success).length}):
+                    </h4>
+                    <div className="max-h-48 overflow-y-auto">
+                      <ul className="text-sm text-red-700 space-y-2 font-medium">
                         {importResults.filter(r => !r.success).map((result, index) => (
-                          <li key={index}>Row {result.rowNumber}: {result.error}</li>
+                          <li key={index} className="flex items-start gap-2">
+                            <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            <span>Row {result.rowNumber}: {result.error}</span>
+                          </li>
                         ))}
                       </ul>
                     </div>
                   </div>
                 )}
-              </>
+              </div>
             )}
             
-            <div className="flex gap-3">
-              <GlassButton
-                onClick={() => setCurrentStep('preview')}
-                variant="secondary"
-                className="flex-1"
-                disabled={isImporting}
-              >
-                Back
-              </GlassButton>
-              <GlassButton
+            {/* Footer Buttons */}
+            {!isImporting && (
+              <div className="flex gap-4 pt-4">
+                <button
+                  onClick={() => setCurrentStep('preview')}
+                  className="px-8 py-4 bg-white border-2 border-gray-300 text-gray-700 rounded-full hover:bg-gray-50 transition-all font-bold text-base"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={handleClose}
+                  className="flex-1 px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-full hover:from-green-600 hover:to-emerald-700 transition-all font-bold shadow-lg text-base flex items-center justify-center gap-2"
+                >
+                  <CheckCheck className="w-5 h-5" />
+                  Done
+                </button>
+              </div>
+            )}
+            
+            {isImporting && (
+              <button
                 onClick={handleImport}
-                disabled={isImporting || validationErrors.length > 0}
-                className="flex-1"
+                disabled={true}
+                className="w-full px-6 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-full opacity-50 cursor-not-allowed transition-all font-bold shadow-lg text-base flex items-center justify-center gap-2"
               >
-                {isImporting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                    Importing...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Import Customers
-                  </>
-                )}
-              </GlassButton>
-            </div>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                Importing...
+              </button>
+            )}
           </div>
         )}
-      </GlassCard>
+      </div>
     </div>
+  </div>
   );
 };
 

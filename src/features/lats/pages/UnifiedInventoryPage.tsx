@@ -15,6 +15,7 @@ import { toast } from 'react-hot-toast';
 // Import forms and components
 import EnhancedStockAdjustModal from '../components/inventory/EnhancedStockAdjustModal';
 import CategoryFormModal from '../components/inventory/CategoryFormModal';
+import ManageCategoriesModal from '../components/inventory/ManageCategoriesModal';
 import ProductExcelImportModal from '../components/ProductExcelImportModal';
 import ProductExcelExport from '../components/inventory/ProductExcelExport';
 
@@ -137,6 +138,7 @@ const UnifiedInventoryPage: React.FC = () => {
   // Form state variables
   const [showStockAdjustModal, setShowStockAdjustModal] = useState(false);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [showManageCategoriesModal, setShowManageCategoriesModal] = useState(false);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [selectedProductForHistory, setSelectedProductForHistory] = useState<string | null>(null);
   const [showMoreActions, setShowMoreActions] = useState(false);
@@ -891,58 +893,74 @@ const UnifiedInventoryPage: React.FC = () => {
       </div>
       
       <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <div className="flex items-center gap-4">
-            <BackButton to="/dashboard" />
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Inventory</h1>
-              <p className="text-gray-600 mt-1">Manage products and inventory in one place</p>
+        {/* Clean Header - Matching Admin UI Pattern */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex items-center gap-4">
+              <BackButton to="/dashboard" />
+              <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                <Package className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Inventory Management</h1>
+                <p className="text-sm text-gray-600 mt-1">Manage products and inventory in one place</p>
+              </div>
             </div>
+
+            {/* Removed Action Buttons - Now in Action Bar below */}
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <GlassButton
+        {/* Action Bar - Enhanced Design */}
+        <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
+          <div className="flex gap-3 flex-wrap">
+            {/* Manage Categories Button */}
+            <button
+              onClick={() => setShowManageCategoriesModal(true)}
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg hover:from-indigo-600 hover:to-purple-700"
+            >
+              <Tag size={18} />
+              <span>Manage Categories</span>
+            </button>
+            
+            {/* Add Product Button */}
+            <button
               onClick={() => setShowAddProductModal(true)}
-              icon={<Plus size={18} />}
-              className="bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700"
               title="Add a new product (⌘N)"
             >
-              Add Product
-            </GlassButton>
-            <GlassButton
+              <Plus size={18} />
+              <span>Add Product</span>
+            </button>
+
+            {/* Create PO Button */}
+            <button
               onClick={() => navigate('/lats/purchase-order/create')}
-              icon={<Truck size={18} />}
-              className="bg-gradient-to-r from-orange-500 to-amber-600 text-white"
-              title="Create Purchase Order (⌘⇧O)"
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg hover:from-orange-600 hover:to-amber-700"
             >
-              Create PO
-            </GlassButton>
-            <GlassButton
-              onClick={() => setShowOrderManagementModal(true)}
-              icon={<ShoppingCart size={18} />}
-              className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white"
-              title="Manage Purchase Orders"
-            >
-              Manage Orders
-            </GlassButton>
-            <GlassButton
+              <Truck size={18} />
+              <span>Create PO</span>
+            </button>
+
+            {/* Import Excel Button */}
+            <button
               onClick={handleImport}
-              icon={<Upload size={18} />}
-              className="bg-gradient-to-r from-green-500 to-teal-600 text-white"
-              title="Import products from Excel (⌘I)"
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700"
             >
-              Import Excel
-            </GlassButton>
-            <GlassButton
+              <Upload size={18} />
+              <span>Import Excel</span>
+            </button>
+
+            {/* Export Excel Button */}
+            <button
               onClick={() => setShowExcelExportModal(true)}
-              icon={<Download size={18} />}
-              className="bg-gradient-to-r from-purple-500 to-pink-600 text-white"
-              title="Export products to Excel (⌘E)"
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow-lg hover:from-cyan-600 hover:to-teal-700"
             >
-              Export Excel
-            </GlassButton>
-            <GlassButton
+              <Download size={18} />
+              <span>Export Excel</span>
+            </button>
+
+            {/* Refresh Data Button */}
+            <button
               onClick={async () => {
                 setIsDataLoading(true);
                 try {
@@ -957,169 +975,161 @@ const UnifiedInventoryPage: React.FC = () => {
                   setIsDataLoading(false);
                 }
               }}
-              icon={<RefreshCw size={18} className={isLoadingLiveMetrics || isDataLoading ? 'animate-spin' : ''} />}
-              className="bg-gradient-to-r from-indigo-500 to-blue-600 text-white"
               disabled={isLoadingLiveMetrics || isDataLoading}
-              title="Refresh all inventory data"
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-gray-500 to-gray-600 text-white shadow-lg hover:from-gray-600 hover:to-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoadingLiveMetrics || isDataLoading ? 'Refreshing...' : 'Refresh'}
-            </GlassButton>
-            {dbStatus === 'error' && (
-              <GlassButton
-                onClick={async () => {
-                  setDbStatus('connecting');
-                  try {
-                    await Promise.all([
-                      loadProducts({ page: 1, limit: 100 }),
-                      loadCategories(),
-                      loadSuppliers()
-                    ]);
-                    setDbStatus('connected');
-                    toast.success('Reconnected successfully!');
-                  } catch (error) {
-                    setDbStatus('error');
-                    toast.error('Failed to reconnect');
-                  }
-                }}
-                icon={<RefreshCw size={18} />}
-                className="bg-gradient-to-r from-red-500 to-pink-600 text-white"
-              >
-                Retry Connection
-              </GlassButton>
-            )}
+              <RefreshCw size={18} className={isLoadingLiveMetrics || isDataLoading ? 'animate-spin' : ''} />
+              <span>{isLoadingLiveMetrics || isDataLoading ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
+          </div>
+        </div>
 
-            {/* More Actions Dropdown */}
+        {/* Keep More Actions Dropdown for secondary options */}
+        <div className="px-8 py-2 bg-white flex-shrink-0 border-b border-gray-100">
+          <div className="flex items-center">
             <div className="relative more-actions-dropdown">
-              <GlassButton
-                onClick={() => setShowMoreActions(!showMoreActions)}
-                icon={<MoreHorizontal size={18} />}
-                className="bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white shadow-lg hover:shadow-xl transition-all duration-200"
-              >
-                More Actions
-              </GlassButton>
+                <button
+                  onClick={() => setShowMoreActions(!showMoreActions)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-sm bg-white shadow-sm hover:shadow-md"
+                  title="More actions"
+                >
+                  <MoreHorizontal size={18} />
+                  <span className="hidden sm:inline">More</span>
+                </button>
               
               {showMoreActions && (
-                <div className="absolute right-0 top-full mt-3 w-80 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 z-50 overflow-hidden">
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
                   {/* Header */}
                   <div className="bg-gradient-to-r from-slate-50 to-gray-50 px-4 py-3 border-b border-gray-100">
                     <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
                       <Settings size={16} className="text-slate-600" />
-                      Quick Actions
+                      More Actions
                     </h3>
-                    <p className="text-xs text-gray-500 mt-1">Manage your inventory efficiently</p>
                   </div>
                   
-                  {/* Actions Grid */}
-                  <div className="p-4">
-                    <div className="grid grid-cols-1 gap-3">
-                      {/* Add Category */}
+                  {/* Actions List - Secondary options only */}
+                  <div className="p-2">
+                    <button
+                      onClick={() => {
+                        setShowOrderManagementModal(true);
+                        setShowMoreActions(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-purple-50 transition-colors text-left group"
+                    >
+                      <div className="w-9 h-9 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                        <ShoppingCart size={16} className="text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900 text-sm">Manage Orders</div>
+                        <div className="text-xs text-gray-500">View purchase orders</div>
+                      </div>
+                    </button>
+                    
+                    <div className="border-t border-gray-100 my-2"></div>
+                    
+                    {dbStatus === 'error' && (
                       <button
-                        onClick={() => {
+                        onClick={async () => {
+                          setDbStatus('connecting');
                           try {
-                            setShowCategoryForm(true);
-                            setShowMoreActions(false);
+                            await Promise.all([
+                              loadProducts({ page: 1, limit: 100 }),
+                              loadCategories(),
+                              loadSuppliers()
+                            ]);
+                            setDbStatus('connected');
+                            toast.success('Reconnected successfully!');
                           } catch (error) {
-                            toast.error('Failed to open category form');
+                            setDbStatus('error');
+                            toast.error('Failed to reconnect');
+                          } finally {
+                            setShowMoreActions(false);
                           }
                         }}
-                        className="group flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-blue-50 to-blue-100/50 hover:from-blue-100 hover:to-blue-200/50 border border-blue-200/30 hover:border-blue-300/50 transition-all duration-200 hover:shadow-md"
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-red-50 transition-colors text-left group mt-1"
                       >
-                        <div className="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
-                          <Tag size={18} className="text-blue-600" />
+                        <div className="w-9 h-9 bg-red-500/10 rounded-lg flex items-center justify-center">
+                          <RefreshCw size={16} className="text-red-600" />
                         </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium text-blue-900 text-sm">Add Category</div>
-                          <div className="text-xs text-blue-600">Organize products</div>
-                        </div>
-                        <div className="w-6 h-6 bg-blue-500/10 rounded-full flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
-                          <Plus size={12} className="text-blue-600" />
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900 text-sm">Retry Connection</div>
+                          <div className="text-xs text-gray-500">Reconnect to database</div>
                         </div>
                       </button>
-                      
-                      {/* Add Supplier */}
-                      <button
-                        onClick={() => {
-                          try {
-                            setShowSupplierForm(true);
-                            setShowMoreActions(false);
-                          } catch (error) {
-                            toast.error('Failed to open supplier form');
-                          }
-                        }}
-                        className="group flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-purple-50 to-purple-100/50 hover:from-purple-100 hover:to-purple-200/50 border border-purple-200/30 hover:border-purple-300/50 transition-all duration-200 hover:shadow-md"
-                      >
-                        <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
-                          <Truck size={18} className="text-purple-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium text-purple-900 text-sm">Add Supplier</div>
-                          <div className="text-xs text-purple-600">Manage suppliers</div>
-                        </div>
-                        <div className="w-6 h-6 bg-purple-500/10 rounded-full flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
-                          <Plus size={12} className="text-purple-600" />
-                        </div>
-                      </button>
-                      
-                      {/* Download Template */}
-                      <button
-                        onClick={() => {
-                          try {
-                            navigate('/excel-templates');
-                            setShowMoreActions(false);
-                          } catch (error) {
-                            toast.error('Failed to open templates page');
-                          }
-                        }}
-                        className="group flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-indigo-100/50 hover:from-indigo-100 hover:to-indigo-200/50 border border-indigo-200/30 hover:border-indigo-300/50 transition-all duration-200 hover:shadow-md"
-                      >
-                        <div className="w-10 h-10 bg-indigo-500/10 rounded-lg flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors">
-                          <Download size={18} className="text-indigo-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium text-indigo-900 text-sm">Download Template</div>
-                          <div className="text-xs text-indigo-600">Excel templates</div>
-                        </div>
-                        <div className="w-6 h-6 bg-indigo-500/10 rounded-full flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors">
-                          <FileText size={12} className="text-indigo-600" />
-                        </div>
-                      </button>
-
-                      {/* Export Products */}
-                      <button
-                        onClick={() => {
-                          try {
-                            handleExport();
-                            setShowMoreActions(false);
-                          } catch (error) {
-                            toast.error('Failed to start export process');
-                          }
-                        }}
-                        className="group flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-orange-50 to-orange-100/50 hover:from-orange-100 hover:to-orange-200/50 border border-orange-200/30 hover:border-orange-300/50 transition-all duration-200 hover:shadow-md"
-                      >
-                        <div className="w-10 h-10 bg-orange-500/10 rounded-lg flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
-                          <Download size={18} className="text-orange-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium text-orange-900 text-sm">Export Products</div>
-                          <div className="text-xs text-orange-600">Download CSV data</div>
-                        </div>
-                        <div className="w-6 h-6 bg-orange-500/10 rounded-full flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
-                          <ArrowDown size={12} className="text-orange-600" />
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {/* Footer */}
-                  <div className="bg-gray-50/50 px-4 py-2 border-t border-gray-100">
-                    <p className="text-xs text-gray-500 text-center">
-                      Click outside to close
-                    </p>
+                    )}
+                    
+                    <div className="border-t border-gray-100 my-2"></div>
+                    
+                    <button
+                      onClick={() => {
+                        setShowCategoryForm(true);
+                        setShowMoreActions(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-blue-50 transition-colors text-left group"
+                    >
+                      <div className="w-9 h-9 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                        <Tag size={16} className="text-blue-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900 text-sm">Add Category</div>
+                        <div className="text-xs text-gray-500">Organize products</div>
+                      </div>
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setShowSupplierForm(true);
+                        setShowMoreActions(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-purple-50 transition-colors text-left group mt-1"
+                    >
+                      <div className="w-9 h-9 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                        <Truck size={16} className="text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900 text-sm">Add Supplier</div>
+                        <div className="text-xs text-gray-500">Manage suppliers</div>
+                      </div>
+                    </button>
+                    
+                    <div className="border-t border-gray-100 my-2"></div>
+                    
+                    <button
+                      onClick={() => {
+                        navigate('/excel-templates');
+                        setShowMoreActions(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-50 transition-colors text-left group"
+                    >
+                      <div className="w-9 h-9 bg-indigo-500/10 rounded-lg flex items-center justify-center">
+                        <FileText size={16} className="text-indigo-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900 text-sm">Download Template</div>
+                        <div className="text-xs text-gray-500">Excel templates</div>
+                      </div>
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        handleExport();
+                        setShowMoreActions(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-orange-50 transition-colors text-left group mt-1"
+                    >
+                      <div className="w-9 h-9 bg-orange-500/10 rounded-lg flex items-center justify-center">
+                        <Download size={16} className="text-orange-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900 text-sm">Export CSV</div>
+                        <div className="text-xs text-gray-500">Download CSV data</div>
+                      </div>
+                    </button>
                   </div>
                 </div>
               )}
+              </div>
             </div>
-
           </div>
         </div>
 
@@ -1227,6 +1237,19 @@ const UnifiedInventoryPage: React.FC = () => {
           parentCategories={categories}
           loading={isLoading}
         />
+
+        {/* Manage Categories Modal */}
+        {showManageCategoriesModal && (
+          <ManageCategoriesModal
+            isOpen={showManageCategoriesModal}
+            onClose={() => setShowManageCategoriesModal(false)}
+            categories={categories || []}
+            onCategoryUpdate={async () => {
+              // Reload categories when updated
+              await loadCategories();
+            }}
+          />
+        )}
 
 
 

@@ -4,7 +4,8 @@ import { useAuth } from '../../../context/AuthContext';
 import {
   Package, Search, Plus, RefreshCw,
   AlertCircle, Edit, Eye, Trash2, DollarSign, FileText,
-  Clock, CheckSquare, Send, CheckCircle, CreditCard, Copy, PackageCheck, Calculator, XCircle, MoreVertical, Zap, Truck, BarChart3, Users
+  Clock, CheckSquare, Send, CheckCircle, CreditCard, Copy, PackageCheck, Calculator, XCircle, MoreVertical, Zap, Truck, BarChart3, Users, X,
+  ChevronDown, ChevronUp, MessageSquare, Mail, MapPin, ShoppingCart, Calendar, Building, Printer
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useInventoryStore } from '../stores/useInventoryStore';
@@ -13,7 +14,6 @@ import { BackButton } from '../../shared/components/ui/BackButton';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import CBMCalculatorModal from '../../calculator/components/CBMCalculatorModal';
 import { supabase } from '../../../lib/supabaseClient';
-import EnhancedSupplierManagementPage from '../../settings/pages/EnhancedSupplierManagementPage';
 import StyledActionMenu, { ActionMenuItem } from '../components/purchase-order/StyledActionMenu';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
@@ -24,9 +24,11 @@ import { POCollaborationWidget } from '../components/purchase-order/POCollaborat
 import { POApprovalWorkflow } from '../components/purchase-order/POApprovalWorkflow';
 import { POReportingAnalytics } from '../components/purchase-order/POReportingAnalytics';
 import ComprehensivePaymentModal from '../components/pos/ComprehensivePaymentModal';
+import PurchaseOrderDetailsModal from '../components/purchase-order/PurchaseOrderDetailsModal';
+import ManageSuppliersModal from '../components/purchase-order/ManageSuppliersModal';
 
 const PurchaseOrdersPage: React.FC = () => {
-  const {} = useAuth(); // Destructure to avoid unused variable warning
+  const { currentUser } = useAuth();
   const navigate = useNavigate();
   const { confirm } = useDialog();
   const { startLoading, completeLoading, failLoading } = useLoadingJob();
@@ -42,8 +44,6 @@ const PurchaseOrdersPage: React.FC = () => {
     updatePurchaseOrder,
   } = useInventoryStore();
 
-  // Tab state for navigation between Purchase Orders and Manage Suppliers
-  const [activeTab, setActiveTab] = useState<'purchase-orders' | 'suppliers'>('purchase-orders');
 
   // Local state
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,6 +54,8 @@ const PurchaseOrdersPage: React.FC = () => {
   const [showCbmCalculator, setShowCbmCalculator] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const moreButtonRefs = React.useRef<{ [key: string]: HTMLButtonElement | null }>({});
+  const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [itemsCollapsed, setItemsCollapsed] = useState<{ [key: string]: boolean }>({});
 
   // Enhanced feature states
   const [showAnalytics, setShowAnalytics] = useState(false);
@@ -62,6 +64,14 @@ const PurchaseOrdersPage: React.FC = () => {
   const [showReporting, setShowReporting] = useState(false);
   const [showComprehensivePayment, setShowComprehensivePayment] = useState(false);
   const [selectedPOForPayment, setSelectedPOForPayment] = useState<any>(null);
+  
+  // Purchase Order Details Modal state
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<any>(null);
+  
+  // Manage Suppliers Modal state
+  const [showManageSuppliersModal, setShowManageSuppliersModal] = useState(false);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
 
   // Close dropdown when clicking outside or on escape
   React.useEffect(() => {
@@ -75,6 +85,25 @@ const PurchaseOrdersPage: React.FC = () => {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [openDropdownId]);
 
+  // Load suppliers function
+  const loadSuppliers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('lats_suppliers')
+        .select('*')
+        .order('name');
+      
+      if (error) {
+        console.error('Error loading suppliers:', error);
+        return;
+      }
+      
+      setSuppliers(data || []);
+    } catch (error) {
+      console.error('Error loading suppliers:', error);
+    }
+  };
+
   // Enhanced load function with timestamp
   const handleLoadPurchaseOrders = async () => {
     console.log('🔄 [PurchaseOrdersPage] Loading purchase orders...');
@@ -82,6 +111,7 @@ const PurchaseOrdersPage: React.FC = () => {
     const startTime = Date.now();
     try {
       await loadPurchaseOrders();
+      await loadSuppliers(); // Load suppliers as well
       const endTime = Date.now();
       setLastUpdated(new Date());
       completeLoading(jobId);
@@ -185,18 +215,35 @@ const PurchaseOrdersPage: React.FC = () => {
 
   // Handle order actions
   const handleDeleteOrder = async (orderId: string) => {
+    const order = purchaseOrders?.find(o => o.id === orderId);
+    if (!order) {
+      toast.error('Order not found');
+      return;
+    }
+    
+    if (order.status !== 'draft') {
+      toast.error('Only draft orders can be deleted');
+      return;
+    }
+    
     console.log('🗑️ [PurchaseOrdersPage] Delete order requested:', orderId);
-    const confirmed = await confirm('Are you sure you want to delete this purchase order?');
-    if (confirmed) {
+    const confirmed = await confirm('Are you sure you want to delete this purchase order? This action cannot be undone.');
+    if (!confirmed) return;
+    
+    try {
       console.log('✅ [PurchaseOrdersPage] Delete confirmed, proceeding...');
       const response = await deletePurchaseOrder(orderId);
       if (response.ok) {
         console.log('✅ [PurchaseOrdersPage] Order deleted successfully');
         toast.success('Purchase order deleted successfully');
+        await loadPurchaseOrders(); // Refresh data - matching PurchaseOrderDetailsModal
       } else {
         console.error('❌ [PurchaseOrdersPage] Failed to delete order:', response.message);
         toast.error(response.message || 'Failed to delete purchase order');
       }
+    } catch (error) {
+      console.error('Error deleting purchase order:', error);
+      toast.error('Failed to delete purchase order');
     }
   };
 
@@ -273,7 +320,41 @@ const PurchaseOrdersPage: React.FC = () => {
     });
   };
 
-  // Simplified action buttons - Option B workflow
+  /**
+   * Action Buttons Workflow
+   * 
+   * Purchase Order Status Flow:
+   * ┌─────────┐     ┌─────────┐     ┌──────────┐     ┌──────────────┐     ┌──────────┐     ┌───────────┐
+   * │  Draft  │ --> │   Sent  │ --> │Confirmed │ --> │Partial_Recvd │ --> │ Received │ --> │ Completed │
+   * └─────────┘     └─────────┘     └──────────┘     └──────────────┘     └──────────┘     └───────────┘
+   *     │                │                 │                    │                    │                  │
+   *     │                │                 │                    │                    │                  │
+   *     ▼                ▼                 ▼                    ▼                    ▼                  ▼
+   * [Send]          [Pay First]        [Pay First]        [Pay First]          [Complete]        [Duplicate]
+   * [Delete]        [Receive]*         [Receive]*         [Continue]*          [Quality]         [Print]
+   * [Edit]          [Print]            [Print]            [Print]              [Duplicate]       [View]
+   * [View]          [Edit]             [Edit]             [Edit]              [Print]           
+   *                 [View]             [View]             [View]              [Edit]
+   *                                                                             [View]
+   * 
+   * * Receive actions are ONLY enabled if payment is complete (totalPaid >= totalAmount)
+   * 
+   * Payment Requirement:
+   * - Items CANNOT be received until payment is fully completed
+   * - "Receive Items" button is disabled (gray) if payment is not complete
+   * - User must click "Make Payment" first to process payment
+   * 
+   * Common Actions (available for most statuses):
+   * - Edit: Available for draft, sent, confirmed, shipped
+   * - View Details: Always available
+   * - Duplicate: Available for all except cancelled (handled separately)
+   * - Print: Available for sent, confirmed, partial_received, received, completed
+   * - Make Payment: Available for all statuses except completed/cancelled (if not fully paid)
+   * 
+   * Special Cases:
+   * - Cancelled: Can be restored to draft or duplicated
+   * - Partial_Received: Shows remaining quantity in button label
+   */
   const getSmartActionButtons = (order: any) => {
     const actions = [];
     
@@ -308,50 +389,169 @@ const PurchaseOrdersPage: React.FC = () => {
         break;
       
       case 'sent':
-        // Sent - Allow receiving (payment not required)
+        // Sent - Check payment status before allowing receive
+        const sentTotalAmount = order.totalAmountBaseCurrency || order.totalAmount || 0;
+        const sentTotalPaid = order.totalPaidBaseCurrency || order.totalPaid || 0;
+        const sentIsPaid = sentTotalPaid >= sentTotalAmount;
+        
+        if (sentIsPaid) {
+          // Payment complete - allow receiving
         actions.push({
           type: 'receive',
           label: 'Receive Items',
           icon: <Package className="w-4 h-4" />,
           color: 'bg-green-600 hover:bg-green-700',
-          onClick: () => navigate(`/lats/purchase-orders/${order.id}?action=receive`)
+            onClick: () => handleReceiveItems(order)
+          });
+        } else {
+          // Payment not complete - show message
+          actions.push({
+            type: 'receive',
+            label: 'Receive Items',
+            icon: <Package className="w-4 h-4" />,
+            color: 'bg-gray-400 hover:bg-gray-500',
+            disabled: true,
+            onClick: () => {
+              toast.error('Payment required before receiving items. Please make payment first.');
+            }
+          });
+        }
+        // Add Print
+        actions.push({
+          type: 'print',
+          label: 'Print',
+          icon: <Printer className="w-4 h-4" />,
+          color: 'bg-gray-600 hover:bg-gray-700',
+          onClick: () => {
+            window.print();
+            toast.success('Preparing print view...');
+          }
         });
         break;
       
       case 'confirmed':
-        // Confirmed - Allow receiving items (supplier confirmed the order)
+        // Confirmed - Check payment status before allowing receive
+        const confirmedTotalAmount = order.totalAmountBaseCurrency || order.totalAmount || 0;
+        const confirmedTotalPaid = order.totalPaidBaseCurrency || order.totalPaid || 0;
+        const confirmedIsPaid = confirmedTotalPaid >= confirmedTotalAmount;
+        
+        if (confirmedIsPaid) {
+          // Payment complete - allow receiving
         actions.push({
           type: 'receive',
           label: 'Receive Items',
           icon: <Package className="w-4 h-4" />,
           color: 'bg-green-600 hover:bg-green-700',
-          onClick: () => navigate(`/lats/purchase-orders/${order.id}?action=receive`)
+            onClick: () => handleReceiveItems(order)
+          });
+        } else {
+          // Payment not complete - show message
+          actions.push({
+            type: 'receive',
+            label: 'Receive Items',
+            icon: <Package className="w-4 h-4" />,
+            color: 'bg-gray-400 hover:bg-gray-500',
+            disabled: true,
+            onClick: () => {
+              toast.error('Payment required before receiving items. Please make payment first.');
+            }
+          });
+        }
+        // Add Print
+        actions.push({
+          type: 'print',
+          label: 'Print',
+          icon: <Printer className="w-4 h-4" />,
+          color: 'bg-gray-600 hover:bg-gray-700',
+          onClick: () => {
+            window.print();
+            toast.success('Preparing print view...');
+          }
         });
         break;
       
       case 'partial_received':
-        // Partial Received - Continue receiving
+        // Partial Received - Check payment status before allowing continue
+        const partialTotalAmount = order.totalAmountBaseCurrency || order.totalAmount || 0;
+        const partialTotalPaid = order.totalPaidBaseCurrency || order.totalPaid || 0;
+        const partialIsPaid = partialTotalPaid >= partialTotalAmount;
         const totalOrdered = order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0;
         const totalReceived = order.items?.reduce((sum: number, item: any) => sum + (item.receivedQuantity || 0), 0) || 0;
         const remaining = totalOrdered - totalReceived;
         
+        if (partialIsPaid) {
+          // Payment complete - allow continuing to receive
         actions.push({
           type: 'receive',
           label: `Continue (${remaining} left)`,
           icon: <Package className="w-4 h-4" />,
           color: 'bg-orange-600 hover:bg-orange-700',
-          onClick: () => navigate(`/lats/purchase-orders/${order.id}?action=receive`)
+            onClick: () => handleReceiveItems(order)
+          });
+        } else {
+          // Payment not complete - show message
+          actions.push({
+            type: 'receive',
+            label: `Continue (${remaining} left)`,
+            icon: <Package className="w-4 h-4" />,
+            color: 'bg-gray-400 hover:bg-gray-500',
+            disabled: true,
+            onClick: () => {
+              toast.error('Payment required before receiving remaining items. Please make payment first.');
+            }
+          });
+        }
+        // Add Print
+        actions.push({
+          type: 'print',
+          label: 'Print',
+          icon: <Printer className="w-4 h-4" />,
+          color: 'bg-gray-600 hover:bg-gray-700',
+          onClick: () => {
+            window.print();
+            toast.success('Preparing print view...');
+          }
         });
         break;
       
       case 'received':
-        // Received - Complete order
+        // Received - Complete order (matching OrderManagementModal)
         actions.push({
           type: 'complete',
-          label: 'Complete',
-          icon: <CheckCircle className="w-4 h-4" />,
+          label: 'Complete Order',
+          icon: <CheckSquare className="w-4 h-4" />,
           color: 'bg-green-600 hover:bg-green-700',
           onClick: () => handleCompleteOrder(order.id)
+        });
+        // Quality Check - Open in new tab to avoid navigation
+        actions.push({
+          type: 'quality',
+          label: 'Quality Check',
+          icon: <PackageCheck className="w-4 h-4" />,
+          color: 'bg-purple-600 hover:bg-purple-700',
+          onClick: () => {
+            window.open(`/lats/purchase-orders/${order.id}?tab=quality`, '_blank');
+            toast.success('Opening quality check in new tab...');
+          }
+        });
+        // Duplicate
+        actions.push({
+          type: 'duplicate',
+          label: 'Duplicate',
+          icon: <Copy className="w-4 h-4" />,
+          color: 'bg-indigo-600 hover:bg-indigo-700',
+          onClick: () => navigate(`/lats/purchase-order/create?duplicate=${order.id}`)
+        });
+        // Print
+        actions.push({
+          type: 'print',
+          label: 'Print',
+          icon: <Printer className="w-4 h-4" />,
+          color: 'bg-gray-600 hover:bg-gray-700',
+          onClick: () => {
+            window.print();
+            toast.success('Preparing print view...');
+          }
         });
         break;
 
@@ -364,10 +564,53 @@ const PurchaseOrdersPage: React.FC = () => {
           color: 'bg-blue-600 hover:bg-blue-700',
           onClick: () => navigate(`/lats/purchase-order/create?duplicate=${order.id}`)
         });
+        // Add Print
+        actions.push({
+          type: 'print',
+          label: 'Print',
+          icon: <Printer className="w-4 h-4" />,
+          color: 'bg-gray-600 hover:bg-gray-700',
+          onClick: () => {
+            window.print();
+            toast.success('Preparing print view...');
+          }
+        });
+        // View Details - Details already visible in expanded view, so skip
+        // If user wants full page view, they can navigate manually
         break;
       
       case 'cancelled':
-        // Cancelled - No primary actions
+        // Cancelled - Restore and Duplicate
+        actions.push({
+          type: 'restore',
+          label: 'Restore',
+          icon: <RefreshCw className="w-4 h-4" />,
+          color: 'bg-green-600 hover:bg-green-700',
+          onClick: async () => {
+            const confirmed = await confirm('Are you sure you want to restore this order to draft?');
+            if (!confirmed) return;
+            
+            try {
+              const response = await updatePurchaseOrder(order.id, { status: 'draft' });
+              if (response.ok) {
+                toast.success('Order restored to draft');
+                await loadPurchaseOrders(); // Refresh data - matching PurchaseOrderDetailsModal
+              } else {
+                toast.error(response.message || 'Failed to restore order');
+              }
+            } catch (error) {
+              console.error('Error restoring order:', error);
+              toast.error('Failed to restore order');
+            }
+          }
+        });
+        actions.push({
+          type: 'duplicate',
+          label: 'Duplicate',
+          icon: <Copy className="w-4 h-4" />,
+          color: 'bg-blue-600 hover:bg-blue-700',
+          onClick: () => navigate(`/lats/purchase-order/create?duplicate=${order.id}`)
+        });
         break;
         
       default:
@@ -376,17 +619,64 @@ const PurchaseOrdersPage: React.FC = () => {
         break;
     }
     
-    // Always add "More" dropdown for secondary actions
+    // Add payment button for orders that can receive payments (not completed/cancelled and not fully paid)
+    if (orderStatus !== 'completed' && orderStatus !== 'cancelled') {
+      const totalAmount = order.totalAmountBaseCurrency || order.totalAmount || 0;
+      const totalPaid = order.totalPaidBaseCurrency || order.totalPaid || 0;
+      const isFullyPaid = totalPaid >= totalAmount;
+      
+      if (!isFullyPaid && totalAmount > 0) {
+        // Add payment button before other secondary actions
     actions.push({
-      type: 'more',
-      label: 'More',
-      icon: <MoreVertical className="w-4 h-4" />,
-      color: 'bg-gray-600 hover:bg-gray-700',
-      onClick: (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setOpenDropdownId(openDropdownId === order.id ? null : order.id);
+          type: 'payment',
+          label: 'Make Payment',
+          icon: <CreditCard className="w-4 h-4" />,
+          color: 'bg-orange-600 hover:bg-orange-700',
+          onClick: () => handleMakePayment(order)
+        });
       }
-    });
+    }
+    
+    // Add common secondary actions for all statuses (matching OrderManagementModal pattern)
+    // Edit button for editable orders (draft, sent, confirmed, shipped)
+    if (['draft', 'sent', 'confirmed', 'shipped'].includes(orderStatus)) {
+      // Check if edit is not already added
+      if (!actions.find(a => a.type === 'edit')) {
+    actions.push({
+          type: 'edit',
+          label: 'Edit Order',
+          icon: <Edit className="w-4 h-4" />,
+          color: 'bg-purple-600 hover:bg-purple-700',
+          onClick: () => navigate(`/lats/purchase-order/create?edit=${order.id}`)
+        });
+      }
+    }
+    
+    // View Details - Since we're already in expanded view, just show a message or do nothing
+    // Only add if not already added and not in expanded view context
+    // For expanded view, details are already visible, so we skip this action
+    // if (!actions.find(a => a.type === 'view')) {
+    //   actions.push({
+    //     type: 'view',
+    //     label: 'View Details',
+    //     icon: <Eye className="w-4 h-4" />,
+    //     color: 'bg-blue-600 hover:bg-blue-700',
+    //     onClick: () => {
+    //       toast.success('Details are already visible in the expanded view');
+    //     }
+    //   });
+    // }
+    
+    // Duplicate (if not already added and not cancelled)
+    if (!actions.find(a => a.type === 'duplicate') && orderStatus !== 'cancelled') {
+      actions.push({
+        type: 'duplicate',
+        label: 'Duplicate',
+        icon: <Copy className="w-4 h-4" />,
+        color: 'bg-indigo-600 hover:bg-indigo-700',
+        onClick: () => navigate(`/lats/purchase-order/create?duplicate=${order.id}`)
+      });
+    }
 
     return actions;
   };
@@ -485,7 +775,7 @@ const PurchaseOrdersPage: React.FC = () => {
     return actions;
   };
   
-  // Combined approve and send handler
+  // Combined approve and send handler - matching PurchaseOrderDetailsModal
   const handleApproveAndSend = async (orderId: string) => {
     try {
       const response = await approvePurchaseOrder(orderId);
@@ -494,8 +784,10 @@ const PurchaseOrdersPage: React.FC = () => {
         const sendResponse = await updatePurchaseOrder(orderId, { status: 'sent' });
         if (sendResponse.ok) {
           toast.success('Order approved and sent to supplier');
+          await loadPurchaseOrders(); // Refresh data
         } else {
           toast.success('Order approved (send manually from details)');
+          await loadPurchaseOrders(); // Refresh data
         }
       } else {
         toast.error(response.message || 'Failed to approve order');
@@ -512,12 +804,27 @@ const PurchaseOrdersPage: React.FC = () => {
     return true; // Placeholder
   };
 
-  // Complete order handler
+  // Complete order handler - matching PurchaseOrderDetailsModal
   const handleCompleteOrder = async (orderId: string) => {
+    const order = purchaseOrders?.find(o => o.id === orderId);
+    if (!order) {
+      toast.error('Order not found');
+      return;
+    }
+    
+    if (order.status !== 'received') {
+      toast.error('Order must be received before completing');
+      return;
+    }
+    
+    const confirmed = await confirm('Are you sure you want to complete this purchase order?');
+    if (!confirmed) return;
+    
     try {
       const response = await updatePurchaseOrder(orderId, { status: 'completed' });
       if (response.ok) {
         toast.success('Purchase order completed successfully');
+        await loadPurchaseOrders(); // Refresh data
       } else {
         toast.error(response.message || 'Failed to complete purchase order');
       }
@@ -525,6 +832,44 @@ const PurchaseOrdersPage: React.FC = () => {
       console.error('Error completing purchase order:', error);
       toast.error('Failed to complete purchase order');
     }
+  };
+
+  // Make payment handler
+  const handleMakePayment = (order: any) => {
+    // Prevent payment if order is already fully paid
+    const totalAmount = order.totalAmountBaseCurrency || order.totalAmount || 0;
+    const totalPaid = order.totalPaidBaseCurrency || order.totalPaid || 0;
+    
+    if (totalPaid >= totalAmount) {
+      toast.error('This purchase order has already been fully paid');
+      return;
+    }
+    
+    // Check if there's nothing left to pay
+    if (totalAmount === 0) {
+      toast.error('Cannot make payment: Purchase order has no total amount. Please add items to the order first.');
+      return;
+    }
+    
+    // Set the selected order and open payment modal
+    setSelectedPOForPayment(order);
+    setShowComprehensivePayment(true);
+  };
+
+  // Handle receive items with payment validation
+  const handleReceiveItems = (order: any) => {
+    // Check payment status before allowing receive
+    const totalAmount = order.totalAmountBaseCurrency || order.totalAmount || 0;
+    const totalPaid = order.totalPaidBaseCurrency || order.totalPaid || 0;
+    const isPaid = totalPaid >= totalAmount;
+    
+    if (!isPaid) {
+      toast.error('Payment required before receiving items. Please make payment first.');
+      return;
+    }
+    
+    // Payment is complete - allow receiving
+    navigate(`/lats/purchase-orders/${order.id}?action=receive`);
   };
 
   // Auto-create PO for iPhone 14 Pro 256GB Deep Purple
@@ -615,103 +960,91 @@ const PurchaseOrdersPage: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header - Flat Design with Back Button */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <BackButton to="/lats" />
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Purchase Orders</h1>
-            <p className="text-gray-600 mt-1">Manage your purchase orders and inventory</p>
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Combined Container - All sections in one */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section - Enhanced Modal Style */}
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            {/* Left: Icon + Text */}
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-orange-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                <Package className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">Purchase Orders</h1>
+                <p className="text-sm text-gray-600">Manage your purchase orders and inventory</p>
+              </div>
+            </div>
+
+            {/* Right: Back Button */}
+            <BackButton to="/lats" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
+          </div>
+      </div>
+
+        {/* Action Bar - Enhanced Design */}
+        <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
+          <div className="flex gap-3 flex-wrap">
+            {/* Create PO Button */}
+            <button
+              onClick={() => navigate('/lats/purchase-order/create')}
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg hover:from-orange-600 hover:to-amber-700"
+            >
+              <Plus size={18} />
+              <span>Create PO</span>
+            </button>
+
+            {/* CBM Calculator Button */}
+            <button
+              onClick={() => setShowCbmCalculator(true)}
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700"
+              title="CBM Calculator"
+            >
+              <Calculator size={18} />
+              <span>CBM Calculator</span>
+            </button>
+
+            {/* Manage Suppliers Button */}
+            <button
+              onClick={() => setShowManageSuppliersModal(true)}
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700"
+            >
+              <Building size={18} />
+              <span>Manage Suppliers</span>
+            </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setShowCbmCalculator(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 transition-colors text-sm"
-            title="CBM Calculator"
-          >
-            <Calculator size={18} />
-            CBM
-          </button>
-          
-          <button
-            onClick={handleAutoCreateiPhonePO}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors text-sm shadow-lg hover:shadow-xl"
-            title="Auto-create PO for iPhone 14 Pro 256GB Deep Purple"
-          >
-            <Zap size={18} />
-            Auto iPhone PO
-          </button>
-          
-          <button
-            onClick={() => navigate('/lats/purchase-order/create')}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-orange-600 text-white hover:bg-orange-700 transition-colors text-sm"
-          >
-            <Plus size={18} />
-            Create PO
-          </button>
-        </div>
-      </div>
-
-      {/* Tab Navigation */}
-      <div className="flex gap-2 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('purchase-orders')}
-          className={`px-6 py-3 font-semibold text-sm rounded-t-lg transition-all duration-200 ${
-            activeTab === 'purchase-orders'
-              ? 'bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Package size={18} />
-            <span>Purchase Orders</span>
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveTab('suppliers')}
-          className={`px-6 py-3 font-semibold text-sm rounded-t-lg transition-all duration-200 ${
-            activeTab === 'suppliers'
-              ? 'bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Truck size={18} />
-            <span>Manage Suppliers</span>
-          </div>
-        </button>
-      </div>
-
-      {/* Tab Content */}
-      {activeTab === 'purchase-orders' ? (
-        <>
-          {/* Statistics - Flat Design - Responsive */}
-          <div className="w-full max-w-full mx-auto px-2 sm:px-3 md:px-4">
+        {/* Main Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
+            {/* Fixed Statistics Section */}
+            <div className="p-6 pb-0 flex-shrink-0">
             <div 
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
-                gap: 'clamp(0.75rem, 1.5vw, 1rem)'
+                  gap: '1rem'
               }}
             >
-        <div className="bg-blue-50 rounded-lg p-5 hover:bg-blue-100 transition-colors">
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <Package className="w-7 h-7 text-blue-600 flex-shrink-0" />
+                    <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                      <Package className="w-6 h-6 text-white" />
+                    </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">Total Orders</p>
+                      <p className="text-xs font-medium text-gray-600 mb-1">Total Orders</p>
               <p className="text-2xl font-bold text-gray-900">{filteredOrders.length}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-green-50 rounded-lg p-5 hover:bg-green-100 transition-colors">
+                <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <DollarSign className="w-7 h-7 text-green-600 flex-shrink-0" />
+                    <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                      <DollarSign className="w-6 h-6 text-white" />
+                    </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">Total Value</p>
+                      <p className="text-xs font-medium text-gray-600 mb-1">Total Value</p>
               <p className="text-2xl font-bold text-gray-900">
                 {formatCurrency(filteredOrders.reduce((sum: number, order: any) => {
                   // Use totalAmountBaseCurrency (TZS) first - this is the correct value for multi-currency orders
@@ -749,21 +1082,25 @@ const PurchaseOrdersPage: React.FC = () => {
           </div>
         </div>
         
-        <div className="bg-orange-50 rounded-lg p-5 hover:bg-orange-100 transition-colors">
+                <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <Clock className="w-7 h-7 text-orange-600 flex-shrink-0" />
+                    <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                      <Clock className="w-6 h-6 text-white" />
+                    </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">Pending</p>
+                      <p className="text-xs font-medium text-gray-600 mb-1">Pending</p>
               <p className="text-2xl font-bold text-gray-900">{filteredOrders.filter((order: any) => order.status === 'draft' || order.status === 'sent' || order.status === 'partial_received').length}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-purple-50 rounded-lg p-5 hover:bg-purple-100 transition-colors">
+                <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <CheckCircle className="w-7 h-7 text-purple-600 flex-shrink-0" />
+                    <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                      <CheckCircle className="w-6 h-6 text-white" />
+                    </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">Completed</p>
+                      <p className="text-xs font-medium text-gray-600 mb-1">Completed</p>
               <p className="text-2xl font-bold text-gray-900">{filteredOrders.filter((order: any) => order.status === 'received').length}</p>
             </div>
           </div>
@@ -771,9 +1108,10 @@ const PurchaseOrdersPage: React.FC = () => {
       </div>
       </div>
 
-      {/* Search and Filters */}
-      <GlassCard className="p-3 sm:p-4 md:p-6">
-        <div className="flex flex-col lg:flex-row gap-3 sm:gap-4">
+            {/* Fixed Search and Filters Section - Enhanced */}
+            <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
+              <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
+                <div className="flex flex-col lg:flex-row gap-4">
           {/* Search Bar */}
           <div className="flex-1">
             <div className="relative">
@@ -783,18 +1121,18 @@ const PurchaseOrdersPage: React.FC = () => {
                 placeholder="Search orders, suppliers, or notes..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-gray-900"
+                        className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all text-gray-900 bg-white font-medium"
               />
             </div>
           </div>
 
-          {/* Filters */}
+                  {/* Filters Row */}
           <div className="flex flex-wrap items-center gap-3">
             {/* Status Filter */}
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-gray-900 bg-white"
+                      className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all text-gray-900 bg-white font-medium min-w-[140px]"
             >
               <option value="all">All Status</option>
               <option value="sent">Sent</option>
@@ -805,7 +1143,7 @@ const PurchaseOrdersPage: React.FC = () => {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-gray-900 bg-white"
+                      className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all text-gray-900 bg-white font-medium min-w-[160px]"
             >
               <option value="createdAt">Date Created</option>
               <option value="orderNumber">Order Number</option>
@@ -816,7 +1154,7 @@ const PurchaseOrdersPage: React.FC = () => {
             <button
               onClick={handleLoadPurchaseOrders}
               disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 bg-white"
+                      className="flex items-center gap-2 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 hover:border-orange-300 transition-all disabled:opacity-50 bg-white font-medium"
             >
               {isLoading ? (
                 <LoadingSpinner size="sm" color="blue" />
@@ -825,72 +1163,80 @@ const PurchaseOrdersPage: React.FC = () => {
               )}
               <span className="hidden sm:inline">Refresh</span>
             </button>
+                  </div>
+                </div>
             
-            {/* Enhanced Feature Buttons */}
+                {/* Enhanced Feature Buttons Row */}
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowAnalytics(true)}
-                className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                      className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all shadow-sm hover:shadow-md font-medium text-sm"
                 title="PO Analytics"
               >
                 <BarChart3 className="w-4 h-4" />
+                      <span className="hidden sm:inline">Analytics</span>
               </button>
               <button
                 onClick={() => setShowCollaboration(true)}
-                className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+                      className="flex items-center gap-2 px-4 py-2.5 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-all shadow-sm hover:shadow-md font-medium text-sm"
                 title="Team Collaboration"
               >
                 <Users className="w-4 h-4" />
+                      <span className="hidden sm:inline">Collaboration</span>
               </button>
               <button
                 onClick={() => setShowApprovalWorkflow(true)}
-                className="p-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 transition-colors"
+                      className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 text-purple-600 rounded-xl hover:bg-purple-100 transition-all shadow-sm hover:shadow-md font-medium text-sm"
                 title="Approval Workflow"
               >
                 <CheckSquare className="w-4 h-4" />
+                      <span className="hidden sm:inline">Approval</span>
               </button>
               <button
                 onClick={() => setShowReporting(true)}
-                className="p-2 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
+                      className="flex items-center gap-2 px-4 py-2.5 bg-orange-50 text-orange-600 rounded-xl hover:bg-orange-100 transition-all shadow-sm hover:shadow-md font-medium text-sm"
                 title="Advanced Reporting"
               >
                 <FileText className="w-4 h-4" />
+                      <span className="hidden sm:inline">Reporting</span>
               </button>
             </div>
 
             {/* Last Updated Timestamp */}
             {lastUpdated && (
-              <div className="text-xs text-gray-600 bg-gray-100 px-3 py-2 rounded-lg">
+                    <div className="text-xs text-gray-600 bg-gray-100 px-3 py-2 rounded-xl font-medium">
                 Last: {lastUpdated.toLocaleTimeString()}
               </div>
             )}
           </div>
         </div>
-      </GlassCard>
+            </div>
 
+            {/* Scrollable Purchase Orders List */}
+            <div className="flex-1 overflow-y-auto px-6 py-6 border-t border-gray-100">
       {/* Error Display */}
       {error && (
-        <GlassCard className="bg-red-50 border-red-200 p-4">
+                <div className="mb-4 bg-red-50 border-2 border-red-200 rounded-xl p-4">
           <div className="flex items-center gap-3 text-red-700">
-            <AlertCircle className="w-5 h-5" />
+                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
             <div>
               <h4 className="font-semibold">Error</h4>
               <p className="text-sm">{error}</p>
             </div>
           </div>
-        </GlassCard>
+                </div>
       )}
 
-      {/* Purchase Orders List - Flat Style */}
       {isLoading ? (
-        <GlassCard className="p-12">
-          <div className="flex items-center justify-center">
+                <div className="flex items-center justify-center py-12">
             <LoadingSpinner size="sm" color="purple" />
           </div>
-        </GlassCard>
       ) : filteredOrders.length === 0 ? (
-        <GlassCard className="p-12 text-center">
-          <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <Package className="w-8 h-8 text-gray-400" />
+                  </div>
           <h3 className="text-xl font-bold text-gray-900 mb-2">No purchase orders found</h3>
           <p className="text-gray-600 mb-6">
             {searchQuery || statusFilter !== 'all' 
@@ -901,49 +1247,47 @@ const PurchaseOrdersPage: React.FC = () => {
           {!searchQuery && statusFilter === 'all' && (
             <button
               onClick={() => navigate('/lats/purchase-order/create')}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
             >
               <Plus className="w-4 h-4" />
               <span>Create Purchase Order</span>
             </button>
           )}
-        </GlassCard>
-      ) : (
-        <GlassCard className="overflow-hidden">
-          {/* Table Header - Flat Style - Hidden on mobile, shown on md+ */}
-          <div className="hidden md:block bg-gray-50 border-b border-gray-200 px-3 sm:px-4 md:px-6 py-3">
-            <div className="grid grid-cols-12 gap-2 sm:gap-3 md:gap-4 items-center text-xs font-semibold text-gray-700 uppercase">
-              <div className="col-span-2">Order Details</div>
-              <div className="col-span-2">Supplier</div>
-              <div className="col-span-2">Financial</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-1 text-center">Items</div>
-              <div className="col-span-2">Created Date</div>
-              <div className="col-span-1 text-center">Actions</div>
             </div>
-          </div>
-
-          {/* Table Body - Flat Style - Responsive cards on mobile */}
-          <div className="divide-y divide-gray-200">
+              ) : (
+                <>
+                  {/* Purchase Orders List - Enhanced Modal Style */}
+                  <div className="space-y-3 mb-4">
             {filteredOrders.map((order) => {
               const orderActions = getSmartActionButtons(order);
+                      const isLinSupplier = order.supplier?.name?.toLowerCase() === 'lin';
+                      
               return (
-                <div key={order.id} className="hover:bg-gray-50 transition-colors">
+                        <div
+                          key={order.id}
+                          className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 hover:shadow-lg cursor-pointer relative ${
+                            expandedOrder === order.id
+                              ? 'border-blue-500 shadow-xl' 
+                              : isLinSupplier 
+                                ? 'border-orange-400 shadow-lg' 
+                                : 'border-gray-200 hover:border-orange-400'
+                          }`}
+                        >
                   {/* Mobile Card View - shown on small screens */}
-                  <div className="md:hidden px-3 sm:px-4 py-4">
+                          <div className="md:hidden p-4">
                   <div className="space-y-3">
                     {/* Order Number and Status */}
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                          <Package className="w-5 h-5 text-white" />
+                                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
+                                    <Package className="w-6 h-6 text-white" />
                         </div>
                         <div>
                           <h3 className="font-bold text-gray-900 text-sm">{order.orderNumber}</h3>
                           <p className="text-xs text-gray-500">{formatDate(order.createdAt)}</p>
                         </div>
                       </div>
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(order.status)}`}>
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-sm ${getStatusColor(order.status)}`}>
                         {getStatusIcon(order.status)}
                         <span className="capitalize">{order.status.replace('_', ' ')}</span>
                       </span>
@@ -952,12 +1296,12 @@ const PurchaseOrdersPage: React.FC = () => {
                     {/* Supplier */}
                     {order.supplier && (
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 bg-orange-500 rounded-lg flex items-center justify-center">
+                                  <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center shadow-md">
                           <span className="text-white text-xs font-bold">
                             {order.supplier.name.charAt(0).toUpperCase()}
                           </span>
                         </div>
-                        <span className="text-sm text-gray-900">{order.supplier.name}</span>
+                                  <span className="text-sm font-medium text-gray-900">{order.supplier.name}</span>
                       </div>
                     )}
                     
@@ -995,7 +1339,7 @@ const PurchaseOrdersPage: React.FC = () => {
                               e.stopPropagation();
                               action.onClick(e);
                             }}
-                            className={`w-full flex items-center justify-center gap-1.5 px-2 py-2 text-white rounded-lg transition-colors text-xs font-medium ${action.color}`}
+                                      className={`w-full flex items-center justify-center gap-1.5 px-2 py-2.5 text-white rounded-xl transition-all shadow-md hover:shadow-lg text-xs font-semibold ${action.color}`}
                             title={action.label}
                           >
                             {action.icon}
@@ -1018,186 +1362,594 @@ const PurchaseOrdersPage: React.FC = () => {
                   </div>
                 </div>
                 
-                {/* Desktop Table View - shown on md+ screens */}
-                <div className="hidden md:grid grid-cols-12 gap-2 sm:gap-3 md:gap-4 items-center px-3 sm:px-4 md:px-6 py-4">
-                    {/* Order Details */}
-                    <div className="col-span-2">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                          <Package className="w-5 h-5 text-white" />
+                          {/* Desktop List View - Expandable - shown on md+ screens */}
+                          <div className="hidden md:block w-full">
+                            {/* Header - Clickable */}
+                            <div 
+                              className="flex items-start justify-between p-6 cursor-pointer"
+                              onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}
+                            >
+                              <div className="flex items-start gap-3 flex-1 min-w-0">
+                                {/* Expand/Collapse Icon */}
+                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
+                                  expandedOrder === order.id ? 'bg-orange-500 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-600'
+                                }`}>
+                                  <ChevronDown 
+                                    className={`w-5 h-5 transition-transform duration-200 ${
+                                      expandedOrder === order.id ? 'rotate-180' : ''
+                                    }`}
+                                  />
                         </div>
-                        <div>
-                          <h3 className="font-bold text-gray-900">
-                            {order.orderNumber}
-                          </h3>
-                          <p className="text-sm text-gray-500">
-                            {order.paymentTerms || 'Net 30'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Supplier */}
-                    <div className="col-span-2">
-                      {order.supplier ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
-                            <span className="text-white text-sm font-bold">
-                              {order.supplier.name.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">{order.supplier.name}</p>
-                            <p className="text-xs text-gray-500">{order.supplier.country || 'Tanzania'}</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400 italic">No supplier</span>
-                      )}
-                    </div>
-
-                    {/* Financial */}
-                    <div className="col-span-2">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <DollarSign className="w-4 h-4 text-green-600" />
-                          <span className="font-bold text-gray-900">
-                            {(() => {
-                              // Use totalAmount if available
-                              if (order.totalAmount && order.totalAmount > 0) {
-                                return formatCurrency(order.totalAmount, order.currency);
-                              }
-                              
-                              // Calculate from items totalPrice if available
-                              if (order.items && order.items.length > 0) {
-                                const totalFromItems = order.items.reduce((sum, item) => {
-                                  // Use totalPrice if available, otherwise calculate from quantity * costPrice
-                                  const itemTotal = item.totalPrice || (item.quantity * item.costPrice);
-                                  return sum + itemTotal;
-                                }, 0);
                                 
-                                if (totalFromItems > 0) {
-                                  return formatCurrency(totalFromItems, order.currency);
-                                }
-                              }
-                              
-                              return formatCurrency(0, order.currency || 'TSh');
-                            })()}
-                          </span>
+                                {/* Main Content */}
+                                <div className="flex-1 min-w-0">
+                                  {/* Order Number and Status Row */}
+                                  <div className="flex items-center gap-3 mb-4 flex-wrap">
+                                    <h3 className="text-2xl font-bold text-gray-900 truncate">{order.orderNumber}</h3>
+                                    
+                                    {/* Status Badge */}
+                                    <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-base font-bold ${getStatusColor(order.status)} flex items-center gap-2 flex-shrink-0`}>
+                                      {getStatusIcon(order.status)}
+                                      <span>{order.status.replace('_', ' ').split(' ').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</span>
+                                    </span>
                         </div>
+                                  
+                                  {/* Info Badges Row */}
+                                  <div className="flex items-center gap-3 flex-wrap">
+                                    {/* Supplier Badge */}
+                                    {order.supplier && (
+                                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0">
+                                        <Building className="w-5 h-5" />
+                                        <span className="text-base font-semibold truncate max-w-[140px]">{order.supplier.name}</span>
+                      </div>
+                                    )}
+
+                                    {/* Items & Quantity & Date Combined Card */}
+                                    <div className="inline-flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-50 border border-gray-200">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                            {order.currency === 'TZS' ? 'TSh' : order.currency || 'TSh'}
+                                        <Package className="w-5 h-5 text-teal-600" />
+                                        <span className="text-base font-semibold text-teal-700">{order.items?.length || 0}</span>
+                                        <span className="text-sm text-teal-600 font-medium">{(order.items?.length || 0) !== 1 ? 'items' : 'item'}</span>
+                          </div>
+                                      <div className="w-px h-5 bg-gray-300"></div>
+                                      <div className="flex items-center gap-2">
+                                        <ShoppingCart className="w-5 h-5 text-pink-600" />
+                                        <span className="text-base font-semibold text-pink-700">{order.items?.reduce((total, item) => total + (item.quantity || 0), 0) || 0}</span>
+                                        <span className="text-sm text-pink-600 font-medium">qty</span>
+                          </div>
+                                      <div className="w-px h-5 bg-gray-300"></div>
+                                      <div className="flex items-center gap-2">
+                                        <Calendar className="w-5 h-5 text-gray-600" />
+                                        <span className="text-base font-medium text-gray-600">{formatDate(order.createdAt)}</span>
+                        </div>
+                                    </div>
+
+                                    {/* Expected Delivery Date */}
+                                    {order.expectedDeliveryDate && (
+                                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">
+                                        <Clock className="w-5 h-5" />
+                                        <span className="text-sm font-medium">ETA:</span>
+                                        <span className="text-base font-semibold">{formatDate(order.expectedDeliveryDate)}</span>
+                                      </div>
+                                    )}
+
+                                    {/* Currency Info for foreign orders */}
+                                    {order.currency && order.currency !== 'TZS' && (
+                                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-50 text-purple-700 border border-purple-200">
+                                        <span className="text-base font-bold">{order.currency}</span>
+                                        {order.exchangeRate && (
+                                          <>
+                                            <span className="text-sm">•</span>
+                                            <span className="text-sm font-medium">1 = {order.exchangeRate} TZS</span>
+                                          </>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Payment & Pricing Card */}
+                              {(order.totalAmount || 0) > 0 && (
+                                <div className="ml-4 flex-shrink-0">
+                                  <div className="flex items-center justify-between gap-4">
+                                    {/* Total Amount */}
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <DollarSign className="w-5 h-5 text-gray-400" />
+                                        <span className="text-sm text-gray-500 font-medium uppercase tracking-wide">Total Amount</span>
+                                      </div>
+                                      <div className="flex flex-col">
+                                        {order.currency && order.currency !== 'TZS' && order.totalAmountBaseCurrency ? (
+                                          <>
+                                            <span className="text-4xl font-bold text-gray-900 leading-tight">{formatCurrency(order.totalAmountBaseCurrency, 'TZS')}</span>
+                                            <span className="text-sm text-gray-500 mt-0.5 font-medium">({formatCurrency(order.totalAmount || 0, order.currency)})</span>
+                                          </>
+                                        ) : (
+                                          <span className="text-4xl font-bold text-gray-900 leading-tight">{formatCurrency(order.totalAmount || 0, order.currency || 'TZS')}</span>
+                                        )}
+                                      </div>
+                    </div>
+
+                                    {/* Payment Status Badge */}
+                                    <div className="flex-shrink-0">
+                                      <span className={`inline-flex items-center gap-1.5 px-5 py-3 rounded-xl text-base font-bold shadow-sm ${
+                                        (order.totalPaid || 0) >= order.totalAmount 
+                                          ? 'bg-green-500 text-white'
+                                          : (order.totalPaid || 0) > 0
+                                            ? 'bg-yellow-500 text-white'
+                                            : 'bg-red-500 text-white'
+                                      }`}>
+                                        {(order.totalPaid || 0) >= order.totalAmount ? (
+                                          <CheckCircle className="w-5 h-5" />
+                                        ) : (order.totalPaid || 0) > 0 ? (
+                                          <Clock className="w-5 h-5" />
+                                        ) : (
+                                          <AlertCircle className="w-5 h-5" />
+                                        )}
+                                        {(order.totalPaid || 0) >= order.totalAmount 
+                                          ? 'Paid'
+                                          : (order.totalPaid || 0) > 0
+                                            ? 'Partial'
+                                            : 'Unpaid'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Separator Line - Enhanced Design - Only show when expanded */}
+                            {expandedOrder === order.id && (
+                              <div className="mt-5 pt-5 border-t-2 border-gray-200 relative">
+                                <div className="absolute top-0 left-0 right-0 flex items-center justify-center -mt-3">
+                                  <span className="bg-white px-5 py-1.5 text-xs text-gray-500 font-semibold uppercase tracking-wider rounded-full border border-gray-200 shadow-sm">Order Details</span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Expanded Content - Only show when expanded */}
+                            {expandedOrder === order.id && (
+                              <div className="px-6 pb-6 pt-2">
+                                {/* Order Items with Progress Bars */}
+                                <div className="mb-4">
+                            {(() => {
+                                    const previewCount = 2;
+                                    const hasMoreItems = (order.items?.length || 0) > previewCount;
+                                    const isCollapsed = itemsCollapsed[order.id] !== false;
+                                    const displayedItems =
+                                      isCollapsed && hasMoreItems
+                                        ? order.items?.slice(0, previewCount) || []
+                                        : order.items || [];
+
+                                    return (
+                                      <>
+                                        <div className="flex items-center justify-between mb-3">
+                                          <h4 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                                            <Package className="w-5 h-5 text-blue-600" />
+                                            Order Items ({order.items?.length || 0})
+                                          </h4>
+                                          {hasMoreItems && (
+                                            <button
+                                              type="button"
+                                              onClick={(event) => {
+                                                event.stopPropagation();
+                                                setItemsCollapsed(prev => ({
+                                                  ...prev,
+                                                  [order.id]: !prev[order.id]
+                                                }));
+                                              }}
+                                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
+                                            >
+                                              {isCollapsed ? (
+                                                <>
+                                                  <ChevronDown className="w-4 h-4" />
+                                                  View More
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <ChevronUp className="w-4 h-4" />
+                                                  View Less
+                                                </>
+                                              )}
+                                            </button>
+                                          )}
+                                        </div>
+                                        {displayedItems.length > 0 ? (
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            {displayedItems.map((item: any, index: number) => {
+                                              const received = item.receivedQuantity || 0;
+                                              const ordered = item.quantity || 0;
+                                              const percentage = ordered > 0 ? (received / ordered) * 100 : 0;
+
+                                              return (
+                                                <div
+                                                  key={index}
+                                                  className="p-3 sm:p-4 md:p-6 cursor-pointer flex flex-col h-full bg-white rounded-xl border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all duration-200 shadow-sm relative"
+                                                >
+                                                  {/* Quantity Badge */}
+                                                  <div className={`absolute -top-2 -right-2 sm:-top-3 sm:-right-3 p-1.5 sm:p-2 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-20 min-w-[2rem] min-h-[2rem] sm:min-w-[2.5rem] sm:min-h-[2.5rem] transition-all duration-300 ${
+                                                    percentage >= 100
+                                                      ? 'bg-gradient-to-r from-green-500 to-green-600'
+                                                      : percentage > 0
+                                                        ? 'bg-gradient-to-r from-orange-500 to-orange-600'
+                                                        : 'bg-gradient-to-r from-red-500 to-red-600'
+                                                  }`}>
+                                                    <span className="text-xs sm:text-sm font-bold text-white whitespace-nowrap px-1">
+                                                      {received > 0 ? `${received}/${ordered}` : ordered}
+                                                    </span>
+                                                  </div>
+                                                  
+                                                  <div className="flex items-start gap-2 sm:gap-3 md:gap-4">
+                                                    {/* Thumbnail */}
+                                                    <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl flex items-center justify-center flex-shrink-0">
+                                                      {(() => {
+                                                        const primaryImage = item.product?.images?.find((img: any) => img.isPrimary) || item.product?.images?.[0];
+                                                        const imageUrl = primaryImage?.url;
+                                                        
+                                                        if (imageUrl) {
+                                                          return (
+                                                            <img
+                                                              src={imageUrl}
+                                                              alt={item.product?.name || 'Product'}
+                                                              className="w-full h-full object-cover rounded-xl"
+                                                              onError={(e) => {
+                                                                (e.target as HTMLImageElement).style.display = 'none';
+                                                              }}
+                                                            />
+                                                          );
+                                                        }
+                                                        
+                                                        return (
+                                                          <div className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center w-full h-full rounded-xl">
+                                                            <Package className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400" />
+                                                          </div>
+                                                        );
+                            })()}
+                                                    </div>
+                                                    
+                                                    <div className="flex-1 min-w-0 flex flex-col h-16 sm:h-20 md:h-24 justify-between">
+                                                      <div>
+                                                        <div className="font-medium text-gray-800 truncate text-sm sm:text-base md:text-lg lg:text-xl leading-tight" title={item.product?.name || `Product ${item.productId}`}>
+                                                          {item.product?.name || `Product ${item.productId}`}
+                                                        </div>
+                                                        {item.variant?.name && item.variant.name !== 'Default Variant' && (
+                                                          <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 font-medium">Variant: {item.variant.name}</p>
+                                                        )}
+                                                      </div>
+                                                      <div>
+                                                        <div className="text-lg sm:text-xl md:text-2xl text-gray-700 mt-0.5 sm:mt-1 font-bold">
+                                                          {order.currency && order.currency !== 'TZS' && order.exchangeRate ? (
+                                                            <>
+                                                              {formatCurrency(
+                                                                (item.totalPrice || (item.quantity || 0) * (item.costPrice || 0)) *
+                                                                  (order.exchangeRate || 1),
+                                                                'TZS'
+                                                              )}
+                                                              {order.currency && order.currency !== 'TZS' && (
+                                                                <span className="text-sm sm:text-base text-gray-500 ml-2">
+                                                                  ({formatCurrency(
+                                                                    item.totalPrice || (item.quantity || 0) * (item.costPrice || 0),
+                                                                    order.currency
+                                                                  )})
                           </span>
-                          {order.exchangeRate && order.exchangeRate !== 1.0 && order.totalAmountBaseCurrency && (
-                            <span className="text-xs text-blue-600">
-                              {formatCurrency(order.totalAmountBaseCurrency, 'TSh')}
+                                                              )}
+                                                            </>
+                                                          ) : (
+                                                            formatCurrency(
+                                                              item.totalPrice || (item.quantity || 0) * (item.costPrice || 0),
+                                                              'TZS'
+                                                            )
+                                                          )}
+                        </div>
+                                                        <div className="text-xs sm:text-sm text-gray-500 mt-1">
+                                                          Unit: {formatCurrency(item.costPrice || 0, 'TZS')}
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  </div>
+
+                                                  <div className="mt-3 flex items-center justify-between text-sm">
+                                                    <div className="flex items-center gap-4">
+                                                      {(order.status === 'partial_received' ||
+                                                        order.status === 'received' ||
+                                                        order.status === 'completed') && (
+                        <div className="flex items-center gap-2">
+                                                          <span className="text-xs font-semibold text-gray-700">
+                                                            Received: <span className="text-gray-900">{received}/{ordered}</span>
+                          </span>
+                                                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                                            percentage >= 100
+                                                              ? 'bg-green-100 text-green-900'
+                                                              : percentage > 0
+                                                                ? 'bg-orange-100 text-orange-900'
+                                                                : 'bg-gray-100 text-gray-900'
+                                                          }`}>
+                                                            {percentage.toFixed(0)}%
                             </span>
+                                                        </div>
                           )}
                         </div>
+                                                    <div className="flex items-center gap-2">
+                                                      {item.product?.category && (
+                                                        <span className="inline-flex items-center px-2 py-1 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-xs font-medium">
+                                                          📦 {String(typeof item.product.category === 'string' ? item.product.category : (item.product.category as any)?.name || 'Category')}
+                                                        </span>
+                                                      )}
                       </div>
                     </div>
 
-                    {/* Status */}
-                    <div className="col-span-2">
-                      <div className="space-y-1">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${getStatusColor(order.status)}`}>
-                          {getStatusIcon(order.status)}
-                          <span className="capitalize">{order.status.replace('_', ' ')}</span>
-                        </span>
-                        
-                        {/* Progress indicator for partial_received status */}
-                        {order.status === 'partial_received' && order.items && order.items.length > 0 && (
-                          (() => {
-                            const totalOrdered = order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
-                            const totalReceived = order.items.reduce((sum, item) => sum + (item.receivedQuantity || 0), 0);
-                            const percentage = totalOrdered > 0 ? Math.round((totalReceived / totalOrdered) * 100) : 0;
-                            const remaining = totalOrdered - totalReceived;
-                            
-                            return (
-                              <div className="mt-1">
-                                <div className="flex items-center gap-2 text-xs">
-                                  <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
-                                    <div 
-                                      className="bg-orange-500 h-full transition-all duration-300"
-                                      style={{ width: `${percentage}%` }}
+                                                  {(order.status === 'partial_received' ||
+                                                    order.status === 'received' ||
+                                                    order.status === 'completed') && (
+                                                    <div className="mt-2">
+                                                      <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner">
+                                                        <div
+                                                          className={`h-2 rounded-full transition-all duration-500 ${
+                                                            percentage >= 100
+                                                              ? 'bg-gradient-to-r from-green-500 to-emerald-500'
+                                                              : percentage > 0
+                                                                ? 'bg-gradient-to-r from-orange-400 to-orange-500'
+                                                                : 'bg-gray-300'
+                                                          }`}
+                                                          style={{ width: `${Math.min(percentage, 100)}%` }}
                                     />
                                   </div>
-                                  <span className="text-orange-700 font-semibold whitespace-nowrap">
-                                    {percentage}%
-                                  </span>
                                 </div>
-                                <p className="text-xs text-gray-600 mt-0.5">
-                                  {totalReceived}/{totalOrdered} items • {remaining} remaining
-                                </p>
+                                                  )}
                               </div>
                             );
-                          })()
-                        )}
+                                            })}
                       </div>
+                                        ) : (
+                                          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 py-10 text-center text-sm text-gray-500">
+                                            No items found for this order.
+                    </div>
+                                        )}
+                                        {isCollapsed && hasMoreItems && (
+                                          <p className="mt-2 text-xs text-gray-500">
+                                            Showing first {previewCount} items of {order.items?.length || 0}. Tap View More to see all.
+                                          </p>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
                     </div>
 
-                    {/* Items */}
-                    <div className="col-span-1 text-center">
-                      <div className="flex items-center justify-center gap-1 text-sm font-medium text-gray-900">
-                        <Package className="w-4 h-4 text-gray-600" />
-                        <span>{order.items?.reduce((total, item) => total + (item.quantity || 0), 0) || 0}</span>
-                      </div>
-                    </div>
 
-                    {/* Created Date */}
-                    <div className="col-span-2">
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Clock className="w-4 h-4" />
-                        <span>{formatDate(order.createdAt)}</span>
+                                {/* Financial Summary Section */}
+                                {(order.totalAmount || 0) > 0 && (
+                                  <div className="mt-4 mb-4 bg-green-50 rounded-xl p-4 border border-green-200">
+                                    <h4 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                      <DollarSign className="w-5 h-5 text-green-600" />
+                                      Financial Summary
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                      <div className="flex justify-between items-center py-2 border-b border-green-200">
+                                        <span className="text-gray-600 font-medium">Total Paid:</span>
+                                        <span className="text-xl font-bold text-emerald-600">
+                                          {(() => {
+                                            const totalPaid = order.totalPaid || 0;
+                                            // If order has foreign currency and exchange rate, convert paid amount to TZS
+                                            if (order.currency && order.currency !== 'TZS' && order.exchangeRate && order.totalPaidBaseCurrency) {
+                                              return formatCurrency(order.totalPaidBaseCurrency, 'TZS');
+                                            }
+                                            // If already in TZS or no conversion needed
+                                            return formatCurrency(totalPaid, 'TZS');
+                                          })()}
+                                        </span>
                       </div>
+                                      <div className="flex justify-between items-center py-2">
+                                        <span className="text-gray-600 font-medium">Remaining:</span>
+                                        <span className="text-lg font-bold text-orange-600">
+                                          {(() => {
+                                            const totalAmount = order.totalAmountBaseCurrency || order.totalAmount || 0;
+                                            const totalPaid = order.totalPaidBaseCurrency || order.totalPaid || 0;
+                                            const remaining = totalAmount - totalPaid;
+                                            
+                                            // Always show in TZS
+                                            if (order.currency && order.currency !== 'TZS' && order.exchangeRate) {
+                                              // Show TZS with original currency in parentheses if applicable
+                                              const remainingInOriginalCurrency = remaining / (order.exchangeRate || 1);
+                                              return (
+                                                <>
+                                                  {formatCurrency(remaining, 'TZS')}
+                                                  {remainingInOriginalCurrency > 0 && (
+                                                    <span className="text-sm text-gray-500 ml-2">
+                                                      ({formatCurrency(remainingInOriginalCurrency, order.currency)})
+                                                    </span>
+                                                  )}
+                                                </>
+                                              );
+                                            }
+                                            return formatCurrency(remaining, 'TZS');
+                                          })()}
+                                        </span>
                     </div>
+                                    </div>
+                                  </div>
+                                )}
 
-                    {/* Smart Actions - Simplified */}
-                    <div className="col-span-1">
-                      <div className="flex items-center justify-end gap-2 relative">
-                        {orderActions.map((action, index) => (
-                          <div key={`${action.type}-${index}`} className="relative">
+                                {/* Shipping Information Section */}
+                                {(order.trackingNumber || order.shippingStatus || order.shippingNotes) && (
+                                  <div className="mt-4 mb-4 bg-purple-50 rounded-xl p-4 border border-purple-200">
+                                    <h4 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                      <Truck className="w-5 h-5 text-purple-600" />
+                                      Shipping Information
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                      {order.trackingNumber && (
+                                        <div className="flex justify-between items-center py-2 border-b border-purple-200">
+                                          <span className="text-gray-600 font-medium">Tracking Number:</span>
+                                          <span className="font-bold font-mono text-gray-900">{order.trackingNumber}</span>
+                                        </div>
+                                      )}
+                                      {order.shippingStatus && (
+                                        <div className="flex justify-between items-center py-2 border-b border-purple-200">
+                                          <span className="text-gray-600 font-medium">Shipping Status:</span>
+                                          <span className="font-semibold text-purple-700 capitalize">
+                                            {order.shippingStatus.replace('_', ' ')}
+                                          </span>
+                                        </div>
+                                      )}
+                                      {order.shippingNotes && (
+                                        <div className="md:col-span-2 py-2">
+                                          <span className="text-gray-600 font-medium block mb-1">Shipping Notes:</span>
+                                          <p className="text-gray-700 text-sm">{order.shippingNotes}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Order Notes Section */}
+                                {order.notes && (
+                                  <div className="mt-4 mb-4 bg-yellow-50 rounded-xl p-4 border border-yellow-200">
+                                    <h4 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                      <FileText className="w-5 h-5 text-yellow-600" />
+                                      Order Notes
+                                    </h4>
+                                    <p className="text-gray-700 leading-relaxed text-sm">{order.notes}</p>
+                                  </div>
+                                )}
+
+                                {/* Quick Access Communication & Info */}
+                                <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+                                  {order.supplier?.phone && (
                             <button
-                              ref={action.type === 'more' ? (el) => { moreButtonRefs.current[order.id] = el; } : undefined}
                               onClick={(e) => {
-                                e.preventDefault();
                                 e.stopPropagation();
-                                action.onClick(e);
-                              }}
-                              className={`flex items-center gap-1.5 px-3 py-2 text-white rounded-lg transition-colors text-xs font-medium ${action.color}`}
-                              title={action.label}
-                            >
-                              {action.icon}
-                              <span className="hidden lg:inline">{action.label}</span>
-                            </button>
-
-                            {/* Styled Action Menu for More button */}
-                            {action.type === 'more' && (
-                              <StyledActionMenu
-                                isOpen={openDropdownId === order.id}
-                                onClose={() => setOpenDropdownId(null)}
-                                position="right"
-                                items={getStyledMenuActions(order)}
-                                triggerRef={{ current: moreButtonRefs.current[order.id] }}
-                              />
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                                        const message = `Hello, regarding Purchase Order #${order.orderNumber}. Please provide status update.`;
+                                        const whatsappUrl = `https://wa.me/${order.supplier.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
+                                        window.open(whatsappUrl, '_blank');
+                                        toast.success('Opening WhatsApp...');
+                                      }}
+                                      className="flex items-center justify-center gap-2 px-3 py-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg transition-all text-sm font-medium"
+                                      title="Message on WhatsApp"
+                                    >
+                                      <MessageSquare className="w-4 h-4" />
+                                      WhatsApp
+                                    </button>
+                                  )}
+                                  {order.supplier?.email && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const subject = `Purchase Order #${order.orderNumber}`;
+                                        const body = `Hello,\n\nRegarding Purchase Order #${order.orderNumber}...\n\nBest regards`;
+                                        const mailtoUrl = `mailto:${order.supplier.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                                        window.location.href = mailtoUrl;
+                                        toast.success('Opening email client...');
+                                      }}
+                                      className="flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg transition-all text-sm font-medium"
+                                      title="Send email"
+                                    >
+                                      <Mail className="w-4 h-4" />
+                                      Email
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Open notes in new tab to avoid navigation
+                                      window.open(`/lats/purchase-orders/${order.id}?tab=notes`, '_blank');
+                                      toast.success('Opening notes in new tab...');
+                                    }}
+                                    className="flex items-center justify-center gap-2 px-3 py-2 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border border-yellow-200 rounded-lg transition-all text-sm font-medium"
+                                    title="View notes"
+                                  >
+                                    <FileText className="w-4 h-4" />
+                                    Notes
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Open payments in new tab to avoid navigation
+                                      window.open(`/lats/purchase-orders/${order.id}?tab=payment`, '_blank');
+                                      toast.success('Opening payments in new tab...');
+                                    }}
+                                    className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg transition-all text-sm font-medium"
+                                    title="Payment history"
+                                  >
+                                    <CreditCard className="w-4 h-4" />
+                                    Payments
+                                  </button>
                     </div>
+
+                                {/* Action Buttons Section */}
+                                <div className="mt-5 pt-5 border-t-2 border-gray-200">
+                                  {orderActions.length > 0 && (
+                                    <>
+                                      {/* Primary Actions */}
+                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                                        {orderActions.slice(0, 4).map((action, index) => (
+                                          <button
+                                            key={`${action.type}-${index}`}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (typeof action.onClick === 'function') {
+                                                action.onClick(e);
+                                              }
+                                            }}
+                                            className={`flex items-center justify-center gap-2 px-4 py-3 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-semibold text-sm ${action.color}`}
+                                          >
+                                            {action.icon}
+                                            {action.label}
+                                          </button>
+                                        ))}
+                                      </div>
+
+                                      {/* Secondary Actions */}
+                                      {orderActions.length > 4 && (
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                                          {orderActions.slice(4).map((action, index) => (
+                                            <button
+                                              key={`${action.type}-${index + 4}`}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (typeof action.onClick === 'function') {
+                                                  action.onClick(e);
+                                                }
+                                              }}
+                                              className={`flex items-center justify-center gap-2 px-4 py-2.5 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-medium text-sm ${action.color}`}
+                                            >
+                                              {action.icon}
+                                              {action.label}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                  
+                                  {/* View Details Button - Always visible in actions */}
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedOrderForDetails(order);
+                                        setShowDetailsModal(true);
+                                      }}
+                                      className="flex items-center justify-center gap-2 px-4 py-2.5 text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all hover:scale-105 hover:shadow-lg font-medium text-sm"
+                                      title="View Order Details"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                      View Details
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                   </div>
                 </div>
               );
             })}
+          </div>
+                </>
+              )}
             </div>
-          </GlassCard>
-        )}
-      </>
-    ) : (
-        /* Suppliers Tab Content - Enhanced Supplier Management */
-        <EnhancedSupplierManagementPage embedded={true} />
-      )}
+          </div>
+        </div>
 
       {/* CBM Calculator Modal */}
       <CBMCalculatorModal
@@ -1207,20 +1959,26 @@ const PurchaseOrdersPage: React.FC = () => {
 
       {/* Enhanced PO Analytics Modal */}
       {showAnalytics && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-gray-900">PO Analytics</h2>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden relative">
                 <button
                   onClick={() => setShowAnalytics(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
                 >
-                  <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
                 </button>
+            <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+              <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                  <BarChart3 className="w-8 h-8 text-white" />
+              </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">PO Analytics</h2>
+                  <p className="text-sm text-gray-600">View purchase order analytics and insights</p>
+            </div>
               </div>
             </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+            <div className="flex-1 overflow-y-auto p-6">
               <POAnalyticsWidget />
             </div>
           </div>
@@ -1229,20 +1987,26 @@ const PurchaseOrdersPage: React.FC = () => {
 
       {/* PO Collaboration Modal */}
       {showCollaboration && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-gray-900">Team Collaboration</h2>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden relative">
                 <button
                   onClick={() => setShowCollaboration(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
                 >
-                  <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
                 </button>
+            <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+              <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center shadow-lg">
+                  <Users className="w-8 h-8 text-white" />
+              </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Team Collaboration</h2>
+                  <p className="text-sm text-gray-600">Collaborate with your team on purchase orders</p>
+            </div>
               </div>
             </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+            <div className="flex-1 overflow-y-auto p-6">
               <POCollaborationWidget
                 onInviteUser={(email, role) => console.log('Invite user:', email, role)}
                 onSendMessage={(message) => console.log('Send message:', message)}
@@ -1255,20 +2019,26 @@ const PurchaseOrdersPage: React.FC = () => {
 
       {/* PO Approval Workflow Modal */}
       {showApprovalWorkflow && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-gray-900">Approval Workflow</h2>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden relative">
                 <button
                   onClick={() => setShowApprovalWorkflow(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
                 >
-                  <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
                 </button>
+            <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+              <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                <div className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center shadow-lg">
+                  <CheckSquare className="w-8 h-8 text-white" />
+              </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Approval Workflow</h2>
+                  <p className="text-sm text-gray-600">Manage purchase order approval processes</p>
+            </div>
               </div>
             </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+            <div className="flex-1 overflow-y-auto p-6">
               <POApprovalWorkflow
                 onApprove={(stepId, comments) => console.log('Approve step:', stepId, comments)}
                 onReject={(stepId, comments) => console.log('Reject step:', stepId, comments)}
@@ -1282,20 +2052,26 @@ const PurchaseOrdersPage: React.FC = () => {
 
       {/* PO Reporting Analytics Modal */}
       {showReporting && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-gray-900">Advanced PO Reporting</h2>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden relative">
                 <button
                   onClick={() => setShowReporting(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
                 >
-                  <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
                 </button>
+            <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+              <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                <div className="w-16 h-16 bg-orange-600 rounded-full flex items-center justify-center shadow-lg">
+                  <FileText className="w-8 h-8 text-white" />
+              </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Advanced PO Reporting</h2>
+                  <p className="text-sm text-gray-600">Generate comprehensive purchase order reports</p>
+            </div>
               </div>
             </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+            <div className="flex-1 overflow-y-auto p-6">
               <POReportingAnalytics
                 onExport={(format) => console.log('Export report as:', format)}
               />
@@ -1312,18 +2088,120 @@ const PurchaseOrdersPage: React.FC = () => {
             setShowComprehensivePayment(false);
             setSelectedPOForPayment(null);
           }}
-          totalAmount={selectedPOForPayment.totalAmount || 0}
+          totalAmount={(() => {
+            // Calculate remaining amount in TZS
+            const totalAmount = selectedPOForPayment.totalAmountBaseCurrency || selectedPOForPayment.totalAmount || 0;
+            const totalPaid = selectedPOForPayment.totalPaidBaseCurrency || selectedPOForPayment.totalPaid || 0;
+            return totalAmount - totalPaid;
+          })()}
           discountAmount={0}
           onProcessPayment={async (paymentData) => {
-            console.log('Processing PO payment:', paymentData);
-            // Handle PO payment processing logic here
-            setShowComprehensivePayment(false);
-            setSelectedPOForPayment(null);
+            try {
+              // Import the payment service
+              const { purchaseOrderPaymentService } = await import('../lib/purchaseOrderPaymentService');
+              
+              // Convert payment data format to match purchase order payment service
+              let payments: any[] = [];
+              
+              if (paymentData.method === 'split') {
+                // Handle split payments
+                payments = paymentData.splitPayments.map((split: any) => ({
+                  purchaseOrderId: selectedPOForPayment.id,
+                  paymentAccountId: split.paymentAccountId || split.accountId,
+                  amount: split.amount,
+                  currency: 'TZS', // Always TZS after conversion
+                  paymentMethod: split.method || split.paymentMethod,
+                  paymentMethodId: split.methodId || split.paymentMethodId,
+                  reference: split.reference || null,
+                  notes: split.notes || null,
+                  createdBy: currentUser?.id || null
+                }));
+              } else {
+                // Handle single payment
+                payments = [{
+                  purchaseOrderId: selectedPOForPayment.id,
+                  paymentAccountId: paymentData.paymentAccountId || paymentData.accountId,
+                  amount: paymentData.amount,
+                  currency: 'TZS', // Always TZS after conversion
+                  paymentMethod: paymentData.method || paymentData.paymentMethod,
+                  paymentMethodId: paymentData.methodId || paymentData.paymentMethodId,
+                  reference: paymentData.reference || null,
+                  notes: paymentData.notes || null,
+                  createdBy: currentUser?.id || null
+                }];
+              }
+              
+              // Process each payment
+              const results = await Promise.all(
+                payments.map(async (payment) => {
+                  const result = await purchaseOrderPaymentService.processPayment(payment);
+                  return result;
+                })
+              );
+              
+              // Check if all payments were successful
+              const failedPayments = results.filter(result => !result.success);
+              
+              if (failedPayments.length > 0) {
+                const errorMessages = failedPayments.map(result => result.message).join('; ');
+                toast.error(`Some payments failed: ${errorMessages}`);
+              } else {
+                toast.success('Payment processed successfully');
+                
+                // Update payment status and reload purchase orders - matching PurchaseOrderDetailsModal pattern
+                try {
+                  const { PurchaseOrderService } = await import('../services/purchaseOrderService');
+                  await PurchaseOrderService.updatePaymentStatus(selectedPOForPayment.id);
+                  console.log('✅ Purchase order payment status updated');
+                } catch (updateError) {
+                  console.warn('⚠️ Failed to update payment status:', updateError);
+                  // Don't block the success flow for this non-critical update
+                }
+                
+                // Reload purchase orders to reflect payment changes
+                await loadPurchaseOrders();
+              }
+              
+              setShowComprehensivePayment(false);
+              setSelectedPOForPayment(null);
+            } catch (error) {
+              console.error('Error processing payment:', error);
+              toast.error('Failed to process payment. Please try again.');
+            }
           }}
         />
       )}
-    </div>
-  );
-};
+      
+       {/* Purchase Order Details Modal */}
+       {showDetailsModal && selectedOrderForDetails && (
+         <PurchaseOrderDetailsModal
+           isOpen={showDetailsModal}
+           onClose={() => {
+             setShowDetailsModal(false);
+             setSelectedOrderForDetails(null);
+           }}
+           order={selectedOrderForDetails}
+           onOrderUpdate={async () => {
+             // Reload purchase orders when the order is updated in the modal
+             await handleLoadPurchaseOrders();
+           }}
+         />
+       )}
+       
+       {/* Manage Suppliers Modal */}
+       {showManageSuppliersModal && (
+         <ManageSuppliersModal
+           isOpen={showManageSuppliersModal}
+           onClose={() => setShowManageSuppliersModal(false)}
+           suppliers={suppliers || []}
+           onSupplierUpdate={async () => {
+             // Reload suppliers when updated
+             await loadSuppliers();
+           }}
+         />
+       )}
+      </div>
+    );
+  };
 
 export default PurchaseOrdersPage;

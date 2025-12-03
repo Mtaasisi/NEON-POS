@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
+import GlassTabs from '../../shared/components/ui/GlassTabs';
 import { PageErrorBoundary } from '../../../features/shared/components/PageErrorBoundary';
 import PageHeader from '../components/ui/PageHeader';
 import { 
@@ -172,31 +173,19 @@ const InventoryManagementPage: React.FC = () => {
           }
         />
 
-        {/* Tab Navigation */}
-        <GlassCard className="p-2">
-          <div className="flex flex-wrap gap-1">
-            {TAB_CONFIGS.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              const styles = TAB_STYLES[tab.color];
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => handleTabChange(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
-                    isActive
-                      ? styles.active
-                      : `text-gray-600 ${styles.hover}`
-                  }`}
-                  title={tab.description}
-                >
-                  <Icon size={18} />
-                  <span className="hidden sm:inline">{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </GlassCard>
+        {/* Modern Tab Navigation */}
+        <GlassTabs
+          tabs={TAB_CONFIGS.map(tab => ({
+            id: tab.id,
+            label: tab.label,
+            icon: <tab.icon size={20} />,
+            description: tab.description
+          }))}
+          activeTab={activeTab}
+          onTabChange={(tabId) => handleTabChange(tabId as TabType)}
+          variant="modern"
+          size="md"
+        />
 
         {/* Tab Content */}
         <div className="min-h-[600px]">

@@ -13,6 +13,7 @@ import {
 import GlassButton from '../../shared/components/ui/GlassButton';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassBadge from '../../shared/components/ui/GlassBadge';
+import GlassTabs from '../../shared/components/ui/GlassTabs';
 import { Customer, Device, Payment } from '../../../types';
 import { formatCurrency } from '../../../lib/customerApi';
 import { toast } from 'react-hot-toast';
@@ -22,6 +23,7 @@ import { useDevices } from '../../../context/DevicesContext';
 import { usePayments } from '../../../context/PaymentsContext';
 import { calculatePointsForDevice } from '../../../lib/pointsConfig';
 import { smsService } from '../../../services/smsService';
+import whatsappService from '../../../services/whatsappService';
 import { checkInCustomer } from '../../../lib/customerApi';
 import { supabase } from '../../../lib/supabaseClient';
 import { getCustomerStatus, trackCustomerActivity, reactivateCustomer, checkInCustomerWithReactivation } from '../../../lib/customerStatusService';
@@ -97,6 +99,10 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   const [smsMessage, setSmsMessage] = useState('');
   const [smsSending, setSmsSending] = useState(false);
   const [smsResult, setSmsResult] = useState<string | null>(null);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [whatsappMessage, setWhatsappMessage] = useState('');
+  const [whatsappSending, setWhatsappSending] = useState(false);
+  const [whatsappResult, setWhatsappResult] = useState<string | null>(null);
   const [showPointsModal, setShowPointsModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -494,8 +500,8 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   };
 
   const calculateCustomerAnalytics = (customerId: string, posSales: any[], spareUsage: any[]) => {
-    const totalPosSpent = posSales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
-    const totalSpareSpent = spareUsage.reduce((sum, usage) => sum + (usage.lats_spare_parts?.selling_price || 0), 0);
+    const totalPosSpent = posSales.reduce((sum, sale) => sum + (parseFloat(sale.total_amount) || 0), 0);
+    const totalSpareSpent = spareUsage.reduce((sum, usage) => sum + (parseFloat(usage.lats_spare_parts?.selling_price) || 0), 0);
     
     // Calculate device-related revenue for this customer from customer_payments table
     const customerDevices = devices.filter(device => device.customerId === customerId);
@@ -615,70 +621,43 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Tab Navigation - Matching CBMCalculatorModal Style */}
+        {/* Modern Tab Navigation */}
         <div className="bg-white flex-shrink-0 px-6 py-4">
-          <div className="flex rounded-lg bg-gray-100 p-1 gap-1 overflow-x-auto">
-            <button
-              onClick={() => setActiveTab('overview')}
-              type="button"
-              className={`flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
-                activeTab === 'overview'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Info className="w-4 h-4" />
-              Overview
-            </button>
-            <button
-              onClick={() => setActiveTab('transactions')}
-              type="button"
-              className={`flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
-                activeTab === 'transactions'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Receipt className="w-4 h-4" />
-              Transactions
-            </button>
-            <button
-              onClick={() => setActiveTab('repairs')}
-              type="button"
-              className={`flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
-                activeTab === 'repairs'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Smartphone className="w-4 h-4" />
-              Repairs
-            </button>
-            <button
-              onClick={() => setActiveTab('communications')}
-              type="button"
-              className={`flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
-                activeTab === 'communications'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <MessageCircle className="w-4 h-4" />
-              Communications
-            </button>
-            <button
-              onClick={() => setActiveTab('journey')}
-              type="button"
-              className={`flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
-                activeTab === 'journey'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4" />
-              Journey
-            </button>
-          </div>
+          <GlassTabs
+            tabs={[
+              {
+                id: 'overview',
+                label: 'Overview',
+                icon: <Info className="w-4 h-4" />
+              },
+              {
+                id: 'transactions',
+                label: 'Transactions',
+                icon: <Receipt className="w-4 h-4" />,
+                badge: posSales.length > 0 ? posSales.length : undefined
+              },
+              {
+                id: 'repairs',
+                label: 'Repairs',
+                icon: <Smartphone className="w-4 h-4" />,
+                badge: devices.length > 0 ? devices.length : undefined
+              },
+              {
+                id: 'communications',
+                label: 'Communications',
+                icon: <MessageCircle className="w-4 h-4" />
+              },
+              {
+                id: 'journey',
+                label: 'Journey',
+                icon: <TrendingUp className="w-4 h-4" />
+              }
+            ]}
+            activeTab={activeTab}
+            onTabChange={(tabId) => setActiveTab(tabId)}
+            variant="modern"
+            size="sm"
+          />
         </div>
 
         {/* Content - Scrollable */}
@@ -914,6 +893,16 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                       >
                         <MessageSquare className="w-4 h-4" />
                         Send SMS
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowWhatsAppModal(true);
+                          trackActivity('whatsapp_opened');
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        WhatsApp
                       </button>
                       <button
                         onClick={() => setShowPointsModal(true)}
@@ -1293,7 +1282,7 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
           {activeTab === 'communications' && (
             <div className="space-y-6">
               {/* Quick Actions Bar */}
-              <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200">
+              <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 flex-wrap">
                 <button
                   onClick={() => {
                     setShowSmsModal(true);
@@ -1303,6 +1292,16 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                 >
                   <MessageSquare className="w-4 h-4" />
                   Send SMS
+                </button>
+                <button
+                  onClick={() => {
+                    setShowWhatsAppModal(true);
+                    trackActivity('whatsapp_opened');
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Send WhatsApp
                 </button>
                 <button
                   onClick={() => {
@@ -1449,6 +1448,16 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                 SMS
               </button>
               
+              <button
+                onClick={() => {
+                  setShowWhatsAppModal(true);
+                  trackActivity('whatsapp_opened');
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
+              >
+                <MessageCircle className="w-4 h-4" />
+                WhatsApp
+              </button>
 
               <button
                 onClick={() => setShowPointsModal(true)}
@@ -1624,6 +1633,120 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
           <div className="flex gap-3 justify-end mt-4">
             <GlassButton type="button" variant="secondary" onClick={() => { setShowSmsModal(false); setSmsMessage(''); setSmsResult(null); }}>Cancel</GlassButton>
             <GlassButton type="submit" variant="primary" disabled={smsSending}>{smsSending ? 'Sending...' : 'Send SMS'}</GlassButton>
+          </div>
+        </form>
+      </Modal>
+
+      {/* WhatsApp Modal */}
+      <Modal isOpen={showWhatsAppModal} onClose={() => { setShowWhatsAppModal(false); setWhatsappMessage(''); setWhatsappResult(null); }} title="Send WhatsApp Message" maxWidth="400px" zIndex={100000}>
+        <form
+          onSubmit={async e => {
+            e.preventDefault();
+            if (!whatsappMessage.trim()) return;
+            setWhatsappSending(true);
+            setWhatsappResult(null);
+            try {
+              const phoneNumber = customer.whatsapp || customer.phone;
+              if (!phoneNumber) {
+                throw new Error('No phone number or WhatsApp number available for this customer');
+              }
+              
+              console.log('💬 Attempting to send WhatsApp to:', phoneNumber);
+              
+              const result = await whatsappService.sendMessage(phoneNumber, whatsappMessage);
+              console.log('💬 WhatsApp Service Result:', result);
+              
+              if (result.success) {
+                // Try to log the WhatsApp message to customer_communications table (non-blocking)
+                let commLogged = false;
+                
+                try {
+                  const { data: commData, error: commError } = await supabase
+                    .from('customer_communications')
+                    .insert({
+                      customer_id: customer.id,
+                      type: 'whatsapp',
+                      message: whatsappMessage,
+                      phone_number: phoneNumber,
+                      status: 'sent',
+                      sent_by: currentUser?.id,
+                      sent_at: new Date().toISOString(),
+                      created_at: new Date().toISOString(),
+                    })
+                    .select()
+                    .single();
+
+                  if (commError) {
+                    console.warn('⚠️ Could not log to customer_communications table:', commError.message);
+                    console.warn('   This is not critical - WhatsApp message was still sent');
+                  } else {
+                    commLogged = true;
+                    console.log('✅ WhatsApp message logged to customer_communications table');
+                  }
+                } catch (commEx) {
+                  console.warn('⚠️ Exception logging customer communication:', commEx);
+                }
+
+                // Show success message regardless of logging
+                const logStatus = commLogged ? ' and logged' : '';
+                setWhatsappResult(`✅ WhatsApp message sent${logStatus} successfully!`);
+                toast.success('WhatsApp message sent successfully!');
+                
+                // Try to refresh communication history (non-blocking)
+                try {
+                  await loadAdditionalCustomerData();
+                } catch (refreshEx) {
+                  console.warn('⚠️ Could not refresh communication history:', refreshEx);
+                }
+              } else {
+                const errorMsg = result.error || 'Unknown error occurred';
+                console.error('❌ WhatsApp Failed:', errorMsg);
+                setWhatsappResult(`❌ ${errorMsg}`);
+                toast.error(`WhatsApp Failed: ${errorMsg}`);
+              }
+            } catch (error: any) {
+              console.error('❌ WhatsApp sending error:', error);
+              
+              // Extract error message from different possible error structures
+              let errorMessage = 'Failed to send WhatsApp message';
+              if (error?.message) {
+                errorMessage = error.message;
+              } else if (error?.error) {
+                errorMessage = typeof error.error === 'string' ? error.error : JSON.stringify(error.error);
+              } else if (typeof error === 'string') {
+                errorMessage = error;
+              }
+              
+              setWhatsappResult(`❌ ${errorMessage}`);
+              toast.error(errorMessage);
+            } finally {
+              setWhatsappSending(false);
+            }
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-gray-700 mb-1 font-medium">To</label>
+            <div className="py-2 px-4 bg-green-50 text-green-700 font-medium rounded">{customer.whatsapp || customer.phone}</div>
+          </div>
+          <div>
+            <label className="block text-gray-700 mb-1 font-medium">Message</label>
+            <textarea
+              value={whatsappMessage}
+              onChange={e => setWhatsappMessage(e.target.value)}
+              rows={4}
+              className="w-full py-2 px-4 bg-white/30 backdrop-blur-md border border-white/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/50"
+              placeholder="Type your WhatsApp message here..."
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Message will be sent via WasenderAPI
+            </p>
+          </div>
+          {whatsappResult && <div className={`text-sm ${whatsappResult.startsWith('❌') || whatsappResult.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}>{whatsappResult}</div>}
+          <div className="flex gap-3 justify-end mt-4">
+            <GlassButton type="button" variant="secondary" onClick={() => { setShowWhatsAppModal(false); setWhatsappMessage(''); setWhatsappResult(null); }}>Cancel</GlassButton>
+            <GlassButton type="submit" variant="primary" disabled={whatsappSending}>{whatsappSending ? 'Sending...' : 'Send WhatsApp'}</GlassButton>
           </div>
         </form>
       </Modal>

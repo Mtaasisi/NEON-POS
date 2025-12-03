@@ -54,7 +54,7 @@ const SupplierOrderHistoryTab: React.FC<SupplierOrderHistoryTabProps> = ({
 
       // Calculate stats
       if (purchaseOrders && purchaseOrders.length > 0) {
-        const totalValue = purchaseOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
+        const totalValue = purchaseOrders.reduce((sum, order) => sum + (parseFloat(order.total_amount) || 0), 0);
         
         // Determine currency handling
         const currencies = [...new Set(purchaseOrders.map(o => o.currency || 'TZS'))];

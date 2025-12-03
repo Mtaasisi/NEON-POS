@@ -59,7 +59,7 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
 
       if (error) throw error;
 
-      const total = sales?.reduce((sum: number, sale: any) => sum + (sale.total_amount || 0), 0) || 0;
+      const total = sales?.reduce((sum: number, sale: any) => sum + (parseFloat(sale.total_amount) || 0), 0) || 0;
       setDailySalesAmount(total);
     } catch (error) {
       console.error('Error fetching daily sales:', error);

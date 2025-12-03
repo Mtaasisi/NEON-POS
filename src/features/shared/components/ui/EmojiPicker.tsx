@@ -71,13 +71,19 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onEmojiSelect, trigger }) => 
 
   return (
     <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
-        type="button"
-      >
-        {trigger || <Smile size={20} />}
-      </button>
+      {trigger ? (
+        <div onClick={() => setIsOpen(!isOpen)} className="inline-block cursor-pointer">
+          {trigger}
+        </div>
+      ) : (
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+          type="button"
+        >
+          <Smile size={20} />
+        </button>
+      )}
 
       {isOpen && (
         <>

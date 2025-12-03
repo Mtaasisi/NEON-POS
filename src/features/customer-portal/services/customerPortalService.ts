@@ -158,32 +158,18 @@ class CustomerPortalService {
 
       let variants: any[] = [];
       
-      // TRY METHOD 1: lats_variants table (newer schema)
-      const { data: variantsData1, error: error1 } = await supabase
-        .from('lats_variants')
-        .select('id, product_id, variant_name, unit_price, compare_at_price, total_quantity, is_parent, variant_type, parent_variant_id')
+      // Fetch from lats_product_variants table (using 'quantity' not 'stock_quantity')
+      const { data: variantsData, error: variantsError } = await supabase
+        .from('lats_product_variants')
+        .select('id, product_id, variant_name, selling_price, cost_price, quantity, is_parent, variant_type, parent_variant_id')
         .in('product_id', productIds);
 
-      if (!error1 && variantsData1 && variantsData1.length > 0) {
+      if (variantsError) {
+        console.error('❌ Error fetching from lats_product_variants:', variantsError);
+      } else if (variantsData && variantsData.length > 0) {
         // Filter out child variants (IMEI children) - only show parent/standard
-        variants = variantsData1.filter((v: any) => !v.parent_variant_id || v.is_parent);
-        console.log(`✅ Fetched ${variants.length} variants from lats_variants table`);
-      } else {
-        console.log('⚠️  lats_variants not available, trying lats_product_variants...');
-        
-        // TRY METHOD 2: lats_product_variants table (older/alternative schema)
-        const { data: variantsData2, error: error2 } = await supabase
-          .from('lats_product_variants')
-          .select('id, product_id, variant_name, selling_price, cost_price, stock_quantity, quantity, is_parent, variant_type, parent_variant_id')
-          .in('product_id', productIds);
-
-        if (error2) {
-          console.error('❌ Error fetching from lats_product_variants:', error2);
-        } else if (variantsData2 && variantsData2.length > 0) {
-          // Filter out child variants
-          variants = variantsData2.filter((v: any) => !v.parent_variant_id || v.is_parent);
-          console.log(`✅ Fetched ${variants.length} variants from lats_product_variants table`);
-        }
+        variants = variantsData.filter((v: any) => !v.parent_variant_id || v.is_parent);
+        console.log(`✅ Fetched ${variants.length} variants from lats_product_variants table`);
       }
 
       if (variants.length === 0) {
@@ -237,7 +223,7 @@ class CustomerPortalService {
         
         // Handle different quantity column names
         const totalStock = productVariants.reduce((sum: number, v: any) => 
-          sum + (v.total_quantity || v.quantity || v.stock_quantity || 0), 0
+          sum + (v.quantity || 0), 0
         );
 
         // Get images for this product
@@ -259,10 +245,10 @@ class CustomerPortalService {
           variants: productVariants.map((v: any) => ({
             id: v.id,
             name: v.variant_name,
-            price: v.unit_price || v.selling_price || 0,
-            compareAtPrice: v.compare_at_price || v.cost_price,
-            inStock: (v.total_quantity || v.quantity || v.stock_quantity || 0) > 0,
-            stockQuantity: v.total_quantity || v.quantity || v.stock_quantity || 0
+            price: v.selling_price || 0,
+            compareAtPrice: v.cost_price,
+            inStock: (v.quantity || 0) > 0,
+            stockQuantity: v.quantity || 0
           })),
           rating: Math.random() * 2 + 3,
           reviewCount: Math.floor(Math.random() * 100)
@@ -325,35 +311,22 @@ class CustomerPortalService {
 
       console.log(`✅ Found product: ${productData.name}`);
 
-      // Fetch variants separately - try both table names
+      // Fetch variants from lats_product_variants table (using 'quantity' not 'stock_quantity')
       let variants: any[] = [];
       
-      // Try lats_variants first (newer schema)
-      const { data: variantsData1, error: error1 } = await supabase
-        .from('lats_variants')
-        .select('id, variant_name, unit_price, compare_at_price, total_quantity, is_parent, parent_variant_id')
+      const { data: variantsData, error: variantsError } = await supabase
+        .from('lats_product_variants')
+        .select('id, variant_name, selling_price, cost_price, quantity, is_parent, parent_variant_id')
         .eq('product_id', productId);
 
-      if (!error1 && variantsData1 && variantsData1.length > 0) {
+      if (variantsError) {
+        console.error('❌ Error fetching variants:', variantsError);
+      } else if (variantsData) {
         // Filter out child variants (IMEI children)
-        variants = variantsData1.filter((v: any) => !v.parent_variant_id || v.is_parent);
-        console.log(`✅ Fetched ${variants.length} variants from lats_variants`);
+        variants = variantsData.filter((v: any) => !v.parent_variant_id || v.is_parent);
+        console.log(`✅ Fetched ${variants.length} variants from lats_product_variants`);
       } else {
-        console.log('⚠️  lats_variants not available, trying lats_product_variants...');
-        
-        // Fallback to lats_product_variants (older schema)
-        const { data: variantsData2, error: error2 } = await supabase
-          .from('lats_product_variants')
-          .select('id, variant_name, selling_price, cost_price, stock_quantity, quantity, is_parent, parent_variant_id')
-          .eq('product_id', productId);
-
-        if (!error2 && variantsData2) {
-          // Filter out child variants
-          variants = variantsData2.filter((v: any) => !v.parent_variant_id || v.is_parent);
-          console.log(`✅ Fetched ${variants.length} variants from lats_product_variants`);
-        } else {
-          console.warn('⚠️  No variants found for this product');
-        }
+        console.warn('⚠️  No variants found for this product');
       }
 
       // Fetch product images from product_images table
@@ -373,11 +346,11 @@ class CustomerPortalService {
 
       console.log(`✅ Found ${imageUrls.length} images for product`);
 
-      // Transform to CustomerProduct format with flexible column mapping
-      const prices = variants.map((v: any) => v.unit_price || v.selling_price || 0).filter((p: any) => p > 0);
+      // Transform to CustomerProduct format
+      const prices = variants.map((v: any) => v.selling_price || 0).filter((p: any) => p > 0);
       const basePrice = prices.length > 0 ? Math.min(...prices) : 0;
       const totalStock = variants.reduce((sum: number, v: any) => 
-        sum + (v.total_quantity || v.quantity || v.stock_quantity || 0), 0
+        sum + (v.quantity || 0), 0
       );
 
       const product: CustomerProduct = {
@@ -395,10 +368,10 @@ class CustomerPortalService {
         variants: variants.map((v: any) => ({
           id: v.id,
           name: v.variant_name,
-          price: v.unit_price || v.selling_price || 0,
-          compareAtPrice: v.compare_at_price || v.cost_price,
-          inStock: (v.total_quantity || v.quantity || v.stock_quantity || 0) > 0,
-          stockQuantity: v.total_quantity || v.quantity || v.stock_quantity || 0
+          price: v.selling_price || 0,
+          compareAtPrice: v.cost_price,
+          inStock: (v.quantity || 0) > 0,
+          stockQuantity: v.quantity || 0
         })),
         rating: Math.random() * 2 + 3,
         reviewCount: Math.floor(Math.random() * 100)

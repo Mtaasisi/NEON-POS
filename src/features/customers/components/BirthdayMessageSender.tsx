@@ -51,18 +51,41 @@ const BirthdayMessageSender: React.FC<BirthdayMessageSenderProps> = ({
         selectedCustomers.includes(c.id)
       );
 
-      // Simulate sending messages
+      // Send messages
+      let successCount = 0;
+      let failCount = 0;
+      
       for (const customer of selectedCustomersData) {
         const message = defaultMessages[messageType].replace('{name}', customer.name);
         
-        if (messageType === 'whatsapp' && customer.whatsapp) {
-          // Send WhatsApp message
-          console.log(`Sending WhatsApp to ${customer.whatsapp}: ${message}`);
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-        } else if (messageType === 'sms' && customer.phone) {
-          // Send SMS
-          console.log(`Sending SMS to ${customer.phone}: ${message}`);
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+        try {
+          if (messageType === 'whatsapp' && (customer.whatsapp || customer.phone)) {
+            // Send WhatsApp message using WhatsApp service
+            const whatsappService = (await import('../../../services/whatsappService')).default;
+            const phone = customer.whatsapp || customer.phone;
+            const result = await whatsappService.sendMessage(phone, message);
+            
+            if (result.success) {
+              successCount++;
+            } else {
+              failCount++;
+              console.error(`Failed to send WhatsApp to ${phone}:`, result.error);
+            }
+          } else if (messageType === 'sms' && customer.phone) {
+            // Send SMS using SMS service
+            const { default: smsService } = await import('../../../services/smsService');
+            const result = await smsService.sendSMS(customer.phone, message);
+            
+            if (result.success) {
+              successCount++;
+            } else {
+              failCount++;
+              console.error(`Failed to send SMS to ${customer.phone}:`, result.error);
+            }
+          }
+        } catch (error) {
+          failCount++;
+          console.error(`Error sending message to ${customer.name}:`, error);
         }
       }
 

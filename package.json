@@ -25,6 +25,8 @@
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "type-check": "tsc --noEmit",
+    "check:keys": "node scripts/scan-react-keys.mjs",
+    "check:all": "npm run type-check && npm run lint && npm run check:keys",
     "setup": "./setup-full-system.sh",
     "validate": "node validate-all-products.mjs",
     "fix": "node fix-all-products.mjs",

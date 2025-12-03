@@ -12,6 +12,7 @@ import GlobalSearchShortcut from '../features/shared/components/GlobalSearchShor
 import GlobalPurchaseOrderShortcut from '../features/shared/components/GlobalPurchaseOrderShortcut';
 import GlobalKeyboardShortcutsHelp from '../features/shared/components/GlobalKeyboardShortcutsHelp';
 import { ErrorBoundary } from '../features/shared/components/ErrorBoundary';
+import { useWhatsAppUnreadCount } from '../features/whatsapp/hooks/useWhatsAppUnreadCount';
 
 import ActivityCounter from '../features/shared/components/ui/ActivityCounter';
 import {
@@ -54,6 +55,7 @@ import GlassButton from '../features/shared/components/ui/GlassButton';
 const AppLayout: React.FC = () => {
   const { currentUser, logout } = useAuth();
   const { isDark } = useTheme();
+  const whatsappUnreadCount = useWhatsAppUnreadCount();
   
   // Safely access context hooks with error handling
   let devices: any[] = [];
@@ -407,6 +409,13 @@ const AppLayout: React.FC = () => {
         icon: <MessageSquare size={20} strokeWidth={1.5} />,
         roles: ['admin', 'customer-care'],
         count: 0
+      },
+      {
+        path: '/whatsapp/inbox',
+        label: 'WhatsApp Inbox',
+        icon: <MessageCircle size={20} strokeWidth={1.5} />,
+        roles: ['admin', 'customer-care'],
+        count: whatsappUnreadCount
       },
 
       // Customer Portal

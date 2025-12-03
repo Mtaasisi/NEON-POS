@@ -6,6 +6,7 @@ interface BackButtonProps {
   to?: string;
   label?: string;
   className?: string;
+  iconClassName?: string;
   onClick?: () => void;
 }
 
@@ -13,6 +14,7 @@ export const BackButton: React.FC<BackButtonProps> = ({
   to, 
   label = 'Back', 
   className = '',
+  iconClassName = '',
   onClick 
 }) => {
   const navigate = useNavigate();
@@ -32,7 +34,7 @@ export const BackButton: React.FC<BackButtonProps> = ({
       onClick={handleClick}
       className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors ${className}`}
     >
-      <ArrowLeft size={20} />
+      <ArrowLeft size={20} className={iconClassName} />
       {label}
     </button>
   );

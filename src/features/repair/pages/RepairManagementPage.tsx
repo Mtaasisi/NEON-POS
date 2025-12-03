@@ -4,6 +4,7 @@ import { useDevices } from '../../../context/DevicesContext';
 import { useAuth } from '../../../context/AuthContext';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassButton from '../../shared/components/ui/GlassButton';
+import GlassTabs from '../../shared/components/ui/GlassTabs';
 import SearchBar from '../../shared/components/ui/SearchBar';
 import GlassSelect from '../../shared/components/ui/GlassSelect';
 import { BackButton } from '../../shared/components/ui/BackButton';
@@ -499,32 +500,18 @@ const RepairManagementPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <GlassCard className="p-2">
-        <div className="flex gap-1">
-          {[
-            { id: 'overview', label: 'Overview', icon: Wrench },
-            { id: 'technicians', label: 'Technicians', icon: Users },
-            { id: 'analytics', label: 'Analytics', icon: BarChart3 }
-          ].map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setViewMode(tab.id as any)}
-                className={`flex items-center gap-2 px-4 py-3 rounded-lg font-medium transition-all ${
-                  viewMode === tab.id
-                    ? 'bg-blue-500 text-white shadow-lg'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      </GlassCard>
+      {/* Modern Navigation Tabs */}
+      <GlassTabs
+        tabs={[
+          { id: 'overview', label: 'Overview', icon: <Wrench className="w-5 h-5" /> },
+          { id: 'technicians', label: 'Technicians', icon: <Users className="w-5 h-5" /> },
+          { id: 'analytics', label: 'Analytics', icon: <BarChart3 className="w-5 h-5" /> }
+        ]}
+        activeTab={viewMode}
+        onTabChange={(tabId) => setViewMode(tabId as any)}
+        variant="modern"
+        size="md"
+      />
 
       {/* Filters */}
       <GlassCard className="p-4">
