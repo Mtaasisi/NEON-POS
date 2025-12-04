@@ -19,10 +19,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Neon database connection
-$DB_HOST = 'ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech';
+$DB_HOST = 'ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech';
 $DB_NAME = 'neondb';
 $DB_USER = 'neondb_owner';
-$DB_PASS = 'npg_dMyv1cG4KSOR';
+$DB_PASS = 'npg_vABqUKk73tEW';
 
 // Optional webhook secret for security
 $WEBHOOK_SECRET = getenv('WHATSAPP_WEBHOOK_SECRET') ?: '';

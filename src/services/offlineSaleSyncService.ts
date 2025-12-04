@@ -5,6 +5,7 @@
 
 import { supabase } from '../lib/supabaseClient';
 import { saleProcessingService } from '../lib/saleProcessingService';
+import { cacheErrorLogger } from './cacheErrorLogger';
 
 interface OfflineSale {
   id: string;
@@ -59,6 +60,20 @@ class OfflineSaleSyncService {
       };
     } catch (error) {
       console.error('❌ [OfflineSaleSync] Failed to save sale locally:', error);
+      
+      // Log error with context
+      await cacheErrorLogger.logCacheError(
+        'offlineSaleSyncService',
+        'saveSaleLocally',
+        error,
+        'save',
+        {
+          saleDataKeys: Object.keys(saleData),
+          timestamp: Date.now(),
+          isOnline: navigator.onLine,
+        }
+      );
+      
       return {
         success: false,
         saleId: '',
@@ -141,6 +156,22 @@ class OfflineSaleSyncService {
       if (sale.syncAttempts >= this.MAX_SYNC_ATTEMPTS && !sale.errorLogged) {
         sale.errorLogged = true; // Mark as logged to prevent repeated errors
         this.updateOfflineSale(sale);
+        
+        // Log to error tracking system
+        await cacheErrorLogger.logCacheError(
+          'offlineSaleSyncService',
+          'syncSale',
+          new Error(errorMessage),
+          'sync',
+          {
+            saleId,
+            syncAttempts: sale.syncAttempts,
+            maxAttempts: this.MAX_SYNC_ATTEMPTS,
+            isStockError,
+            saleTimestamp: sale.timestamp,
+            isOnline: navigator.onLine,
+          }
+        );
         
         if (isStockError) {
           // ✅ FIX: Suppress individual stock-related warnings - they'll be summarized in syncAllPendingSales
@@ -233,7 +264,7 @@ class OfflineSaleSyncService {
   /**
    * Clean up old synced sales (called periodically, debounced)
    */
-  private cleanupOldSyncedSales(): void {
+  private async cleanupOldSyncedSales(): Promise<void> {
     // Prevent multiple simultaneous cleanups
     if (this.isCleaningUp) {
       return;
@@ -262,6 +293,18 @@ class OfflineSaleSyncService {
       }
     } catch (error) {
       console.warn('⚠️ [OfflineSaleSync] Cleanup error:', error);
+      
+      // Log error with context
+      await cacheErrorLogger.logCacheError(
+        'offlineSaleSyncService',
+        'cleanupOldSyncedSales',
+        error,
+        'delete',
+        {
+          salesCount: this.getOfflineSales().length,
+          lastCleanupTime: this.lastCleanupTime,
+        }
+      );
     } finally {
       this.isCleaningUp = false;
     }
@@ -418,6 +461,18 @@ class OfflineSaleSyncService {
         }
       } else {
         console.error('❌ [OfflineSaleSync] Failed to save offline sales:', error);
+        
+        // Log error with context
+        cacheErrorLogger.logCacheError(
+          'offlineSaleSyncService',
+          'saveOfflineSales',
+          error,
+          'save',
+          {
+            salesCount: sales.length,
+            isCleaningUp: this.isCleaningUp,
+          }
+        ).catch(err => console.error('Failed to log error:', err));
       }
     }
   }

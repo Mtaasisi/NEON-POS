@@ -19,6 +19,7 @@ import cartRoutes from './routes/cart.js';
 import smsRoutes from './routes/sms.js';
 import backupRoutes from './routes/backup.js';
 import whatsappWebhookRoutes from './routes/whatsapp-webhook.js';
+import bulkWhatsAppRoutes from './routes/bulk-whatsapp.js';
 import neonMigrationRouter from '../routes/neon-migration.mjs';
 
 // Load environment variables
@@ -63,6 +64,7 @@ app.use('/api/cart', cartRoutes);
 app.use('/api', smsRoutes);
 app.use('/api/backup', backupRoutes);
 app.use('/api/whatsapp', whatsappWebhookRoutes);
+app.use('/api/bulk-whatsapp', bulkWhatsAppRoutes);
 app.use('/api/neon', neonMigrationRouter);
 
 // 404 handler
@@ -86,6 +88,8 @@ app.listen(PORT, () => {
   console.log('  POST /api/sms-proxy');
   console.log('  POST /api/backup/restore');
   console.log('  GET  /api/backup/restore/formats');
+  console.log('  POST /api/bulk-whatsapp/create');
+  console.log('  GET  /api/bulk-whatsapp/status/:id');
   console.log('');
 });
 

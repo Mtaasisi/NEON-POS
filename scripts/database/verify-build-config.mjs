@@ -49,7 +49,9 @@ function verifyEnvFile(filePath, isProduction = false) {
 }
 
 function fixProductionEnv() {
-  const prodEnvPath = join(__dirname, '.env.production');
+  // Get project root (two levels up from scripts/database/)
+  const projectRoot = join(__dirname, '..', '..');
+  const prodEnvPath = join(projectRoot, '.env.production');
   
   if (!existsSync(prodEnvPath)) {
     console.log('📝 Creating .env.production...');
@@ -80,8 +82,10 @@ DATABASE_URL=${CORRECT_DB_CONFIG.connectionString}
 function main() {
   console.log('🔍 Verifying build configuration...\n');
 
-  const envPath = join(__dirname, '.env');
-  const prodEnvPath = join(__dirname, '.env.production');
+  // Get project root (two levels up from scripts/database/)
+  const projectRoot = join(__dirname, '..', '..');
+  const envPath = join(projectRoot, '.env');
+  const prodEnvPath = join(projectRoot, '.env.production');
 
   // Check .env file
   const envOk = verifyEnvFile(envPath, false);

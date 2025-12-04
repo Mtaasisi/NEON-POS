@@ -47,7 +47,8 @@ import {
   MessageSquare,
   Shield,
   Globe,
-  FileText
+  FileText,
+  AlertCircle
 } from 'lucide-react';
 
 import GlassButton from '../features/shared/components/ui/GlassButton';
@@ -426,6 +427,15 @@ const AppLayout: React.FC = () => {
         roles: ['admin'],
         count: 0,
         badge: '🌐'
+      },
+
+      // Admin & Monitoring
+      {
+        path: '/admin/error-logs',
+        label: 'Error Logs',
+        icon: <AlertCircle size={20} strokeWidth={1.5} />,
+        roles: ['admin'],
+        count: 0
       }
     ];
 
