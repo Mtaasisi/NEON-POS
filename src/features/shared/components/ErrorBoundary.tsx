@@ -33,7 +33,9 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('🚨 ErrorBoundary caught an error:', error, errorInfo);
+    // Log the ACTUAL error first, before React's generic messages
+    console.error('🚨 [ErrorBoundary] ACTUAL ERROR:', error.name, '-', error.message);
+    console.error('🚨 [ErrorBoundary] Error stack:', error.stack);
     
     this.setState({ errorInfo });
     
@@ -44,7 +46,9 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
     // Log to console for debugging
     console.group('🚨 Error Details');
-    console.error('Error:', error);
+    console.error('Error Type:', error.name);
+    console.error('Error Message:', error.message);
+    console.error('Error Stack:', error.stack);
     console.error('Error Info:', errorInfo);
     console.error('Component Stack:', errorInfo.componentStack);
     console.groupEnd();

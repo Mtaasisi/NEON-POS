@@ -19,6 +19,10 @@ import cartRoutes from './routes/cart.js';
 import smsRoutes from './routes/sms.js';
 import backupRoutes from './routes/backup.js';
 import whatsappWebhookRoutes from './routes/whatsapp-webhook.js';
+import bulkWhatsAppRoutes from './routes/bulk-whatsapp.js';
+import scheduledMessagesRoutes from './routes/scheduled-messages.js';
+import antibanSettingsRoutes from './routes/antiban-settings-postgres.js';
+import whatsappSessionsRoutes from './routes/whatsapp-sessions.js';
 import neonMigrationRouter from '../routes/neon-migration.mjs';
 
 // Load environment variables
@@ -63,6 +67,10 @@ app.use('/api/cart', cartRoutes);
 app.use('/api', smsRoutes);
 app.use('/api/backup', backupRoutes);
 app.use('/api/whatsapp', whatsappWebhookRoutes);
+app.use('/api/bulk-whatsapp', bulkWhatsAppRoutes);
+app.use('/api/scheduled-messages', scheduledMessagesRoutes);
+app.use('/api/antiban-settings', antibanSettingsRoutes);
+app.use('/api/whatsapp-sessions', whatsappSessionsRoutes);
 app.use('/api/neon', neonMigrationRouter);
 
 // 404 handler
@@ -86,7 +94,27 @@ app.listen(PORT, () => {
   console.log('  POST /api/sms-proxy');
   console.log('  POST /api/backup/restore');
   console.log('  GET  /api/backup/restore/formats');
+  console.log('  POST /api/bulk-whatsapp/create');
+  console.log('  GET  /api/bulk-whatsapp/status/:id');
+  console.log('  GET  /api/scheduled-messages');
+  console.log('  POST /api/scheduled-messages');
   console.log('');
+
+  // Initialize scheduled messages service
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  
+  if (supabaseUrl && supabaseKey) {
+    import('./services/scheduledMessagesService.js').then(({ initScheduler }) => {
+      const scheduler = initScheduler(supabaseUrl, supabaseKey);
+      console.log('📅 Scheduled Messages Service: STARTED');
+      console.log(`   Checking every ${scheduler.getStatus().checkIntervalSeconds}s for pending messages`);
+    }).catch(err => {
+      console.error('❌ Failed to start Scheduled Messages Service:', err.message);
+    });
+  } else {
+    console.log('⚠️  Scheduled Messages Service: DISABLED (missing Supabase config)');
+  }
 });
 
 export default app;

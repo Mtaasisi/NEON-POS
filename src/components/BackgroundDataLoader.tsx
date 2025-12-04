@@ -88,11 +88,11 @@ const BackgroundDataLoader: React.FC = () => {
         tasks.push(
           (async () => {
             try {
-              console.log('🚀 Preloading customers data...');
+              if (import.meta.env.DEV) console.log('🚀 Preloading customers data...');
               const { dataPreloadService } = await import('../services/dataPreloadService');
               await dataPreloadService.refreshData('customers');
               customersLoadedRef.current = true;
-              console.log('✅ Customers data preloaded successfully');
+              if (import.meta.env.DEV) console.log('✅ Customers data preloaded successfully');
             } catch (error) {
               console.warn('⚠️ Failed to preload customers:', error);
             }
@@ -105,10 +105,10 @@ const BackgroundDataLoader: React.FC = () => {
         tasks.push(
           (async () => {
             try {
-              console.log('🚀 Preloading settings data...');
+              if (import.meta.env.DEV) console.log('🚀 Preloading settings data...');
               const { dataPreloadService } = await import('../services/dataPreloadService');
               await dataPreloadService.refreshData('settings');
-              console.log('✅ Settings data preloaded successfully');
+              if (import.meta.env.DEV) console.log('✅ Settings data preloaded successfully');
             } catch (error) {
               console.warn('⚠️ Failed to preload settings:', error);
             }
@@ -121,10 +121,10 @@ const BackgroundDataLoader: React.FC = () => {
         tasks.push(
           (async () => {
             try {
-              console.log('🚀 Preloading admin settings data...');
+              if (import.meta.env.DEV) console.log('🚀 Preloading admin settings data...');
               const { dataPreloadService } = await import('../services/dataPreloadService');
               await dataPreloadService.refreshData('admin_settings');
-              console.log('✅ Admin settings data preloaded successfully');
+              if (import.meta.env.DEV) console.log('✅ Admin settings data preloaded successfully');
             } catch (error) {
               console.warn('⚠️ Failed to preload admin settings:', error);
             }
@@ -137,10 +137,10 @@ const BackgroundDataLoader: React.FC = () => {
         tasks.push(
           (async () => {
             try {
-              console.log('🚀 Preloading purchase orders data...');
+              if (import.meta.env.DEV) console.log('🚀 Preloading purchase orders data...');
               const { dataPreloadService } = await import('../services/dataPreloadService');
               await dataPreloadService.refreshData('purchase_orders');
-              console.log('✅ Purchase orders data preloaded successfully');
+              if (import.meta.env.DEV) console.log('✅ Purchase orders data preloaded successfully');
             } catch (error) {
               console.warn('⚠️ Failed to preload purchase orders:', error);
             }
@@ -153,10 +153,10 @@ const BackgroundDataLoader: React.FC = () => {
         tasks.push(
           (async () => {
             try {
-              console.log('🚀 Preloading stock movements data...');
+              if (import.meta.env.DEV) console.log('🚀 Preloading stock movements data...');
               const { dataPreloadService } = await import('../services/dataPreloadService');
               await dataPreloadService.refreshData('stock_movements');
-              console.log('✅ Stock movements data preloaded successfully');
+              if (import.meta.env.DEV) console.log('✅ Stock movements data preloaded successfully');
             } catch (error) {
               console.warn('⚠️ Failed to preload stock movements:', error);
             }
@@ -169,10 +169,10 @@ const BackgroundDataLoader: React.FC = () => {
         tasks.push(
           (async () => {
             try {
-              console.log('🚀 Preloading sales data...');
+              if (import.meta.env.DEV) console.log('🚀 Preloading sales data...');
               const { dataPreloadService } = await import('../services/dataPreloadService');
               await dataPreloadService.refreshData('sales');
-              console.log('✅ Sales data preloaded successfully');
+              if (import.meta.env.DEV) console.log('✅ Sales data preloaded successfully');
             } catch (error) {
               console.warn('⚠️ Failed to preload sales:', error);
             }
@@ -185,10 +185,10 @@ const BackgroundDataLoader: React.FC = () => {
         tasks.push(
           (async () => {
             try {
-              console.log('🚀 Preloading parent variants data...');
+              if (import.meta.env.DEV) console.log('🚀 Preloading parent variants data...');
               const { dataPreloadService } = await import('../services/dataPreloadService');
               await dataPreloadService.refreshData('parent_variants');
-              console.log('✅ Parent variants data preloaded successfully');
+              if (import.meta.env.DEV) console.log('✅ Parent variants data preloaded successfully');
             } catch (error) {
               console.warn('⚠️ Failed to preload parent variants:', error);
             }
@@ -201,10 +201,10 @@ const BackgroundDataLoader: React.FC = () => {
         tasks.push(
           (async () => {
             try {
-              console.log('🚀 Preloading employees data...');
+              if (import.meta.env.DEV) console.log('🚀 Preloading employees data...');
               const { dataPreloadService } = await import('../services/dataPreloadService');
               await dataPreloadService.refreshData('employees');
-              console.log('✅ Employees data preloaded successfully');
+              if (import.meta.env.DEV) console.log('✅ Employees data preloaded successfully');
             } catch (error) {
               console.warn('⚠️ Failed to preload employees:', error);
             }
@@ -217,10 +217,10 @@ const BackgroundDataLoader: React.FC = () => {
         tasks.push(
           (async () => {
             try {
-              console.log('🚀 Preloading payment methods data...');
+              if (import.meta.env.DEV) console.log('🚀 Preloading payment methods data...');
               const { dataPreloadService } = await import('../services/dataPreloadService');
               await dataPreloadService.refreshData('payment_methods');
-              console.log('✅ Payment methods data preloaded successfully');
+              if (import.meta.env.DEV) console.log('✅ Payment methods data preloaded successfully');
             } catch (error) {
               console.warn('⚠️ Failed to preload payment methods:', error);
             }
@@ -233,10 +233,10 @@ const BackgroundDataLoader: React.FC = () => {
         tasks.push(
           (async () => {
             try {
-              console.log('🚀 Preloading attendance records data...');
+              if (import.meta.env.DEV) console.log('🚀 Preloading attendance records data...');
               const { dataPreloadService } = await import('../services/dataPreloadService');
               await dataPreloadService.refreshData('attendance_records');
-              console.log('✅ Attendance records data preloaded successfully');
+              if (import.meta.env.DEV) console.log('✅ Attendance records data preloaded successfully');
             } catch (error) {
               console.warn('⚠️ Failed to preload attendance records:', error);
             }

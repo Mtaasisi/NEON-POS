@@ -440,14 +440,14 @@ class DataPreloadService {
       if (error) throw error;
 
       dataStore.setCustomers(data || []);
-      console.log(`✅ Preloaded ${data?.length || 0} customers`);
+      if (import.meta.env.DEV) console.log(`✅ Preloaded ${data?.length || 0} customers`);
 
       // Also populate customerCacheService for components that use it
       if (data && data.length > 0) {
         try {
           const { customerCacheService } = await import('../lib/customerCacheService');
           customerCacheService.saveCustomers(data);
-          console.log(`✅ Also cached ${data.length} customers in customerCacheService`);
+          if (import.meta.env.DEV) console.log(`✅ Also cached ${data.length} customers in customerCacheService`);
         } catch (cacheError) {
           console.warn('⚠️ Could not populate customerCacheService:', cacheError);
         }
@@ -623,7 +623,7 @@ class DataPreloadService {
 
       // Store all settings in dataStore for fast access
       dataStore.setSettings(allSettings);
-      console.log('✅ Preloaded all POS settings data');
+      if (import.meta.env.DEV) console.log('✅ Preloaded all POS settings data');
     } catch (error: any) {
       console.error('❌ Error preloading settings:', error);
       dataStore.setError('settings', error.message);
@@ -957,7 +957,7 @@ class DataPreloadService {
     if (refreshFn) {
       try {
         await refreshFn();
-        console.log(`✅ Refreshed ${dataType}`);
+        if (import.meta.env.DEV) console.log(`✅ Refreshed ${dataType}`);
       } catch (error: any) {
         console.error(`❌ Failed to refresh ${dataType}:`, error);
         throw error;

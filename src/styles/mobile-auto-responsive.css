@@ -345,7 +345,7 @@
 @media print {
   .responsive-button,
   .responsive-icon {
-    color-adjust: exact;
+    print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
 }

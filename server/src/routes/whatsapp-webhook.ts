@@ -21,11 +21,15 @@ const router = express.Router();
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 
+let supabase: ReturnType<typeof createClient> | null = null;
+
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ CRITICAL: Supabase credentials not configured for webhooks');
+  console.error('   WhatsApp webhook routes will return 503 Service Unavailable');
+} else {
+  supabase = createClient(supabaseUrl, supabaseKey);
+  console.log('✅ Supabase client initialized for WhatsApp webhooks');
 }
-
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Webhook secret for signature verification (optional but recommended)
 const WEBHOOK_SECRET = process.env.WHATSAPP_WEBHOOK_SECRET || '';
@@ -272,16 +276,20 @@ async function processWebhook(data: any, startTime: number) {
       processingId
     });
 
-    // Log failed webhook to database for manual retry if needed
-    try {
-      await supabase.from('webhook_failures').insert({
-        event_type: eventType,
-        payload: data,
-        error_message: error.message,
-        created_at: new Date().toISOString()
-      });
-    } catch (logError) {
-      console.error('❌ Could not log webhook failure:', logError);
+    // Log failed webhook to database for manual retry if needed (if Supabase is configured)
+    if (supabase) {
+      try {
+        await supabase.from('webhook_failures').insert({
+          event_type: eventType,
+          payload: data,
+          error_message: error.message,
+          created_at: new Date().toISOString()
+        });
+      } catch (logError) {
+        console.error('❌ Could not log webhook failure:', logError);
+      }
+    } else {
+      console.warn('⚠️ Webhook failure not logged to database (Supabase not configured)');
     }
   }
 }

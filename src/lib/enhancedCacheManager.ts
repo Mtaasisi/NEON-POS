@@ -13,6 +13,7 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { supabase } from './supabase';
 import toast from 'react-hot-toast';
+import { cacheErrorLogger } from '../services/cacheErrorLogger';
 
 // Database schema
 interface CacheDB extends DBSchema {
@@ -314,6 +315,20 @@ class EnhancedCacheManager {
     } catch (error: any) {
       console.error(`❌ [SmartCache] Error fetching ${storeName}:`, error);
       
+      // Log error with context
+      await cacheErrorLogger.logCacheError(
+        'enhancedCacheManager',
+        'smartFetch',
+        error,
+        'fetch',
+        {
+          storeName,
+          forceRefresh,
+          branchId,
+          isOnline: this.isOnline,
+        }
+      );
+      
       if (showLoadingToast) {
         toast.error(`Failed to load ${storeName}`, { id: `fetch-${storeName}` });
       }
@@ -358,6 +373,19 @@ class EnhancedCacheManager {
       this.notifyListeners(storeName, data);
     } catch (error) {
       console.error(`❌ [SmartCache] Background refresh failed for ${storeName}:`, error);
+      
+      // Log error with context
+      await cacheErrorLogger.logCacheError(
+        'enhancedCacheManager',
+        'refreshInBackground',
+        error,
+        'background_refresh',
+        {
+          storeName,
+          branchId,
+          isOnline: this.isOnline,
+        }
+      );
     } finally {
       this.refreshInProgress.delete(storeName);
     }
@@ -398,6 +426,16 @@ class EnhancedCacheManager {
       };
     } catch (error) {
       console.error(`❌ [SmartCache] Error checking cache status for ${storeName}:`, error);
+      
+      // Log error with context
+      await cacheErrorLogger.logCacheError(
+        'enhancedCacheManager',
+        'getCacheStatus',
+        error,
+        'read',
+        { storeName }
+      );
+      
       return { exists: false, isFresh: false, isStale: false, isExpired: true, age: 0 };
     }
   }
@@ -415,6 +453,16 @@ class EnhancedCacheManager {
       });
     } catch (error) {
       console.error(`❌ [SmartCache] Error getting from cache for ${storeName}:`, error);
+      
+      // Log error with context
+      await cacheErrorLogger.logCacheError(
+        'enhancedCacheManager',
+        'getFromCache',
+        error,
+        'read',
+        { storeName }
+      );
+      
       return [];
     }
   }
@@ -452,6 +500,19 @@ class EnhancedCacheManager {
       await tx.done;
     } catch (error) {
       console.error(`❌ [SmartCache] Error saving to cache for ${storeName}:`, error);
+      
+      // Log error with context
+      await cacheErrorLogger.logCacheError(
+        'enhancedCacheManager',
+        'saveToCache',
+        error,
+        'save',
+        {
+          storeName,
+          itemCount: data.length,
+        }
+      );
+      
       throw error;
     }
   }
@@ -498,6 +559,18 @@ class EnhancedCacheManager {
       console.log(`📝 [SmartCache] Queued ${action} operation for ${type}`);
     } catch (error) {
       console.error(`❌ [SmartCache] Error queuing operation:`, error);
+      
+      // Log error with context
+      await cacheErrorLogger.logCacheError(
+        'enhancedCacheManager',
+        'queueForSync',
+        error,
+        'queue',
+        {
+          type,
+          action,
+        }
+      );
     }
   }
 
@@ -526,12 +599,36 @@ class EnhancedCacheManager {
           console.log(`✅ [SmartCache] Synced operation ${op.id}`);
         } catch (error) {
           console.error(`❌ [SmartCache] Failed to sync operation ${op.id}:`, error);
+          
+          // Log error with context
+          await cacheErrorLogger.logCacheError(
+            'enhancedCacheManager',
+            'syncPendingOperations',
+            error,
+            'sync',
+            {
+              operationId: op.id,
+              operationType: op.type,
+              operationAction: op.action,
+            }
+          );
         }
       }
 
       toast.success(`Synced ${pendingOps.length} offline changes`);
     } catch (error) {
       console.error(`❌ [SmartCache] Error syncing pending operations:`, error);
+      
+      // Log error with context
+      await cacheErrorLogger.logCacheError(
+        'enhancedCacheManager',
+        'syncPendingOperations',
+        error,
+        'sync',
+        {
+          pendingOperationsCount: pendingOps?.length || 0,
+        }
+      );
     }
   }
 
@@ -558,6 +655,16 @@ class EnhancedCacheManager {
       return stats;
     } catch (error) {
       console.error('❌ [SmartCache] Error getting cache stats:', error);
+      
+      // Log error with context
+      await cacheErrorLogger.logCacheError(
+        'enhancedCacheManager',
+        'getCacheStats',
+        error,
+        'read',
+        {}
+      );
+      
       return {};
     }
   }
@@ -580,6 +687,16 @@ class EnhancedCacheManager {
       toast.success('Cache cleared successfully');
     } catch (error) {
       console.error('❌ [SmartCache] Error clearing cache:', error);
+      
+      // Log error with context
+      await cacheErrorLogger.logCacheError(
+        'enhancedCacheManager',
+        'clearAllCache',
+        error,
+        'delete',
+        {}
+      );
+      
       toast.error('Failed to clear cache');
     }
   }
@@ -594,6 +711,15 @@ class EnhancedCacheManager {
       console.log(`✅ [SmartCache] Invalidated cache for ${storeName}`);
     } catch (error) {
       console.error(`❌ [SmartCache] Error invalidating cache for ${storeName}:`, error);
+      
+      // Log error with context
+      await cacheErrorLogger.logCacheError(
+        'enhancedCacheManager',
+        'invalidateCache',
+        error,
+        'delete',
+        { storeName }
+      );
     }
   }
 }

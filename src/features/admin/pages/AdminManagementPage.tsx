@@ -10,7 +10,7 @@ import {
   Users, CreditCard, BarChart2, Package, Calendar, Smartphone,
   MessageCircle, MessageSquare, Stethoscope, Plus, Edit, Trash2,
   Eye, Download, Upload, RefreshCw, CheckCircle, AlertTriangle, MapPin, Layers,
-  ArrowRightLeft
+  ArrowRightLeft, AlertCircle
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useDevices } from '../../../context/DevicesContext';
@@ -151,6 +151,15 @@ const AdminManagementPage: React.FC = () => {
       icon: <Shield size={24} />,
       path: '/audit-logs',
       color: 'from-red-500 to-red-600',
+      category: 'security'
+    },
+    {
+      id: 'error-logs',
+      title: 'Cache Error Logs',
+      description: 'Monitor cache management errors in offline operations',
+      icon: <AlertCircle size={24} />,
+      path: '/admin/error-logs',
+      color: 'from-rose-500 to-rose-600',
       category: 'security'
     },
     {

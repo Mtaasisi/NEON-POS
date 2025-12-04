@@ -1681,15 +1681,77 @@ const mockAuth = {
   },
 };
 
-// Mock storage implementation (you can enhance this later)
+// Mock storage implementation with real functionality
 const mockStorage = {
-  from: () => ({
-    upload: () => Promise.resolve({ data: null, error: null }),
+  from: (bucket: string) => ({
+    upload: async (path: string, file: File | Blob, options?: any) => {
+      try {
+        console.log('📤 Storage upload:', { bucket, path, fileSize: file.size });
+        
+        // Convert Blob to File if needed
+        const actualFile = file instanceof File ? file : new File([file], path.split('/').pop() || 'file', { type: file.type });
+        
+        // Use WhatsApp media storage service for uploads
+        const { WhatsAppMediaStorageService } = await import('./whatsappMediaStorage');
+        const result = await WhatsAppMediaStorageService.uploadMedia(actualFile);
+        
+        if (result.success && result.url) {
+          // Store the URL for later retrieval by getPublicUrl
+          // Use localStorage instead of sessionStorage for persistence across page reloads
+          localStorage.setItem(`storage:${bucket}:${path}`, result.url);
+          
+          return { 
+            data: { 
+              path: path,
+              id: path,
+              fullPath: path
+            }, 
+            error: null 
+          };
+        }
+        
+        return { 
+          data: null, 
+          error: { 
+            message: result.error || 'Upload failed',
+            statusCode: '400'
+          } 
+        };
+      } catch (error: any) {
+        console.error('❌ Storage upload error:', error);
+        return { 
+          data: null, 
+          error: { 
+            message: error.message || 'Upload failed',
+            statusCode: '500'
+          } 
+        };
+      }
+    },
     download: () => Promise.resolve({ data: null, error: null }),
     list: () => Promise.resolve({ data: [], error: null }),
-    remove: () => Promise.resolve({ data: null, error: null }),
+    remove: async (paths: string[]) => {
+      try {
+        const { WhatsAppMediaStorageService } = await import('./whatsappMediaStorage');
+        for (const path of paths) {
+          const url = localStorage.getItem(`storage:${bucket}:${path}`);
+          if (url) {
+            await WhatsAppMediaStorageService.deleteMedia(url);
+            localStorage.removeItem(`storage:${bucket}:${path}`);
+          }
+        }
+        return { data: null, error: null };
+      } catch (error: any) {
+        return { data: null, error: { message: error.message } };
+      }
+    },
     createSignedUrl: () => Promise.resolve({ data: null, error: null }),
-    getPublicUrl: () => ({ data: { publicUrl: '' } }),
+    getPublicUrl: (path: string) => {
+      // Retrieve the URL that was stored during upload
+      const url = localStorage.getItem(`storage:${bucket}:${path}`) || '';
+      console.log('🔗 Getting public URL:', { bucket, path, url: url.substring(0, 50) + '...' });
+      return { data: { publicUrl: url } };
+    },
   }),
 };
 

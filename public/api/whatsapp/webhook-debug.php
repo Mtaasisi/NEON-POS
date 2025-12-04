@@ -28,8 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
     // Test database connection
     try {
-        $dsn = "pgsql:host=ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech;dbname=neondb;sslmode=require";
-        $pdo = new PDO($dsn, 'neondb_owner', 'npg_dMyv1cG4KSOR', [
+        $dsn = "pgsql:host=ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech;dbname=neondb;sslmode=require";
+        $pdo = new PDO($dsn, 'neondb_owner', 'npg_vABqUKk73tEW', [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
         ]);
         
@@ -76,8 +76,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Connect to database
         debugLog("Connecting to database...");
-        $dsn = "pgsql:host=ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech;dbname=neondb;sslmode=require";
-        $pdo = new PDO($dsn, 'neondb_owner', 'npg_dMyv1cG4KSOR', [
+        $dsn = "pgsql:host=ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech;dbname=neondb;sslmode=require";
+        $pdo = new PDO($dsn, 'neondb_owner', 'npg_vABqUKk73tEW', [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
         ]);
         debugLog("Database connected!");

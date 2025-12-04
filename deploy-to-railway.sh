@@ -42,15 +42,15 @@ echo -e "Connection configured automatically"
 echo ""
 
 # Neon database configuration
-DB_CONNECTION="postgresql://neondb_owner:npg_dMyv1cG4KSOR@ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require"
+DB_CONNECTION="postgresql://neondb_owner:npg_vABqUKk73tEW@ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 echo ""
 echo -e "${GREEN}Setting environment variables...${NC}"
 
 # For Neon, we use the Supabase client with direct database connection
 railway variables set DATABASE_URL="$DB_CONNECTION"
-railway variables set VITE_SUPABASE_URL="https://ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech"
-railway variables set SUPABASE_URL="https://ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech"
+railway variables set VITE_SUPABASE_URL="https://ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech"
+railway variables set SUPABASE_URL="https://ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech"
 
 # Note: For Neon, we don't need anon key since we're using direct DB connection
 # But set a placeholder to prevent errors

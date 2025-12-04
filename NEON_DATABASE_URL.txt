@@ -1,0 +1,53 @@
+====================================
+NEON DATABASE CONNECTION STRING
+====================================
+
+Copy this line to your server/.env file:
+
+DATABASE_URL="postgresql://neondb_owner:npg_dMyv1cG4KSOR@ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require"
+
+====================================
+SETUP STEPS:
+====================================
+
+1. Open or create: server/.env
+
+2. Add the DATABASE_URL line above
+
+3. Save the file
+
+4. Run migration (choose one):
+   - Web Console: https://console.neon.tech → SQL Editor
+   - Command line: ./setup-antiban-neon.sh
+
+5. Restart backend:
+   cd server && npm run dev
+
+6. Restart frontend:
+   npm run dev
+
+7. Open WhatsApp Inbox → Settings auto-load! ✅
+
+====================================
+VERIFY IT WORKS:
+====================================
+
+Backend console should show:
+  ✅ Connected to PostgreSQL (Neon)
+
+Browser console should show:
+  ⚙️ Anti-ban settings loaded from database
+
+Test API:
+  curl http://localhost:8000/api/antiban-settings
+
+====================================
+DOCUMENTATION:
+====================================
+
+Quick Start: QUICK_START_NEON.md
+Full Guide: ANTIBAN_SETTINGS_NEON.md
+Summary: NEON_SETUP_COMPLETE.md
+
+====================================
+

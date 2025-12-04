@@ -198,13 +198,17 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
       const result = await dataPreloadService.preloadAllData();
 
       if (result.success) {
-        console.log('✅ All data preloaded successfully');
-        console.log(`   Duration: ${result.duration}ms`);
-        console.log(`   Loaded: ${result.loaded.length} data types`);
+        if (import.meta.env.DEV) {
+          console.log('✅ All data preloaded successfully');
+          console.log(`   Duration: ${result.duration}ms`);
+          console.log(`   Loaded: ${result.loaded.length} data types`);
+        }
       } else {
         console.warn('⚠️ Data preload completed with some failures');
-        console.log(`   Loaded: ${result.loaded.join(', ')}`);
-        console.log(`   Failed: ${result.failed.join(', ')}`);
+        if (import.meta.env.DEV) {
+          console.log(`   Loaded: ${result.loaded.join(', ')}`);
+          console.log(`   Failed: ${result.failed.join(', ')}`);
+        }
       }
 
       // Get preload summary

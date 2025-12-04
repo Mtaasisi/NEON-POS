@@ -6,7 +6,7 @@ export interface WhatsAppLog {
   id: string;
   recipient_phone: string;
   message: string;
-  message_type: 'text' | 'image' | 'video' | 'document' | 'audio' | 'location' | 'contact';
+  message_type: 'text' | 'image' | 'video' | 'document' | 'audio' | 'location' | 'contact' | 'poll';
   status: 'sent' | 'delivered' | 'read' | 'failed' | 'pending';
   error_message?: string;
   sent_at?: string;
@@ -19,7 +19,7 @@ export interface WhatsAppLog {
 }
 
 export interface WhatsAppMessageOptions {
-  message_type?: 'text' | 'image' | 'video' | 'document' | 'audio' | 'location' | 'contact';
+  message_type?: 'text' | 'image' | 'video' | 'document' | 'audio' | 'location' | 'contact' | 'poll';
   media_url?: string;
   caption?: string;
   location?: {
@@ -32,7 +32,13 @@ export interface WhatsAppMessageOptions {
     name: string;
     phone: string;
   };
+  pollName?: string;
+  pollOptions?: string[];
+  allowMultipleAnswers?: boolean;
   quoted_message_id?: string; // For replying to messages
+  viewOnce?: boolean; // For images/videos
+  session_id?: number; // Local DB session ID for tracking
+  wasender_session_id?: number; // WasenderAPI session ID (override default)
 }
 
 class WhatsAppService {
@@ -156,6 +162,9 @@ class WhatsAppService {
         case 'contact':
           result = await this.sendContactMessage(formattedPhone, options);
           break;
+        case 'poll':
+          result = await this.sendPollMessage(formattedPhone, options);
+          break;
         default:
           result = await this.sendTextMessage(formattedPhone, message, options);
       }
@@ -174,7 +183,8 @@ class WhatsAppService {
         sent_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
         message_id: result.message_id,
-        media_url: options?.media_url
+        media_url: options?.media_url,
+        session_id: options?.session_id || null // Track which session was used
       };
 
       if (result.error) {
@@ -274,12 +284,22 @@ class WhatsAppService {
 
       const url = `${this.apiUrl}/send-message`;
       
+      const finalCaption = caption || options.caption || '';
       const payload: any = {
         session: this.sessionId,
         to: phone,
-        image: options.media_url,
-        caption: caption || options.caption || ''
+        imageUrl: options.media_url
       };
+      
+      // Add text/caption - at least one is required
+      if (finalCaption) {
+        payload.text = finalCaption;
+      }
+      
+      // Add viewOnce option if specified
+      if (options.viewOnce) {
+        payload.viewOnce = true;
+      }
 
       const response = await fetch(url, {
         method: 'POST',
@@ -324,12 +344,22 @@ class WhatsAppService {
 
       const url = `${this.apiUrl}/send-message`;
       
+      const finalCaption = caption || options.caption || '';
       const payload: any = {
         session: this.sessionId,
         to: phone,
-        video: options.media_url,
-        caption: caption || options.caption || ''
+        videoUrl: options.media_url
       };
+      
+      // Add text/caption - at least one is required
+      if (finalCaption) {
+        payload.text = finalCaption;
+      }
+      
+      // Add viewOnce option if specified
+      if (options.viewOnce) {
+        payload.viewOnce = true;
+      }
 
       const response = await fetch(url, {
         method: 'POST',
@@ -374,12 +404,17 @@ class WhatsAppService {
 
       const url = `${this.apiUrl}/send-message`;
       
+      const finalCaption = caption || options.caption || '';
       const payload: any = {
         session: this.sessionId,
         to: phone,
-        document: options.media_url,
-        caption: caption || options.caption || ''
+        documentUrl: options.media_url
       };
+      
+      // Add text/caption - at least one is required
+      if (finalCaption) {
+        payload.text = finalCaption;
+      }
 
       const response = await fetch(url, {
         method: 'POST',
@@ -427,9 +462,14 @@ class WhatsAppService {
       const payload: any = {
         session: this.sessionId,
         to: phone,
-        audio: options.media_url,
-        caption: caption || options.caption || ''
+        audioUrl: options.media_url
       };
+      
+      // Audio messages typically don't have captions, but we can add text if provided
+      const finalCaption = caption || options.caption || '';
+      if (finalCaption) {
+        payload.text = finalCaption;
+      }
 
       const response = await fetch(url, {
         method: 'POST',
@@ -558,6 +598,80 @@ class WhatsAppService {
         message_id: data.messageId || data.id 
       };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Network error';
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Send poll message
+   */
+  private async sendPollMessage(
+    phone: string, 
+    options?: WhatsAppMessageOptions
+  ): Promise<{ success: boolean; error?: string; message_id?: string }> {
+    try {
+      if (!options?.pollName || !options?.pollOptions || options.pollOptions.length < 2) {
+        return { success: false, error: 'Poll name and at least 2 options are required for poll messages' };
+      }
+
+      const url = `${this.apiUrl}/send-message`;
+      
+      // WasenderAPI expects poll as a nested object with 'question' and 'multiSelect'
+      const payload: any = {
+        session: this.sessionId,
+        to: phone,
+        poll: {
+          question: options.pollName,
+          options: options.pollOptions,
+          multiSelect: options.allowMultipleAnswers || false
+        }
+      };
+
+      console.log('📤 Sending poll message with payload:', JSON.stringify(payload, null, 2));
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Poll message failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData: errorData,
+          sentPayload: payload
+        });
+        
+        // More detailed error message
+        let errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+        if (errorData.message) {
+          errorMsg = errorData.message;
+        }
+        if (errorData.errors) {
+          const errorDetails = JSON.stringify(errorData.errors);
+          errorMsg += ` - ${errorDetails}`;
+        }
+        
+        return { 
+          success: false, 
+          error: errorMsg
+        };
+      }
+
+      const data = await response.json();
+      console.log('✅ Poll message sent successfully:', data);
+      return { 
+        success: true, 
+        message_id: data.messageId || data.id 
+      };
+    } catch (error) {
+      console.error('❌ Poll message exception:', error);
       const errorMessage = error instanceof Error ? error.message : 'Network error';
       return { success: false, error: errorMessage };
     }
@@ -763,6 +877,52 @@ class WhatsAppService {
     } catch (error) {
       console.error('Error marking message as read:', error);
       return false;
+    }
+  }
+
+  /**
+   * Send presence update (typing indicator)
+   * @param phone - Phone number to send presence to
+   * @param state - Presence state: 'composing' (typing), 'paused', 'available'
+   */
+  async sendPresenceUpdate(
+    phone: string,
+    state: 'composing' | 'paused' | 'available' = 'composing'
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await this.ensureInitialized();
+      
+      if (!this.apiKey || !this.sessionId) {
+        return { success: false, error: 'WhatsApp not configured' };
+      }
+
+      const formattedPhone = phone.startsWith('+') ? phone.substring(1) : phone;
+      
+      const response = await fetch(`${this.apiUrl}/send-presence-update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({
+          session: this.sessionId,
+          to: formattedPhone,
+          state: state
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return { 
+          success: false, 
+          error: errorData.message || `HTTP ${response.status}: ${response.statusText}` 
+        };
+      }
+
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Network error';
+      return { success: false, error: errorMessage };
     }
   }
 

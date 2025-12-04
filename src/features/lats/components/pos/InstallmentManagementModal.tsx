@@ -39,7 +39,6 @@ interface InstallmentManagementModalProps {
 }
 
 const InstallmentManagementModal: React.FC<InstallmentManagementModalProps> = ({ isOpen, onClose }) => {
-  console.log('🔵 [InstallmentManagementModal] Rendering, isOpen:', isOpen);
   const { currentUser } = useAuth();
   const { customers } = useCustomers();
   const { currentBranch } = useBranch();
@@ -600,9 +599,6 @@ const InstallmentManagementModal: React.FC<InstallmentManagementModalProps> = ({
   if (typeof document === 'undefined' || !document.body) {
     return null;
   }
-
-  // Debug log
-  console.log('🔵 [InstallmentManagementModal] Rendering modal with z-index 999999');
 
   // Return the actual modal using createPortal
   return createPortal(

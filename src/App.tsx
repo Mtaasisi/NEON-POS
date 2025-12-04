@@ -18,6 +18,13 @@ import ErrorManager from './components/ErrorManager';
 import { Toaster } from 'react-hot-toast';
 // Load branch debugging tools (makes them available in console)
 import './lib/branchDataCleanup';
+// Global error handler for catching all errors
+import { globalErrorHandler } from './services/globalErrorHandler';
+import { GlobalErrorBoundary } from './components/GlobalErrorBoundary';
+// Storage cleanup utilities (available in console)
+import './utils/clearErrorLogs';
+// Emergency cleanup for storage quota issues
+import './utils/emergencyCleanup';
 
 // import BackgroundSelector from './features/settings/components/BackgroundSelector';
 import GlobalLoadingProgress from './features/shared/components/ui/GlobalLoadingProgress';
@@ -78,6 +85,7 @@ import DefaultRedirect from './components/DefaultRedirect';
 import InlineLoader from './components/ui/InlineLoader';
 const AdminSettingsPage = lazy(() => import('./features/admin/pages/AdminSettingsPage'));
 const IntegrationsTestPage = lazy(() => import('./features/admin/pages/IntegrationsTestPage'));
+const ErrorLogsPage = lazy(() => import('./features/admin/pages/ErrorLogsPage'));
 const UserManagementPage = lazy(() => import('./features/users/pages/UserManagementPage'));
 const EnhancedSupplierManagementPage = lazy(() => import('./features/settings/pages/EnhancedSupplierManagementPage'));
 import { SuppliersProvider } from './context/SuppliersContext';
@@ -171,6 +179,7 @@ const DashboardPage = lazy(() => import('./features/shared/pages/DashboardPage')
 const BulkSMSPage = lazy(() => import('./features/sms/pages/BulkSMSPage'));
 const SMSLogsPage = lazy(() => import('./features/sms/pages/SMSLogsPage'));
 const SMSSettingsPage = lazy(() => import('./features/sms/pages/SMSSettingsPage'));
+const ScheduledMessagesPage = lazy(() => import('./features/sms/pages/ScheduledMessagesPage'));
 const IntegrationSettingsPage = lazy(() => import('./features/settings/pages/IntegrationSettingsPage'));
 const UserSettingsPage = lazy(() => import('./features/shared/pages/UserSettingsPage'));
 
@@ -804,6 +813,13 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
               </Suspense>
             </RoleProtectedRoute>
           } />
+          <Route path="/sms/scheduled" element={
+            <RoleProtectedRoute allowedRoles={['admin', 'customer-care']}>
+              <Suspense fallback={<DynamicPageLoader />}>
+                <ScheduledMessagesPage />
+              </Suspense>
+            </RoleProtectedRoute>
+          } />
           
           {/* WhatsApp Module Routes */}
           <Route path="/whatsapp/inbox" element={
@@ -823,6 +839,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             </RoleProtectedRoute>
           } />
           <Route path="/integrations-test" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><IntegrationsTestPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/admin/error-logs" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><ErrorLogsPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/users" element={
             <RoleProtectedRoute allowedRoles={['admin']}>
               <Suspense fallback={<DynamicPageLoader />}>
@@ -1116,6 +1133,16 @@ function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, _setIsSyncing] = useState(false);
 
+  // --- Initialize Global Error Handler ---
+  useEffect(() => {
+    globalErrorHandler.init();
+    console.log('✅ Global error handler initialized');
+    
+    return () => {
+      globalErrorHandler.cleanup();
+    };
+  }, []);
+
   // --- Global scroll position persistence ---
   useEffect(() => {
     // Restore scroll position on mount
@@ -1224,6 +1251,15 @@ function App() {
       );
     };
 
+    // Helper function to check if error is WhatsApp integration not configured
+    const isWhatsAppConfigError = (message: string): boolean => {
+      const text = message.toLowerCase();
+      return !!(
+        text.includes('whatsapp integration not configured') ||
+        (text.includes('[whatsapp]') && text.includes('not configured'))
+      );
+    };
+
     console.error = (...args: any[]) => {
       const message = args.join(' ');
       // Check error object if present
@@ -1235,6 +1271,13 @@ function App() {
         // Silently ignore extension errors
         return;
       }
+
+      // Filter out WhatsApp integration configuration errors (shown in UI instead)
+      if (isWhatsAppConfigError(message)) {
+        // Silently ignore - shown in UI instead
+        return;
+      }
+
       originalError.apply(console, args);
     };
 
@@ -1323,13 +1366,14 @@ function App() {
     : '';
 
   return (
-    <BrowserRouter basename={basename} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <ThemeProvider>
-        <AuthProvider>
-          <GlobalSearchProvider>
-            <BranchProvider>
-              <DateRangeProvider>
-                <ErrorProvider>
+    <GlobalErrorBoundary>
+      <BrowserRouter basename={basename} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <ThemeProvider>
+          <AuthProvider>
+            <GlobalSearchProvider>
+              <BranchProvider>
+                <DateRangeProvider>
+                  <ErrorProvider>
                   {/* <RepairProvider> */}
                   <DevicesProvider>
                   <CustomersProvider>
@@ -1395,6 +1439,7 @@ function App() {
         }}
       />
     </BrowserRouter>
+    </GlobalErrorBoundary>
   );
 }
 

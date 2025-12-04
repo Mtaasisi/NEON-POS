@@ -15,6 +15,8 @@ export default defineConfig(({ command, mode }) => {
     protocol: env.VITE_DEV_HMR_PROTOCOL || 'ws',
     timeout: 30000, // 30 second timeout for HMR
     overlay: false, // Disable error overlay to prevent WebSocket issues
+    // Reduce HMR update frequency for better performance
+    throttle: 100, // Throttle HMR updates to max once per 100ms
   };
 
   if (env.VITE_DEV_HMR_HOST) {
@@ -36,9 +38,9 @@ export default defineConfig(({ command, mode }) => {
     open: true, // Automatically open browser when dev server starts
     hmr: hmrOptions,
     watch: {
-      usePolling: true,
-      interval: 1000,
-      ignored: ['**/node_modules/**', '**/dist/**'], // Ignore unnecessary files
+      usePolling: false, // Disable polling for better performance - use native file system events
+      // interval: 1000, // Removed - not needed with usePolling: false
+      ignored: ['**/node_modules/**', '**/dist/**', '**/.git/**', '**/terminals/**'], // Ignore unnecessary files
     },
     // Add better error handling for development
     // Allow access to source files for development
@@ -123,17 +125,17 @@ export default defineConfig(({ command, mode }) => {
         },
       },
       // Optimize for production
-      minify: 'terser',
-      terserOptions: {
-        compress: {
-          drop_console: true,
-          drop_debugger: true,
-          pure_funcs: ['console.log', 'console.info', 'console.debug'],
-        },
-        mangle: {
-          safari10: true,
-        },
-      },
+      minify: 'esbuild',
+      // terserOptions: {
+      //   compress: {
+      //     drop_console: true,
+      //     drop_debugger: true,
+      //     pure_funcs: ['console.log', 'console.info', 'console.debug'],
+      //   },
+      //   mangle: {
+      //     safari10: true,
+      //   },
+      // },
       // Add compression
       reportCompressedSize: true,
       // Optimize assets

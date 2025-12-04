@@ -207,6 +207,15 @@ export const APP_ROUTES: RouteDefinition[] = [
     category: 'admin',
     allowedRoles: ['admin', 'manager']
   },
+  {
+    id: 'error-logs',
+    path: '/admin/error-logs',
+    title: 'Cache Error Logs',
+    description: 'Monitor cache management errors in offline operations',
+    icon: '🚨',
+    category: 'admin',
+    allowedRoles: ['admin']
+  },
 
   // Customer Management
   {
@@ -264,6 +273,15 @@ export const APP_ROUTES: RouteDefinition[] = [
     icon: '⚙️',
     category: 'sms',
     allowedRoles: ['admin']
+  },
+  {
+    id: 'scheduled-messages',
+    path: '/sms/scheduled',
+    title: 'Scheduled Messages',
+    description: 'Manage scheduled bulk SMS and WhatsApp messages',
+    icon: '📅',
+    category: 'sms',
+    allowedRoles: ['admin', 'customer-care']
   },
 
   // Appointments & Reminders

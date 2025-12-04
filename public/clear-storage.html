@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Error Logs - Storage Cleanup</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: linear-gradient(to bottom right, #f0f9ff, #e0f2fe);
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #1e40af;
+            margin-top: 0;
+        }
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-top: 10px;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+        .btn-danger {
+            background: #dc2626;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+        .info {
+            background: #dbeafe;
+            border-left: 4px solid #2563eb;
+            padding: 12px;
+            margin: 16px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background: #dcfce7;
+            border-left: 4px solid #16a34a;
+            padding: 12px;
+            margin: 16px 0;
+            border-radius: 4px;
+        }
+        .warning {
+            background: #fef3c7;
+            border-left: 4px solid #eab308;
+            padding: 12px;
+            margin: 16px 0;
+            border-radius: 4px;
+        }
+        #result {
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .stat-label {
+            font-weight: 600;
+        }
+        .stat-value {
+            color: #6b7280;
+        }
+        .list {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #f9fafb;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+        .list-item {
+            padding: 6px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🧹 Storage Cleanup Utility</h1>
+        <div class="warning">
+            <strong>⚠️ Important:</strong> This page helps you clear error logs that are filling up your browser's localStorage, causing "QuotaExceeded" errors.
+        </div>
+        
+        <h2>Current Storage Status</h2>
+        <div id="storageInfo"></div>
+        
+        <h2>Actions</h2>
+        <button class="btn-primary" onclick="clearErrorLogs()">Clear Error Logs Only</button>
+        <button class="btn-secondary" onclick="showStorageInfo()">Refresh Stats</button>
+        <button class="btn-danger" onclick="clearAll()">⚠️ Clear ALL Storage</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        function showStorageInfo() {
+            let totalSize = 0;
+            let errorLogCount = 0;
+            const items = [];
+
+            const keys = Object.keys(localStorage);
+            
+            for (const key of keys) {
+                const value = localStorage.getItem(key);
+                if (value) {
+                    const size = value.length;
+                    totalSize += size;
+                    items.push({
+                        key,
+                        size,
+                        sizeKB: (size / 1024).toFixed(2)
+                    });
+                    
+                    if (key.startsWith('error_log_') || key.startsWith('error-') || key.includes('ErrorLog')) {
+                        errorLogCount++;
+                    }
+                }
+            }
+
+            // Sort by size descending
+            items.sort((a, b) => b.size - a.size);
+
+            const info = `
+                <div class="stat">
+                    <span class="stat-label">Total Items:</span>
+                    <span class="stat-value">${keys.length}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Error Log Items:</span>
+                    <span class="stat-value">${errorLogCount}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Total Size:</span>
+                    <span class="stat-value">${(totalSize / 1024).toFixed(2)} KB (${(totalSize / 1024 / 1024).toFixed(2)} MB)</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Typical Limit:</span>
+                    <span class="stat-value">~5-10 MB per domain</span>
+                </div>
+                
+                <h3>Largest Items (Top 10)</h3>
+                <div class="list">
+                    ${items.slice(0, 10).map(item => `
+                        <div class="list-item">
+                            <strong>${item.key}</strong>: ${item.sizeKB} KB
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            document.getElementById('storageInfo').innerHTML = info;
+        }
+
+        function clearErrorLogs() {
+            let cleared = 0;
+            let freedSpace = 0;
+
+            const keys = Object.keys(localStorage);
+            
+            for (const key of keys) {
+                if (key.startsWith('error_log_') || 
+                    key.startsWith('error-') || 
+                    key.includes('ErrorLog') ||
+                    key.includes('error_export')) {
+                    try {
+                        const size = localStorage.getItem(key)?.length || 0;
+                        localStorage.removeItem(key);
+                        cleared++;
+                        freedSpace += size;
+                    } catch (err) {
+                        console.warn(`Failed to remove ${key}:`, err);
+                    }
+                }
+            }
+
+            document.getElementById('result').innerHTML = `
+                <div class="success">
+                    <strong>✅ Success!</strong><br>
+                    Cleared ${cleared} error log entries<br>
+                    Freed ~${(freedSpace / 1024).toFixed(2)} KB (~${(freedSpace / 1024 / 1024).toFixed(2)} MB)
+                </div>
+            `;
+
+            // Refresh storage info
+            showStorageInfo();
+        }
+
+        function clearAll() {
+            if (confirm('⚠️ This will clear ALL localStorage data including user preferences, cached data, etc. Are you absolutely sure?')) {
+                if (confirm('This action cannot be undone. Continue?')) {
+                    const itemCount = Object.keys(localStorage).length;
+                    localStorage.clear();
+                    
+                    document.getElementById('result').innerHTML = `
+                        <div class="success">
+                            <strong>✅ All Storage Cleared!</strong><br>
+                            Removed ${itemCount} items<br>
+                            <br>
+                            <strong>Please refresh your browser or navigate back to the app.</strong>
+                        </div>
+                    `;
+                    
+                    showStorageInfo();
+                }
+            }
+        }
+
+        // Auto-load on page load
+        window.addEventListener('load', showStorageInfo);
+    </script>
+</body>
+</html>
+
