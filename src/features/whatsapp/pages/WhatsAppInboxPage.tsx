@@ -6826,9 +6826,9 @@ export default function WhatsAppInboxPage() {
     
     {/* Floating Detailed Campaign Panel - SHOWS ALL DETAILS */}
     {renderMinimizedPanel()}
-      
-      {/* Advanced Feature Modals */}
-      <React.Fragment key="modals">
+    
+    {/* Advanced Feature Modals */}
+    <React.Fragment key="modals">
         <CampaignHistoryModal
         isOpen={showCampaignHistory}
         onClose={() => setShowCampaignHistory(false)}
