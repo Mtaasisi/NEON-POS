@@ -819,6 +819,717 @@ app.post('/api/query', async (req, res) => {
   }
 });
 
+// ============================================
+// WHATSAPP WEBHOOK ENDPOINT
+// ============================================
+app.get('/api/whatsapp/webhook', (req, res) => {
+  console.log('🔍 WhatsApp Webhook - Health Check');
+  res.json({
+    status: 'healthy',
+    service: 'whatsapp-webhook',
+    timestamp: new Date().toISOString(),
+    database: 'connected'
+  });
+});
+
+app.post('/api/whatsapp/webhook', async (req, res) => {
+  console.log('\n╔═══════════════════════════════════════════════╗');
+  console.log('║  📨 WHATSAPP WEBHOOK - MESSAGE RECEIVED      ║');
+  console.log('╚═══════════════════════════════════════════════╝');
+  
+  // ALWAYS return 200 OK first
+  res.status(200).json({ received: true, timestamp: new Date().toISOString() });
+  
+  try {
+    const webhook = req.body;
+    const eventType = webhook.event || 'unknown';
+    
+    console.log(`📋 Event Type: ${eventType}`);
+    console.log(`📋 Full Webhook:`, JSON.stringify(webhook, null, 2));
+    
+    // Process incoming messages
+    if (eventType === 'messages.received' || eventType === 'messages.upsert') {
+      const message = webhook.data || {};
+      
+      console.log(`📬 Processing message...`);
+      console.log(`   From: ${message.from}`);
+      console.log(`   ID: ${message.id}`);
+      console.log(`   Type: ${message.type}`);
+      
+      if (!message.from || !message.id) {
+        console.log('⚠️  Missing required fields (from/id)');
+        return;
+      }
+      
+      // Clean phone number
+      const from = message.from.replace('@s.whatsapp.net', '');
+      const cleanPhone = from.replace(/[^\d+]/g, '');
+      const messageText = message.text || message.body || message.caption || '';
+      const messageType = message.type || 'text';
+      const messageId = message.id;
+      const timestamp = message.timestamp || new Date().toISOString();
+      
+      console.log(`📞 Clean Phone: ${cleanPhone}`);
+      console.log(`💬 Message Text: ${messageText.substring(0, 100)}`);
+      
+      // Find customer
+      console.log(`👤 Looking for customer...`);
+      const customers = await sql`
+        SELECT id, name, phone, whatsapp 
+        FROM customers 
+        WHERE phone = ${cleanPhone} 
+           OR phone = ${'+' + cleanPhone}
+           OR whatsapp = ${cleanPhone}
+           OR whatsapp = ${'+' + cleanPhone}
+        LIMIT 1
+      `;
+      
+      const customer = customers[0];
+      if (customer) {
+        console.log(`✅ Customer found: ${customer.name} (${customer.id})`);
+      } else {
+        console.log(`⚠️  No customer found for ${cleanPhone}`);
+      }
+      
+      // Insert message into database
+      console.log(`💾 Storing message in database...`);
+      
+      const result = await sql`
+        INSERT INTO whatsapp_incoming_messages 
+        (message_id, from_phone, customer_id, message_text, message_type, 
+         media_url, received_at, created_at, is_read, replied)
+        VALUES (
+          ${messageId},
+          ${cleanPhone},
+          ${customer?.id || null},
+          ${messageText.substring(0, 5000)},
+          ${messageType},
+          ${message.image || message.video || message.document || message.audio || null},
+          ${timestamp},
+          NOW(),
+          false,
+          false
+        )
+        ON CONFLICT (message_id) DO UPDATE 
+        SET message_text = EXCLUDED.message_text
+        RETURNING id
+      `;
+      
+      if (result && result.length > 0) {
+        console.log(`✅ Message stored successfully! ID: ${result[0].id}`);
+        
+        // Get total count
+        const count = await sql`SELECT COUNT(*) as count FROM whatsapp_incoming_messages`;
+        console.log(`📊 Total messages in database: ${count[0].count}`);
+      } else {
+        console.log(`⚠️  Message might be duplicate (conflict)`);
+      }
+      
+    } else {
+      console.log(`ℹ️  Event '${eventType}' - not a message event`);
+    }
+    
+    console.log('✅ Webhook processing complete');
+    console.log('───────────────────────────────────────────────\n');
+    
+  } catch (error) {
+    console.error('❌ Webhook error:', error.message);
+    console.error('Stack:', error.stack);
+  }
+});
+
+// ============================================
+// BULK WHATSAPP CAMPAIGN ENDPOINTS
+// ============================================
+
+// Create a new bulk WhatsApp campaign
+app.post('/api/bulk-whatsapp/create', async (req, res) => {
+  console.log('\n╔═══════════════════════════════════════════════╗');
+  console.log('║  📤 BULK WHATSAPP - CREATE CAMPAIGN          ║');
+  console.log('╚═══════════════════════════════════════════════╝');
+  
+  try {
+    const { userId, name, message, recipients, settings, mediaUrl, mediaType } = req.body;
+    
+    console.log('📋 [REQUEST] Campaign creation request:');
+    console.log(`   Name: ${name}`);
+    console.log(`   Message: ${message?.substring(0, 50)}...`);
+    console.log(`   Recipients: ${recipients?.length || 0}`);
+    console.log(`   Media URL: ${mediaUrl ? 'Yes' : 'No'}`);
+    console.log(`   Media Type: ${mediaType || 'text'}`);
+    
+    // Validate input
+    if (!name || !message || !recipients || recipients.length === 0) {
+      console.error('❌ [ERROR] Missing required fields');
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: name, message, and recipients'
+      });
+    }
+    
+    // Insert campaign into database
+    console.log('💾 [DATABASE] Creating campaign record...');
+    
+    // Validate userId is a UUID or null
+    let validUserId = null;
+    if (userId) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(userId)) {
+        validUserId = userId;
+      } else {
+        console.warn(`⚠️ [WARNING] Invalid userId format: ${userId}, setting to null`);
+      }
+    }
+    
+    const result = await sql`
+      INSERT INTO whatsapp_campaigns (
+        name,
+        message,
+        media_url,
+        media_type,
+        total_recipients,
+        recipients_data,
+        sent_count,
+        success_count,
+        failed_count,
+        replied_count,
+        settings,
+        status,
+        created_by,
+        created_at,
+        updated_at
+      ) VALUES (
+        ${name},
+        ${message},
+        ${mediaUrl || null},
+        ${mediaType || 'text'},
+        ${recipients.length},
+        ${JSON.stringify(recipients)},
+        0,
+        0,
+        0,
+        0,
+        ${JSON.stringify(settings || {})},
+        'pending',
+        ${validUserId},
+        NOW(),
+        NOW()
+      )
+      RETURNING id
+    `;
+    
+    const campaignId = result[0]?.id;
+    
+    if (!campaignId) {
+      throw new Error('Failed to create campaign in database');
+    }
+    
+    console.log(`✅ [SUCCESS] Campaign created with ID: ${campaignId}`);
+    console.log('   Status: pending (ready to be processed)');
+    
+    res.json({
+      success: true,
+      campaignId: campaignId,
+      message: 'Campaign created successfully',
+      status: 'pending',
+      totalRecipients: recipients.length
+    });
+    
+    console.log('───────────────────────────────────────────────\n');
+    
+  } catch (error) {
+    console.error('❌ [ERROR] Campaign creation failed:', error.message);
+    console.error('   Stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create campaign'
+    });
+  }
+});
+
+// Get campaign status (with progress info)
+app.get('/api/bulk-whatsapp/status/:id', async (req, res) => {
+  console.log(`📥 [API] GET /api/bulk-whatsapp/status/${req.params.id}`);
+  
+  try {
+    const campaignId = req.params.id;
+    
+    const result = await sql`
+      SELECT 
+        id,
+        name,
+        message,
+        media_url,
+        media_type,
+        total_recipients,
+        sent_count,
+        success_count,
+        failed_count,
+        replied_count,
+        status,
+        started_at,
+        completed_at,
+        duration_seconds,
+        created_at,
+        updated_at
+      FROM whatsapp_campaigns
+      WHERE id = ${campaignId}
+    `;
+    
+    const campaign = result[0];
+    
+    if (!campaign) {
+      return res.status(404).json({
+        success: false,
+        error: 'Campaign not found'
+      });
+    }
+    
+    console.log(`✅ Campaign found: ${campaign.name}`);
+    console.log(`   Status: ${campaign.status}`);
+    console.log(`   Progress: ${campaign.sent_count}/${campaign.total_recipients}`);
+    
+    // Format response to match frontend expectations
+    res.json({
+      success: true,
+      campaign: {
+        ...campaign,
+        progress: {
+          current: campaign.sent_count || 0,
+          total: campaign.total_recipients || 0,
+          success: campaign.success_count || 0,
+          failed: campaign.failed_count || 0
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching campaign status:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch campaign'
+    });
+  }
+});
+
+// Get campaign details (alias for backwards compatibility)
+app.get('/api/bulk-whatsapp/campaign/:id', async (req, res) => {
+  console.log(`📥 [API] GET /api/bulk-whatsapp/campaign/${req.params.id}`);
+  
+  try {
+    const campaignId = req.params.id;
+    
+    const result = await sql`
+      SELECT 
+        id,
+        name,
+        message,
+        media_url,
+        media_type,
+        total_recipients,
+        sent_count,
+        success_count,
+        failed_count,
+        replied_count,
+        status,
+        started_at,
+        completed_at,
+        duration_seconds,
+        created_at,
+        updated_at
+      FROM whatsapp_campaigns
+      WHERE id = ${campaignId}
+    `;
+    
+    const campaign = result[0];
+    
+    if (!campaign) {
+      return res.status(404).json({
+        success: false,
+        error: 'Campaign not found'
+      });
+    }
+    
+    console.log(`✅ Campaign found: ${campaign.name}`);
+    console.log(`   Status: ${campaign.status}`);
+    console.log(`   Progress: ${campaign.sent_count}/${campaign.total_recipients}`);
+    
+    res.json({
+      success: true,
+      campaign: campaign
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching campaign:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch campaign'
+    });
+  }
+});
+
+// Update campaign status
+app.patch('/api/bulk-whatsapp/campaign/:id', async (req, res) => {
+  console.log(`📥 [API] PATCH /api/bulk-whatsapp/campaign/${req.params.id}`);
+  
+  try {
+    const campaignId = req.params.id;
+    const updates = req.body;
+    
+    console.log('   Updates:', JSON.stringify(updates, null, 2));
+    
+    // Build dynamic update query based on provided fields
+    const updateFields = [];
+    const updateValues = [];
+    
+    if (updates.status !== undefined) {
+      updateFields.push('status');
+      updateValues.push(updates.status);
+    }
+    if (updates.sent_count !== undefined) {
+      updateFields.push('sent_count');
+      updateValues.push(updates.sent_count);
+    }
+    if (updates.success_count !== undefined) {
+      updateFields.push('success_count');
+      updateValues.push(updates.success_count);
+    }
+    if (updates.failed_count !== undefined) {
+      updateFields.push('failed_count');
+      updateValues.push(updates.failed_count);
+    }
+    if (updates.started_at !== undefined) {
+      updateFields.push('started_at');
+      updateValues.push(updates.started_at);
+    }
+    if (updates.completed_at !== undefined) {
+      updateFields.push('completed_at');
+      updateValues.push(updates.completed_at);
+    }
+    
+    if (updateFields.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No valid fields to update'
+      });
+    }
+    
+    // Always update the updated_at timestamp
+    updateFields.push('updated_at');
+    updateValues.push(new Date().toISOString());
+    
+    // Build the SET clause
+    const setClause = updateFields.map((field, i) => `${field} = $${i + 1}`).join(', ');
+    const query = `UPDATE whatsapp_campaigns SET ${setClause} WHERE id = $${updateFields.length + 1} RETURNING *`;
+    
+    const result = await sql([query], [...updateValues, campaignId]);
+    
+    if (!result || result.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Campaign not found'
+      });
+    }
+    
+    console.log(`✅ Campaign updated: ${result[0].name}`);
+    
+    res.json({
+      success: true,
+      campaign: result[0]
+    });
+    
+  } catch (error) {
+    console.error('❌ Error updating campaign:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update campaign'
+    });
+  }
+});
+
+// ============================================
+// SMS PROXY ENDPOINT
+// ============================================
+app.post('/api/sms-proxy', async (req, res) => {
+  try {
+    console.log('📥 SMS Proxy Request received');
+    
+    const { 
+      phone, 
+      message, 
+      apiUrl, 
+      apiKey, 
+      apiPassword, 
+      senderId = 'INAUZWA',
+      priority = 'High',
+      countryCode = 'ALL',
+      timeout = 30000,
+      maxRetries = 3
+    } = req.body;
+
+    // Validate required fields
+    if (!phone || !message || !apiUrl || !apiKey) {
+      console.error('❌ Missing required fields');
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: phone, message, apiUrl, apiKey'
+      });
+    }
+
+    // Additional validation for null/empty values
+    if (!apiKey || apiKey === 'null' || apiKey === '') {
+      console.error('❌ API Key is null or empty');
+      return res.status(400).json({
+        success: false,
+        error: 'SMS API Key is not configured. Please configure SMS settings first.'
+      });
+    }
+
+    if (!apiUrl || apiUrl === 'null' || apiUrl === '') {
+      console.error('❌ API URL is null or empty');
+      return res.status(400).json({
+        success: false,
+        error: 'SMS API URL is not configured. Please configure SMS settings first.'
+      });
+    }
+
+    // Normalize phone number for MShastra (remove +, ensure 255XXXXXXXXX format)
+    let normalizedPhone = phone;
+    if (apiUrl.includes('mshastra.com')) {
+      // Remove all non-numeric characters
+      normalizedPhone = phone.replace(/\D/g, '');
+      
+      // Convert to MShastra format: 255XXXXXXXXX (12 digits)
+      if (normalizedPhone.startsWith('0')) {
+        // Local format: 0XXXXXXXXX -> 255XXXXXXXXX
+        normalizedPhone = '255' + normalizedPhone.substring(1);
+      } else if (normalizedPhone.startsWith('255')) {
+        // Already in international format
+        normalizedPhone = normalizedPhone;
+      } else if (normalizedPhone.length === 9) {
+        // 9 digits without country code -> add 255
+        normalizedPhone = '255' + normalizedPhone;
+      }
+      
+      // Validate: should be 12 digits starting with 255
+      if (!/^255[67]\d{8}$/.test(normalizedPhone)) {
+        console.error('❌ Invalid phone number format for MShastra:', phone, '->', normalizedPhone);
+        return res.status(400).json({
+          success: false,
+          error: `Invalid phone number format. Expected: 255XXXXXXXXX (12 digits), got: ${normalizedPhone}`
+        });
+      }
+    }
+
+    console.log('📱 SMS Details:');
+    console.log('   Original Phone:', phone);
+    console.log('   Normalized Phone:', normalizedPhone);
+    console.log('   Message:', message.substring(0, 50) + '...');
+    console.log('   API URL:', apiUrl);
+    console.log('   Sender ID:', senderId);
+
+    // For testing purposes, if using a test phone number, simulate success
+    if (normalizedPhone === '255700000000' || normalizedPhone.startsWith('255700')) {
+      console.log('🧪 Test SMS - simulating success');
+      return res.json({
+        success: true,
+        status: 200,
+        data: {
+          message: 'Test SMS simulated successfully',
+          phone: normalizedPhone,
+          test_mode: true
+        }
+      });
+    }
+
+    // Prepare SMS request based on provider
+    let providerUrl, providerMethod, providerHeaders, providerBody;
+    
+    if (apiUrl.includes('mshastra.com')) {
+      // Mobishastra provider - uses GET request with query parameters
+      const params = new URLSearchParams({
+        user: apiKey,
+        pwd: apiPassword || apiKey,
+        senderid: senderId,
+        mobileno: normalizedPhone,
+        msgtext: message,
+        priority: priority,
+        CountryCode: countryCode
+      });
+
+      providerUrl = `${apiUrl}?${params.toString()}`;
+      providerMethod = 'GET';
+      providerHeaders = { 'User-Agent': 'INAUZWA-SMS-Proxy/1.0' };
+      providerBody = null;
+      
+      console.log('🔗 MShastra API URL (without credentials):', 
+        providerUrl.replace(/user=[^&]+/, 'user=***').replace(/pwd=[^&]+/, 'pwd=***'));
+    } else {
+      // Generic provider (default format)
+      providerUrl = apiUrl;
+      providerMethod = 'POST';
+      providerHeaders = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'User-Agent': 'INAUZWA-SMS-Proxy/1.0'
+      };
+      providerBody = JSON.stringify({
+        phone: normalizedPhone,
+        message: message,
+        sender_id: senderId
+      });
+    }
+
+    console.log('🌐 Sending to provider:');
+    console.log('   URL:', providerUrl.replace(/user=[^&]+/, 'user=***').replace(/pwd=[^&]+/, 'pwd=***'));
+    console.log('   Method:', providerMethod);
+
+    // Make the request to SMS provider with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+      const fetchOptions = {
+        method: providerMethod,
+        headers: providerHeaders,
+        signal: controller.signal
+      };
+      
+      if (providerBody) {
+        fetchOptions.body = providerBody;
+      }
+      
+      const response = await fetch(providerUrl, fetchOptions);
+      clearTimeout(timeoutId);
+
+      const responseText = await response.text();
+      console.log('📥 Full Provider Response:');
+      console.log('   Status Code:', response.status);
+      console.log('   Response Text:', responseText);
+      console.log('   Response Length:', responseText.length);
+
+      // Parse response based on provider
+      let result;
+      
+      if (apiUrl.includes('mshastra.com')) {
+        // Mobishastra returns simple text responses
+        const trimmedResponse = responseText.trim().toLowerCase();
+        console.log('🔍 Parsing MShastra response:', trimmedResponse);
+
+        const successPatterns = [
+          'send successful',
+          'success',
+          '000',
+          'message sent',
+          'sms sent',
+          'delivered',
+          'sent successfully'
+        ];
+        
+        const isSuccess = successPatterns.some(pattern => trimmedResponse.includes(pattern));
+        
+        if (isSuccess || response.status === 200) {
+          result = {
+            success: true,
+            data: {
+              message: 'SMS sent successfully',
+              provider_response: responseText.trim(),
+              status_code: response.status === 200 ? '200' : '000',
+              raw_response: responseText.trim()
+            }
+          };
+        } else {
+          let errorMessage = 'SMS sending failed';
+          const lowerResponse = trimmedResponse;
+          
+          if (lowerResponse.includes('invalid mobile') || lowerResponse.includes('invalid number')) {
+            errorMessage = 'Invalid mobile number format';
+          } else if (lowerResponse.includes('invalid password') || lowerResponse.includes('invalid user')) {
+            errorMessage = 'Invalid API credentials (username or password)';
+          } else if (lowerResponse.includes('no more credits') || lowerResponse.includes('insufficient')) {
+            errorMessage = 'Insufficient account balance';
+          } else if (lowerResponse.includes('blocked') || lowerResponse.includes('profile id blocked')) {
+            errorMessage = 'Account is blocked';
+          } else if (lowerResponse.includes('invalid sender')) {
+            errorMessage = 'Invalid sender ID';
+          } else if (lowerResponse.includes('timeout') || lowerResponse.includes('connection')) {
+            errorMessage = 'Connection timeout or network error';
+          }
+
+          console.error('❌ MShastra error response:', responseText.trim());
+          result = {
+            success: false,
+            data: null,
+            error: `${errorMessage}. Provider response: ${responseText.trim()}`
+          };
+        }
+      } else {
+        // For JSON-based providers
+        try {
+          const responseData = JSON.parse(responseText);
+          
+          if (response.status >= 200 && response.status < 300) {
+            result = {
+              success: true,
+              data: responseData
+            };
+          } else {
+            result = {
+              success: false,
+              data: responseData,
+              error: 'SMS sending failed'
+            };
+          }
+        } catch (parseError) {
+          // If response is not JSON, treat as raw text
+          if (response.status >= 200 && response.status < 300) {
+            result = {
+              success: true,
+              data: { rawResponse: responseText }
+            };
+          } else {
+            result = {
+              success: false,
+              data: { rawResponse: responseText },
+              error: 'SMS sending failed'
+            };
+          }
+        }
+      }
+      
+      console.log('📊 Parsed Result:', JSON.stringify(result, null, 2));
+
+      return res.status(response.status).json({
+        success: result.success,
+        status: response.status,
+        data: result.data,
+        error: result.error || null
+      });
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      // Check if it was a timeout
+      if (fetchError.name === 'AbortError' || controller.signal.aborted) {
+        console.error('❌ SMS request timeout after', timeout, 'ms');
+        return res.status(408).json({
+          success: false,
+          error: `SMS request timed out after ${timeout}ms`
+        });
+      }
+      
+      // Re-throw other errors
+      throw fetchError;
+    }
+
+  } catch (error) {
+    console.error('❌ SMS Proxy Error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Internal server error'
+    });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log('');

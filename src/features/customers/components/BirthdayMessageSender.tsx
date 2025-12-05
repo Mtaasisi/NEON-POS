@@ -57,30 +57,54 @@ const BirthdayMessageSender: React.FC<BirthdayMessageSenderProps> = ({
       
       for (const customer of selectedCustomersData) {
         const message = defaultMessages[messageType].replace('{name}', customer.name);
+        const phone = customer.whatsapp || customer.phone;
+        
+        if (!phone) {
+          failCount++;
+          continue;
+        }
         
         try {
-          if (messageType === 'whatsapp' && (customer.whatsapp || customer.phone)) {
-            // Send WhatsApp message using WhatsApp service
+          // Use smart routing for all messages (except when user explicitly chooses a method)
+          if (messageType === 'whatsapp') {
+            // User wants WhatsApp - try WhatsApp, but allow fallback if not available
             const whatsappService = (await import('../../../services/whatsappService')).default;
-            const phone = customer.whatsapp || customer.phone;
             const result = await whatsappService.sendMessage(phone, message);
             
             if (result.success) {
               successCount++;
             } else {
-              failCount++;
-              console.error(`Failed to send WhatsApp to ${phone}:`, result.error);
+              // If WhatsApp fails and it's because number not on WhatsApp, try SMS
+              const isNotOnWhatsApp = result.error && (
+                result.error.includes('not_on_whatsapp') ||
+                result.error.includes('JID does not exist') ||
+                result.error.includes('Not on WhatsApp')
+              );
+              
+              if (isNotOnWhatsApp) {
+                // Fallback to SMS
+                const { default: smsService } = await import('../../../services/smsService');
+                const smsResult = await smsService.sendSMS(phone, message);
+                if (smsResult.success) {
+                  successCount++;
+                } else {
+                  failCount++;
+                }
+              } else {
+                failCount++;
+                console.error(`Failed to send WhatsApp to ${phone}:`, result.error);
+              }
             }
-          } else if (messageType === 'sms' && customer.phone) {
-            // Send SMS using SMS service
-            const { default: smsService } = await import('../../../services/smsService');
-            const result = await smsService.sendSMS(customer.phone, message);
+          } else if (messageType === 'sms') {
+            // User wants SMS - use smart routing (WhatsApp first, SMS fallback)
+            const { smartNotificationService } = await import('../../../services/smartNotificationService');
+            const result = await smartNotificationService.sendNotification(phone, message);
             
             if (result.success) {
               successCount++;
             } else {
               failCount++;
-              console.error(`Failed to send SMS to ${customer.phone}:`, result.error);
+              console.error(`Failed to send message to ${phone}:`, result.error);
             }
           }
         } catch (error) {

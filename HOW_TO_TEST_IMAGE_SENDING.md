@@ -220,3 +220,4 @@ This happens when:
 
 Just make sure to configure your WasenderAPI credentials and try sending an image!
 
+

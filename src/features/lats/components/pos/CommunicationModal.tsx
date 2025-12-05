@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, MessageCircle, Phone, Mail, Send, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
+import { X, MessageCircle, Phone, Mail, Send, AlertCircle, CheckCircle, RefreshCw, Zap } from 'lucide-react';
 import GlassCard from '../../../shared/components/ui/GlassCard';
 import GlassButton from '../../../shared/components/ui/GlassButton';
 import { 
@@ -20,7 +20,7 @@ const CommunicationModal: React.FC<CommunicationModalProps> = ({
   onClose, 
   customer 
 }) => {
-  const [communicationType, setCommunicationType] = useState<'sms' | 'email' | 'whatsapp'>('sms');
+  const [communicationType, setCommunicationType] = useState<'sms' | 'email' | 'whatsapp' | 'smart'>('smart');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState('');
@@ -86,6 +86,18 @@ const CommunicationModal: React.FC<CommunicationModalProps> = ({
       let success = false;
       
       switch (communicationType) {
+        case 'smart':
+          // Smart routing: WhatsApp first, SMS fallback
+          const { smartNotificationService } = await import('../../../services/smartNotificationService');
+          const smartResult = await smartNotificationService.sendNotification(customer.phone, message);
+          success = smartResult.success;
+          if (success) {
+            const method = smartResult.method === 'whatsapp' ? 'WhatsApp' : 'SMS';
+            toast.success(`Message sent via ${method}`);
+          } else {
+            toast.error(`Failed to send message: ${smartResult.error || 'Unknown error'}`);
+          }
+          break;
         case 'sms':
           const smsResult = await smsService.sendSMS(customer.phone, message);
           success = smsResult.success;
@@ -127,6 +139,7 @@ const CommunicationModal: React.FC<CommunicationModalProps> = ({
 
   const getCommunicationIcon = (type: string) => {
     switch (type) {
+      case 'smart': return <Zap className="w-5 h-5" />;
       case 'whatsapp': return <MessageCircle className="w-5 h-5" />;
       case 'sms': return <Phone className="w-5 h-5" />;
       case 'email': return <Mail className="w-5 h-5" />;
@@ -136,6 +149,7 @@ const CommunicationModal: React.FC<CommunicationModalProps> = ({
 
   const getCommunicationColor = (type: string) => {
     switch (type) {
+      case 'smart': return 'bg-yellow-500 hover:bg-yellow-600';
       case 'whatsapp': return 'bg-green-500 hover:bg-green-600';
       case 'sms': return 'bg-blue-500 hover:bg-blue-600';
       case 'email': return 'bg-purple-500 hover:bg-purple-600';
@@ -202,8 +216,8 @@ const CommunicationModal: React.FC<CommunicationModalProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Communication Method
             </label>
-            <div className="grid grid-cols-3 gap-3">
-              {(['whatsapp', 'sms', 'email'] as const).map((type) => (
+            <div className="grid grid-cols-4 gap-3">
+              {(['smart', 'whatsapp', 'sms', 'email'] as const).map((type) => (
                 <button
                   key={type}
                   onClick={() => setCommunicationType(type)}

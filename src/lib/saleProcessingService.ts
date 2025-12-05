@@ -2101,22 +2101,212 @@ class SaleProcessingService {
     }
   }
 
-  // Send notifications (SMS, email, etc.)
+  // Send notifications using smart routing: WhatsApp first, SMS fallback
   private async sendNotifications(sale: SaleData): Promise<void> {
+    console.log('🔍 [DEBUG] Starting notification sending process...');
+    console.log('🔍 [DEBUG] Sale:', {
+      saleNumber: sale.saleNumber,
+      customerName: sale.customerName,
+      customerPhone: sale.customerPhone,
+      customerEmail: sale.customerEmail,
+      total: sale.total
+    });
+    
     try {
-      // Send SMS notification if customer phone is provided
-      if (sale.customerPhone) {
-        await this.sendSMSNotification(sale);
+      // Only send if customer has a phone number
+      if (!sale.customerPhone) {
+        console.warn('⚠️ [DEBUG] Notification skipped: Customer has no phone number');
+        return;
       }
 
-      // Email service disabled - only SMS notifications are sent
-      // if (sale.customerEmail) {
-      //   await this.sendEmailReceipt(sale);
-      // }
+      console.log(`✅ [DEBUG] Customer has phone number: ${sale.customerPhone}`);
+
+      // Check if auto-send is enabled
+      const { notificationSettingsService } = await import('../services/notificationSettingsService');
+      const settings = notificationSettingsService.getSettings();
+      
+      console.log('🔍 [DEBUG] Notification settings:', {
+        whatsappEnabled: settings.whatsappEnabled,
+        whatsappAutoSend: settings.whatsappAutoSend,
+        smsEnabled: settings.smsEnabled,
+        smsAutoSend: settings.smsAutoSend
+      });
+      
+      // If auto-send is disabled, don't send notifications
+      const shouldAutoSend = (settings.whatsappEnabled && settings.whatsappAutoSend) || 
+                            (settings.smsEnabled && settings.smsAutoSend);
+      
+      if (!shouldAutoSend) {
+        console.warn('⚠️ [DEBUG] Notification skipped: Auto-send is disabled');
+        console.warn('💡 [DEBUG] Enable auto-send in POS Settings → Notifications');
+        return;
+      }
+
+      console.log('✅ [DEBUG] Auto-send is enabled, proceeding with notification...');
+
+      // Use smart notification service: tries WhatsApp first, falls back to SMS
+      const { smartNotificationService } = await import('../services/smartNotificationService');
+      
+      // Get business info for invoice
+      let businessName = 'inauzwa';
+      let businessPhone = '';
+      let businessLogo = '';
+      try {
+        const { businessInfoService } = await import('./businessInfoService');
+        const businessInfo = await businessInfoService.getBusinessInfo();
+        businessName = businessInfo.name || 'inauzwa';
+        businessPhone = businessInfo.phone || '';
+        businessLogo = businessInfo.logo || '';
+      } catch (error) {
+        console.warn('⚠️ Could not load business info for notification, using defaults');
+      }
+
+      // Prepare invoice data
+      const invoiceData = {
+        invoice_no: sale.saleNumber,
+        business_name: businessName,
+        business_phone: businessPhone,
+        business_logo: businessLogo,
+        customer_name: sale.customerName || 'Customer',
+        customer_phone: sale.customerPhone!,
+        customer_email: sale.customerEmail,
+        items: sale.items.map(item => ({
+          name: `${item.productName}${item.variantName ? ` (${item.variantName})` : ''}`,
+          quantity: item.quantity,
+          price: item.totalPrice
+        })),
+        subtotal: sale.subtotal,
+        tax: sale.tax,
+        discount: sale.discount,
+        total: sale.total,
+        paid: sale.total,
+        balance: 0,
+        date: new Date(sale.soldAt).toLocaleDateString(),
+        payment_method: typeof sale.paymentMethod === 'object' ? sale.paymentMethod.type : sale.paymentMethod
+      };
+
+      console.log('🔍 [DEBUG] Invoice data prepared:', {
+        invoice_no: invoiceData.invoice_no,
+        customer_phone: invoiceData.customer_phone,
+        customer_name: invoiceData.customer_name,
+        total: invoiceData.total,
+        items_count: invoiceData.items.length
+      });
+
+      // Smart send: WhatsApp first, SMS fallback
+      console.log('📱 [DEBUG] Attempting to send invoice via smart notification service...');
+      const result = await smartNotificationService.sendInvoice(invoiceData);
+      
+      console.log('🔍 [DEBUG] Notification result:', {
+        success: result.success,
+        method: result.method,
+        whatsappSuccess: result.whatsappResult?.success,
+        smsSuccess: result.smsResult?.success,
+        error: result.error
+      });
+      
+      if (result.success) {
+        const method = result.method === 'whatsapp' ? 'WhatsApp' : 'SMS';
+        console.log(`✅ [DEBUG] ${method} notification sent successfully for sale: ${sale.saleNumber}`);
+        console.log(`📱 [DEBUG] Receipt sent via ${method} to ${sale.customerPhone}`);
+        
+        // Show user-friendly message
+        if (result.method === 'whatsapp') {
+          console.log('✅ [SUCCESS] Customer received WhatsApp receipt!');
+        } else {
+          console.log('📱 [INFO] Customer received SMS receipt (WhatsApp not available for this number)');
+        }
+      } else {
+        // Log detailed error for debugging
+        console.error('❌ [DEBUG] Notification sending failed:', result.error);
+        console.error('🔍 [DEBUG] Detailed error info:', {
+          whatsappError: result.whatsappResult?.error,
+          smsError: result.smsResult?.error,
+          method: result.method
+        });
+        console.warn('💡 [DEBUG] Troubleshooting:');
+        console.warn('   1. Is auto-send enabled in POS Settings → Notifications?');
+        console.warn('   2. Is WhatsApp configured in Admin Settings → Integrations?');
+        console.warn('   3. Does customer have a valid phone number?');
+        console.warn('   4. Check browser console for more details');
+        // Don't fail the sale - notifications are optional
+      }
 
     } catch (error) {
       console.error('❌ Error sending notifications:', error);
       // Don't fail the sale if notifications fail
+    }
+  }
+
+  // Send WhatsApp notification
+  private async sendWhatsAppNotification(sale: SaleData): Promise<void> {
+    try {
+      // Check if WhatsApp auto-send is enabled
+      const { notificationSettingsService } = await import('../services/notificationSettingsService');
+      const settings = notificationSettingsService.getSettings();
+      
+      if (!settings.whatsappEnabled || !settings.whatsappAutoSend) {
+        // WhatsApp not enabled or auto-send is off - skip silently
+        return;
+      }
+
+      // Get business info
+      let businessName = 'inauzwa';
+      let businessPhone = '';
+      let businessLogo = '';
+      try {
+        const { businessInfoService } = await import('./businessInfoService');
+        const businessInfo = await businessInfoService.getBusinessInfo();
+        businessName = businessInfo.name || 'inauzwa';
+        businessPhone = businessInfo.phone || '';
+        businessLogo = businessInfo.logo || '';
+      } catch (error) {
+        console.warn('⚠️ Could not load business info for WhatsApp, using defaults');
+      }
+
+      // Prepare invoice data for WhatsApp
+      const invoiceData = {
+        invoice_no: sale.saleNumber,
+        business_name: businessName,
+        business_phone: businessPhone,
+        business_logo: businessLogo,
+        customer_name: sale.customerName || 'Customer',
+        customer_phone: sale.customerPhone!,
+        customer_email: sale.customerEmail,
+        items: sale.items.map(item => ({
+          name: `${item.productName} (${item.variantName})`,
+          quantity: item.quantity,
+          price: item.totalPrice
+        })),
+        subtotal: sale.subtotal,
+        tax: sale.tax,
+        discount: sale.discount,
+        total: sale.total,
+        paid: sale.total,
+        balance: 0,
+        date: new Date(sale.soldAt).toLocaleDateString(),
+        payment_method: typeof sale.paymentMethod === 'object' ? sale.paymentMethod.type : sale.paymentMethod
+      };
+
+      // Send WhatsApp invoice
+      const result = await notificationSettingsService.sendWhatsAppInvoice(invoiceData);
+      
+      if (result.success) {
+        console.log('📱 WhatsApp notification sent successfully for sale:', sale.saleNumber);
+      } else {
+        // Only log non-configuration errors
+        const isConfigError = result.error && (
+          result.error.includes('not configured') ||
+          result.error.includes('disabled in settings')
+        );
+        
+        if (!isConfigError) {
+          console.warn('⚠️ WhatsApp notification failed:', result.error);
+        }
+      }
+    } catch (error) {
+      // Silently skip WhatsApp errors - WhatsApp is optional and shouldn't affect sale completion
+      console.log('ℹ️  WhatsApp notification skipped - sale completed successfully');
     }
   }
 

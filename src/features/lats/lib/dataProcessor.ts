@@ -304,6 +304,7 @@ export function processLatsData(data: {
 
 /**
  * Validate data integrity and log any issues
+ * Updated to also clean up any remaining long URLs that slipped through
  */
 export function validateDataIntegrity(data: any, dataType: string): boolean {
   if (!data) {
@@ -316,21 +317,30 @@ export function validateDataIntegrity(data: any, dataType: string): boolean {
     return false;
   }
 
-  // Check for extremely long URLs that might cause issues
+  // Check for extremely long URLs and apply emergency cleanup if found
   let hasLongUrls = false;
+  let cleanedCount = 0;
+  
   data.forEach((item, index) => {
     if (item && typeof item === 'object') {
       Object.entries(item).forEach(([key, value]) => {
         if (typeof value === 'string' && value.length > 2000) {
-          console.warn(`⚠️ ${dataType}[${index}].${key}: Extremely long URL detected (${value.length} chars)`);
+          // Log as debug instead of warning (too noisy)
+          console.debug(`🔧 ${dataType}[${index}].${key}: Long URL detected (${value.length} chars) - applying cleanup`);
           hasLongUrls = true;
+          
+          // Apply emergency cleanup inline
+          if (key.includes('image') || key.includes('url') || key.includes('logo')) {
+            item[key] = emergencyUrlCleanup(value);
+            cleanedCount++;
+          }
         }
       });
     }
   });
 
   if (hasLongUrls) {
-    console.warn(`⚠️ ${dataType}: Contains extremely long URLs that may cause HTTP 431 errors`);
+    console.info(`ℹ️ ${dataType}: Cleaned up ${cleanedCount} long URL(s) to prevent HTTP 431 errors`);
   }
 
   return true;

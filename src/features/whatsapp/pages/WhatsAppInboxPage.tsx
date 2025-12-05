@@ -40,7 +40,13 @@ import CampaignHistoryModal from '../components/CampaignHistoryModal';
 import BlacklistManagementModal from '../components/BlacklistManagementModal';
 import MediaLibraryModal from '../components/MediaLibraryModal';
 import WhatsAppSessionModal from '../components/WhatsAppSessionModal';
+import CampaignManagementModal from '../components/CampaignManagementModal';
 import { errorExporter } from '../../../utils/errorExporter';
+import { createCampaignInDB, updateCampaignProgress, finalizeCampaign, getCurrentCampaignId, resetCampaignTracking } from '../utils/campaignSaver';
+import { getAllTemplates, saveTemplate, deleteTemplate, getTemplate, incrementTemplateUse, type CampaignTemplate } from '../utils/campaignTemplates';
+import { personalizeMessage as enhancedPersonalize, getAvailableVariables } from '../utils/personalization';
+import { createRetryableError, shouldRetry, incrementRetry, getRetryQueue, type RetryableError } from '../utils/smartRetry';
+import { scheduleCampaign, getAllScheduled, getPendingCampaigns, updateScheduledStatus, type ScheduledCampaign } from '../utils/scheduledCampaigns';
 
 interface IncomingMessage {
   id: string;
@@ -139,6 +145,7 @@ export default function WhatsAppInboxPage() {
   
   // Advanced Features Modals
   const [showCampaignHistory, setShowCampaignHistory] = useState(false);
+  const [showCampaignManagement, setShowCampaignManagement] = useState(false);
   const [showBlacklistModal, setShowBlacklistModal] = useState(false);
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [showSessionModal, setShowSessionModal] = useState(false);
@@ -199,6 +206,341 @@ export default function WhatsAppInboxPage() {
   const [scheduledSend, setScheduledSend] = useState(false);
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
+  
+  // Pause/Stop/Resume controls with persistent state
+  const [isPaused, setIsPaused] = useState(false);
+  const [isStopped, setIsStopped] = useState(false);
+  const [sentPhones, setSentPhones] = useState<string[]>([]);
+  const [pausedCampaignState, setPausedCampaignState] = useState<any>(null);
+  const [isMinimizedExpanded, setIsMinimizedExpanded] = useState(false);
+  
+  // Enhanced tracking for analytics and reporting
+  const [failedMessages, setFailedMessages] = useState<Array<{phone: string, name: string, error: string, errorType?: string, timestamp: string}>>([]);
+  const [campaignStartTime, setCampaignStartTime] = useState<number | null>(null);
+  const [pauseTimestamp, setPauseTimestamp] = useState<string | null>(null);
+  const [campaignTimeline, setCampaignTimeline] = useState<Array<{event: string, time: string, details?: string}>>([]);
+  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<number | null>(null);
+  const [showProgressDetails, setShowProgressDetails] = useState(false);
+  const [showFailedDetails, setShowFailedDetails] = useState(false);
+  const [editingBeforeResume, setEditingBeforeResume] = useState(false);
+  
+  // Sound and notifications
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  
+  // Campaign Templates
+  const [showTemplatesModal, setShowTemplatesModal] = useState(false);
+  const [templates, setTemplates] = useState<CampaignTemplate[]>([]);
+  
+  // Scheduled Campaigns
+  const [showScheduledModal, setShowScheduledModal] = useState(false);
+  const [scheduledCampaigns, setScheduledCampaigns] = useState<ScheduledCampaign[]>([]);
+  
+  // Retry Queue
+  const [retryQueue, setRetryQueue] = useState<RetryableError[]>([]);
+
+  // Play sound notification
+  const playSound = (type: 'pause' | 'complete' | 'error' | 'resume') => {
+    if (!soundEnabled) return;
+    
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Different frequencies for different events
+      const frequencies = {
+        pause: [400, 300],
+        complete: [500, 600, 700],
+        error: [300, 200],
+        resume: [300, 400, 500]
+      };
+      
+      const freqs = frequencies[type];
+      let time = audioContext.currentTime;
+      
+      freqs.forEach((freq, i) => {
+        oscillator.frequency.setValueAtTime(freq, time);
+        gainNode.gain.setValueAtTime(0.3, time);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
+        time += 0.15;
+      });
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(time);
+    } catch (error) {
+      console.warn('Could not play sound:', error);
+    }
+  };
+
+  // Send browser notification
+  const sendBrowserNotification = (title: string, body: string, icon?: string) => {
+    if (!notificationsEnabled) return;
+    
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, {
+        body,
+        icon: icon || '/whatsapp-icon.svg',
+        badge: '/whatsapp-icon.svg'
+      });
+    }
+  };
+
+  // Request notification permission
+  const requestNotificationPermission = async () => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        setNotificationsEnabled(true);
+        toast.success('Browser notifications enabled!');
+      }
+    }
+  };
+
+  // Calculate estimated time remaining
+  const calculateEstimatedTime = (sent: number, total: number, startTime: number) => {
+    if (sent === 0 || !startTime) return null;
+    
+    const elapsed = Date.now() - startTime;
+    const rate = sent / (elapsed / 1000); // messages per second
+    const remaining = total - sent;
+    const estimatedSeconds = remaining / rate;
+    
+    return Math.round(estimatedSeconds);
+  };
+
+  // Format time duration
+  const formatDuration = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return `${hours}h ${mins}m`;
+  };
+
+  // Export recipients to CSV
+  const exportToCSV = (data: Array<{phone: string, name: string}>, filename: string) => {
+    const csv = [
+      'Phone,Name',
+      ...data.map(r => `${r.phone},${r.name}`)
+    ].join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    toast.success(`Exported ${data.length} recipients to ${filename}`);
+  };
+
+  // Export sent recipients
+  const exportSentRecipients = () => {
+    const data = sentPhones.map(phone => {
+      const conv = conversations.find(c => c.phone === phone);
+      return {
+        phone,
+        name: conv?.customer_name || 'Unknown'
+      };
+    });
+    exportToCSV(data, `sent-recipients-${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  // Export pending recipients
+  const exportPendingRecipients = () => {
+    const pending = selectedRecipients.filter(phone => !sentPhones.includes(phone));
+    const data = pending.map(phone => {
+      const conv = conversations.find(c => c.phone === phone);
+      return {
+        phone,
+        name: conv?.customer_name || 'Unknown'
+      };
+    });
+    exportToCSV(data, `pending-recipients-${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  // Export failed recipients
+  const exportFailedRecipients = () => {
+    const data = failedMessages.map(f => ({
+      phone: f.phone,
+      name: f.name
+    }));
+    exportToCSV(data, `failed-recipients-${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  // Add event to timeline
+  const addTimelineEvent = (event: string, details?: string) => {
+    setCampaignTimeline(prev => [...prev, {
+      event,
+      time: new Date().toISOString(),
+      details
+    }]);
+  };
+
+  // Save campaign state to localStorage for pause/resume functionality
+  const saveCampaignState = (state: any) => {
+    try {
+      localStorage.setItem('whatsapp_bulk_campaign_paused', JSON.stringify({
+        ...state,
+        timestamp: new Date().toISOString(),
+        pauseTimestamp: new Date().toISOString(),
+        failedMessages: failedMessages,
+        campaignTimeline: campaignTimeline,
+        campaignStartTime: campaignStartTime
+      }));
+      console.log('💾 Campaign state saved to localStorage');
+    } catch (error) {
+      console.error('Failed to save campaign state:', error);
+    }
+  };
+
+  // Load paused campaign state from localStorage
+  const loadPausedCampaignState = () => {
+    try {
+      const saved = localStorage.getItem('whatsapp_bulk_campaign_paused');
+      if (saved) {
+        const state = JSON.parse(saved);
+        console.log('📂 Loaded paused campaign from localStorage:', state);
+        
+        // Restore additional tracking data
+        if (state.failedMessages) setFailedMessages(state.failedMessages);
+        if (state.campaignTimeline) setCampaignTimeline(state.campaignTimeline);
+        if (state.campaignStartTime) setCampaignStartTime(state.campaignStartTime);
+        if (state.pauseTimestamp) setPauseTimestamp(state.pauseTimestamp);
+        
+        return state;
+      }
+    } catch (error) {
+      console.error('Failed to load paused campaign:', error);
+    }
+    return null;
+  };
+
+  // Clear paused campaign state
+  const clearPausedCampaignState = () => {
+    try {
+      localStorage.removeItem('whatsapp_bulk_campaign_paused');
+      setPausedCampaignState(null);
+      setSentPhones([]);
+      setIsPaused(false);
+      setIsStopped(false);
+      setFailedMessages([]);
+      setCampaignTimeline([]);
+      setCampaignStartTime(null);
+      setPauseTimestamp(null);
+      setEstimatedTimeRemaining(null);
+      console.log('🗑️ Cleared paused campaign state');
+    } catch (error) {
+      console.error('Failed to clear paused campaign:', error);
+    }
+  };
+
+  // Retry failed messages
+  const retryFailedMessages = async () => {
+    if (failedMessages.length === 0) {
+      toast.error('No failed messages to retry');
+      return;
+    }
+
+    const confirmRetry = window.confirm(
+      `Retry ${failedMessages.length} failed message${failedMessages.length > 1 ? 's' : ''}?\n\n` +
+      `This will attempt to resend to all failed recipients.`
+    );
+
+    if (!confirmRetry) return;
+
+    console.log(`🔄 Retrying ${failedMessages.length} failed messages...`);
+    addTimelineEvent('Retry Started', `${failedMessages.length} failed messages`);
+    
+    // Set up retry with failed phones as recipients
+    const failedPhones = failedMessages.map(f => f.phone);
+    setSelectedRecipients(failedPhones);
+    
+    // Clear failed messages list
+    setFailedMessages([]);
+    
+    // Reset progress
+    setBulkProgress({ current: 0, total: failedPhones.length, success: 0, failed: 0 });
+    
+    toast.loading(`Retrying ${failedPhones.length} messages...`, { duration: 3000 });
+    
+    // Start sending
+    setTimeout(() => {
+      sendBulkMessages(false); // false = not resuming, starting fresh retry
+    }, 1000);
+  };
+
+  // Add all failed contacts to blacklist
+  const addFailedToBlacklist = async () => {
+    if (failedMessages.length === 0) {
+      toast.error('No failed messages to add to blacklist');
+      return;
+    }
+
+    const confirm = window.confirm(
+      `⚠️ Add ${failedMessages.length} Failed Contact${failedMessages.length !== 1 ? 's' : ''} to Blacklist?\n\n` +
+      `This will prevent future campaigns from including these numbers.\n\n` +
+      `Failed contacts will be blacklisted with their error reason.`
+    );
+
+    if (!confirm) return;
+
+    toast.loading('Adding failed contacts to blacklist...');
+
+    let added = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (const failed of failedMessages) {
+      try {
+        // Check if already blacklisted
+        const alreadyBlacklisted = blacklist.some(b => b.phone === failed.phone);
+        
+        if (alreadyBlacklisted) {
+          skipped++;
+          console.log(`⏭️ Skipped ${failed.phone} - already in blacklist`);
+        } else {
+          // Add to blacklist with error reason
+          await whatsappAdvancedService.blacklist.add(
+            failed.phone,
+            `Campaign failure: ${failed.error}`,
+            `Auto-added from campaign "${campaignName || 'Unnamed'}" on ${new Date(failed.timestamp).toLocaleString()}. Contact: ${failed.name}`
+          );
+          added++;
+          console.log(`✅ Added ${failed.phone} to blacklist: ${failed.error}`);
+        }
+      } catch (error) {
+        console.error(`Error adding ${failed.phone} to blacklist:`, error);
+        errors.push(failed.phone);
+      }
+    }
+
+    // Reload blacklist
+    await loadBlacklist();
+
+    // Clear failed messages list
+    setFailedMessages([]);
+
+    // Show results
+    if (added > 0) {
+      toast.success(
+        `✅ Added ${added} contact${added !== 1 ? 's' : ''} to blacklist` +
+        (skipped > 0 ? ` (${skipped} already blacklisted)` : ''),
+        { duration: 5000 }
+      );
+    } else if (skipped > 0) {
+      toast('All failed contacts were already blacklisted', { icon: 'ℹ️', duration: 4000 });
+    }
+
+    if (errors.length > 0) {
+      toast.error(`Failed to blacklist ${errors.length} contact(s)`, { duration: 4000 });
+    }
+  };
 
   // Load anti-ban settings from database
   useEffect(() => {
@@ -264,7 +606,71 @@ export default function WhatsAppInboxPage() {
     };
     
     loadSettings();
+    
+    // Check for paused campaign on mount
+    const paused = loadPausedCampaignState();
+    if (paused) {
+      setPausedCampaignState(paused);
+      setSentPhones(paused.sentPhones || []);
+      
+      // Check if campaign is old (24h+)
+      const pausedTime = new Date(paused.pauseTimestamp || paused.timestamp).getTime();
+      const hoursSincePaused = (Date.now() - pausedTime) / (1000 * 60 * 60);
+      
+      if (hoursSincePaused > 24) {
+        toast.error(`⚠️ Campaign paused ${Math.floor(hoursSincePaused)} hours ago. Recipients list may be outdated.`, {
+          duration: 10000
+        });
+      } else {
+        toast('You have a paused campaign. Click "Resume Campaign" to continue.', {
+          duration: 8000,
+          icon: '⏸️'
+        });
+      }
+    }
   }, []);
+  
+  // Keyboard shortcuts for bulk sending
+  useEffect(() => {
+    if (!showBulkModal || bulkStep !== 4) return;
+    
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Ignore if typing in input field
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
+      // Space or P - Pause/Resume
+      if (e.code === 'Space' || e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        if (bulkSending && !isPaused && !isStopped) {
+          console.log('⏸️ Keyboard shortcut: Pause (Space/P)');
+          setIsPaused(true);
+          toast('Pausing... Please wait for current message to complete', { icon: '⏸️' });
+        }
+      }
+      
+      // S - Stop
+      if ((e.key === 's' || e.key === 'S') && bulkSending) {
+        e.preventDefault();
+        console.log('🛑 Keyboard shortcut: Stop (S)');
+        if (window.confirm('Are you sure you want to stop the campaign?')) {
+          setIsStopped(true);
+          toast('Stopping... Please wait for current message to complete', { icon: '🛑' });
+        }
+      }
+      
+      // Escape - Close modal (only if not sending)
+      if (e.key === 'Escape' && !bulkSending) {
+        e.preventDefault();
+        console.log('❌ Keyboard shortcut: Close (Esc)');
+        setShowBulkModal(false);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [showBulkModal, bulkStep, bulkSending, isPaused, isStopped]);
   
   // Load customers for compose modal and check for draft
   useEffect(() => {
@@ -304,6 +710,57 @@ export default function WhatsAppInboxPage() {
       console.error('Error loading campaigns:', error);
     }
   }
+  
+  // Load templates
+  function loadTemplates() {
+    const loaded = getAllTemplates();
+    setTemplates(loaded);
+  }
+  
+  // Load scheduled campaigns
+  function loadScheduledCampaigns() {
+    const loaded = getAllScheduled();
+    setScheduledCampaigns(loaded);
+  }
+  
+  // Check for pending scheduled campaigns
+  useEffect(() => {
+    loadTemplates();
+    loadScheduledCampaigns();
+    
+    // Check every minute for scheduled campaigns ready to run
+    const interval = setInterval(() => {
+      const pending = getPendingCampaigns();
+      if (pending.length > 0 && !bulkSending) {
+        const nextCampaign = pending[0];
+        const confirm = window.confirm(
+          `Scheduled campaign "${nextCampaign.name}" is ready to run.\n\n` +
+          `Start now?`
+        );
+        if (confirm) {
+          // Load campaign data and start
+          setCampaignName(nextCampaign.name);
+          setBulkMessage(nextCampaign.message);
+          setBulkMessageType(nextCampaign.messageType);
+          setSelectedRecipients(nextCampaign.selectedRecipients);
+          Object.entries(nextCampaign.settings).forEach(([key, value]) => {
+            // Apply settings
+            if (key === 'usePersonalization') setUsePersonalization(value);
+            if (key === 'randomDelay') setRandomDelay(value);
+            if (key === 'minDelay') setMinDelay(value);
+            if (key === 'maxDelay') setMaxDelay(value);
+            // Add more settings as needed
+          });
+          updateScheduledStatus(nextCampaign.id, 'running', new Date().toISOString());
+          setShowBulkModal(true);
+          setBulkStep(4);
+          setTimeout(() => sendBulkMessages(false), 500);
+        }
+      }
+    }, 60000); // Check every minute
+    
+    return () => clearInterval(interval);
+  }, [bulkSending]);
   
   // Load blacklist
   async function loadBlacklist() {
@@ -896,7 +1353,7 @@ export default function WhatsAppInboxPage() {
     }
   }
   
-  async function sendBulkMessages() {
+  async function sendBulkMessages(resuming: boolean = false) {
     if (!bulkMessage.trim() && bulkMessageType === 'text') {
       toast.error('Please enter a message');
       return;
@@ -905,6 +1362,15 @@ export default function WhatsAppInboxPage() {
     if (selectedRecipients.length === 0) {
       toast.error('Please select at least one recipient');
       return;
+    }
+    
+    // CRITICAL: If resuming, ensure we have sentPhones from paused campaign
+    // This handles race conditions where React state might not have updated yet
+    if (resuming && pausedCampaignState && sentPhones.length === 0 && pausedCampaignState.sentPhones?.length > 0) {
+      console.log('⚠️ State race condition detected! Using sentPhones from pausedCampaignState directly');
+      setSentPhones(pausedCampaignState.sentPhones);
+      // Wait a bit for state to update
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
     
     // Check quiet hours (10 PM - 8 AM)
@@ -917,9 +1383,63 @@ export default function WhatsAppInboxPage() {
       }
     }
     
-    // Filter out recently contacted numbers
+    // Validate phone numbers before sending (only if not resuming)
     let recipientsToSend = [...selectedRecipients];
-    if (skipRecentlyContacted) {
+    if (!resuming) {
+      console.log('📋 Validating phone numbers...');
+      toast.loading('Validating phone numbers...', { id: 'phone-validation' });
+      
+      const validatedPhones: string[] = [];
+      const invalidPhones: Array<{ phone: string; reason: string }> = [];
+      
+      for (const phone of recipientsToSend) {
+        // Validate phone format
+        const validation = await whatsappService.validatePhoneNumber(phone);
+        
+        if (!validation.valid) {
+          console.warn(`❌ Invalid phone: ${phone} - ${validation.error}`);
+          invalidPhones.push({ 
+            phone, 
+            reason: validation.error || 'Invalid format' 
+          });
+        } else {
+          validatedPhones.push(phone);
+        }
+      }
+      
+      toast.dismiss('phone-validation');
+      
+      // Report validation results
+      if (invalidPhones.length > 0) {
+        const errorMsg = `${invalidPhones.length} invalid phone number${invalidPhones.length > 1 ? 's' : ''} found:\n` +
+          invalidPhones.slice(0, 5).map(p => `• ${p.phone}: ${p.reason}`).join('\n') +
+          (invalidPhones.length > 5 ? `\n...and ${invalidPhones.length - 5} more` : '');
+        
+        console.error('❌ Invalid phone numbers:', invalidPhones);
+        
+        const continueAnyway = window.confirm(
+          `⚠️ Phone Number Validation Failed\n\n${errorMsg}\n\n` +
+          `Valid numbers: ${validatedPhones.length}/${recipientsToSend.length}\n\n` +
+          `Continue with valid numbers only?`
+        );
+        
+        if (!continueAnyway) {
+          setBulkStep(3);
+          return;
+        }
+        
+        toast.warning(`Sending to ${validatedPhones.length} valid numbers (skipped ${invalidPhones.length} invalid)`, { 
+          duration: 5000 
+        });
+      } else {
+        toast.success('All phone numbers validated ✓', { duration: 2000 });
+      }
+      
+      recipientsToSend = validatedPhones;
+    }
+    
+    // Filter out recently contacted numbers
+    if (skipRecentlyContacted && !resuming) {
       const sixHoursAgo = Date.now() - (6 * 60 * 60 * 1000);
       const filtered = recipientsToSend.filter(phone => {
         const conv = conversations.find(c => c.phone === phone);
@@ -936,8 +1456,27 @@ export default function WhatsAppInboxPage() {
       }
     }
     
+    // If resuming, filter out already sent phones
+    let alreadySentCount = 0;
+    if (resuming) {
+      if (sentPhones.length === 0) {
+        console.warn('⚠️ WARNING: Resuming but sentPhones is empty! This may cause duplicate sends.');
+        toast.error('Warning: Cannot find sent history. Campaign may send duplicates.', { duration: 6000 });
+      } else {
+        alreadySentCount = sentPhones.length;
+        const beforeFilter = recipientsToSend.length;
+        recipientsToSend = recipientsToSend.filter(phone => !sentPhones.includes(phone));
+        console.log(`📤 Resuming campaign:`);
+        console.log(`   - Already sent: ${alreadySentCount} phones`);
+        console.log(`   - Total recipients: ${beforeFilter}`);
+        console.log(`   - After filtering: ${recipientsToSend.length} remaining`);
+        console.log(`   - Filtered out: ${beforeFilter - recipientsToSend.length} phones`);
+        toast(`Resuming: ${recipientsToSend.length} messages remaining (${alreadySentCount} already sent)`, { duration: 5000, icon: '▶️' });
+      }
+    }
+    
     if (recipientsToSend.length === 0) {
-      toast.error('All recipients were filtered out. Adjust your settings.');
+      toast.error('All recipients were filtered out or already sent. Adjust your settings.');
       setBulkStep(3);
       return;
     }
@@ -951,7 +1490,7 @@ export default function WhatsAppInboxPage() {
     
     // Check hourly limit
     const estimatedHours = Math.ceil(recipientsToSend.length / maxPerHour);
-    if (estimatedHours > 3) {
+    if (estimatedHours > 3 && !resuming) {
       const confirmSend = window.confirm(
         `This will take approximately ${estimatedHours} hours to send at ${maxPerHour} messages/hour.\n\n` +
         `This is to prevent spam detection. Continue?`
@@ -962,8 +1501,75 @@ export default function WhatsAppInboxPage() {
       }
     }
 
+    // Store original total for progress tracking (before removing sent ones)
+    const originalTotal = selectedRecipients.length;
+    
     setBulkSending(true);
-    setBulkProgress({ current: 0, total: recipientsToSend.length, success: 0, failed: 0 });
+    setIsPaused(false);
+    setIsStopped(false);
+    setBulkProgress({ 
+      current: alreadySentCount, 
+      total: originalTotal, 
+      success: sentPhones.filter(p => selectedRecipients.includes(p)).length, 
+      failed: 0 
+    });
+    
+    // Track campaign start time (only if starting fresh)
+    if (!resuming) {
+      const startTime = Date.now();
+      setCampaignStartTime(startTime);
+      addTimelineEvent('Campaign Started', `${selectedRecipients.length} recipients`);
+      
+      // Create campaign in database for incremental saving
+      try {
+        const campaignId = await createCampaignInDB({
+          name: campaignName || `Campaign ${new Date().toLocaleDateString()}`,
+          message: bulkMessage,
+          messageType: bulkMessageType,
+          selectedRecipients,
+          sentPhones,
+          bulkProgress: {
+            current: alreadySentCount,
+            total: originalTotal,
+            success: sentPhones.filter(p => selectedRecipients.includes(p)).length,
+            failed: 0
+          },
+          failedMessages: [],
+          campaignStartTime: startTime,
+          settings: {
+            usePersonalization,
+            randomDelay,
+            minDelay,
+            maxDelay,
+            usePresence,
+            batchSize,
+            batchDelay,
+            maxPerHour,
+            dailyLimit,
+            skipRecentlyContacted,
+            respectQuietHours,
+            useInvisibleChars,
+            useEmojiVariation,
+            varyMessageLength
+          },
+          conversations: conversations.map(c => ({ phone: c.phone, customer_name: c.customer_name }))
+        });
+        if (campaignId) {
+          console.log(`✅ Campaign created in DB: ${campaignId}`);
+        }
+      } catch (error) {
+        console.error('Failed to create campaign in DB:', error);
+      }
+      
+      // Request notification permission if not already set
+      if (notificationsEnabled && Notification.permission === 'default') {
+        requestNotificationPermission();
+      }
+    } else {
+      addTimelineEvent('Campaign Resumed', `${recipientsToSend.length} remaining`);
+      playSound('resume');
+      sendBrowserNotification('Campaign Resumed', `Continuing with ${recipientsToSend.length} messages`);
+    }
 
     try {
       console.log('\n╔═══════════════════════════════════════════════════════════════╗');
@@ -1074,6 +1680,66 @@ export default function WhatsAppInboxPage() {
 
       // Send messages sequentially with COMPREHENSIVE anti-ban protection
       for (let i = 0; i < recipientsToSend.length; i++) {
+        // Check for stop signal
+        if (isStopped) {
+          console.log('🛑 STOP signal received. Stopping campaign...');
+          toast.error('Campaign stopped by user', { duration: 4000 });
+          clearPausedCampaignState();
+          break;
+        }
+        
+        // Check for pause signal
+        if (isPaused) {
+          console.log('⏸️ PAUSE signal received. Saving state...');
+          addTimelineEvent('Campaign Paused', `${alreadySentCount + i}/${selectedRecipients.length} sent`);
+          setPauseTimestamp(new Date().toISOString());
+          
+          const campaignState = {
+            sentPhones: [...sentPhones],
+            selectedRecipients: [...selectedRecipients],
+            bulkMessage,
+            bulkMessageType,
+            bulkMedia,
+            mediaDataUrl,
+            bulkProgress: { 
+              current: alreadySentCount + i, 
+              total: selectedRecipients.length, 
+              success: successCount, 
+              failed: failCount 
+            },
+            // Save all campaign settings
+            usePersonalization,
+            randomDelay,
+            minDelay,
+            maxDelay,
+            usePresence,
+            batchSize,
+            batchDelay,
+            maxPerHour,
+            dailyLimit,
+            skipRecentlyContacted,
+            respectQuietHours,
+            useInvisibleChars,
+            useEmojiVariation,
+            varyMessageLength,
+            viewOnce,
+            pollQuestion,
+            pollOptions,
+            allowMultiSelect,
+            locationLat,
+            locationLng,
+            locationName,
+            locationAddress
+          };
+          saveCampaignState(campaignState);
+          
+          playSound('pause');
+          sendBrowserNotification('Campaign Paused', `Progress saved: ${alreadySentCount + i}/${selectedRecipients.length} sent`);
+          toast.success('Campaign paused. Progress saved!', { duration: 5000 });
+          setBulkSending(false);
+          return; // Exit the function
+        }
+        
         const phone = recipientsToSend[i];
         const conversation = conversations.find(c => c.phone === phone);
         
@@ -1110,8 +1776,11 @@ export default function WhatsAppInboxPage() {
           console.log(`   Customer: ${conversation?.customer_name || 'Unknown'}`);
           console.log(`   Batch: ${Math.floor(i / batchSize) + 1} | Messages this hour: ${messagesThisHour}`);
           
-          // Update progress
-          setBulkProgress(prev => ({ ...prev, current: i + 1 }));
+          // Update progress - show attempt position
+          setBulkProgress(prev => ({ 
+            ...prev, 
+            current: alreadySentCount + i + 1 
+          }));
           
           // Personalize message (replace all variables)
           let personalizedMessage = bulkMessage;
@@ -1290,8 +1959,95 @@ export default function WhatsAppInboxPage() {
           if (result.success) {
             successCount++;
             messagesThisHour++; // Increment hourly counter
+            
+            // Add to sent phones list for pause/resume functionality
+            const newSentPhones = [...sentPhones, phone];
+            setSentPhones(newSentPhones);
+            
+            // IMPORTANT: Remove from selectedRecipients in real-time to keep only pending
+            setSelectedRecipients(prev => prev.filter(p => p !== phone));
+            
             console.log(`   ✅ SUCCESS (${sendDuration}ms)`);
+            console.log(`   📊 Progress: ${alreadySentCount + i + 1}/${originalTotal} | Success: ${successCount} | Failed: ${failCount}`);
             console.log(`   📊 Stats: ${successCount} sent | ${failCount} failed | ${messagesThisHour} this hour`);
+            console.log(`   📝 Saved to sentPhones (now ${newSentPhones.length} total)`);
+            console.log(`   🗑️ Removed from queue - ${selectedRecipients.length - 1} pending remaining`);
+            
+            // Save progress to localStorage after each successful send
+            const campaignState = {
+              sentPhones: newSentPhones,
+              selectedRecipients: [...selectedRecipients],
+              bulkMessage,
+              bulkMessageType,
+              bulkMedia,
+              mediaDataUrl,
+              bulkProgress: { 
+                current: alreadySentCount + i + 1, 
+                total: selectedRecipients.length, 
+                success: successCount, 
+                failed: failCount 
+              },
+              usePersonalization,
+              randomDelay,
+              minDelay,
+              maxDelay,
+              usePresence,
+              batchSize,
+              batchDelay,
+              maxPerHour,
+              dailyLimit,
+              skipRecentlyContacted,
+              respectQuietHours,
+              useInvisibleChars,
+              useEmojiVariation,
+              varyMessageLength,
+              viewOnce,
+              pollQuestion,
+              pollOptions,
+              allowMultiSelect,
+              locationLat,
+              locationLng,
+              locationName,
+              locationAddress
+            };
+            saveCampaignState(campaignState);
+            
+            // Update campaign progress in database (incremental saving)
+            const campaignId = getCurrentCampaignId();
+            if (campaignId) {
+              updateCampaignProgress(campaignId, {
+                name: campaignName || `Campaign ${new Date().toLocaleDateString()}`,
+                message: bulkMessage,
+                messageType: bulkMessageType,
+                selectedRecipients,
+                sentPhones: newSentPhones,
+                bulkProgress: {
+                  current: alreadySentCount + i + 1,
+                  total: originalTotal,
+                  success: successCount,
+                  failed: failCount
+                },
+                failedMessages,
+                campaignStartTime,
+                settings: {
+                  usePersonalization,
+                  randomDelay,
+                  minDelay,
+                  maxDelay,
+                  usePresence,
+                  batchSize,
+                  batchDelay,
+                  maxPerHour,
+                  dailyLimit,
+                  skipRecentlyContacted,
+                  respectQuietHours,
+                  useInvisibleChars,
+                  useEmojiVariation,
+                  varyMessageLength
+                },
+                conversations: conversations.map(c => ({ phone: c.phone, customer_name: c.customer_name }))
+              });
+            }
             
             // Log to customer communications if customer is linked
             if (conversation?.customer_id) {
@@ -1314,11 +2070,80 @@ export default function WhatsAppInboxPage() {
             }
           } else {
             failCount++;
-            console.error(`   ❌ FAILED (${sendDuration}ms): ${result.error || 'Unknown error'}`);
+            
+            // Extract specific error type for better tracking
+            const errorMsg = result.error || 'Unknown error';
+            const isJIDError = errorMsg.includes('JID does not exist') || errorMsg.includes('not on WhatsApp') || errorMsg.includes('not registered');
+            const isFormatError = errorMsg.includes('Invalid') || errorMsg.includes('format');
+            const isRateLimitError = errorMsg.includes('rate limit') || errorMsg.includes('too many');
+            
+            // Track failed message with details and error categorization
+            const failedMsg = {
+              phone,
+              name: conversation?.customer_name || 'Unknown',
+              error: errorMsg,
+              errorType: isJIDError ? 'not_on_whatsapp' : isFormatError ? 'invalid_format' : isRateLimitError ? 'rate_limit' : 'other',
+              timestamp: new Date().toISOString()
+            };
+            setFailedMessages(prev => [...prev, failedMsg]);
+            
+            // IMPORTANT: Remove failed recipient from queue as well (already attempted)
+            setSelectedRecipients(prev => prev.filter(p => p !== phone));
+            
+            // Log with more context
+            console.error(`   ❌ FAILED (${sendDuration}ms):`);
+            console.error(`      Error Type: ${failedMsg.errorType}`);
+            console.error(`      Phone: ${phone}`);
+            console.error(`      Message: ${errorMsg}`);
+            console.log(`   📊 Progress: ${alreadySentCount + i + 1}/${originalTotal} | Success: ${successCount} | Failed: ${failCount}`);
             console.log(`   📊 Stats: ${successCount} sent | ${failCount} failed | ${messagesThisHour} this hour`);
+            console.log(`   🗑️ Removed from queue - ${selectedRecipients.length - 1} truly pending remaining`);
+            
+            // Provide actionable suggestions for common errors
+            if (isJIDError) {
+              console.warn(`   💡 SUGGESTION: Phone ${phone} may have:`);
+              console.warn(`      • Wrong country code (check if it starts with correct code)`);
+              console.warn(`      • Not registered on WhatsApp`);
+              console.warn(`      • Been deactivated`);
+            } else if (isFormatError) {
+              console.warn(`   💡 SUGGESTION: Fix phone format to: CountryCode+Number`);
+              console.warn(`      Example: 255712345678 (Tanzania)`);
+              console.warn(`      Remove: spaces, dashes, parentheses, + symbol`);
+            }
           }
           
-          setBulkProgress(prev => ({ ...prev, success: successCount, failed: failCount }));
+          // Update progress with all counts - CRITICAL for accurate display
+          if (campaignStartTime) {
+            const estimated = calculateEstimatedTime(successCount + failCount, originalTotal, campaignStartTime);
+            setEstimatedTimeRemaining(estimated);
+          }
+          
+          // Update ALL progress metrics together to keep them synchronized
+          setBulkProgress({
+            current: alreadySentCount + i + 1,
+            total: originalTotal,
+            success: successCount,
+            failed: failCount
+          });
+          
+          // Verification: Success + Failed should equal Current (attempted so far)
+          const attempted = alreadySentCount + i + 1;
+          const accounted = successCount + failCount;
+          if (attempted !== accounted) {
+            console.warn(`⚠️ COUNT MISMATCH: Attempted ${attempted} but only ${accounted} accounted for (${successCount} success + ${failCount} failed)`);
+            console.warn(`   Missing: ${attempted - accounted} messages`);
+          }
+          
+          // Send progress notifications at milestones
+          if (notificationsEnabled) {
+            const progress = ((alreadySentCount + i + 1) / selectedRecipients.length) * 100;
+            if ([25, 50, 75].includes(Math.floor(progress)) && Math.floor(progress) !== Math.floor(((alreadySentCount + i) / selectedRecipients.length) * 100)) {
+              sendBrowserNotification(
+                `${Math.floor(progress)}% Complete`,
+                `${alreadySentCount + i + 1}/${selectedRecipients.length} messages sent`
+              );
+            }
+          }
           
           // Smart delay between messages (COMPREHENSIVE anti-ban)
           if (i < recipientsToSend.length - 1) {
@@ -1346,15 +2171,62 @@ export default function WhatsAppInboxPage() {
         } catch (error) {
           const sendDuration = Date.now() - startTime;
           failCount++;
+          
+          // Track the exception as a failed message
+          const failedMsg = {
+            phone,
+            name: conversation?.customer_name || 'Unknown',
+            error: error instanceof Error ? error.message : 'Unknown exception',
+            errorType: 'other' as const,
+            timestamp: new Date().toISOString()
+          };
+          setFailedMessages(prev => [...prev, failedMsg]);
+          
+          // Remove from queue
+          setSelectedRecipients(prev => prev.filter(p => p !== phone));
+          
           console.error(`   ❌ EXCEPTION (${sendDuration}ms):`, error);
           console.error(`   🐛 Error details:`, error);
-          setBulkProgress(prev => ({ ...prev, success: successCount, failed: failCount }));
+          console.log(`   🗑️ Removed from queue - ${selectedRecipients.length - 1} pending remaining`);
+          
+          // Update progress with all counts
+          setBulkProgress({
+            current: alreadySentCount + i + 1,
+            total: originalTotal,
+            success: successCount,
+            failed: failCount
+          });
         }
       }
 
       // Show final results with detailed stats
       const totalProcessed = recipientsToSend.length;
       const totalSkipped = selectedRecipients.length - recipientsToSend.length;
+      
+      // Add completion to timeline
+      addTimelineEvent('Campaign Completed', `${successCount} sent, ${failCount} failed`);
+      
+      // Play completion sound
+      if (successCount > 0 && failCount === 0) {
+        playSound('complete');
+      } else if (failCount > 0) {
+        playSound('error');
+      }
+      
+      // Send completion notification
+      if (notificationsEnabled) {
+        if (successCount === totalProcessed && totalProcessed > 0) {
+          sendBrowserNotification(
+            '✅ Campaign Complete!',
+            `All ${successCount} messages sent successfully!`
+          );
+        } else {
+          sendBrowserNotification(
+            '📊 Campaign Complete',
+            `${successCount} sent, ${failCount} failed`
+          );
+        }
+      }
       
       if (successCount === totalProcessed && totalProcessed > 0) {
         toast.success(`✅ All ${successCount} messages sent successfully! ${totalSkipped > 0 ? `(${totalSkipped} skipped)` : ''}`, { duration: 5000 });
@@ -1372,13 +2244,106 @@ export default function WhatsAppInboxPage() {
       console.log(`⏭️  Skipped (Anti-ban): ${totalSkipped}`);
       console.log(`📊 Total Processed: ${totalProcessed}`);
       console.log(`📊 Total Selected: ${selectedRecipients.length}`);
-      console.log(`───────────────────────────────────────────────────────────────\n`);
+      
+      // Finalize campaign in database
+      const campaignId = getCurrentCampaignId();
+      if (campaignId) {
+        const isSuccess = failCount === 0 || successCount > failCount;
+        await finalizeCampaign(campaignId, {
+          name: campaignName || `Campaign ${new Date().toLocaleDateString()}`,
+          message: bulkMessage,
+          messageType: bulkMessageType,
+          selectedRecipients,
+          sentPhones,
+          bulkProgress: {
+            current: alreadySentCount + totalProcessed,
+            total: originalTotal,
+            success: successCount,
+            failed: failCount
+          },
+          failedMessages,
+          campaignStartTime,
+          settings: {
+            usePersonalization,
+            randomDelay,
+            minDelay,
+            maxDelay,
+            usePresence,
+            batchSize,
+            batchDelay,
+            maxPerHour,
+            dailyLimit,
+            skipRecentlyContacted,
+            respectQuietHours,
+            useInvisibleChars,
+            useEmojiVariation,
+            varyMessageLength
+          },
+          conversations: conversations.map(c => ({ phone: c.phone, customer_name: c.customer_name }))
+        }, isSuccess);
+        console.log(`✅ Campaign finalized in database`);
+      }
+      
+      // Categorize and display failed messages by error type
+      if (failedMessages.length > 0) {
+        console.log(`\n❌ FAILURE ANALYSIS (${failedMessages.length} failed):`);
+        
+        const errorCategories = {
+          not_on_whatsapp: failedMessages.filter((m: any) => m.errorType === 'not_on_whatsapp'),
+          invalid_format: failedMessages.filter((m: any) => m.errorType === 'invalid_format'),
+          rate_limit: failedMessages.filter((m: any) => m.errorType === 'rate_limit'),
+          other: failedMessages.filter((m: any) => m.errorType === 'other')
+        };
+        
+        if (errorCategories.not_on_whatsapp.length > 0) {
+          console.log(`\n📱 NOT ON WHATSAPP (${errorCategories.not_on_whatsapp.length}):`);
+          console.log(`   These numbers may have wrong country codes or aren't registered:`);
+          errorCategories.not_on_whatsapp.slice(0, 5).forEach((m: any) => {
+            console.log(`   • ${m.phone} (${m.name})`);
+          });
+          if (errorCategories.not_on_whatsapp.length > 5) {
+            console.log(`   ... and ${errorCategories.not_on_whatsapp.length - 5} more`);
+          }
+          console.log(`   💡 TIP: Verify country codes and check if numbers are active on WhatsApp`);
+        }
+        
+        if (errorCategories.invalid_format.length > 0) {
+          console.log(`\n🔢 INVALID FORMAT (${errorCategories.invalid_format.length}):`);
+          console.log(`   These numbers have formatting issues:`);
+          errorCategories.invalid_format.slice(0, 5).forEach((m: any) => {
+            console.log(`   • ${m.phone} (${m.name})`);
+          });
+          if (errorCategories.invalid_format.length > 5) {
+            console.log(`   ... and ${errorCategories.invalid_format.length - 5} more`);
+          }
+          console.log(`   💡 TIP: Use format: CountryCode+Number (e.g., 255712345678)`);
+        }
+        
+        if (errorCategories.rate_limit.length > 0) {
+          console.log(`\n⏱️ RATE LIMIT (${errorCategories.rate_limit.length}):`);
+          console.log(`   These failed due to API rate limiting`);
+          console.log(`   💡 TIP: Increase delays or reduce batch size in anti-ban settings`);
+        }
+        
+        if (errorCategories.other.length > 0) {
+          console.log(`\n❓ OTHER ERRORS (${errorCategories.other.length}):`);
+          errorCategories.other.slice(0, 3).forEach((m: any) => {
+            console.log(`   • ${m.phone}: ${m.error.substring(0, 60)}...`);
+          });
+        }
+      }
+      
+      console.log(`\n───────────────────────────────────────────────────────────────\n`);
       
       // Clear draft on successful completion
       if (successCount > 0) {
         clearDraft();
         console.log('🗑️ Draft cleared after successful send');
       }
+      
+      // Clear paused campaign state on completion
+      clearPausedCampaignState();
+      console.log('🗑️ Cleared paused campaign state after completion');
       
       // Reload messages to show new sent messages in history
       loadMessages();
@@ -2277,84 +3242,274 @@ export default function WhatsAppInboxPage() {
     );
   }
 
-  return (
-    <>
-      {/* Minimized Progress Bar - MUST BE AT ROOT LEVEL */}
-      {isMinimized && showBulkModal && (() => {
-        const isSending = bulkSending || bulkProgress.total > 0;
-        console.log('🔵 Rendering minimized bar - isMinimized:', isMinimized, 'showBulkModal:', showBulkModal, 'isSending:', isSending);
-        
-        return (
-        <div className="fixed top-0 left-0 right-0 z-[100000] bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg">
-          <div className="max-w-7xl mx-auto px-6 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4 flex-1">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 bg-white/20 rounded-full flex items-center justify-center ${isSending ? 'animate-pulse' : ''}`}>
-                    {isSending ? (
-                      <Send className="w-5 h-5 text-white" />
-                    ) : (
-                      <Users className="w-5 h-5 text-white" />
-                    )}
-                  </div>
-                  <div>
-                    {isSending ? (
-                      <>
-                        <p className="font-bold text-sm">Sending Messages...</p>
-                        <p className="text-xs text-blue-100">
-                          {bulkProgress.current} / {bulkProgress.total} ({bulkProgress.success} success, {bulkProgress.failed} failed)
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="font-bold text-sm">Bulk WhatsApp Messages</p>
-                        <p className="text-xs text-blue-100">
-                          {selectedRecipients.length > 0 ? (
-                            `${selectedRecipients.length} recipient${selectedRecipients.length !== 1 ? 's' : ''} selected • Step ${bulkStep} of 4`
-                          ) : (
-                            `Composing • Step ${bulkStep} of 4`
-                          )}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </div>
-                {isSending && (
-                  <div className="flex-1 max-w-md">
-                    <div className="w-full bg-white/20 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="h-2 bg-white transition-all duration-300"
-                        style={{ width: `${bulkProgress.total > 0 ? (bulkProgress.current / bulkProgress.total) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
+  // Helper function to render minimized campaign panel
+  const renderMinimizedPanel = () => {
+    if (!isMinimized || !showBulkModal) return null;
+    
+    const isSending = bulkSending || bulkProgress.total > 0;
+    const successRate = bulkProgress.success + bulkProgress.failed > 0 
+      ? Math.round((bulkProgress.success / (bulkProgress.success + bulkProgress.failed)) * 100) 
+      : 0;
+    
+    return (
+      <div 
+        className="fixed bottom-4 right-4 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
+        style={{ 
+          zIndex: 999999,
+          width: '280px'
+        }}
+      >
+          {/* Header */}
+          <div className="bg-white border-b border-gray-200 p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center shadow-lg">
+                {isSending ? (
+                  <Send className="w-4 h-4 text-white" />
+                ) : (
+                  <Users className="w-4 h-4 text-white" />
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div>
+                <div className="text-sm font-semibold text-gray-900">
+                  {isSending ? 'Campaign Active' : 'Bulk Campaign'}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setIsMinimizedExpanded(!isMinimizedExpanded)}
+                className="w-7 h-7 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full transition-colors"
+                title={isMinimizedExpanded ? 'Collapse' : 'Expand details'}
+              >
+                <ChevronDown className={`w-4 h-4 transition-transform ${isMinimizedExpanded ? 'rotate-180' : ''}`} />
+              </button>
+              <button
+                onClick={() => {
+                  setIsMinimized(false);
+                  toast.success('Expanded to full view');
+                }}
+                className="w-7 h-7 flex items-center justify-center bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-full transition-colors"
+                title="Expand to full modal"
+              >
+                <Eye className="w-4 h-4" />
+              </button>
+              {!isSending && (
                 <button
-                  onClick={() => setIsMinimized(false)}
-                  className="px-4 py-1.5 bg-white/20 hover:bg-white/30 rounded-full text-sm font-semibold transition-all flex items-center gap-1"
-                >
-                  <Eye className="w-4 h-4" />
-                  Show
-                </button>
-                {!isSending && (
-                  <button
-                    onClick={() => {
+                  onClick={() => {
+                    if (window.confirm('Close campaign?')) {
                       setIsMinimized(false);
                       setShowBulkModal(false);
                       setBulkStep(1);
                       setSelectedRecipients([]);
                       setBulkMessage('');
-                      setCampaignName('');
-                    }}
-                    className="px-4 py-1.5 bg-red-500/80 hover:bg-red-500 rounded-full text-sm font-semibold transition-all flex items-center gap-1"
-                  >
-                    <X className="w-4 h-4" />
-                    Close
-                  </button>
+                    }
+                  }}
+                  className="w-7 h-7 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className={`p-3 space-y-3 text-xs bg-white ${isMinimizedExpanded ? 'overflow-y-auto' : ''}`} 
+               style={{ maxHeight: isMinimizedExpanded ? '500px' : 'auto' }}>
+            {/* Progress */}
+            {isSending && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-gray-700">
+                  <span className="font-medium">Progress</span>
+                  <span className="font-semibold text-gray-900">{bulkProgress.current}/{bulkProgress.total}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="h-2 bg-gradient-to-r from-orange-500 to-orange-600 transition-all duration-300"
+                    style={{ width: `${bulkProgress.total > 0 ? (bulkProgress.current / bulkProgress.total) * 100 : 0}%` }}
+                  />
+                </div>
+                <p className="text-center text-xs text-gray-600">
+                  {bulkProgress.total > 0 ? Math.round((bulkProgress.current / bulkProgress.total) * 100) : 0}% Complete
+                </p>
+              </div>
+            )}
+
+            {/* Stats */}
+            {(bulkProgress.success > 0 || bulkProgress.failed > 0) && (
+              <div className="flex gap-2 text-xs">
+                <div className="flex-1 bg-green-50 border border-green-200 p-2 rounded-xl">
+                  <div className="text-gray-600 mb-1">Success</div>
+                  <div className="font-bold text-green-600 text-lg">{bulkProgress.success}</div>
+                </div>
+                <div className="flex-1 bg-red-50 border border-red-200 p-2 rounded-xl">
+                  <div className="text-gray-600 mb-1">Failed</div>
+                  <div className="font-bold text-red-600 text-lg">{bulkProgress.failed}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Expanded Details */}
+            {isMinimizedExpanded && (
+              <>
+                {/* Campaign Stats */}
+                {(bulkProgress.success > 0 || bulkProgress.failed > 0) && (
+                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl">
+                    <h4 className="font-semibold text-gray-900 mb-2 text-xs">Campaign Statistics</h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <p className="text-gray-600">Success Rate</p>
+                        <p className="font-bold text-purple-600">
+                          {bulkProgress.success + bulkProgress.failed > 0 
+                            ? Math.round((bulkProgress.success / (bulkProgress.success + bulkProgress.failed)) * 100) 
+                            : 0}%
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Remaining</p>
+                        <p className="font-bold text-orange-600">
+                          {bulkProgress.total - bulkProgress.current}
+                        </p>
+                      </div>
+                      {estimatedTimeRemaining && (
+                        <div className="col-span-2">
+                          <p className="text-gray-600">Est. Time Left</p>
+                          <p className="font-bold text-blue-600">{formatDuration(estimatedTimeRemaining)}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
-                {bulkProgress.current === bulkProgress.total && bulkProgress.total > 0 && (
+
+                {/* Timeline */}
+                {campaignTimeline.length > 0 && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                    <h4 className="font-semibold text-gray-900 mb-2 text-xs flex items-center gap-1">
+                      <History className="w-3 h-3" />
+                      Recent Activity
+                    </h4>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {[...campaignTimeline].reverse().slice(0, 3).map((event, idx) => (
+                        <div key={idx} className="flex items-start gap-2 text-xs">
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1 flex-shrink-0"></div>
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">{event.event}</p>
+                            {event.details && (
+                              <p className="text-gray-600 text-[10px]">{event.details}</p>
+                            )}
+                            <p className="text-gray-500 text-[10px]">
+                              {new Date(event.time).toLocaleTimeString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recent Recipients */}
+                {sentPhones.length > 0 && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-xl">
+                    <h4 className="font-semibold text-gray-900 mb-2 text-xs flex items-center gap-1">
+                      <CheckCheck className="w-3 h-3" />
+                      Recently Sent ({sentPhones.length})
+                    </h4>
+                    <div className="space-y-1 max-h-24 overflow-y-auto">
+                      {sentPhones.slice(-3).reverse().map(phone => {
+                        const conv = conversations.find(c => c.phone === phone);
+                        return (
+                          <div key={phone} className="text-xs text-gray-700 flex items-center gap-2 bg-white p-1.5 rounded">
+                            <CheckCheck className="w-2.5 h-2.5 text-green-500 flex-shrink-0" />
+                            <span className="font-medium truncate">{conv?.customer_name || 'Unknown'}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Failed Messages */}
+                {failedMessages.length > 0 && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
+                    <h4 className="font-semibold text-gray-900 mb-2 text-xs flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      Failed ({failedMessages.length})
+                    </h4>
+                    <div className="space-y-1 max-h-24 overflow-y-auto">
+                      {failedMessages.slice(0, 3).map((failed, idx) => (
+                        <div key={idx} className="bg-white p-1.5 rounded text-[10px]">
+                          <p className="font-medium text-gray-900">{failed.name}</p>
+                          <p className="text-red-600 truncate">❌ {failed.error}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Export Actions */}
+                {!bulkSending && (bulkProgress.success > 0 || failedMessages.length > 0) && (
+                  <div className="pt-2 border-t border-gray-200 space-y-1">
+                    <p className="text-[10px] font-semibold text-gray-700 mb-1">Export Data</p>
+                    {sentPhones.length > 0 && (
+                      <button
+                        onClick={exportSentRecipients}
+                        className="w-full px-2 py-1.5 bg-green-600 text-white text-[10px] font-medium rounded-lg hover:bg-green-700 flex items-center justify-center gap-1"
+                      >
+                        <Download className="w-3 h-3" />
+                        Export Sent ({sentPhones.length})
+                      </button>
+                    )}
+                    {failedMessages.length > 0 && (
+                      <>
+                        <button
+                          onClick={exportFailedRecipients}
+                          className="w-full px-2 py-1.5 bg-red-600 text-white text-[10px] font-medium rounded-lg hover:bg-red-700 flex items-center justify-center gap-1"
+                        >
+                          <Download className="w-3 h-3" />
+                          Export Failed ({failedMessages.length})
+                        </button>
+                        <button
+                          onClick={addFailedToBlacklist}
+                          className="w-full px-2 py-1.5 bg-gray-800 text-white text-[10px] font-medium rounded-lg hover:bg-gray-900 flex items-center justify-center gap-1"
+                        >
+                          <UserX className="w-3 h-3" />
+                          Blacklist Failed
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Controls */}
+            {isSending ? (
+              <div className="space-y-2 pt-2 border-t border-gray-200">
+                <button
+                  onClick={() => {
+                    setIsPaused(true);
+                    toast('Pausing...');
+                  }}
+                  disabled={isPaused || isStopped}
+                  className="w-full px-3 py-2 bg-yellow-500 text-white text-xs font-medium rounded-xl hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
+                >
+                  {isPaused ? 'Pausing...' : 'Pause Campaign'}
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm('Stop campaign?')) {
+                      setIsStopped(true);
+                      toast('Stopping...');
+                    }
+                  }}
+                  disabled={isStopped}
+                  className="w-full px-3 py-2 bg-red-500 text-white text-xs font-medium rounded-xl hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
+                >
+                  {isStopped ? 'Stopping...' : 'Stop Campaign'}
+                </button>
+              </div>
+            ) : (
+              (bulkProgress.current === bulkProgress.total && bulkProgress.total > 0) && (
+                <div className="pt-2 border-t border-gray-200">
                   <button
                     onClick={() => {
                       setIsMinimized(false);
@@ -2364,22 +3519,27 @@ export default function WhatsAppInboxPage() {
                       setBulkProgress({ current: 0, total: 0, success: 0, failed: 0 });
                       setSelectedRecipients([]);
                       setBulkMessage('');
-                      setCampaignName('');
+                      clearPausedCampaignState();
+                      toast.success('Complete');
                     }}
-                    className="px-4 py-1.5 bg-green-500 hover:bg-green-600 rounded-full text-sm font-semibold transition-all flex items-center gap-1"
+                    className="w-full px-3 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xs font-semibold rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg"
                   >
-                    <CheckCheck className="w-4 h-4" />
                     Done
                   </button>
-                )}
-              </div>
-            </div>
+                </div>
+              )
+            )}
           </div>
         </div>
-        );
-      })()}
-    
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      </div>
+    );
+  };
+  
+  // Main component return
+  return (
+    <>
+      {/* Main Content */}
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       {/* Combined Container - WhatsApp Style */}
       <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
         {/* Fixed Header Section - WhatsApp Style */}
@@ -2437,6 +3597,128 @@ export default function WhatsAppInboxPage() {
                 <Send className="w-4 h-4" />
                 <span className="hidden sm:inline">New Message</span>
               </button>
+              
+              {/* Resume Campaign Button - Shows when there's a paused campaign */}
+              {pausedCampaignState && (
+                <>
+                  <button
+                    onClick={() => {
+                      console.log('▶️ Opening resume options...');
+                      
+                      // Check if campaign is old
+                      const pausedTime = new Date(pausedCampaignState.pauseTimestamp || pausedCampaignState.timestamp).getTime();
+                      const hoursSincePaused = (Date.now() - pausedTime) / (1000 * 60 * 60);
+                      
+                      if (hoursSincePaused > 24) {
+                        const proceed = window.confirm(
+                          `⚠️ WARNING: Campaign paused ${Math.floor(hoursSincePaused)} hours ago\n\n` +
+                          `Recipients list may be outdated. Review before sending?\n\n` +
+                          `Click OK to review, Cancel to resume as-is.`
+                        );
+                        
+                        if (proceed) {
+                          setEditingBeforeResume(true);
+                        }
+                      }
+                      
+                      // Restore campaign state
+                      const state = pausedCampaignState;
+                      
+                      // CRITICAL: Restore sentPhones FIRST to avoid duplicate sends
+                      const restoredSentPhones = state.sentPhones || [];
+                      setSentPhones(restoredSentPhones);
+                      console.log(`📋 Restored ${restoredSentPhones.length} already-sent phones from paused campaign`);
+                      
+                      // Filter out already-sent phones from selectedRecipients
+                      const pendingRecipients = (state.selectedRecipients || []).filter(
+                        phone => !restoredSentPhones.includes(phone)
+                      );
+                      setSelectedRecipients(pendingRecipients);
+                      console.log(`📋 ${pendingRecipients.length} pending recipients remaining (filtered out ${restoredSentPhones.length} already sent)`);
+                      
+                      setBulkMessage(state.bulkMessage || '');
+                      setBulkMessageType(state.bulkMessageType || 'text');
+                      setBulkMedia(state.bulkMedia || null);
+                      setBulkProgress(state.bulkProgress || { current: 0, total: 0, success: 0, failed: 0 });
+                      
+                      // Restore settings
+                      if (state.usePersonalization !== undefined) setUsePersonalization(state.usePersonalization);
+                      if (state.randomDelay !== undefined) setRandomDelay(state.randomDelay);
+                      if (state.minDelay) setMinDelay(state.minDelay);
+                      if (state.maxDelay) setMaxDelay(state.maxDelay);
+                      if (state.usePresence !== undefined) setUsePresence(state.usePresence);
+                      if (state.batchSize) setBatchSize(state.batchSize);
+                      if (state.batchDelay) setBatchDelay(state.batchDelay);
+                      if (state.maxPerHour) setMaxPerHour(state.maxPerHour);
+                      if (state.dailyLimit) setDailyLimit(state.dailyLimit);
+                      if (state.skipRecentlyContacted !== undefined) setSkipRecentlyContacted(state.skipRecentlyContacted);
+                      if (state.respectQuietHours !== undefined) setRespectQuietHours(state.respectQuietHours);
+                      if (state.useInvisibleChars !== undefined) setUseInvisibleChars(state.useInvisibleChars);
+                      if (state.useEmojiVariation !== undefined) setUseEmojiVariation(state.useEmojiVariation);
+                      if (state.varyMessageLength !== undefined) setVaryMessageLength(state.varyMessageLength);
+                      if (state.viewOnce !== undefined) setViewOnce(state.viewOnce);
+                      if (state.pollQuestion) setPollQuestion(state.pollQuestion);
+                      if (state.pollOptions) setPollOptions(state.pollOptions);
+                      if (state.allowMultiSelect !== undefined) setAllowMultiSelect(state.allowMultiSelect);
+                      if (state.locationLat) setLocationLat(state.locationLat);
+                      if (state.locationLng) setLocationLng(state.locationLng);
+                      if (state.locationName) setLocationName(state.locationName);
+                      if (state.locationAddress) setLocationAddress(state.locationAddress);
+                      
+                      // Open modal
+                      setShowBulkModal(true);
+                      
+                      if (editingBeforeResume) {
+                        // Go to compose step to edit
+                        setBulkStep(2);
+                        toast('Review and edit your message before resuming', { icon: '✏️', duration: 5000 });
+                      } else {
+                        // Go directly to sending step
+                        setBulkStep(4);
+                        
+                        // Start sending
+                        setTimeout(() => {
+                          sendBulkMessages(true); // true = resuming
+                        }, 500);
+                      }
+                    }}
+                    className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-full flex items-center gap-2 font-bold hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg animate-pulse"
+                    title={`Resume paused campaign (${sentPhones.length} sent, ${(pausedCampaignState.selectedRecipients?.length || 0) - sentPhones.length} remaining)`}
+                  >
+                    <Activity className="w-4 h-4" />
+                    <span className="hidden lg:inline">Resume Campaign</span>
+                    <span className="bg-white text-green-600 px-2 py-0.5 rounded-full text-xs font-bold">
+                      {(pausedCampaignState.selectedRecipients?.length || 0) - sentPhones.length} left
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Show edit option
+                      const action = window.confirm(
+                        '📝 Edit Message Before Resuming?\n\n' +
+                        'Click OK to edit the message first\n' +
+                        'Click Cancel to discard this campaign'
+                      );
+                      
+                      if (action) {
+                        setEditingBeforeResume(true);
+                        // Trigger resume which will go to edit step
+                        document.querySelector<HTMLButtonElement>('button[title*="Resume paused campaign"]')?.click();
+                      } else {
+                        if (window.confirm('Are you sure you want to discard the paused campaign? This cannot be undone.')) {
+                          clearPausedCampaignState();
+                          toast.success('Paused campaign discarded');
+                        }
+                      }
+                    }}
+                    className="px-3 py-2 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 transition-all flex items-center gap-1"
+                    title="Edit or discard paused campaign"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+              
               <button
                 onClick={() => {
                   console.log('🚀 Opening Bulk Send modal...');
@@ -2482,6 +3764,14 @@ export default function WhatsAppInboxPage() {
               >
                 <History className="w-4 h-4" />
                 <span className="hidden xl:inline">History</span>
+              </button>
+              <button
+                onClick={() => setShowCampaignManagement(true)}
+                className="px-4 py-2 bg-white text-indigo-600 rounded-full flex items-center gap-2 font-semibold hover:bg-indigo-50 transition-all shadow-lg"
+                title="Manage campaigns"
+              >
+                <Activity className="w-4 h-4" />
+                <span className="hidden xl:inline">Campaigns</span>
               </button>
               <button
                 onClick={() => setShowBlacklistModal(true)}
@@ -3189,7 +4479,7 @@ export default function WhatsAppInboxPage() {
                     setIsMinimized(true);
                   }}
                   title="Minimize to top bar"
-                  className="absolute top-4 right-16 w-9 h-9 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-colors shadow-lg z-50"
+                  className="absolute top-4 right-16 w-9 h-9 flex items-center justify-center bg-gray-500 hover:bg-gray-600 text-white rounded-full transition-colors shadow-lg z-50"
                 >
                   <Minimize2 className="w-5 h-5" />
                 </button>
@@ -3198,7 +4488,7 @@ export default function WhatsAppInboxPage() {
             <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
               <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
                 {/* Icon */}
-                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <div className="w-16 h-16 bg-orange-600 rounded-full flex items-center justify-center shadow-lg">
                   <Users className="w-8 h-8 text-white" />
                 </div>
                 
@@ -3242,7 +4532,7 @@ export default function WhatsAppInboxPage() {
                       <div key={step} className="flex items-center">
                         <div className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm transition-all ${
                       bulkStep > step ? 'bg-green-500 text-white' :
-                          bulkStep === step ? 'bg-blue-600 text-white' :
+                          bulkStep === step ? 'bg-orange-600 text-white' :
                           'bg-gray-200 text-gray-400'
                     }`}>
                           {bulkStep > step ? <CheckCheck className="w-4 h-4" /> : step}
@@ -3283,6 +4573,7 @@ export default function WhatsAppInboxPage() {
                   csvRecipients={csvRecipients}
                   blacklist={blacklist}
                   savedLists={savedLists}
+                  sentPhones={sentPhones}
                   campaignName={campaignName}
                   recipientSearch={recipientSearch}
                   activeQuickFilter={activeQuickFilter}
@@ -3332,7 +4623,7 @@ export default function WhatsAppInboxPage() {
                     className={`p-3 rounded-xl font-medium text-sm transition-all border-2 flex items-center justify-center gap-2 ${
                       bulkMessageType === 'text'
                         ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
-                        : 'bg-white text-gray-700 border-blue-200 hover:bg-blue-50'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-blue-50'
                     }`}
                   >
                     <MessageCircle className="w-4 h-4" />
@@ -3342,8 +4633,8 @@ export default function WhatsAppInboxPage() {
                     onClick={() => setBulkMessageType('image')}
                     className={`p-3 rounded-xl font-medium text-sm transition-all border-2 flex items-center justify-center gap-2 ${
                       bulkMessageType === 'image'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
-                        : 'bg-white text-gray-700 border-blue-200 hover:bg-blue-50'
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-lg'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-purple-50'
                     }`}
                   >
                     <ImageIcon className="w-4 h-4" />
@@ -3353,8 +4644,8 @@ export default function WhatsAppInboxPage() {
                     onClick={() => setBulkMessageType('video')}
                     className={`p-3 rounded-xl font-medium text-sm transition-all border-2 flex items-center justify-center gap-2 ${
                       bulkMessageType === 'video'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
-                        : 'bg-white text-gray-700 border-blue-200 hover:bg-blue-50'
+                        ? 'bg-red-600 text-white border-red-600 shadow-lg'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-red-50'
                     }`}
                   >
                     <Video className="w-4 h-4" />
@@ -3364,8 +4655,8 @@ export default function WhatsAppInboxPage() {
                     onClick={() => setBulkMessageType('document')}
                     className={`p-3 rounded-xl font-medium text-sm transition-all border-2 flex items-center justify-center gap-2 ${
                       bulkMessageType === 'document'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
-                        : 'bg-white text-gray-700 border-blue-200 hover:bg-blue-50'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-indigo-50'
                     }`}
                   >
                     <FileText className="w-4 h-4" />
@@ -3375,8 +4666,8 @@ export default function WhatsAppInboxPage() {
                     onClick={() => setBulkMessageType('audio')}
                     className={`p-3 rounded-xl font-medium text-sm transition-all border-2 flex items-center justify-center gap-2 ${
                       bulkMessageType === 'audio'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
-                        : 'bg-white text-gray-700 border-blue-200 hover:bg-blue-50'
+                        ? 'bg-pink-600 text-white border-pink-600 shadow-lg'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-pink-50'
                     }`}
                   >
                     <Music className="w-4 h-4" />
@@ -3386,8 +4677,8 @@ export default function WhatsAppInboxPage() {
                     onClick={() => setBulkMessageType('location')}
                     className={`p-3 rounded-xl font-medium text-sm transition-all border-2 flex items-center justify-center gap-2 ${
                       bulkMessageType === 'location'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
-                        : 'bg-white text-gray-700 border-blue-200 hover:bg-blue-50'
+                        ? 'bg-green-600 text-white border-green-600 shadow-lg'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-green-50'
                     }`}
                   >
                     <MapPin className="w-4 h-4" />
@@ -3397,8 +4688,8 @@ export default function WhatsAppInboxPage() {
                     onClick={() => setBulkMessageType('poll')}
                     className={`p-3 rounded-xl font-medium text-sm transition-all border-2 flex items-center justify-center gap-2 ${
                       bulkMessageType === 'poll'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
-                        : 'bg-white text-gray-700 border-blue-200 hover:bg-blue-50'
+                        ? 'bg-teal-600 text-white border-teal-600 shadow-lg'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-teal-50'
                     }`}
                   >
                     <BarChart3 className="w-4 h-4" />
@@ -4281,22 +5572,64 @@ export default function WhatsAppInboxPage() {
                     {/* Smart Features */}
                     <div>
                       <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Smart Protection</p>
-                      <label 
-                        className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 transition-all border border-gray-200"
-                        title="Don't send between 10 PM and 8 AM - prevents annoyance and spam reports"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={respectQuietHours}
-                          onChange={(e) => setRespectQuietHours(e.target.checked)}
-                          className="w-4 h-4 text-blue-600 rounded"
-                        />
-                        <Clock className="w-4 h-4 text-gray-600" />
-                        <div className="flex-1">
-                          <span className="font-medium text-gray-900 text-sm">Respect Quiet Hours</span>
-                          <p className="text-xs text-gray-500">No messages 10 PM - 8 AM</p>
-                        </div>
-                      </label>
+                      <div className="space-y-2">
+                        <label 
+                          className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 transition-all border border-gray-200"
+                          title="Don't send between 10 PM and 8 AM - prevents annoyance and spam reports"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={respectQuietHours}
+                            onChange={(e) => setRespectQuietHours(e.target.checked)}
+                            className="w-4 h-4 text-blue-600 rounded"
+                          />
+                          <Clock className="w-4 h-4 text-gray-600" />
+                          <div className="flex-1">
+                            <span className="font-medium text-gray-900 text-sm">Respect Quiet Hours</span>
+                            <p className="text-xs text-gray-500">No messages 10 PM - 8 AM</p>
+                          </div>
+                        </label>
+                        
+                        <label 
+                          className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 transition-all border border-gray-200"
+                          title="Play sound for campaign events (pause, complete, error)"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={soundEnabled}
+                            onChange={(e) => setSoundEnabled(e.target.checked)}
+                            className="w-4 h-4 text-blue-600 rounded"
+                          />
+                          <Music className="w-4 h-4 text-gray-600" />
+                          <div className="flex-1">
+                            <span className="font-medium text-gray-900 text-sm">Sound Notifications</span>
+                            <p className="text-xs text-gray-500">Audio feedback for events</p>
+                          </div>
+                        </label>
+                        
+                        <label 
+                          className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 transition-all border border-gray-200"
+                          title="Show browser notifications for progress updates"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={notificationsEnabled}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                requestNotificationPermission();
+                              } else {
+                                setNotificationsEnabled(false);
+                              }
+                            }}
+                            className="w-4 h-4 text-blue-600 rounded"
+                          />
+                          <Smartphone className="w-4 h-4 text-gray-600" />
+                          <div className="flex-1">
+                            <span className="font-medium text-gray-900 text-sm">Browser Notifications</span>
+                            <p className="text-xs text-gray-500">Progress updates (25%, 50%, 75%, complete)</p>
+                          </div>
+                        </label>
+                      </div>
                     </div>
                     
                     {/* Reset to Defaults */}
@@ -4374,32 +5707,59 @@ export default function WhatsAppInboxPage() {
                     
                     {/* Recipients Summary */}
                   <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Recipients</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {sentPhones.length > 0 ? 'Pending Recipients' : 'Recipients'}
+                    </label>
                     <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                      <div className="flex items-center gap-3 mb-3">
-                        <span className="text-3xl font-bold text-blue-600">{selectedRecipients.length}</span>
-                        <span className="text-sm text-gray-600">recipients selected</span>
-                      </div>
-                      {selectedRecipients.length > 0 && (
-                        <div className="max-h-32 overflow-y-auto text-sm text-gray-600 space-y-1">
-                          {selectedRecipients.slice(0, 5).map(phone => {
-                          const conv = conversations.find(c => c.phone === phone);
-                          return (
-                            <div key={phone} className="flex items-center gap-2">
-                                <CheckCheck className="w-3 h-3 text-green-600" />
-                                <span className="font-medium">{conv?.customer_name || 'Unknown'}</span>
-                                <span className="text-gray-400">-</span>
-                                <span className="font-mono text-xs">{phone}</span>
+                      {(() => {
+                        const pendingRecipients = selectedRecipients.filter(phone => !sentPhones.includes(phone));
+                        return (
+                          <>
+                            <div className="flex items-center gap-3 mb-3">
+                              <span className="text-3xl font-bold text-blue-600">{pendingRecipients.length}</span>
+                              <span className="text-sm text-gray-600">
+                                {sentPhones.length > 0 ? 'pending recipients' : 'recipients selected'}
+                              </span>
                             </div>
-                          );
-                        })}
-                          {selectedRecipients.length > 5 && (
-                            <p className="text-xs text-gray-500 italic">... and {selectedRecipients.length - 5} more</p>
-                          )}
-                        </div>
-                        )}
-                      </div>
+                            {sentPhones.length > 0 && (
+                              <div className="mb-3 p-2 bg-green-100 border border-green-300 rounded-lg">
+                                <p className="text-xs text-green-800">
+                                  ✅ {sentPhones.length} already sent • {pendingRecipients.length} remaining
+                                </p>
+                              </div>
+                            )}
+                            {pendingRecipients.length > 0 && (
+                              <div className="max-h-32 overflow-y-auto text-sm text-gray-600 space-y-1">
+                                {pendingRecipients.slice(0, 5).map(phone => {
+                                  const conv = conversations.find(c => c.phone === phone);
+                                  return (
+                                    <div key={phone} className="flex items-center gap-2">
+                                      <CheckCheck className="w-3 h-3 text-blue-600" />
+                                      <span className="font-medium">{conv?.customer_name || 'Unknown'}</span>
+                                      <span className="text-gray-400">-</span>
+                                      <span className="font-mono text-xs">{phone}</span>
+                                    </div>
+                                  );
+                                })}
+                                {pendingRecipients.length > 5 && (
+                                  <p className="text-xs text-gray-500 italic">
+                                    ... and {pendingRecipients.length - 5} more pending
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            {pendingRecipients.length === 0 && sentPhones.length > 0 && (
+                              <div className="text-center py-4">
+                                <CheckCheck className="w-12 h-12 text-green-500 mx-auto mb-2" />
+                                <p className="text-sm font-medium text-green-700">All messages sent!</p>
+                                <p className="text-xs text-gray-600 mt-1">No pending recipients</p>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
+                  </div>
                     
                   {/* WhatsApp-Style Message Preview */}
                   <div className="mb-6">
@@ -4768,12 +6128,16 @@ export default function WhatsAppInboxPage() {
                       {sendingMode === 'browser' && !isMinimized && (
                         <button
                           onClick={() => {
-                            console.log('Minimizing to topbar...');
+                            console.log('🔽 MINIMIZE CLICKED - Setting isMinimized to true');
                             setIsMinimized(true);
+                            toast.success('Minimized to top bar! Campaign continues in background.', {
+                              duration: 4000,
+                              icon: '🔽'
+                            });
                           }}
                           className="mt-4 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full hover:from-blue-700 hover:to-indigo-700 transition-all font-bold text-base border-2 border-blue-700 flex items-center gap-2 mx-auto shadow-lg animate-bounce"
                         >
-                          <ChevronDown className="w-5 h-5" />
+                          <Minimize2 className="w-5 h-5" />
                           Click Here to Minimize to Topbar
                         </button>
                       )}
@@ -4816,13 +6180,364 @@ export default function WhatsAppInboxPage() {
                         </p>
                       </div>
                     </div>
+                    
+                    {/* Paused State Message */}
+                    {isPaused && !bulkSending && (
+                      <div className="mt-6 p-6 bg-yellow-50 border-2 border-yellow-300 rounded-xl">
+                        <div className="text-center">
+                          <Clock className="w-16 h-16 text-yellow-600 mx-auto mb-3" />
+                          <h4 className="text-2xl font-bold text-yellow-900 mb-2">Campaign Paused</h4>
+                          <p className="text-base text-yellow-800 mb-1">
+                            Progress saved: {sentPhones.length} messages sent
+                          </p>
+                          <p className="text-sm text-yellow-700">
+                            {selectedRecipients.length - sentPhones.length} messages remaining
+                          </p>
+                          <p className="text-xs text-yellow-600 mt-3">
+                            Your progress is saved. You can refresh the page and resume later.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
+                  
+                  {/* Campaign Statistics */}
+                  {(bulkProgress.success > 0 || bulkProgress.failed > 0) && (
+                    <div className="p-5 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border-2 border-purple-200 mb-6">
+                      <h4 className="font-bold text-gray-900 text-base mb-3 flex items-center gap-2">
+                        <BarChart3 className="w-5 h-5" />
+                        Campaign Statistics
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                        <div className="bg-white p-3 rounded-lg">
+                          <p className="text-gray-600 text-xs mb-1">Success Rate</p>
+                          <p className="text-2xl font-bold text-green-600">
+                            {bulkProgress.success + bulkProgress.failed > 0 
+                              ? Math.round((bulkProgress.success / (bulkProgress.success + bulkProgress.failed)) * 100) 
+                              : 0}%
+                          </p>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg">
+                          <p className="text-gray-600 text-xs mb-1">Avg Time</p>
+                          <p className="text-2xl font-bold text-blue-600">
+                            {campaignStartTime && bulkProgress.current > 0
+                              ? `${Math.round((Date.now() - campaignStartTime) / bulkProgress.current / 1000)}s`
+                              : '—'}
+                          </p>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg">
+                          <p className="text-gray-600 text-xs mb-1">Remaining</p>
+                          <p className="text-2xl font-bold text-orange-600">
+                            {estimatedTimeRemaining ? formatDuration(estimatedTimeRemaining) : '—'}
+                          </p>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg">
+                          <p className="text-gray-600 text-xs mb-1">Duration</p>
+                          <p className="text-2xl font-bold text-purple-600">
+                            {campaignStartTime ? formatDuration(Math.floor((Date.now() - campaignStartTime) / 1000)) : '—'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Export Buttons */}
+                  {sentPhones.length > 0 && (
+                    <div className="mb-6 flex flex-wrap gap-2">
+                      <button
+                        onClick={exportSentRecipients}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all flex items-center gap-2 text-sm font-medium"
+                      >
+                        <Download className="w-4 h-4" />
+                        Export Sent ({sentPhones.length})
+                      </button>
+                      {selectedRecipients.length > sentPhones.length && (
+                        <button
+                          onClick={exportPendingRecipients}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2 text-sm font-medium"
+                        >
+                          <Download className="w-4 h-4" />
+                          Export Pending ({selectedRecipients.length - sentPhones.length})
+                        </button>
+                      )}
+                      {failedMessages.length > 0 && (
+                        <>
+                          <button
+                            onClick={exportFailedRecipients}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all flex items-center gap-2 text-sm font-medium"
+                          >
+                            <Download className="w-4 h-4" />
+                            Export Failed ({failedMessages.length})
+                          </button>
+                          {!bulkSending && (
+                            <button
+                              onClick={addFailedToBlacklist}
+                              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2 text-sm font-medium"
+                              title="Add failed contacts to blacklist"
+                            >
+                              <UserX className="w-4 h-4" />
+                              Blacklist Failed
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Failed Messages Details */}
+                  {failedMessages.length > 0 && (
+                    <div className="mb-6 p-5 bg-red-50 rounded-xl border-2 border-red-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                          <AlertCircle className="w-5 h-5 text-red-600" />
+                          Failed Messages ({failedMessages.length})
+                        </h4>
+                        <div className="flex items-center gap-2">
+                          {!bulkSending && (
+                            <>
+                              <button
+                                onClick={retryFailedMessages}
+                                className="px-3 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-all flex items-center gap-1.5 text-sm font-medium"
+                                title="Retry all failed messages"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                Retry All
+                              </button>
+                              <button
+                                onClick={addFailedToBlacklist}
+                                className="px-3 py-1.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-1.5 text-sm font-medium"
+                                title="Add all failed contacts to blacklist with their error reasons"
+                              >
+                                <UserX className="w-3.5 h-3.5" />
+                                Add to Blacklist
+                              </button>
+                            </>
+                          )}
+                          <button
+                            onClick={() => setShowFailedDetails(!showFailedDetails)}
+                            className="text-sm text-red-600 hover:text-red-700 font-medium flex items-center gap-1"
+                          >
+                            {showFailedDetails ? 'Hide' : 'Show'} Details
+                            <ChevronDown className={`w-4 h-4 transition-transform ${showFailedDetails ? 'rotate-180' : ''}`} />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Error Summary by Type */}
+                      <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {(() => {
+                          const errorCounts = {
+                            not_on_whatsapp: failedMessages.filter(m => m.errorType === 'not_on_whatsapp').length,
+                            invalid_format: failedMessages.filter(m => m.errorType === 'invalid_format').length,
+                            rate_limit: failedMessages.filter(m => m.errorType === 'rate_limit').length,
+                            other: failedMessages.filter(m => !m.errorType || m.errorType === 'other').length
+                          };
+                          
+                          return (
+                            <>
+                              {errorCounts.not_on_whatsapp > 0 && (
+                                <div className="bg-orange-100 p-3 rounded-lg border border-orange-300">
+                                  <div className="text-2xl mb-1">📵</div>
+                                  <div className="text-xl font-bold text-orange-700">{errorCounts.not_on_whatsapp}</div>
+                                  <div className="text-xs text-orange-600 font-medium">Not on WhatsApp</div>
+                                </div>
+                              )}
+                              {errorCounts.invalid_format > 0 && (
+                                <div className="bg-yellow-100 p-3 rounded-lg border border-yellow-300">
+                                  <div className="text-2xl mb-1">⚠️</div>
+                                  <div className="text-xl font-bold text-yellow-700">{errorCounts.invalid_format}</div>
+                                  <div className="text-xs text-yellow-600 font-medium">Invalid Format</div>
+                                </div>
+                              )}
+                              {errorCounts.rate_limit > 0 && (
+                                <div className="bg-blue-100 p-3 rounded-lg border border-blue-300">
+                                  <div className="text-2xl mb-1">⏱️</div>
+                                  <div className="text-xl font-bold text-blue-700">{errorCounts.rate_limit}</div>
+                                  <div className="text-xs text-blue-600 font-medium">Rate Limited</div>
+                                </div>
+                              )}
+                              {errorCounts.other > 0 && (
+                                <div className="bg-gray-100 p-3 rounded-lg border border-gray-300">
+                                  <div className="text-2xl mb-1">❌</div>
+                                  <div className="text-xl font-bold text-gray-700">{errorCounts.other}</div>
+                                  <div className="text-xs text-gray-600 font-medium">Other Errors</div>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                      
+                      {/* Quick Tips for Common Errors */}
+                      {failedMessages.some(m => m.errorType === 'not_on_whatsapp') && (
+                        <div className="mb-4 p-3 bg-white rounded-lg border border-orange-200">
+                          <div className="flex items-start gap-2">
+                            <span className="text-lg">💡</span>
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-gray-900 mb-1">Tips for "Not on WhatsApp" errors:</p>
+                              <ul className="text-xs text-gray-700 space-y-1">
+                                <li>• Verify the number is correct and active</li>
+                                <li>• For Tanzania: Use prefixes 71X-78X, 65X, 68X, 69X (e.g., 255712345678)</li>
+                                <li>• Check if it's a mobile number (not landline)</li>
+                                <li>• Confirm WhatsApp is installed on the number</li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {showFailedDetails && (
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {failedMessages.map((failed, idx) => {
+                            // Determine icon and color based on error type
+                            const errorTypeInfo = failed.errorType === 'not_on_whatsapp' 
+                              ? { icon: '📵', color: 'orange', label: 'Not on WhatsApp' }
+                              : failed.errorType === 'invalid_format' 
+                              ? { icon: '⚠️', color: 'yellow', label: 'Invalid Format' }
+                              : failed.errorType === 'rate_limit' 
+                              ? { icon: '⏱️', color: 'blue', label: 'Rate Limited' }
+                              : { icon: '❌', color: 'red', label: 'Error' };
+                            
+                            return (
+                              <div key={idx} className="bg-white p-3 rounded-lg border border-red-200 hover:border-red-300 transition-colors">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="text-lg">{errorTypeInfo.icon}</span>
+                                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full bg-${errorTypeInfo.color}-100 text-${errorTypeInfo.color}-700`}>
+                                        {errorTypeInfo.label}
+                                      </span>
+                                    </div>
+                                    <p className="font-semibold text-gray-900">{failed.name}</p>
+                                    <p className="text-sm text-gray-600 font-mono">{failed.phone}</p>
+                                    <div className="mt-2 p-2 bg-red-50 rounded text-xs text-red-700 leading-relaxed whitespace-pre-line">
+                                      {failed.error}
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-2">
+                                      {new Date(failed.timestamp).toLocaleString()}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Detailed Progress View */}
+                  {sentPhones.length > 0 && (
+                    <div className="mb-6 p-5 bg-blue-50 rounded-xl border-2 border-blue-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                          <Users className="w-5 h-5 text-blue-600" />
+                          Recipients Progress
+                        </h4>
+                        <button
+                          onClick={() => setShowProgressDetails(!showProgressDetails)}
+                          className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                        >
+                          {showProgressDetails ? 'Hide' : 'Show'} Details
+                          <ChevronDown className={`w-4 h-4 transition-transform ${showProgressDetails ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                      
+                      {showProgressDetails && (
+                        <div className="space-y-3">
+                          {/* Sent Recipients */}
+                          <div className="bg-white p-3 rounded-lg">
+                            <p className="font-semibold text-green-600 mb-2 flex items-center gap-2">
+                              <CheckCheck className="w-4 h-4" />
+                              Sent Recipients ({sentPhones.length})
+                            </p>
+                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                              {sentPhones.slice(-5).reverse().map(phone => {
+                                const conv = conversations.find(c => c.phone === phone);
+                                return (
+                                  <div key={phone} className="text-sm text-gray-700 flex items-center gap-2">
+                                    <CheckCheck className="w-3 h-3 text-green-500" />
+                                    <span className="font-medium">{conv?.customer_name || 'Unknown'}</span>
+                                    <span className="text-gray-400">-</span>
+                                    <span className="font-mono text-xs">{phone}</span>
+                                  </div>
+                                );
+                              })}
+                              {sentPhones.length > 5 && (
+                                <p className="text-xs text-gray-500 italic">
+                                  ... and {sentPhones.length - 5} more
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Pending Recipients */}
+                          {selectedRecipients.length > sentPhones.length && (
+                            <div className="bg-white p-3 rounded-lg">
+                              <p className="font-semibold text-orange-600 mb-2 flex items-center gap-2">
+                                <Clock className="w-4 h-4" />
+                                Pending Recipients ({selectedRecipients.length - sentPhones.length})
+                              </p>
+                              <div className="space-y-1 max-h-32 overflow-y-auto">
+                                {selectedRecipients
+                                  .filter(phone => !sentPhones.includes(phone))
+                                  .slice(0, 5)
+                                  .map(phone => {
+                                    const conv = conversations.find(c => c.phone === phone);
+                                    return (
+                                      <div key={phone} className="text-sm text-gray-700 flex items-center gap-2">
+                                        <Clock className="w-3 h-3 text-orange-500" />
+                                        <span className="font-medium">{conv?.customer_name || 'Unknown'}</span>
+                                        <span className="text-gray-400">-</span>
+                                        <span className="font-mono text-xs">{phone}</span>
+                                      </div>
+                                    );
+                                  })}
+                                {selectedRecipients.length - sentPhones.length > 5 && (
+                                  <p className="text-xs text-gray-500 italic">
+                                    ... and {selectedRecipients.length - sentPhones.length - 5} more
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Campaign Timeline */}
+                  {campaignTimeline.length > 0 && (
+                    <div className="mb-6 p-5 bg-gray-50 rounded-xl border-2 border-gray-200">
+                      <h4 className="font-bold text-gray-900 text-base mb-3 flex items-center gap-2">
+                        <History className="w-5 h-5" />
+                        Campaign Timeline
+                      </h4>
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {[...campaignTimeline].reverse().map((event, idx) => (
+                          <div key={idx} className="flex items-start gap-3 text-sm">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-900">{event.event}</p>
+                              {event.details && (
+                                <p className="text-gray-600">{event.details}</p>
+                              )}
+                              <p className="text-xs text-gray-500">
+                                {new Date(event.time).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   
                   {/* Live Activity Log */}
                   <div className="p-5 bg-gray-50 rounded-xl border-2 border-gray-200">
                     <h4 className="font-bold text-gray-900 text-base mb-3 flex items-center gap-2">
                       <Activity className="w-5 h-5" />
                       Activity Log
+                      {bulkSending && <span className="text-xs text-gray-500 ml-2">(Keyboard: Space/P=Pause, S=Stop)</span>}
                     </h4>
                     <div className="text-sm text-gray-700 space-y-2 max-h-48 overflow-y-auto font-medium">
                       <p className="flex items-center gap-2">
@@ -4843,6 +6558,18 @@ export default function WhatsAppInboxPage() {
                         <p className="flex items-center gap-2">
                           <CheckCheck className="w-4 h-4 text-green-600" />
                           Showing typing indicators
+                        </p>
+                      )}
+                      {soundEnabled && (
+                        <p className="flex items-center gap-2">
+                          <CheckCheck className="w-4 h-4 text-green-600" />
+                          Sound notifications enabled
+                        </p>
+                      )}
+                      {notificationsEnabled && (
+                        <p className="flex items-center gap-2">
+                          <CheckCheck className="w-4 h-4 text-green-600" />
+                          Browser notifications enabled
                         </p>
                       )}
                       <p className="text-blue-600 font-bold mt-3 flex items-center gap-2">
@@ -4879,8 +6606,7 @@ export default function WhatsAppInboxPage() {
             </div>
             
             {/* Footer Buttons - Fixed */}
-            <div className="p-6 bg-white border-t border-gray-200 flex-shrink-0">
-              <div className="flex gap-3">
+            <div className="flex gap-3 pt-4 border-t border-gray-200 flex-shrink-0 bg-white px-6 pb-6">
                 {/* Back Button - Available on all steps */}
                 <button
                   onClick={() => {
@@ -4912,9 +6638,9 @@ export default function WhatsAppInboxPage() {
                       setBulkStep(bulkStep - 1);
                     }
                   }}
-                  className="px-8 py-4 bg-white border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-bold text-lg"
+                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  ← Back
+                  Cancel
                 </button>
                 
                 {/* Step 1: Next Button */}
@@ -4928,9 +6654,9 @@ export default function WhatsAppInboxPage() {
                       setBulkStep(2);
                     }}
                     disabled={selectedRecipients.length === 0}
-                    className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all font-semibold shadow-lg"
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    Next: Compose Message →
+                    Next: Compose Message
                   </button>
                 )}
                 
@@ -4972,9 +6698,9 @@ export default function WhatsAppInboxPage() {
                       (bulkMessageType === 'poll' && (!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2)) ||
                       (bulkMessageType === 'location' && (!locationLat || !locationLng))
                     }
-                    className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all font-semibold shadow-lg"
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    Next: Review & Confirm →
+                    Next: Review & Confirm
                   </button>
                 )}
                 
@@ -4987,21 +6713,78 @@ export default function WhatsAppInboxPage() {
                       setBulkStep(4);
                       sendBulkMessages();
                     }}
-                    className="flex-1 px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-full hover:from-green-600 hover:to-emerald-700 flex items-center justify-center gap-2 transition-all font-bold shadow-lg text-base"
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
                   >
                     <Send className="w-5 h-5" />
-                    Confirm & Send {selectedRecipients.length} Message{selectedRecipients.length !== 1 ? 's' : ''}
+                    {(() => {
+                      const pendingCount = selectedRecipients.filter(phone => !sentPhones.includes(phone)).length;
+                      return sentPhones.length > 0 
+                        ? `Send ${pendingCount} Pending`
+                        : `Send ${selectedRecipients.length} Message${selectedRecipients.length !== 1 ? 's' : ''}`;
+                    })()}
                   </button>
                     ) : (
                       <button
                         onClick={submitCloudCampaign}
-                        className="flex-1 px-6 py-4 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-full hover:from-purple-600 hover:to-indigo-700 flex items-center justify-center gap-2 transition-all font-bold shadow-lg text-base"
+                        className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
                       >
                         <Database className="w-5 h-5" />
-                        Submit to Cloud ☁️
+                        Submit to Cloud
                       </button>
                     )}
                   </>
+                )}
+                
+                {/* Step 4: Pause/Stop Controls - Show when actively sending */}
+                {bulkStep === 4 && bulkSending && bulkProgress.current < bulkProgress.total && !isPaused && sendingMode === 'browser' && (
+                  <>
+                    <button
+                      onClick={() => {
+                        console.log('⏸️ Pausing campaign...');
+                        setIsPaused(true);
+                        toast('Pausing...');
+                      }}
+                      disabled={isStopped}
+                      className="flex-1 px-4 py-3 bg-yellow-500 text-white rounded-xl font-medium hover:bg-yellow-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
+                    >
+                      <Clock className="w-5 h-5" />
+                      Pause
+                    </button>
+                    <button
+                      onClick={() => {
+                        console.log('🛑 Stopping campaign...');
+                        if (window.confirm('Stop campaign? All remaining messages will be cancelled.')) {
+                          setIsStopped(true);
+                          toast('Stopping...');
+                        }
+                      }}
+                      disabled={isStopped}
+                      className="flex-1 px-4 py-3 bg-red-500 text-white rounded-xl font-medium hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
+                    >
+                      <X className="w-5 h-5" />
+                      Stop
+                    </button>
+                  </>
+                )}
+                
+                {/* Step 4: Resume Button - Show when paused or stopped */}
+                {bulkStep === 4 && (isPaused || !bulkSending) && bulkProgress.current < bulkProgress.total && !isStopped && sendingMode === 'browser' && (
+                  <button
+                    onClick={() => {
+                      console.log('▶️ Resuming campaign...');
+                      setIsPaused(false);
+                      setBulkSending(true);
+                      toast.success('Resuming campaign...');
+                      // Resume sending
+                      setTimeout(() => {
+                        sendBulkMessages(true); // true = resuming
+                      }, 500);
+                    }}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                  >
+                    <Activity className="w-5 h-5" />
+                    ▶️ Resume Sending
+                  </button>
                 )}
                 
                 {/* Step 4: Close Button (after completion) */}
@@ -5028,7 +6811,7 @@ export default function WhatsAppInboxPage() {
                       setLocationName('');
                       setLocationAddress('');
                     }}
-                    className="flex-1 px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-full hover:from-green-600 hover:to-emerald-700 flex items-center justify-center gap-2 transition-all font-bold shadow-lg text-base"
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
                   >
                     <CheckCheck className="w-5 h-5" />
                     Done
@@ -5038,11 +6821,15 @@ export default function WhatsAppInboxPage() {
             </div>
           </div>
         </div>
-      );
-      })()}
+      </div>
+    </div>
+    
+    {/* Floating Detailed Campaign Panel - SHOWS ALL DETAILS */}
+    {renderMinimizedPanel()}
       
       {/* Advanced Feature Modals */}
-      <CampaignHistoryModal
+      <React.Fragment key="modals">
+        <CampaignHistoryModal
         isOpen={showCampaignHistory}
         onClose={() => setShowCampaignHistory(false)}
         onClone={(campaign) => {
@@ -5056,6 +6843,57 @@ export default function WhatsAppInboxPage() {
           setShowBulkModal(true);
           setBulkStep(2); // Go to compose step
           toast.success(`Campaign cloned! Edit and send when ready.`);
+        }}
+      />
+
+      <CampaignManagementModal
+        isOpen={showCampaignManagement}
+        onClose={() => setShowCampaignManagement(false)}
+        currentActiveCampaign={
+          bulkSending && bulkStep === 4 ? {
+            name: campaignName || 'Current Campaign',
+            status: isPaused ? 'paused' : isStopped ? 'stopped' : 'active',
+            selectedRecipients,
+            sentPhones,
+            bulkMessage,
+            bulkMessageType,
+            bulkMedia,
+            bulkProgress,
+            usePersonalization,
+            randomDelay,
+            minDelay,
+            maxDelay,
+            timestamp: campaignStartTime ? new Date(campaignStartTime).toISOString() : new Date().toISOString()
+          } : undefined
+        }
+        onResumeCampaign={(campaign) => {
+          // Restore campaign state
+          setSelectedRecipients(campaign.selectedRecipients || []);
+          setBulkMessage(campaign.bulkMessage || '');
+          setBulkMessageType(campaign.bulkMessageType || 'text');
+          setBulkMedia(campaign.bulkMedia || null);
+          setSentPhones(campaign.sentPhones || []);
+          setBulkProgress(campaign.bulkProgress || { current: 0, total: 0, success: 0, failed: 0 });
+          
+          // Restore settings
+          if (campaign.usePersonalization !== undefined) setUsePersonalization(campaign.usePersonalization);
+          if (campaign.randomDelay !== undefined) setRandomDelay(campaign.randomDelay);
+          if (campaign.minDelay) setMinDelay(campaign.minDelay);
+          if (campaign.maxDelay) setMaxDelay(campaign.maxDelay);
+          
+          // Open modal and go to sending step
+          setShowBulkModal(true);
+          setBulkStep(4);
+          
+          toast.success('Campaign restored! Click Resume to continue.', { duration: 5000 });
+        }}
+        onDeleteCampaign={(campaignId) => {
+          // If it's the currently paused campaign, clear it
+          const currentPausedKey = 'whatsapp_paused_campaign';
+          if (campaignId === currentPausedKey) {
+            clearPausedCampaignState();
+          }
+          toast.success('Campaign deleted');
         }}
       />
 
@@ -5099,7 +6937,7 @@ export default function WhatsAppInboxPage() {
           loadActiveSession();
         }}
       />
-    </div>
+      </React.Fragment>
     </>
   );
 }

@@ -154,30 +154,33 @@ router.get('/check-integration', async (req, res) => {
     // Check integrations table for WhatsApp configuration
     const integrationResult = await pool.query(
       `SELECT 
-        name,
-        is_enabled,
-        credentials,
+        integration_name,
+        is_active,
+        api_key,
+        api_secret,
         config,
-        last_used_at
+        last_sync
        FROM integrations
-       WHERE name = 'WHATSAPP_WASENDER'`
+       WHERE integration_name = 'WHATSAPP_WASENDER' OR integration_type = 'whatsapp'`
     );
     
     const integration = integrationResult.rows[0];
     
     if (integration) {
-      const credentials = typeof integration.credentials === 'string' 
-        ? JSON.parse(integration.credentials) 
-        : integration.credentials;
+      const config = typeof integration.config === 'string' 
+        ? JSON.parse(integration.config) 
+        : integration.config || {};
+      
+      const apiKey = integration.api_key || config.api_key || config.bearer_token;
+      const sessionId = config.session_id || config.whatsapp_session;
       
       result.integration = {
-        enabled: !!integration.is_enabled,
-        has_api_key: !!(credentials.api_key || credentials.bearer_token),
-        has_session_id: !!(credentials.session_id || credentials.whatsapp_session),
-        session_id: credentials.session_id || credentials.whatsapp_session || null,
-        api_key_preview: credentials.api_key ? credentials.api_key.substring(0, 10) + '...' :
-                        credentials.bearer_token ? credentials.bearer_token.substring(0, 10) + '...' : null,
-        last_used_at: integration.last_used_at
+        enabled: !!integration.is_active,
+        has_api_key: !!apiKey,
+        has_session_id: !!sessionId,
+        session_id: sessionId || null,
+        api_key_preview: apiKey ? apiKey.substring(0, 10) + '...' : null,
+        last_used_at: integration.last_sync
       };
       
       console.log('📊 Integration found:', {

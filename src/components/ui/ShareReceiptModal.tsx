@@ -12,6 +12,7 @@ import SuccessModal from './SuccessModal';
 import { useSuccessModal } from '../../hooks/useSuccessModal';
 import { SuccessIcons } from './SuccessModalIcons';
 import { useBusinessInfo } from '../../hooks/useBusinessInfo';
+import { formatContactForInvoice } from '../../utils/formatPhoneForInvoice';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -422,14 +423,17 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
           console.log('📱 Sending receipt via SMS to:', cleanPhone);
           
           // Use in-app SMS service
-          const result = await smsService.sendSMS(cleanPhone, text);
+          // Use smart routing: WhatsApp first, SMS fallback
+          const { smartNotificationService } = await import('../../services/smartNotificationService');
+          const result = await smartNotificationService.sendNotification(cleanPhone, text);
           
           if (result.success) {
+            const method = result.method === 'whatsapp' ? 'WhatsApp' : 'SMS';
             // Show success modal
             successModal.show(
-              `Receipt sent successfully to ${phone}!`,
+              `Receipt sent successfully to ${phone} via ${method}!`,
               {
-                title: 'SMS Sent! ✅',
+                title: `${method} Sent! ✅`,
                 icon: SuccessIcons.messageSent,
                 autoCloseDelay: 3000,
               }
@@ -440,7 +444,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
               onClose();
             }, 500);
           } else {
-            toast.error(result.error || 'Failed to send SMS');
+            toast.error(result.error || `Failed to send message`);
           }
         } catch (error) {
           console.error('Error sending SMS:', error);
@@ -862,31 +866,19 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                       </div>
                     )}
                     {businessInfo.phone && (() => {
-                      // Parse phone number - handle JSON array or string
-                      let phoneNumbers: string[] = [];
-                      try {
-                        const parsed = typeof businessInfo.phone === 'string' ? JSON.parse(businessInfo.phone) : businessInfo.phone;
-                        if (Array.isArray(parsed)) {
-                          phoneNumbers = parsed.map((item: any) => 
-                            typeof item === 'object' && item.phone ? item.phone : String(item)
-                          ).filter(Boolean);
-                        } else if (typeof parsed === 'string') {
-                          phoneNumbers = [parsed];
-                        } else {
-                          phoneNumbers = [String(businessInfo.phone)];
-                        }
-                      } catch {
-                        // If not JSON, treat as plain string
-                        phoneNumbers = [String(businessInfo.phone)];
-                      }
+                      // Format phone numbers properly using utility
+                      const phoneString = typeof businessInfo.phone === 'string' 
+                        ? businessInfo.phone 
+                        : JSON.stringify(businessInfo.phone);
+                      const formattedPhones = formatContactForInvoice(phoneString);
                       
-                      return phoneNumbers.length > 0 ? (
+                      return formattedPhones ? (
                         <div className="flex items-center gap-2">
                           <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                           </svg>
                           <span className={`text-gray-700 font-medium ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>
-                            {phoneNumbers.join(', ')}
+                            {formattedPhones}
                           </span>
                         </div>
                       ) : null;

@@ -130,6 +130,10 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
   });
   const headerRef = useRef<HTMLElement>(null);
   
+  // WhatsApp Bulk Campaign Floating Panel State
+  const [activeCampaign, setActiveCampaign] = useState<any>(null);
+  const [showCampaignPanel, setShowCampaignPanel] = useState(false);
+  
   // Safely access devices context with error handling for HMR
   let devices: any[] = [];
   try {
@@ -219,6 +223,40 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
     // Refresh count every 5 minutes
     const interval = setInterval(fetchReminderCount, 5 * 60 * 1000);
     return () => clearInterval(interval);
+  }, []);
+  
+  // Monitor active WhatsApp bulk campaigns
+  useEffect(() => {
+    const checkActiveCampaign = () => {
+      try {
+        const campaignData = localStorage.getItem('whatsapp_bulk_campaign_active');
+        if (campaignData) {
+          const campaign = JSON.parse(campaignData);
+          setActiveCampaign(campaign);
+          setShowCampaignPanel(campaign.isMinimized === true);
+          console.log('📊 [TopBar] Active campaign detected:', campaign);
+        } else {
+          setActiveCampaign(null);
+          setShowCampaignPanel(false);
+        }
+      } catch (error) {
+        console.error('Error checking active campaign:', error);
+      }
+    };
+    
+    // Check immediately
+    checkActiveCampaign();
+    
+    // Poll every 2 seconds for updates
+    const interval = setInterval(checkActiveCampaign, 2000);
+    
+    // Listen for storage events (updates from other tabs/components)
+    window.addEventListener('storage', checkActiveCampaign);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', checkActiveCampaign);
+    };
   }, []);
   
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -1029,7 +1067,176 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
     return options;
   }, [currentUser, navigate, setShowCreateDropdown, setShowAddProductModal, setShowAddSupplierModal, setShowCustomerImportModal, setShowAppointmentModal, setPaymentModalConfig, setShowPaymentModal, setShowSMSModal, setShowEmployeeImportModal, setShowAccountTransferModal, setShowBulkSMSModal, setShowDailyReportModal, setReportType]);
 
+  // Format time duration
+  const formatDuration = (seconds: number) => {
+    if (!seconds || seconds < 0) return '—';
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return `${hours}h ${mins}m`;
+  };
+
   return (
+    <>
+      {/* Floating WhatsApp Bulk Campaign Panel - GLOBAL */}
+      {showCampaignPanel && activeCampaign && (
+        <div 
+          className="fixed right-4 bg-white rounded-2xl shadow-2xl border-4 border-green-500 overflow-hidden z-[100000]"
+          style={{ 
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: '550px',
+            maxHeight: '95vh',
+            boxShadow: '0 0 0 4px rgba(34, 197, 94, 0.2), 0 20px 60px rgba(0, 0, 0, 0.3)'
+          }}
+        >
+          {/* Header */}
+          <div className="bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 text-white p-5 relative z-10">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/30 rounded-full flex items-center justify-center">
+                  <Send className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">
+                    📤 Campaign Active
+                  </h3>
+                  <p className="text-xs text-green-100">
+                    Sending in progress...
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    // Navigate to WhatsApp inbox and expand
+                    window.location.href = '/whatsapp/inbox?expand=true';
+                  }}
+                  className="p-2.5 bg-white/20 hover:bg-white/30 rounded-lg transition-all"
+                  title="Expand to full view"
+                >
+                  <Eye className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCampaignPanel(false);
+                    toast.success('Panel hidden. Campaign continues.', { icon: '👁️' });
+                  }}
+                  className="p-2.5 bg-white/20 hover:bg-white/30 rounded-lg transition-all"
+                  title="Hide panel"
+                >
+                  <Minimize2 className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Scrollable Content */}
+          <div className="overflow-y-auto bg-white relative z-10" style={{ maxHeight: 'calc(95vh - 120px)' }}>
+            {/* Progress Section */}
+            <div className="p-4 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-bold text-gray-700">Progress</span>
+                <span className="text-2xl font-bold text-blue-600">
+                  {activeCampaign.current || 0} / {activeCampaign.total || 0}
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden mb-2">
+                <div
+                  className="h-4 bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-300"
+                  style={{ width: `${activeCampaign.total > 0 ? ((activeCampaign.current || 0) / activeCampaign.total) * 100 : 0}%` }}
+                />
+              </div>
+              <p className="text-center text-sm font-bold text-gray-700">
+                {activeCampaign.total > 0 ? Math.round(((activeCampaign.current || 0) / activeCampaign.total) * 100) : 0}% Complete
+              </p>
+            </div>
+
+            {/* Statistics */}
+            {((activeCampaign.success || 0) > 0 || (activeCampaign.failed || 0) > 0) && (
+              <div className="p-4 border-b border-gray-200 bg-gradient-to-br from-purple-50 to-pink-50">
+                <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5" />
+                  Campaign Stats
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-white p-3 rounded-lg border border-green-200">
+                    <p className="text-xs text-gray-600 mb-1">Success</p>
+                    <p className="text-2xl font-bold text-green-600">{activeCampaign.success || 0}</p>
+                  </div>
+                  <div className="bg-white p-3 rounded-lg border border-red-200">
+                    <p className="text-xs text-gray-600 mb-1">Failed</p>
+                    <p className="text-2xl font-bold text-red-600">{activeCampaign.failed || 0}</p>
+                  </div>
+                  <div className="bg-white p-3 rounded-lg border border-blue-200">
+                    <p className="text-xs text-gray-600 mb-1">Success Rate</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {(activeCampaign.success || 0) + (activeCampaign.failed || 0) > 0 
+                        ? Math.round(((activeCampaign.success || 0) / ((activeCampaign.success || 0) + (activeCampaign.failed || 0))) * 100) 
+                        : 0}%
+                    </p>
+                  </div>
+                  <div className="bg-white p-3 rounded-lg border border-purple-200">
+                    <p className="text-xs text-gray-600 mb-1">Duration</p>
+                    <p className="text-lg font-bold text-purple-600">
+                      {activeCampaign.startTime 
+                        ? formatDuration(Math.floor((Date.now() - activeCampaign.startTime) / 1000))
+                        : '—'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Info Message */}
+            <div className="p-4 bg-blue-50 border-l-4 border-blue-500">
+              <p className="text-sm text-blue-900 font-medium">
+                💡 Campaign is running in the background
+              </p>
+              <p className="text-xs text-blue-700 mt-1">
+                Click the eye icon above to view full details in WhatsApp Inbox
+              </p>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="p-4 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Total Recipients:</span>
+                <span className="font-bold text-gray-900">{activeCampaign.total || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Sent:</span>
+                <span className="font-bold text-green-600">{activeCampaign.success || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Failed:</span>
+                <span className="font-bold text-red-600">{activeCampaign.failed || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Remaining:</span>
+                <span className="font-bold text-orange-600">
+                  {(activeCampaign.total || 0) - (activeCampaign.current || 0)}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Button */}
+            <div className="p-4 bg-gray-50 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  window.location.href = '/whatsapp/inbox?expand=true';
+                }}
+                className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 font-bold flex items-center justify-center gap-2 shadow-lg"
+              >
+                <Eye className="w-5 h-5" />
+                View Full Campaign Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
     <header ref={headerRef} className={`fixed top-0 left-0 right-0 z-20 transition-all duration-500 ${isNavCollapsed ? 'md:ml-[5.5rem]' : 'md:ml-72'}`}>
       {/* Main TopBar */}
       <div className={`topbar ${isDark ? 'bg-slate-900/90' : 'bg-white/80'} backdrop-blur-xl ${isDark ? 'border-slate-700/50' : 'border-white/30'} border-b shadow-lg`}>
@@ -1852,6 +2059,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
       />
 
     </header>
+    </>
   );
 };
 
@@ -2151,11 +2359,14 @@ const QuickSMSModal: React.FC<QuickSMSModalProps> = ({ isOpen, onClose }) => {
     setSending(true);
     setError(null);
     try {
-      const result = await smsService.sendSMS(phone.trim(), message.trim());
+      // Use smart routing: WhatsApp first, SMS fallback
+      const { smartNotificationService } = await import('../../../services/smartNotificationService');
+      const result = await smartNotificationService.sendNotification(phone.trim(), message.trim());
       if (!result.success) {
-        throw new Error(result.error || 'Failed to send SMS.');
+        throw new Error(result.error || 'Failed to send message.');
       }
-      toast.success('SMS sent successfully');
+      const method = result.method === 'whatsapp' ? 'WhatsApp' : 'SMS';
+      toast.success(`${method} sent successfully`);
       onClose();
     } catch (err) {
       console.error('Quick SMS error:', err);

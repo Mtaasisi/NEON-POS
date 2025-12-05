@@ -2,6 +2,7 @@
 import { smsService } from './smsService';
 import toast from 'react-hot-toast';
 import { format } from '../features/lats/lib/format';
+import { formatContactForMessage } from '../utils/formatPhoneForInvoice';
 
 export interface NotificationSettings {
   // WhatsApp Invoice Settings
@@ -153,7 +154,13 @@ class NotificationSettingsService {
       message += `💳 Payment: ${invoice.payment_method}\n`;
     }
     
-    message += `\n📞 Contact: ${invoice.business_phone}\n`;
+    // Format contact phone numbers properly
+    const formattedContact = formatContactForMessage(invoice.business_phone);
+    
+    if (formattedContact) {
+      message += `\n📞 Contact: ${formattedContact}\n`;
+    }
+    
     message += `\nThank you for your business! 🙏`;
     
     return message;
@@ -173,17 +180,50 @@ class NotificationSettingsService {
     message = message.replace('{business_name}', invoice.business_name);
     message = message.replace('{customer_name}', invoice.customer_name);
     message = message.replace('{date}', invoice.date);
-    message = message.replace('{business_phone}', invoice.business_phone);
+    // Format business phone number properly
+    const formattedBusinessPhone = formatContactForMessage(invoice.business_phone);
+    message = message.replace('{business_phone}', formattedBusinessPhone || invoice.business_phone);
     
     return message;
   }
 
   /**
    * Send invoice via WhatsApp
-   * @deprecated WhatsApp functionality has been removed
    */
   async sendWhatsAppInvoice(invoice: InvoiceData): Promise<{ success: boolean; error?: string }> {
-    return { success: false, error: 'WhatsApp functionality has been removed' };
+    try {
+      const settings = this.getSettings();
+      
+      if (!settings.whatsappEnabled) {
+        return { success: false, error: 'WhatsApp notifications are disabled in settings' };
+      }
+
+      if (!invoice.customer_phone) {
+        return { success: false, error: 'Customer phone number is required' };
+      }
+
+      const message = this.generateWhatsAppMessage(invoice, settings);
+      
+      console.log('📱 Sending WhatsApp invoice:', {
+        to: invoice.customer_phone,
+        invoice_no: invoice.invoice_no
+      });
+
+      // Dynamically import whatsappService to avoid circular dependencies
+      const { default: whatsappService } = await import('./whatsappService');
+      const result = await whatsappService.sendMessage(invoice.customer_phone, message);
+
+      if (result.success) {
+        toast.success('WhatsApp invoice sent successfully! ✅');
+      } else {
+        toast.error(`WhatsApp failed: ${result.error}`);
+      }
+
+      return result;
+    } catch (error: any) {
+      console.error('Error sending WhatsApp invoice:', error);
+      return { success: false, error: error.message };
+    }
   }
 
   /**
@@ -252,7 +292,40 @@ class NotificationSettingsService {
   }
 
   /**
+   * Smart send invoice: Try WhatsApp first, fall back to SMS if number not on WhatsApp
+   * This is the recommended method for automatic sending
+   */
+  async smartSendInvoice(invoice: InvoiceData): Promise<{
+    success: boolean;
+    method: 'whatsapp' | 'sms' | 'none';
+    whatsapp?: { success: boolean; error?: string };
+    sms?: { success: boolean; error?: string };
+    error?: string;
+  }> {
+    try {
+      const { smartNotificationService } = await import('./smartNotificationService');
+      const result = await smartNotificationService.sendInvoice(invoice);
+      
+      return {
+        success: result.success,
+        method: result.method,
+        whatsapp: result.whatsappResult,
+        sms: result.smsResult,
+        error: result.error
+      };
+    } catch (error: any) {
+      console.error('Error in smart send invoice:', error);
+      return {
+        success: false,
+        method: 'none',
+        error: error.message
+      };
+    }
+  }
+
+  /**
    * Auto-send invoice based on settings
+   * Uses smart routing: WhatsApp first, SMS fallback if not on WhatsApp
    * This should be called after a successful payment
    */
   async autoSendInvoice(invoice: InvoiceData): Promise<{
@@ -263,19 +336,35 @@ class NotificationSettingsService {
     const settings = this.getSettings();
     const results: any = {};
 
-    // Send WhatsApp if auto-send is enabled
-    if (settings.whatsappEnabled && settings.whatsappAutoSend) {
-      console.log('📱 Auto-sending WhatsApp invoice...');
-      results.whatsapp = await this.sendWhatsAppInvoice(invoice);
+    // Check if any auto-send is enabled
+    const shouldAutoSend = (settings.whatsappEnabled && settings.whatsappAutoSend) || 
+                          (settings.smsEnabled && settings.smsAutoSend);
+    
+    if (!shouldAutoSend) {
+      return results;
     }
 
-    // Send SMS if auto-send is enabled
-    if (settings.smsEnabled && settings.smsAutoSend) {
-      console.log('📱 Auto-sending SMS invoice...');
-      results.sms = await this.sendSMSInvoice(invoice);
+    // Use smart sending: WhatsApp first, SMS fallback
+    console.log('📱 Auto-sending invoice using smart routing (WhatsApp first, SMS fallback)...');
+    const smartResult = await this.smartSendInvoice(invoice);
+    
+    if (smartResult.success) {
+      if (smartResult.method === 'whatsapp') {
+        results.whatsapp = smartResult.whatsapp || { success: true };
+      } else if (smartResult.method === 'sms') {
+        results.sms = smartResult.sms || { success: true };
+      }
+    } else {
+      // If smart send failed, record the error
+      if (smartResult.whatsapp) {
+        results.whatsapp = smartResult.whatsapp;
+      }
+      if (smartResult.sms) {
+        results.sms = smartResult.sms;
+      }
     }
 
-    // Send Email if auto-send is enabled
+    // Send Email if auto-send is enabled (independent of WhatsApp/SMS)
     if (settings.emailEnabled && settings.emailAutoSend) {
       console.log('📧 Auto-sending Email invoice...');
       results.email = await this.sendEmailInvoice(invoice);

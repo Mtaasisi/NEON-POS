@@ -480,16 +480,21 @@ const MobileClientDetail: React.FC = () => {
     setSmsSending(true);
     try {
       const phoneNumber = client.phone.replace(/\D/g, '');
-      const result = await smsService.sendSMS(phoneNumber, smsMessage);
+      // Use smart routing: WhatsApp first, SMS fallback
+      const { smartNotificationService } = await import('../../../services/smartNotificationService');
+      const result = await smartNotificationService.sendNotification(phoneNumber, smsMessage);
       
       if (result.success) {
-        // Log SMS to database
+        const method = result.method === 'whatsapp' ? 'whatsapp' : 'sms';
+        const methodName = result.method === 'whatsapp' ? 'WhatsApp' : 'SMS';
+        
+        // Log to database
         try {
           await supabase
             .from('customer_communications')
             .insert({
               customer_id: clientId,
-              type: 'sms',
+              type: method,
               message: smsMessage,
               status: 'sent',
               phone_number: phoneNumber,
@@ -497,10 +502,10 @@ const MobileClientDetail: React.FC = () => {
               sent_at: new Date().toISOString()
             });
         } catch (error) {
-          console.warn('Could not log SMS:', error);
+          console.warn('Could not log message:', error);
         }
         
-        toast.success('SMS sent successfully!');
+        toast.success(`${methodName} sent successfully!`);
         setSmsMessage('');
         setShowSmsModal(false);
         await loadAdditionalCustomerData();

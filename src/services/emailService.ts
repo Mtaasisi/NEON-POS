@@ -13,13 +13,14 @@ const SENDGRID_API_KEY = import.meta.env.VITE_SENDGRID_API_KEY;
 const FROM_EMAIL = import.meta.env.VITE_FROM_EMAIL || 'noreply@dukani.site';
 const FROM_NAME = import.meta.env.VITE_FROM_NAME || 'NEON POS';
 
-// Only warn once about missing SendGrid configuration
+// Only warn once about missing SendGrid configuration (only in development)
 let hasWarnedAboutSendGrid = false;
 
 if (SENDGRID_API_KEY) {
   sgMail.setApiKey(SENDGRID_API_KEY);
-} else if (!hasWarnedAboutSendGrid) {
-  console.warn('⚠️ SendGrid API key not configured. Email sending will be disabled.');
+} else if (!hasWarnedAboutSendGrid && (import.meta.env.DEV || import.meta.env.MODE === 'development')) {
+  // Only warn in development mode to avoid console noise in production
+  console.debug('ℹ️ SendGrid API key not configured. Email sending will be disabled. Add VITE_SENDGRID_API_KEY to your .env file to enable email functionality.');
   hasWarnedAboutSendGrid = true;
 }
 
@@ -71,7 +72,10 @@ class EmailService {
    */
   async send(options: EmailOptions): Promise<EmailResult> {
     if (!SENDGRID_API_KEY) {
-      console.error('❌ [Email] SendGrid API key not configured');
+      // Only log error in development mode
+      if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+        console.debug('ℹ️ [Email] SendGrid API key not configured. Email sending is disabled.');
+      }
       return {
         success: false,
         error: 'Email service not configured'

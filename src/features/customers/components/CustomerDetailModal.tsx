@@ -1511,50 +1511,25 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
             setSmsResult(null);
             try {
               const phoneNumber = customer.phone.replace(/\D/g, '');
-              console.log('📱 Attempting to send SMS to:', phoneNumber);
+              console.log('📱 Attempting to send message (smart routing: WhatsApp first, SMS fallback) to:', phoneNumber);
               
-              const result = await smsService.sendSMS(phoneNumber, smsMessage);
-              console.log('📱 SMS Service Result:', result);
+              // Use smart notification service: WhatsApp first, SMS fallback
+              const { smartNotificationService } = await import('../../../services/smartNotificationService');
+              const result = await smartNotificationService.sendNotification(phoneNumber, smsMessage);
+              console.log('📱 Smart Notification Result:', result);
               
               if (result.success) {
-                // Try to log the SMS to the database (non-blocking)
-                let smsLogged = false;
-                let commLogged = false;
+                const method = result.method === 'whatsapp' ? 'WhatsApp' : 'SMS';
+                const methodType = result.method === 'whatsapp' ? 'whatsapp' : 'sms';
                 
-                try {
-                  const { data: logData, error: logError } = await supabase
-                    .from('sms_logs')
-                    .insert({
-                      recipient_phone: phoneNumber,
-                      message: smsMessage,
-                      status: 'sent',
-                      sent_by: currentUser?.id,
-                      device_id: null,
-                      cost: null,
-                      sent_at: new Date().toISOString(),
-                      created_at: new Date().toISOString()
-                    })
-                    .select()
-                    .single();
-
-                  if (logError) {
-                    console.warn('⚠️ Could not log SMS to sms_logs table:', logError.message);
-                    console.warn('   This is not critical - SMS was still sent');
-                  } else {
-                    smsLogged = true;
-                    console.log('✅ SMS logged to sms_logs table');
-                  }
-                } catch (logEx) {
-                  console.warn('⚠️ Exception logging SMS:', logEx);
-                }
-
                 // Try to log to customer_communications table (non-blocking)
+                let commLogged = false;
                 try {
                   const { data: commData, error: commError } = await supabase
                     .from('customer_communications')
                     .insert({
                       customer_id: customer.id,
-                      type: 'sms',
+                      type: methodType,
                       message: smsMessage,
                       status: 'sent',
                       phone_number: phoneNumber,
@@ -1566,20 +1541,18 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
 
                   if (commError) {
                     console.warn('⚠️ Could not log to customer_communications table:', commError.message);
-                    console.warn('   This is not critical - SMS was still sent');
                   } else {
                     commLogged = true;
-                    console.log('✅ SMS logged to customer_communications table');
+                    console.log(`✅ ${method} logged to customer_communications table`);
                   }
                 } catch (commEx) {
                   console.warn('⚠️ Exception logging customer communication:', commEx);
                 }
 
-                // Show success message regardless of logging
-                const logStatus = smsLogged || commLogged ? ' and logged' : ' (logging skipped)';
-                setSmsResult(`✅ SMS sent${logStatus} successfully!`);
+                // Show success message
+                setSmsResult(`✅ ${method} message sent successfully!`);
                 setSmsMessage('');
-                toast.success('SMS sent successfully!');
+                toast.success(`${method} message sent successfully!`);
                 
                 // Try to refresh communication history (non-blocking)
                 try {

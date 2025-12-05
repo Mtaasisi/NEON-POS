@@ -48,7 +48,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, X, CheckCircle, User, Package, DollarSign } from 'lucide-react';
+import { ShoppingCart, X, CheckCircle, User, Package, DollarSign, Phone, Mail, Calendar, UserCircle } from 'lucide-react';
 import { useCustomers } from '../../../context/CustomersContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useBranch } from '../../../context/BranchContext';
@@ -133,6 +133,7 @@ import {
 import { useDynamicDelivery } from '../hooks/useDynamicDelivery';
 import { format } from '../lib/format';
 import { usePOSFeatures } from '../hooks/usePOSFeatures';
+import { SafeImage } from '../../../components/SafeImage';
 
 // Helper function to convert old image format to new format
 // const convertToProductImages = (imageUrls: string[]): ProductImage[] => {
@@ -3846,99 +3847,193 @@ const POSPageOptimized: React.FC = () => {
       {/* POS Sale Summary Modal */}
       {showPOSSummaryModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            {/* Header */}
-            <div className="bg-blue-600 p-8">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-lg">
-                  <ShoppingCart className="w-10 h-10 text-blue-600" />
-                </div>
+          <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col relative">
+            {/* Close Button */}
                 <button
+              type="button"
                   onClick={() => setShowPOSSummaryModal(false)}
-                  className="w-9 h-9 flex items-center justify-center bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors"
+              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
                 >
                   <X className="w-5 h-5" />
                 </button>
+
+            {/* Icon Header - Fixed */}
+            <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+              <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                {/* Icon */}
+                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                  <ShoppingCart className="w-8 h-8 text-white" />
               </div>
-              <h2 className="text-3xl font-bold text-white mb-2">
+                
+                {/* Text */}
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
                 Complete Sale
-              </h2>
-              <p className="text-blue-100">Review your sale details before processing payment</p>
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Review your sale details before processing payment
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Summary Content - Scrollable */}
-            <div className="p-8 overflow-y-auto flex-1">
+            <div className="flex-1 overflow-y-auto p-6">
               <div className="space-y-6">
-                {/* Customer Information */}
-                {selectedCustomer && (
-                  <div className="bg-gray-50 rounded-lg p-6">
+                {/* Customer & Sale Information - Combined */}
+                <div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                       <User className="w-5 h-5 text-blue-600" />
-                      Customer Information
+                    Sale Information
                     </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-500">Customer Name</p>
-                        <p className="font-semibold text-gray-900">{selectedCustomer.name}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {selectedCustomer && (
+                      <>
+                        <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
+                          <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                            <User className="w-5 h-5 text-blue-600" />
                       </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Contact</p>
-                        <p className="font-semibold text-gray-900">{selectedCustomer.phone || selectedCustomer.email || 'N/A'}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-gray-500 mb-1">Customer Name</p>
+                            <p className="font-semibold text-gray-900 truncate">{selectedCustomer.name}</p>
                       </div>
                     </div>
+                        <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
+                          <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
+                            {selectedCustomer.phone ? (
+                              <Phone className="w-5 h-5 text-green-600" />
+                            ) : (
+                              <Mail className="w-5 h-5 text-green-600" />
+                            )}
                   </div>
-                )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-gray-500 mb-1">Contact</p>
+                            <p className="font-semibold text-gray-900 truncate">{selectedCustomer.phone || selectedCustomer.email || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
+                      <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
+                        <Calendar className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-500 mb-1">Sale Date</p>
+                        <p className="font-semibold text-gray-900 text-sm">{new Date().toLocaleDateString('en-US', { 
+                          weekday: 'long', 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}</p>
+                      </div>
+                    </div>
+                    {currentUser && (
+                      <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
+                        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center">
+                          <UserCircle className="w-5 h-5 text-orange-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-gray-500 mb-1">Cashier</p>
+                          <p className="font-semibold text-gray-900 truncate">{currentUser.fullName || currentUser.email}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-                {/* Items Summary */}
-                <div className="bg-gray-50 rounded-lg p-6">
+                {/* Separator */}
+                <div className="border-b-2 border-gray-300 my-4"></div>
+
+                {/* Items Summary - With Thumbnails */}
+                <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                     <Package className="w-5 h-5 text-purple-600" />
-                    Sale Items
+                    Sale Items ({cartItems.length})
                   </h3>
                   
-                  <div className="space-y-3 mb-4">
+                  <div className="grid grid-cols-2 gap-3">
                     {cartItems.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-900">{item.productName}</p>
-                          <p className="text-sm text-gray-500">{item.variantName} • SKU: {item.sku}</p>
+                      <div
+                        key={item.id}
+                        className="p-3 cursor-pointer flex flex-col h-full bg-white rounded-xl border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all duration-200 shadow-sm relative"
+                      >
+                        {/* Quantity Badge */}
+                        <div className="absolute -top-2 -right-2 p-1.5 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-20 min-w-[2rem] min-h-[2rem] bg-gradient-to-r from-blue-500 to-blue-600">
+                          <span className="text-xs font-bold text-white whitespace-nowrap px-1">
+                            {item.quantity}
+                          </span>
                         </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-gray-900">Qty: {item.quantity}</p>
-                          <p className="text-sm text-gray-600">{format.money(item.unitPrice)} each</p>
+                        
+                        <div className="flex items-start gap-2 md:gap-3">
+                          {/* Thumbnail */}
+                          <div className="relative w-16 h-16 md:w-20 md:h-20 rounded-xl flex items-center justify-center flex-shrink-0">
+                            {item.image ? (
+                              <div className="w-full h-full rounded-xl overflow-hidden bg-gray-100 border border-gray-200">
+                                <SafeImage
+                                  src={item.image}
+                                  alt={item.productName}
+                                  className="w-full h-full object-cover rounded-xl"
+                                  fallbackText={item.productName.charAt(0).toUpperCase()}
+                                />
+                              </div>
+                            ) : (
+                              <div className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center w-full h-full">
+                                <Package className="w-8 h-8 md:w-10 md:h-10 text-gray-400" />
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex-1 min-w-0 flex flex-col justify-between">
+                            <div>
+                              <div className="font-medium text-gray-800 truncate text-sm md:text-base leading-tight" title={item.productName}>
+                                {item.productName}
+                              </div>
+                              {item.variantName && item.variantName !== 'Default' && (
+                                <p className="text-xs text-gray-500 mt-0.5 font-medium">
+                                  {item.variantName}
+                                </p>
+                              )}
+                            </div>
+                            <div className="mt-2">
+                              <div className="text-lg md:text-xl text-gray-700 font-bold">
+                                {format.money(item.totalPrice)}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                {format.money(item.unitPrice)} each
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                  
-                  <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
-                    <div className="text-center">
-                      <p className="text-sm text-gray-500 mb-1">Total Items</p>
-                      <p className="text-2xl font-bold text-gray-900">{cartItems.length}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-gray-500 mb-1">Total Quantity</p>
-                      <p className="text-2xl font-bold text-blue-600">
-                        {cartItems.reduce((sum, item) => sum + item.quantity, 0)}
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-gray-500 mb-1">Subtotal</p>
-                      <p className="text-2xl font-bold text-green-600">
-                        {format.money(totalAmount)}
-                      </p>
-                    </div>
-                  </div>
                 </div>
 
-                {/* Financial Summary */}
-                <div className="bg-blue-50 rounded-lg p-6 border-2 border-blue-200">
+                {/* Separator */}
+                <div className="border-b-2 border-gray-300 my-4"></div>
+
+                {/* Payment Summary - All totals here */}
+                <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                     <DollarSign className="w-5 h-5 text-blue-600" />
                     Payment Summary
                   </h3>
                   <div className="space-y-3">
-                    <div className="flex justify-between items-center">
+                    <div className="grid grid-cols-2 gap-4 pb-3 border-b border-gray-200">
+                      <div>
+                        <p className="text-sm text-gray-500">Total Items</p>
+                        <p className="text-xl font-bold text-gray-900">{cartItems.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Total Quantity</p>
+                        <p className="text-xl font-bold text-blue-600">
+                          {cartItems.reduce((sum, item) => sum + item.quantity, 0)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center pt-2">
                       <span className="text-gray-700">Subtotal</span>
                       <span className="font-semibold text-gray-900">{format.money(totalAmount)}</span>
                     </div>
@@ -3960,7 +4055,7 @@ const POSPageOptimized: React.FC = () => {
                         <span className="font-semibold text-gray-900">{format.money(taxAmount)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between items-center pt-3 border-t border-blue-200">
+                    <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
                       <span className="text-lg font-semibold text-gray-900">Total Amount</span>
                       <span className="text-2xl font-bold text-blue-600">
                         {format.money(tradeInDiscount > 0 ? finalAmount - tradeInDiscount : finalAmount)}
@@ -3968,46 +4063,22 @@ const POSPageOptimized: React.FC = () => {
                     </div>
                   </div>
                 </div>
-
-                {/* Additional Information */}
-                {(selectedCustomer || cartItems.some(item => item.notes)) && (
-                  <div className="bg-gray-50 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Additional Information</h3>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-sm text-gray-500">Sale Date</p>
-                        <p className="font-semibold text-gray-900">{new Date().toLocaleDateString('en-US', { 
-                          weekday: 'long', 
-                          year: 'numeric', 
-                          month: 'long', 
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}</p>
-                      </div>
-                      {currentUser && (
-                        <div>
-                          <p className="text-sm text-gray-500">Cashier</p>
-                          <p className="text-gray-900">{currentUser.fullName || currentUser.email}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="bg-gray-50 px-8 py-6 flex gap-4 border-t border-gray-200">
+            {/* Action Buttons - Fixed Footer */}
+            <div className="flex gap-3 pt-4 border-t border-gray-200 flex-shrink-0 bg-white px-6 pb-6">
               <button
+                type="button"
                 onClick={() => setShowPOSSummaryModal(false)}
-                className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 rounded-xl transition-colors font-semibold"
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleConfirmSaleSummary}
-                className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors font-semibold shadow-lg flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
               >
                 <CheckCircle className="w-5 h-5" />
                 Proceed to Payment

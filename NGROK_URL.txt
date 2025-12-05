@@ -1,0 +1,28 @@
+🌐 YOUR NGROK WEBHOOK URL:
+================================
+
+https://08202fbce9ef.ngrok-free.app/api/whatsapp/webhook
+
+================================
+
+📋 INSTRUCTIONS:
+
+1. Copy the URL above
+2. Go to: https://wasenderapi.com/whatsapp/37637/edit
+3. Find "Webhook URL (POST)" field
+4. Replace with the ngrok URL above
+5. Make sure "Enable Webhook Notifications" is checked
+6. Make sure "messages.received" is checked
+7. Click "Save Changes"
+8. Send test WhatsApp message
+9. Check your inbox!
+
+================================
+
+⚠️ IMPORTANT:
+- Keep ngrok running (terminal 34)
+- Keep backend running (terminal 31)
+- If you restart ngrok, URL will change!
+
+================================
+

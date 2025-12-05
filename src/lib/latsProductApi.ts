@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import { ImageUploadService } from './imageUpload';
 import { deduplicateRequest } from './requestDeduplication';
 import { getCachedQuery, invalidateCachePattern } from './queryCache';
+import { emergencyUrlCleanup } from '../features/lats/lib/imageUtils';
 
 // Use the main supabase client instead of creating a separate one
 // This ensures consistent configuration and avoids conflicts
@@ -1077,8 +1078,12 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
       productImagesArray.forEach(img => {
         if (img.is_primary) {
           const imageUrl = img.thumbnail_url || img.image_url;
-          if (imageUrl && !images.includes(imageUrl)) {
-            images.push(imageUrl);
+          if (imageUrl) {
+            // Apply emergency cleanup to prevent extremely long URLs
+            const cleanedUrl = emergencyUrlCleanup(imageUrl);
+            if (!images.includes(cleanedUrl)) {
+              images.push(cleanedUrl);
+            }
           }
         }
       });
@@ -1087,15 +1092,20 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
       productImagesArray.forEach(img => {
         if (!img.is_primary) {
           const imageUrl = img.thumbnail_url || img.image_url;
-          if (imageUrl && !images.includes(imageUrl)) {
-            images.push(imageUrl);
+          if (imageUrl) {
+            // Apply emergency cleanup to prevent extremely long URLs
+            const cleanedUrl = emergencyUrlCleanup(imageUrl);
+            if (!images.includes(cleanedUrl)) {
+              images.push(cleanedUrl);
+            }
           }
         }
       });
       
       // Finally, add image_url from products table as fallback if no images found
       if (images.length === 0 && product.image_url) {
-        images.push(product.image_url);
+        const cleanedUrl = emergencyUrlCleanup(product.image_url);
+        images.push(cleanedUrl);
       }
 
       const productVariants = variantsByProductId.get(product.id) || [];
@@ -1119,7 +1129,7 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
         barcode: product.barcode,
         specification: product.specification,
         images: images, // Add images array
-        image_url: images[0] || product.image_url || null, // Primary image for mobile display
+        image_url: images[0] || (product.image_url ? emergencyUrlCleanup(product.image_url) : null), // Primary image for mobile display (cleaned)
         categoryId: product.category_id,
         supplierId: product.supplier_id,
         isActive: product.is_active,

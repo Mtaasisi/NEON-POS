@@ -21,6 +21,7 @@ interface Props {
   csvRecipients: Array<{ phone: string; name: string }>;
   blacklist: BlacklistEntry[];
   savedLists: Array<{ id: string; name: string; recipients: string[]; createdAt: string }>;
+  sentPhones: string[]; // Track already-sent contacts to hide them
   
   // State
   campaignName: string;
@@ -66,6 +67,7 @@ export default function BulkStep1Enhanced(props: Props) {
     csvRecipients,
     blacklist,
     savedLists,
+    sentPhones,
     campaignName,
     recipientSearch,
     activeQuickFilter,
@@ -98,8 +100,14 @@ export default function BulkStep1Enhanced(props: Props) {
     isValidPhone
   } = props;
 
-  // Filter conversations based on search
+  // Filter conversations based on search AND exclude already-sent contacts
   const searchFilteredConversations = filteredConversations.filter(conv => {
+    // First, exclude contacts who already received the message
+    if (sentPhones.includes(conv.phone)) {
+      return false;
+    }
+    
+    // Then apply search filter
     if (!recipientSearch) return true;
     const search = recipientSearch.toLowerCase();
     return (
@@ -176,6 +184,23 @@ export default function BulkStep1Enhanced(props: Props) {
           title="Name your campaign for tracking and analytics"
         />
       </div>
+
+      {/* Already Sent Info Banner */}
+      {sentPhones.length > 0 && (
+        <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl">
+          <div className="flex items-start gap-3">
+            <CheckCheck className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-green-900 mb-1">
+                {sentPhones.length} Contact{sentPhones.length !== 1 ? 's' : ''} Already Sent
+              </h4>
+              <p className="text-sm text-green-700">
+                These contacts have been removed from the list below to prevent duplicate messages. Only pending recipients are shown.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Filters */}
       <div className="mb-6">
@@ -394,7 +419,7 @@ export default function BulkStep1Enhanced(props: Props) {
       <div>
         <div className="flex items-center justify-between mb-3">
           <label className="block text-sm font-medium text-gray-700">
-            Recipients ({selectedRecipients.length} selected)
+            {sentPhones.length > 0 ? 'Pending Recipients' : 'Recipients'} ({selectedRecipients.length} selected)
           </label>
           <div className="flex items-center gap-2">
             <button

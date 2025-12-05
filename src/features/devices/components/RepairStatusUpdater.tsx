@@ -768,8 +768,8 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
     setShowSMSModal(true);
   };
 
-  // Handle sending SMS
-  const handleSendSMS = async (type: 'sms' | 'whatsapp') => {
+  // Handle sending SMS with smart routing (WhatsApp first, SMS fallback)
+  const handleSendSMS = async (type: 'sms' | 'whatsapp' | 'smart') => {
     if (!smsMessage.trim()) {
       toast.error('Please enter a message');
       return;
@@ -789,8 +789,19 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
         return;
       }
 
-      // Send SMS or WhatsApp based on type
-      if (type === 'sms') {
+      // Use smart routing if requested
+      if (type === 'smart') {
+        const { smartNotificationService } = await import('../../../services/smartNotificationService');
+        const result = await smartNotificationService.sendNotification(customerData.phone, smsMessage);
+        
+        if (result.success) {
+          const method = result.method === 'whatsapp' ? 'WhatsApp' : 'SMS';
+          toast.success(`${method} message sent successfully`);
+        } else {
+          toast.error(`Failed to send message: ${result.error || 'Unknown error'}`);
+        }
+      } else if (type === 'sms') {
+        // Explicit SMS send
         const { default: smsService } = await import('../../../services/smsService');
         const result = await smsService.sendSMS(customerData.phone, smsMessage);
         if (result.success) {
@@ -799,7 +810,7 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
           toast.error(`SMS failed: ${result.error}`);
         }
       } else {
-        // For WhatsApp, use the WhatsApp service
+        // Explicit WhatsApp send
         const whatsappService = (await import('../../../services/whatsappService')).default;
         const result = await whatsappService.sendMessage(customerData.phone, smsMessage);
         if (result.success) {

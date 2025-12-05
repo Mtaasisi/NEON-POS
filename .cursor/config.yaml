@@ -1,0 +1,5 @@
+ai:
+  system_rules:
+    - "Do NOT create .md files."
+    - "Do NOT generate markdown files."
+    - "Only modify code files."
