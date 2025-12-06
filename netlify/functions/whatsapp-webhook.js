@@ -1,7 +1,10 @@
 /**
  * Netlify Serverless Function - WhatsApp Webhook Handler
  * Receives WhatsApp events from WasenderAPI
- * Stores in Neon PostgreSQL database (direct connection)
+ * Stores in Neon PostgreSQL DEVELOPMENT database (direct connection)
+ * 
+ * Database: Development (ep-icy-mouse-adshjg5n-pooler)
+ * Can be overridden by setting DATABASE_URL environment variable in Netlify
  * 
  * URL: https://your-site.netlify.app/.netlify/functions/whatsapp-webhook
  */
@@ -10,34 +13,106 @@ const { Pool } = require('pg');
 
 // Database connection configuration
 const getDatabaseConfig = () => {
-  // Use the specified Neon database connection
-  const dbUrl = 'postgresql://neondb_owner:npg_dMyv1cG4KSOR@ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+  // PRODUCTION DATABASE - Supabase PostgreSQL (default)
+  // Priority: 1. DATABASE_URL env var (if set in Netlify), 2. Production Supabase database (default)
+  const productionDbUrl = 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
+  
+  // Fallback to old Neon database if needed (for backward compatibility)
+  const fallbackDbUrl = 'postgresql://neondb_owner:npg_dMyv1cG4KSOR@ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+  
+  // Check for environment variable override (allows Netlify env vars to override)
+  const dbUrl = process.env.DATABASE_URL || productionDbUrl;
   
   // Log which database is being used (mask password for security)
   const dbUrlMasked = dbUrl.replace(/:[^:@]+@/, ':****@');
+  const envUsed = process.env.DATABASE_URL ? 'environment variable' : 'development database (default)';
+  const urlMatch = dbUrl.match(/@([^/]+)/);
+  const dbHost = urlMatch ? urlMatch[1] : 'unknown';
+  
   console.log('🔌 Database Connection:', dbUrlMasked);
-  console.log('🔌 Database Host: ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech');
+  console.log(`🔌 Using: ${envUsed}`);
+  console.log(`🔌 Database Host: ${dbHost}`);
+  console.log('🔌 Environment: PRODUCTION (Supabase)');
+  
+  // Determine SSL requirements based on database type
+  const isSupabase = dbUrl.includes('supabase.com');
+  const isNeon = dbUrl.includes('neon.tech');
   
   return {
     connectionString: dbUrl,
-    ssl: {
+    ssl: isSupabase ? {
+      rejectUnauthorized: false,
+      require: true
+    } : isNeon ? {
+      rejectUnauthorized: false
+    } : {
       rejectUnauthorized: false
     },
     max: 1, // Limit connections for serverless
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000
+    min: 0, // Don't keep idle connections
+    idleTimeoutMillis: 10000, // Close idle quickly
+    connectionTimeoutMillis: 30000, // 30s timeout
+    statement_timeout: 20000, // Query timeout
+    query_timeout: 20000,
+    // Additional options for better reliability
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000
   };
 };
 
-// Create connection pool
+// Create connection pool (singleton for serverless)
 let pool = null;
 
+const resetPool = () => {
+  if (pool) {
+    try {
+      // Don't end the pool, just mark it for recreation
+      // Ending the pool closes it permanently
+      pool = null;
+    } catch (e) {
+      pool = null;
+    }
+  }
+};
+
 const getPool = () => {
+  // For serverless, check if pool is valid before reusing
+  if (pool) {
+    // Check if pool is ended or invalid
+    try {
+      if (pool.ended || pool._ending) {
+        console.log('⚠️ Pool was ended, creating new pool...');
+        pool = null;
+      }
+    } catch (e) {
+      // If checking pool properties throws, pool is invalid
+      console.log('⚠️ Pool check failed, creating new pool...');
+      pool = null;
+    }
+  }
+  
   if (!pool) {
     const config = getDatabaseConfig();
-    pool = new Pool(config);
+    // Use smaller pool for serverless - connections are expensive
+    pool = new Pool({
+      ...config,
+      max: 1, // Single connection for serverless
+      min: 0, // Don't keep idle connections
+      idleTimeoutMillis: 10000, // Close idle connections quickly
+      connectionTimeoutMillis: 20000, // 20s timeout
+      allowExitOnIdle: true // Allow process to exit when idle
+    });
+    
+    // Handle pool errors
+    pool.on('error', (err) => {
+      console.error('❌ Unexpected pool error:', err);
+      // Reset pool on error to force reconnection
+      resetPool();
+    });
+    
     console.log('✅ PostgreSQL connection pool initialized');
   }
+  
   return pool;
 };
 
@@ -64,41 +139,97 @@ exports.handler = async (event, context) => {
 
   // Handle GET request - Health check
   if (event.httpMethod === 'GET') {
-    try {
-      const dbPool = getPool();
-      const result = await dbPool.query('SELECT NOW() as current_time');
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          status: 'healthy',
-          service: 'whatsapp-webhook',
-          timestamp: new Date().toISOString(),
-          environment: 'production',
-          message: 'WhatsApp webhook endpoint is active',
-          database_connected: true,
-          db_time: result.rows[0].current_time,
-          database_host: 'ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech',
-          database_name: 'neondb'
-        })
-      };
-    } catch (error) {
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          status: 'healthy',
-          service: 'whatsapp-webhook',
-          timestamp: new Date().toISOString(),
-          database_connected: false,
-          error: error.message
-        })
-      };
+    let client = null;
+    let retryCount = 0;
+    const maxRetries = 2;
+    
+    while (retryCount <= maxRetries) {
+      try {
+        // Always get a fresh pool for health check in serverless
+        resetPool();
+        const dbPool = getPool();
+        
+        // Get a client from the pool for health check
+        client = await dbPool.connect();
+        const result = await client.query('SELECT NOW() as current_time');
+        client.release();
+        
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            status: 'healthy',
+            service: 'whatsapp-webhook',
+            timestamp: new Date().toISOString(),
+            environment: 'production',
+            message: 'WhatsApp webhook endpoint is active',
+            database_connected: true,
+            db_time: result.rows[0].current_time,
+            database_host: 'aws-0-eu-north-1.pooler.supabase.com',
+            database_name: 'postgres',
+            database_type: 'production'
+          })
+        };
+      } catch (error) {
+        retryCount++;
+        
+        if (client) {
+          try {
+            client.release();
+          } catch (e) {
+            // Ignore release errors
+          }
+          client = null;
+        }
+        
+        // Reset pool on error to force recreation
+        resetPool();
+        
+        // If we've exhausted retries, return error status
+        if (retryCount > maxRetries) {
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              status: 'healthy',
+              service: 'whatsapp-webhook',
+              timestamp: new Date().toISOString(),
+              database_connected: false,
+              error: error.message,
+              retries: retryCount
+            })
+          };
+        }
+        
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
     }
   }
 
   // Handle POST request - Webhook event
   if (event.httpMethod === 'POST') {
+    // Log incoming request for debugging
+    console.log('📥 POST Request Received:', {
+      timestamp: new Date().toISOString(),
+      hasBody: !!event.body,
+      bodyType: typeof event.body,
+      bodyLength: event.body ? (typeof event.body === 'string' ? event.body.length : JSON.stringify(event.body).length) : 0,
+      headers: {
+        'content-type': event.headers['content-type'] || event.headers['Content-Type'] || 'not set',
+        'user-agent': event.headers['user-agent'] || event.headers['User-Agent'] || 'not set'
+      }
+    });
+
+    // Try to parse and log event type immediately
+    try {
+      const webhookData = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+      const eventType = webhookData?.event || 'unknown';
+      console.log('📨 Event Type Detected:', eventType);
+    } catch (parseError) {
+      console.warn('⚠️ Could not parse body for logging:', parseError.message);
+    }
+
     // ALWAYS return 200 OK first (required by WasenderAPI)
     const response = {
       statusCode: 200,
@@ -111,7 +242,11 @@ exports.handler = async (event, context) => {
 
     // Process webhook asynchronously (don't block response)
     processWebhookAsync(event.body).catch(err => {
-      console.error('❌ Error processing webhook:', err.message);
+      console.error('❌ Error processing webhook:', {
+        message: err.message,
+        stack: err.stack,
+        bodyPreview: typeof event.body === 'string' ? event.body.substring(0, 200) : JSON.stringify(event.body).substring(0, 200)
+      });
     });
 
     return response;
@@ -129,15 +264,57 @@ exports.handler = async (event, context) => {
  * Process webhook events asynchronously
  */
 async function processWebhookAsync(body) {
-  const client = await getPool().connect();
+  let client = null;
   
   try {
-    const webhookData = typeof body === 'string' ? JSON.parse(body) : body;
+    // Get connection with timeout handling
+    const pool = getPool();
+    console.log('🔌 Attempting database connection...');
+    
+    // Set a timeout for the connection attempt
+    console.log('⏳ Waiting for database connection (max 25s)...');
+    const connectionPromise = pool.connect();
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Connection timeout after 25s')), 25000)
+    );
+    
+    try {
+      client = await Promise.race([connectionPromise, timeoutPromise]);
+      console.log('✅ Database connection acquired successfully');
+    } catch (connError) {
+      console.error('❌ Failed to acquire database connection:', {
+        message: connError.message,
+        code: connError.code,
+        errno: connError.errno
+      });
+      // Reset pool reference to force recreation on next request
+      // Don't call pool.end() as it closes the pool permanently
+      resetPool();
+      throw connError;
+    }
+    // Parse body - Netlify may pass it as a string
+    let webhookData;
+    try {
+      webhookData = typeof body === 'string' ? JSON.parse(body) : body;
+    } catch (parseError) {
+      console.error('❌ Failed to parse webhook body:', parseError.message);
+      console.error('❌ Body type:', typeof body);
+      console.error('❌ Body preview:', typeof body === 'string' ? body.substring(0, 200) : JSON.stringify(body).substring(0, 200));
+      throw new Error(`Invalid JSON body: ${parseError.message}`);
+    }
+
+    if (!webhookData) {
+      console.error('❌ Webhook data is null or undefined');
+      throw new Error('Webhook data is null');
+    }
+
     const eventType = webhookData.event || 'unknown';
 
     console.log('📨 WhatsApp Webhook Event:', {
       event: eventType,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      hasData: !!webhookData.data,
+      dataKeys: webhookData.data ? Object.keys(webhookData.data) : []
     });
 
     switch (eventType) {
@@ -193,7 +370,14 @@ async function processWebhookAsync(body) {
       console.error('❌ Could not log webhook failure:', logError);
     }
   } finally {
-    client.release();
+    if (client) {
+      try {
+        client.release();
+        console.log('✅ Database connection released');
+      } catch (releaseError) {
+        console.error('⚠️ Error releasing connection:', releaseError.message);
+      }
+    }
   }
 }
 
@@ -230,7 +414,7 @@ async function handleIncomingMessage(client, data) {
       return;
     }
 
-    // Find customer by phone number
+    // Find customer by phone number (with timeout)
     let customer = null;
     try {
       const phoneVariants = [
@@ -248,32 +432,49 @@ async function handleIncomingMessage(client, data) {
         LIMIT 1
       `;
       
-      const result = await client.query(query, [...phoneVariants, ...phoneVariants]);
+      // Add query timeout
+      const queryPromise = client.query(query, [...phoneVariants, ...phoneVariants]);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Customer lookup timeout')), 5000)
+      );
+      
+      const result = await Promise.race([queryPromise, timeoutPromise]);
       
       if (result.rows && result.rows.length > 0) {
         customer = result.rows[0];
         console.log(`👤 Customer found: ${customer.name}`);
+      } else {
+        console.log(`ℹ️ No customer found for phone: ${cleanPhone}`);
       }
     } catch (err) {
-      console.warn('⚠️ Error finding customer:', err.message);
+      console.warn('⚠️ Error finding customer (continuing without customer):', err.message);
+      // Continue without customer - message will still be stored
     }
 
-    // Store incoming message
-    const insertResult = await client.query(
-      `INSERT INTO whatsapp_incoming_messages 
-       (message_id, from_phone, customer_id, message_text, message_type, media_url, received_at, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-       ON CONFLICT (message_id) DO NOTHING`,
-      [
-        messageId,
-        cleanPhone,
-        customer?.id || null,
-        messageText.substring(0, 5000),
-        messageType,
-        message.image || message.video || message.document || message.audio || null,
-        timestamp
-      ]
+    // Store incoming message (with timeout)
+    console.log('💾 Storing message in database...');
+    const insertQuery = `
+      INSERT INTO whatsapp_incoming_messages 
+      (message_id, from_phone, customer_id, message_text, message_type, media_url, received_at, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      ON CONFLICT (message_id) DO NOTHING
+    `;
+    const insertParams = [
+      messageId,
+      cleanPhone,
+      customer?.id || null,
+      messageText.substring(0, 5000),
+      messageType,
+      message.image || message.video || message.document || message.audio || null,
+      timestamp
+    ];
+    
+    const insertPromise = client.query(insertQuery, insertParams);
+    const insertTimeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Insert query timeout')), 10000)
     );
+    
+    const insertResult = await Promise.race([insertPromise, insertTimeout]);
 
     if (insertResult.rowCount === 0) {
       console.log('ℹ️ Duplicate message ignored:', messageId);
