@@ -48,7 +48,8 @@ import {
   Shield,
   Globe,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Image as ImageIcon
 } from 'lucide-react';
 
 import GlassButton from '../features/shared/components/ui/GlassButton';
@@ -434,6 +435,15 @@ const AppLayout: React.FC = () => {
         path: '/admin/error-logs',
         label: 'Error Logs',
         icon: <AlertCircle size={20} strokeWidth={1.5} />,
+        roles: ['admin'],
+        count: 0
+      },
+
+      // Test Pages
+      {
+        path: '/test-png-generation',
+        label: 'PNG Test',
+        icon: <ImageIcon size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0
       }

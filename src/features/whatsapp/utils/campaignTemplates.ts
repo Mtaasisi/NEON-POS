@@ -37,14 +37,38 @@ const TEMPLATES_STORAGE_KEY = 'whatsapp_campaign_templates';
 
 /**
  * Get all saved templates
+ * Returns templates sorted by most recently used, then by creation date
  */
 export function getAllTemplates(): CampaignTemplate[] {
   try {
     const stored = localStorage.getItem(TEMPLATES_STORAGE_KEY);
-    if (!stored) return [];
-    return JSON.parse(stored);
+    if (!stored) {
+      console.log('📋 No templates found in storage');
+      return [];
+    }
+    
+    const templates: CampaignTemplate[] = JSON.parse(stored);
+    
+    // Sort templates: most used first, then by last used date, then by creation date
+    const sorted = templates.sort((a, b) => {
+      // First sort by use count (descending)
+      if (b.useCount !== a.useCount) {
+        return b.useCount - a.useCount;
+      }
+      // Then by last used date (most recent first)
+      if (a.lastUsed && b.lastUsed) {
+        return new Date(b.lastUsed).getTime() - new Date(a.lastUsed).getTime();
+      }
+      if (a.lastUsed) return -1;
+      if (b.lastUsed) return 1;
+      // Finally by creation date (most recent first)
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+    
+    console.log(`✅ Loaded ${sorted.length} template(s) from storage`);
+    return sorted;
   } catch (error) {
-    console.error('Error loading templates:', error);
+    console.error('❌ Error loading templates:', error);
     return [];
   }
 }
@@ -112,4 +136,23 @@ export function incrementTemplateUse(id: string): void {
     useCount: template.useCount + 1,
     lastUsed: new Date().toISOString()
   });
+}
+
+/**
+ * Get template statistics
+ */
+export function getTemplateStats() {
+  const templates = getAllTemplates();
+  return {
+    total: templates.length,
+    totalUses: templates.reduce((sum, t) => sum + t.useCount, 0),
+    mostUsed: templates.length > 0 ? templates[0] : null,
+    recentlyUsed: templates.filter(t => t.lastUsed).sort((a, b) => 
+      new Date(b.lastUsed!).getTime() - new Date(a.lastUsed!).getTime()
+    ).slice(0, 5),
+    byType: templates.reduce((acc, t) => {
+      acc[t.messageType] = (acc[t.messageType] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>)
+  };
 }

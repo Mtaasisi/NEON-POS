@@ -1938,6 +1938,19 @@ class SaleProcessingService {
           console.warn('⚠️ Failed to invalidate workflow cache:', error);
         }
         
+        // Check for low stock and send WhatsApp notifications (non-blocking)
+        try {
+          if (variantIds.length > 0) {
+            const { inventoryNotificationService } = await import('../services/inventoryNotificationService');
+            const notificationResult = await inventoryNotificationService.checkAndNotifyLowStock(variantIds);
+            if (notificationResult.notified > 0) {
+              console.log(`📱 Sent ${notificationResult.notified} low stock WhatsApp notification(s)`);
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to check/send low stock notifications:', error);
+        }
+        
         // ⚠️ CRITICAL FIX: Emit a SINGLE stock update event instead of multiple
         // This prevents cascading reloads and infinite loops
         try {
@@ -2161,6 +2174,57 @@ class SaleProcessingService {
         console.warn('⚠️ Could not load business info for notification, using defaults');
       }
 
+      // Check if this is an installment sale and get installment plan details
+      const isInstallment = typeof sale.paymentMethod === 'object' && sale.paymentMethod.type === 'installment';
+      let paidAmount = sale.total;
+      let balanceAmount = 0;
+      
+      if (isInstallment && sale.id) {
+        try {
+          // Fetch installment plan by sale_id
+          const { supabase } = await import('../lib/supabaseClient');
+          const { data: installmentPlan, error: planError } = await supabase
+            .from('customer_installment_plans')
+            .select('total_paid, balance_due, down_payment')
+            .eq('sale_id', sale.id)
+            .single();
+          
+          if (!planError && installmentPlan) {
+            // Use actual paid amount and balance from installment plan
+            paidAmount = Number(installmentPlan.total_paid || installmentPlan.down_payment || 0);
+            balanceAmount = Number(installmentPlan.balance_due || 0);
+            console.log('📊 [Invoice] Installment sale detected:', {
+              total: sale.total,
+              paid: paidAmount,
+              balance: balanceAmount
+            });
+          }
+        } catch (error) {
+          console.warn('⚠️ Could not fetch installment plan details, using default values:', error);
+        }
+      }
+
+      // Get sale date - use createdAt, created_at, or current date as fallback
+      let saleDate: Date;
+      if ((sale as any).createdAt) {
+        saleDate = new Date((sale as any).createdAt);
+      } else if ((sale as any).created_at) {
+        saleDate = new Date((sale as any).created_at);
+      } else if ((sale as any).soldAt) {
+        saleDate = new Date((sale as any).soldAt);
+      } else {
+        saleDate = new Date();
+      }
+
+      // Format date safely
+      let formattedDate: string;
+      if (isNaN(saleDate.getTime())) {
+        formattedDate = new Date().toLocaleDateString();
+        console.warn('⚠️ Invalid sale date, using current date');
+      } else {
+        formattedDate = saleDate.toLocaleDateString();
+      }
+
       // Prepare invoice data
       const invoiceData = {
         invoice_no: sale.saleNumber,
@@ -2179,9 +2243,9 @@ class SaleProcessingService {
         tax: sale.tax,
         discount: sale.discount,
         total: sale.total,
-        paid: sale.total,
-        balance: 0,
-        date: new Date(sale.soldAt).toLocaleDateString(),
+        paid: paidAmount,
+        balance: balanceAmount,
+        date: formattedDate,
         payment_method: typeof sale.paymentMethod === 'object' ? sale.paymentMethod.type : sale.paymentMethod
       };
 
@@ -2264,6 +2328,57 @@ class SaleProcessingService {
         console.warn('⚠️ Could not load business info for WhatsApp, using defaults');
       }
 
+      // Check if this is an installment sale and get installment plan details
+      const isInstallment = typeof sale.paymentMethod === 'object' && sale.paymentMethod.type === 'installment';
+      let paidAmount = sale.total;
+      let balanceAmount = 0;
+      
+      if (isInstallment && sale.id) {
+        try {
+          // Fetch installment plan by sale_id
+          const { supabase } = await import('../lib/supabaseClient');
+          const { data: installmentPlan, error: planError } = await supabase
+            .from('customer_installment_plans')
+            .select('total_paid, balance_due, down_payment')
+            .eq('sale_id', sale.id)
+            .single();
+          
+          if (!planError && installmentPlan) {
+            // Use actual paid amount and balance from installment plan
+            paidAmount = Number(installmentPlan.total_paid || installmentPlan.down_payment || 0);
+            balanceAmount = Number(installmentPlan.balance_due || 0);
+            console.log('📊 [Invoice] Installment sale detected:', {
+              total: sale.total,
+              paid: paidAmount,
+              balance: balanceAmount
+            });
+          }
+        } catch (error) {
+          console.warn('⚠️ Could not fetch installment plan details, using default values:', error);
+        }
+      }
+
+      // Get sale date - use createdAt, created_at, or current date as fallback
+      let saleDate: Date;
+      if ((sale as any).createdAt) {
+        saleDate = new Date((sale as any).createdAt);
+      } else if ((sale as any).created_at) {
+        saleDate = new Date((sale as any).created_at);
+      } else if ((sale as any).soldAt) {
+        saleDate = new Date((sale as any).soldAt);
+      } else {
+        saleDate = new Date();
+      }
+
+      // Format date safely
+      let formattedDate: string;
+      if (isNaN(saleDate.getTime())) {
+        formattedDate = new Date().toLocaleDateString();
+        console.warn('⚠️ Invalid sale date, using current date');
+      } else {
+        formattedDate = saleDate.toLocaleDateString();
+      }
+
       // Prepare invoice data for WhatsApp
       const invoiceData = {
         invoice_no: sale.saleNumber,
@@ -2274,7 +2389,7 @@ class SaleProcessingService {
         customer_phone: sale.customerPhone!,
         customer_email: sale.customerEmail,
         items: sale.items.map(item => ({
-          name: `${item.productName} (${item.variantName})`,
+          name: `${item.productName}${item.variantName ? ` (${item.variantName})` : ''}`,
           quantity: item.quantity,
           price: item.totalPrice
         })),
@@ -2282,9 +2397,9 @@ class SaleProcessingService {
         tax: sale.tax,
         discount: sale.discount,
         total: sale.total,
-        paid: sale.total,
-        balance: 0,
-        date: new Date(sale.soldAt).toLocaleDateString(),
+        paid: paidAmount,
+        balance: balanceAmount,
+        date: formattedDate,
         payment_method: typeof sale.paymentMethod === 'object' ? sale.paymentMethod.type : sale.paymentMethod
       };
 

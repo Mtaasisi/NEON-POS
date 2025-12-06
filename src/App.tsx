@@ -128,6 +128,7 @@ const CustomerLoyaltyPage = lazy(() => import('./features/customer-portal/pages/
 const TestImageUpload = lazy(() => import('./pages/TestImageUpload'));
 const BackgroundRemovalPage = lazy(() => import('./pages/BackgroundRemovalPage'));
 const UnifiedLoadingExample = lazy(() => import('./features/shared/components/examples/UnifiedLoadingExample'));
+const PNGGenerationTest = lazy(() => import('./components/ui/PNGGenerationTest'));
 
 // Mobile App Pages
 const MobileLayout = lazy(() => import('./features/mobile/components/MobileLayout'));
@@ -1098,6 +1099,12 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
         <Route path="/test-loading" element={
           <Suspense fallback={<DynamicPageLoader />}>
             <UnifiedLoadingExample />
+          </Suspense>
+        } />
+        
+        <Route path="/test-png-generation" element={
+          <Suspense fallback={<DynamicPageLoader />}>
+            <PNGGenerationTest />
           </Suspense>
         } />
         

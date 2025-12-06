@@ -24,7 +24,7 @@ export interface WhatsAppCampaign {
   completed_at?: string;
   duration_seconds?: number;
   
-  status: 'draft' | 'sending' | 'completed' | 'failed' | 'paused';
+  status: 'draft' | 'pending' | 'sending' | 'completed' | 'failed' | 'paused';
   
   created_by?: string;
   created_at: string;

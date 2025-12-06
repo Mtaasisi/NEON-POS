@@ -59,20 +59,28 @@ export default function WhatsAppSessionModal({ isOpen, onClose, onSessionConnect
         setSessions(result.data);
         setIntegrationNotConfigured(false);
       } else {
-        // Check if error is about missing integration
-        if (result.error?.includes('not configured')) {
+        // Check if error is about missing/disabled integration or authentication
+        const errorMsg = result.error || '';
+        if (errorMsg.includes('not configured') || 
+            errorMsg.includes('disabled') || 
+            errorMsg.includes('Authentication failed') ||
+            errorMsg.includes('API token is missing')) {
           setIntegrationNotConfigured(true);
         } else {
-          toast.error(result.error || 'Failed to load sessions');
+          toast.error(errorMsg || 'Failed to load sessions');
         }
       }
     } catch (error: any) {
-      // Check if error is about missing integration
-      if (error?.message?.includes('not configured')) {
+      // Check if error is about missing/disabled integration or authentication
+      const errorMsg = error?.message || '';
+      if (errorMsg.includes('not configured') || 
+          errorMsg.includes('disabled') || 
+          errorMsg.includes('Authentication failed') ||
+          errorMsg.includes('API token is missing')) {
         setIntegrationNotConfigured(true);
       } else {
         console.error('Error loading sessions:', error);
-        toast.error('Failed to load sessions');
+        toast.error(errorMsg || 'Failed to load sessions');
       }
     } finally {
       setLoading(false);

@@ -36,6 +36,7 @@ export default function MediaLibraryModal({ isOpen, onClose, onSelect }: Props) 
   const [imageLoadErrors, setImageLoadErrors] = useState<Set<string>>(new Set());
   const [imageLoading, setImageLoading] = useState<Set<string>>(new Set());
   const [showBackupRestore, setShowBackupRestore] = useState(false);
+  const [retriedMedia, setRetriedMedia] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (isOpen) {
@@ -44,6 +45,7 @@ export default function MediaLibraryModal({ isOpen, onClose, onSelect }: Props) 
       // Reset image states when modal opens
       setImageLoadErrors(new Set());
       setImageLoading(new Set());
+      setRetriedMedia(new Set());
     }
   }, [isOpen]);
 
@@ -58,38 +60,104 @@ export default function MediaLibraryModal({ isOpen, onClose, onSelect }: Props) 
   }, [media]);
 
   async function loadMedia() {
+    console.log('🔍 [DEBUG] loadMedia() called');
+    const startTime = performance.now();
     try {
       setLoading(true);
+      console.log('📥 [DEBUG] Calling whatsappAdvancedService.mediaLibrary.getAll()...');
       const data = await whatsappAdvancedService.mediaLibrary.getAll();
       
       // Media URLs are already resolved by the service
       // Each item's file_url is either a base64 data URL or a relative path
-      console.log(`✅ Loaded ${data.length} media items from library`);
+      const duration = (performance.now() - startTime).toFixed(2);
+      console.log(`✅ [DEBUG] Loaded ${data.length} media items from library in ${duration}ms`);
+      console.log('📊 [DEBUG] Media items breakdown:', {
+        total: data.length,
+        images: data.filter(m => m.file_type === 'image').length,
+        videos: data.filter(m => m.file_type === 'video').length,
+        documents: data.filter(m => m.file_type === 'document').length,
+        audio: data.filter(m => m.file_type === 'audio').length,
+      });
+      console.log('📋 [DEBUG] First 3 items:', data.slice(0, 3).map(item => ({
+        id: item.id,
+        name: item.name,
+        file_type: item.file_type,
+        file_url_preview: item.file_url?.substring(0, 50) + '...',
+        folder: item.folder
+      })));
       
       setMedia(data);
-    } catch (error) {
-      console.error('Error loading media:', error);
+      console.log('✅ [DEBUG] Media state updated successfully');
+    } catch (error: any) {
+      const duration = (performance.now() - startTime).toFixed(2);
+      console.error('❌ [DEBUG] Error loading media after', duration, 'ms:', error);
+      console.error('❌ [DEBUG] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       toast.error('Failed to load media library');
     } finally {
       setLoading(false);
+      console.log('🏁 [DEBUG] loadMedia() completed, loading state set to false');
     }
   }
 
   async function loadFolders() {
+    console.log('🔍 [DEBUG] loadFolders() called');
     try {
+      console.log('📥 [DEBUG] Calling whatsappAdvancedService.mediaLibrary.getFolders()...');
       const data = await whatsappAdvancedService.mediaLibrary.getFolders();
-      setFolders(['All', ...data]);
-    } catch (error) {
-      console.error('Error loading folders:', error);
+      console.log('📁 [DEBUG] Received folders from service:', data);
+      const allFolders = ['All', ...data];
+      console.log('📁 [DEBUG] Setting folders state:', allFolders);
+      setFolders(allFolders);
+      console.log('✅ [DEBUG] Folders loaded successfully');
+    } catch (error: any) {
+      console.error('❌ [DEBUG] Error loading folders:', error);
+      console.error('❌ [DEBUG] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
     }
   }
 
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    console.log('🔍 [DEBUG] handleUpload() called');
+    const startTime = performance.now();
     const file = event.target.files?.[0];
-    if (!file) return;
+    
+    console.log('📄 [DEBUG] File input event:', {
+      filesCount: event.target.files?.length || 0,
+      selectedFile: file ? {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        lastModified: new Date(file.lastModified).toISOString()
+      } : null
+    });
+    
+    if (!file) {
+      console.warn('⚠️ [DEBUG] No file selected, returning early');
+      return;
+    }
 
     // Validate file size (max 16MB for WhatsApp)
-    if (file.size > 16 * 1024 * 1024) {
+    const maxSize = 16 * 1024 * 1024;
+    console.log('📏 [DEBUG] Validating file size:', {
+      fileSize: file.size,
+      maxSize: maxSize,
+      sizeInMB: (file.size / 1024 / 1024).toFixed(2),
+      isValid: file.size <= maxSize
+    });
+    
+    if (file.size > maxSize) {
+      console.error('❌ [DEBUG] File too large:', {
+        fileSize: file.size,
+        maxSize: maxSize,
+        exceedsBy: ((file.size - maxSize) / 1024 / 1024).toFixed(2) + 'MB'
+      });
       toast.error('File too large. Maximum 16MB for WhatsApp.');
       return;
     }
@@ -98,33 +166,97 @@ export default function MediaLibraryModal({ isOpen, onClose, onSelect }: Props) 
       setUploading(true);
       const folder = selectedFolder === 'All' ? 'General' : selectedFolder;
       
-      console.log('📤 Starting media upload to library:', { fileName: file.name, folder, size: file.size });
+      console.log('📤 [DEBUG] Starting media upload to library:', { 
+        fileName: file.name, 
+        fileType: file.type,
+        fileSize: file.size,
+        sizeInMB: (file.size / 1024 / 1024).toFixed(2),
+        folder,
+        selectedFolder,
+        timestamp: new Date().toISOString()
+      });
       
-      await whatsappAdvancedService.mediaLibrary.upload(file, folder);
+      console.log('📥 [DEBUG] Calling whatsappAdvancedService.mediaLibrary.upload()...');
+      const uploadStartTime = performance.now();
+      const result = await whatsappAdvancedService.mediaLibrary.upload(file, folder);
+      const uploadDuration = (performance.now() - uploadStartTime).toFixed(2);
+      
+      console.log('✅ [DEBUG] Upload completed in', uploadDuration, 'ms');
+      console.log('📦 [DEBUG] Upload result:', {
+        id: result.id,
+        name: result.name,
+        file_type: result.file_type,
+        file_url_preview: result.file_url?.substring(0, 100) + '...',
+        folder: result.folder,
+        file_size: result.file_size
+      });
       
       toast.success('Media uploaded successfully!');
-      console.log('✅ Media uploaded to library successfully');
+      console.log('✅ [DEBUG] Media uploaded to library successfully');
       
-      loadMedia();
+      console.log('🔄 [DEBUG] Reloading media list...');
+      await loadMedia();
+      
+      const totalDuration = (performance.now() - startTime).toFixed(2);
+      console.log('✅ [DEBUG] handleUpload() completed successfully in', totalDuration, 'ms');
     } catch (error: any) {
-      console.error('❌ Media library upload error:', error);
+      const duration = (performance.now() - startTime).toFixed(2);
+      console.error('❌ [DEBUG] Media library upload error after', duration, 'ms:', error);
+      console.error('❌ [DEBUG] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
+      });
       const errorMessage = error.message || 'Upload failed';
       toast.error(`Upload failed: ${errorMessage}`);
     } finally {
       setUploading(false);
       // Reset file input
       event.target.value = '';
+      console.log('🏁 [DEBUG] handleUpload() cleanup completed, uploading state set to false');
     }
   }
 
   async function handleDelete(mediaId: string) {
-    if (!confirm('Delete this media file?')) return;
+    console.log('🔍 [DEBUG] handleDelete() called for mediaId:', mediaId);
+    
+    const mediaItem = media.find(m => m.id === mediaId);
+    console.log('📄 [DEBUG] Media item to delete:', mediaItem ? {
+      id: mediaItem.id,
+      name: mediaItem.name,
+      file_type: mediaItem.file_type,
+      file_url: mediaItem.file_url?.substring(0, 50) + '...',
+      folder: mediaItem.folder
+    } : 'NOT FOUND');
+    
+    if (!confirm('Delete this media file?')) {
+      console.log('🚫 [DEBUG] User cancelled deletion');
+      return;
+    }
 
+    const startTime = performance.now();
     try {
+      console.log('🗑️ [DEBUG] Calling whatsappAdvancedService.mediaLibrary.delete()...');
       await whatsappAdvancedService.mediaLibrary.delete(mediaId);
+      const duration = (performance.now() - startTime).toFixed(2);
+      console.log('✅ [DEBUG] Delete completed in', duration, 'ms');
       toast.success('Media deleted');
-      loadMedia();
-    } catch (error) {
+      
+      console.log('🔄 [DEBUG] Reloading media list after deletion...');
+      await loadMedia();
+      console.log('✅ [DEBUG] handleDelete() completed successfully');
+    } catch (error: any) {
+      const duration = (performance.now() - startTime).toFixed(2);
+      console.error('❌ [DEBUG] Delete error after', duration, 'ms:', error);
+      console.error('❌ [DEBUG] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        mediaId
+      });
       toast.error('Delete failed');
     }
   }
@@ -138,28 +270,93 @@ export default function MediaLibraryModal({ isOpen, onClose, onSelect }: Props) 
   }
 
   const handleImageLoad = (itemId: string) => {
+    console.log('🖼️ [DEBUG] handleImageLoad() called for itemId:', itemId);
+    const mediaItem = media.find(m => m.id === itemId);
+    console.log('🖼️ [DEBUG] Image loaded successfully:', {
+      itemId,
+      name: mediaItem?.name,
+      file_url_preview: mediaItem?.file_url?.substring(0, 50) + '...'
+    });
     setImageLoading(prev => {
       const newSet = new Set(prev);
       newSet.delete(itemId);
+      console.log('🖼️ [DEBUG] Updated imageLoading state, remaining:', Array.from(newSet));
       return newSet;
     });
   };
 
   const handleImageError = (itemId: string, url: string) => {
-    console.error(`Failed to load image for item: ${itemId}`);
-    console.error(`Image URL:`, url.substring(0, 100) + '...');
-    console.error(`URL type:`, url.startsWith('data:') ? 'data URL' : url.startsWith('http') ? 'HTTP URL' : 'local path');
+    console.log('❌ [DEBUG] handleImageError() called for itemId:', itemId);
+    console.log('❌ [DEBUG] Error details:', {
+      itemId,
+      url: url?.substring(0, 100) + '...',
+      alreadyRetried: retriedMedia.has(itemId),
+      retriedCount: retriedMedia.size
+    });
+    
+    const mediaItem = media.find(m => m.id === itemId);
+    console.log('📄 [DEBUG] Media item with error:', mediaItem ? {
+      id: mediaItem.id,
+      name: mediaItem.name,
+      file_type: mediaItem.file_type,
+      file_url: mediaItem.file_url?.substring(0, 50) + '...',
+      folder: mediaItem.folder
+    } : 'NOT FOUND');
+    
+    // Prevent infinite retry loops - if we've already retried this item, just mark it as error
+    if (retriedMedia.has(itemId)) {
+      console.log('⚠️ [DEBUG] Already retried this item, marking as error');
+      setImageLoadErrors(prev => new Set(prev).add(itemId));
+      setImageLoading(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(itemId);
+        return newSet;
+      });
+      return;
+    }
+
+    // If URL is already a fallback path (starts with /media/whatsapp), don't try to reload
+    // This means we've already tried localStorage and it's not there
+    if (url.startsWith('/media/whatsapp/')) {
+      // Extract relative path and check localStorage silently one more time
+      const relativePath = url.replace(/^\/media\/whatsapp\//, '');
+      const storedUrl = localMediaStorage.getMediaUrl(relativePath, true); // silent mode
+      
+      // If still not found, mark as error
+      if (!storedUrl || storedUrl === url || !storedUrl.startsWith('data:')) {
+        setRetriedMedia(prev => new Set(prev).add(itemId));
+        setImageLoadErrors(prev => new Set(prev).add(itemId));
+        setImageLoading(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(itemId);
+          return newSet;
+        });
+        return;
+      }
+      
+      // Found in localStorage, update and retry
+      setRetriedMedia(prev => new Set(prev).add(itemId));
+      setMedia(prev => prev.map(item => 
+        item.id === itemId ? { ...item, file_url: storedUrl } : item
+      ));
+      return;
+    }
     
     // Try to reload from local storage if it's not a data URL
-    const mediaItem = media.find(m => m.id === itemId);
     if (mediaItem && !url.startsWith('data:')) {
-      // Try to get the media from local storage using the relative path stored in database
-      const originalPath = mediaItem.file_url.replace(/^\/media\/whatsapp\//, '');
-      const storedUrl = localMediaStorage.getMediaUrl(originalPath);
+      // Extract relative path from the stored file_url
+      // Handle both formats: relative path or full path
+      let originalPath = mediaItem.file_url;
+      if (originalPath.startsWith('/media/whatsapp/')) {
+        originalPath = originalPath.replace(/^\/media\/whatsapp\//, '');
+      }
       
-      if (storedUrl && storedUrl !== url) {
-        console.log('🔄 Found media in local storage, trying to reload');
-        // Update the media item with the stored URL and trigger a re-render
+      // Try to get from localStorage (silent mode to avoid duplicate warnings)
+      const storedUrl = localMediaStorage.getMediaUrl(originalPath, true);
+      
+      if (storedUrl && storedUrl !== url && storedUrl.startsWith('data:')) {
+        // Found in localStorage, update and retry
+        setRetriedMedia(prev => new Set(prev).add(itemId));
         setMedia(prev => prev.map(item => 
           item.id === itemId ? { ...item, file_url: storedUrl } : item
         ));
@@ -167,6 +364,8 @@ export default function MediaLibraryModal({ isOpen, onClose, onSelect }: Props) 
       }
     }
     
+    // Mark as retried and error
+    setRetriedMedia(prev => new Set(prev).add(itemId));
     setImageLoadErrors(prev => new Set(prev).add(itemId));
     setImageLoading(prev => {
       const newSet = new Set(prev);

@@ -3,16 +3,18 @@
  * Beautiful modal for sharing receipts via WhatsApp, SMS, Email, etc.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, MessageCircle, Mail, Send, Copy, Download, Share2, Loader2, Printer } from 'lucide-react';
+import { X, MessageCircle, Mail, Send, Copy, Download, Share2, Loader2, Printer, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { smsService } from '../../services/smsService';
+import whatsappService from '../../services/whatsappService';
 import SuccessModal from './SuccessModal';
 import { useSuccessModal } from '../../hooks/useSuccessModal';
 import { SuccessIcons } from './SuccessModalIcons';
 import { useBusinessInfo } from '../../hooks/useBusinessInfo';
 import { formatContactForInvoice } from '../../utils/formatPhoneForInvoice';
+import { supabase } from '../../lib/supabaseClient';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -24,6 +26,10 @@ interface ShareReceiptModalProps {
     id?: string; // Sale ID for tracking
     receiptNumber: string;
     amount: number;
+    subtotal?: number;
+    tax?: number;
+    discount?: number;
+    paymentMethod?: string | { name: string; description?: string; icon?: string };
     customerName?: string;
     customerPhone?: string;
     customerEmail?: string;
@@ -69,6 +75,123 @@ interface LayoutConfig {
   imageSize: number;
 }
 
+// Helper function to convert image to base64 to avoid CORS issues
+const convertImageToBase64 = async (imageUrl: string): Promise<string | null> => {
+  try {
+    // If already a data URL, return as is
+    if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) {
+      return imageUrl;
+    }
+
+    // First, try to fetch directly (may fail with CORS)
+    try {
+      const response = await fetch(imageUrl, {
+        mode: 'cors',
+        cache: 'no-cache',
+      });
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            resolve(reader.result as string);
+          };
+          reader.onerror = () => {
+            console.warn(`Failed to convert image to base64: ${imageUrl.substring(0, 60)}...`);
+            resolve(null);
+          };
+          reader.readAsDataURL(blob);
+        });
+      }
+    } catch (fetchError) {
+      console.log(`Direct fetch failed (CORS?), trying external proxy: ${imageUrl.substring(0, 60)}...`);
+    }
+
+    // Fallback: Try multiple CORS proxy services
+    const proxyServices = [
+      `https://corsproxy.io/?${encodeURIComponent(imageUrl)}`,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(imageUrl)}`,
+      `https://cors-anywhere.herokuapp.com/${imageUrl}`,
+    ];
+    
+    for (const proxyUrl of proxyServices) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout per proxy
+        
+        const response = await fetch(proxyUrl, {
+          cache: 'no-cache',
+          signal: controller.signal,
+          mode: 'cors',
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          const blob = await response.blob();
+          // Verify it's actually an image
+          if (blob.type.startsWith('image/')) {
+            return new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                resolve(reader.result as string);
+              };
+              reader.onerror = () => {
+                resolve(null);
+              };
+              reader.readAsDataURL(blob);
+            });
+          }
+        }
+      } catch (proxyError) {
+        // Try next proxy service
+        continue;
+      }
+    }
+    
+    console.warn(`All proxy services failed for: ${imageUrl.substring(0, 60)}...`);
+
+    // Last resort: try canvas approach (will fail if CORS headers not present)
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      const timeout = setTimeout(() => {
+        console.warn(`Image load timeout for base64 conversion: ${imageUrl.substring(0, 60)}...`);
+        resolve(null);
+      }, 10000);
+      
+      img.onload = () => {
+        clearTimeout(timeout);
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+          } else {
+            resolve(null);
+          }
+        } catch (e) {
+          console.warn(`Canvas conversion failed for: ${imageUrl.substring(0, 60)}...`, e);
+          resolve(null);
+        }
+      };
+      img.onerror = () => {
+        clearTimeout(timeout);
+        console.warn(`Image load failed for base64 conversion: ${imageUrl.substring(0, 60)}...`);
+        resolve(null);
+      };
+      img.src = imageUrl;
+    });
+  } catch (error) {
+    console.warn(`Error converting image to base64: ${imageUrl.substring(0, 60)}...`, error);
+    return null;
+  }
+};
+
 const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
   isOpen,
   onClose,
@@ -79,8 +202,88 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
   const [sendingMethod, setSendingMethod] = useState<string>('');
   const [pageSize, setPageSize] = useState<PageSize>('a4');
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
+  const [convertedImages, setConvertedImages] = useState<Map<string, string>>(new Map());
+  const [isGeneratingPNG, setIsGeneratingPNG] = useState(false);
   const successModal = useSuccessModal();
   const { businessInfo } = useBusinessInfo();
+  const receiptPreviewRef = useRef<HTMLDivElement | null>(null);
+
+  // Convert cross-origin images to base64 when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const convertImages = async () => {
+        const imageMap = new Map<string, string>();
+        const imagePromises: Promise<void>[] = [];
+
+        // Convert product images
+        if (receiptData?.items) {
+          receiptData.items
+            .filter(item => item.image && !item.image.startsWith('data:') && !item.image.startsWith('blob:'))
+            .forEach((item) => {
+              if (!item.image) return;
+              
+              imagePromises.push(
+                (async () => {
+                  try {
+                    const url = new URL(item.image);
+                    const currentOrigin = window.location.origin;
+                    // Only convert if cross-origin
+                    if (url.origin !== currentOrigin) {
+                      console.log(`🔄 Pre-converting cross-origin image: ${item.image.substring(0, 60)}...`);
+                      const base64 = await convertImageToBase64(item.image);
+                      if (base64) {
+                        imageMap.set(item.image, base64);
+                        console.log(`✅ Image pre-converted to base64`);
+                      }
+                    }
+                  } catch (error) {
+                    // If URL parsing fails, try to convert anyway
+                    console.warn(`Error parsing image URL, attempting conversion: ${item.image.substring(0, 60)}...`, error);
+                    const base64 = await convertImageToBase64(item.image);
+                    if (base64) {
+                      imageMap.set(item.image, base64);
+                    }
+                  }
+                })()
+              );
+            });
+        }
+
+        // Convert business logo
+        if (businessInfo.logo && !businessInfo.logo.startsWith('data:') && !businessInfo.logo.startsWith('blob:')) {
+          imagePromises.push(
+            (async () => {
+              try {
+                const url = new URL(businessInfo.logo);
+                const currentOrigin = window.location.origin;
+                // Only convert if cross-origin
+                if (url.origin !== currentOrigin) {
+                  console.log(`🔄 Pre-converting cross-origin logo: ${businessInfo.logo.substring(0, 60)}...`);
+                  const base64 = await convertImageToBase64(businessInfo.logo);
+                  if (base64) {
+                    imageMap.set(businessInfo.logo, base64);
+                    console.log(`✅ Logo pre-converted to base64`);
+                  }
+                }
+              } catch (error) {
+                // If URL parsing fails, try to convert anyway
+                console.warn(`Error parsing logo URL, attempting conversion: ${businessInfo.logo.substring(0, 60)}...`, error);
+                const base64 = await convertImageToBase64(businessInfo.logo);
+                if (base64) {
+                  imageMap.set(businessInfo.logo, base64);
+                }
+              }
+            })()
+          );
+        }
+
+        await Promise.all(imagePromises);
+        setConvertedImages(imageMap);
+      };
+
+      convertImages();
+    }
+  }, [isOpen, receiptData, businessInfo.logo]);
 
   // Debug: Log receipt data to help troubleshoot QR code
   useEffect(() => {
@@ -233,71 +436,952 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
     }, 1000);
   };
 
+  // Helper function to convert all cross-origin images to base64
+  const convertImagesToBase64 = async (element: HTMLElement): Promise<void> => {
+    const images = element.querySelectorAll('img');
+    console.log(`🔄 Found ${images.length} images to convert for PDF...`);
+    
+    const imagePromises = Array.from(images).map(async (img, index) => {
+      let src = img.src;
+      
+      // Skip if already base64 or blob and properly loaded
+      if ((src.startsWith('data:') || src.startsWith('blob:')) && img.complete && img.naturalWidth > 0) {
+        console.log(`✅ Image ${index + 1} already base64/blob and loaded (${img.naturalWidth}x${img.naturalHeight}), skipping conversion`);
+        return;
+      }
+
+      // Get original src from data attribute or current src
+      const originalSrc = img.getAttribute('data-original-src') || img.getAttribute('src') || src;
+      
+      // If current src is already base64 but not loaded, wait for it
+      if (src.startsWith('data:') || src.startsWith('blob:')) {
+        return new Promise<void>((resolve) => {
+          if (img.complete && img.naturalWidth > 0) {
+            resolve();
+            return;
+          }
+          const timeout = setTimeout(() => resolve(), 5000);
+          img.onload = () => {
+            clearTimeout(timeout);
+            console.log(`✅ Image ${index + 1} base64 image loaded`);
+            resolve();
+          };
+          img.onerror = () => {
+            clearTimeout(timeout);
+            console.warn(`⚠️ Image ${index + 1} base64 image failed to load`);
+            resolve();
+          };
+        });
+      }
+      
+      try {
+        // Convert ALL images to base64 to ensure they work in PDF
+        console.log(`🔄 Converting image ${index + 1} to base64: ${originalSrc.substring(0, 60)}...`);
+        const base64 = await convertImageToBase64(originalSrc);
+        
+        if (base64) {
+          // Set the base64 as src and wait for it to load
+          return new Promise<void>((resolve) => {
+            const timeout = setTimeout(() => {
+              if (img.complete && img.naturalWidth > 0) {
+                console.log(`✅ Image ${index + 1} loaded after timeout`);
+              } else {
+                console.warn(`⏱️ Image ${index + 1} conversion timeout`);
+              }
+              resolve();
+            }, 10000); // 10 second timeout
+            
+            img.onload = () => {
+              clearTimeout(timeout);
+              if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                console.log(`✅ Image ${index + 1} converted and loaded successfully (${img.naturalWidth}x${img.naturalHeight})`);
+              } else {
+                console.warn(`⚠️ Image ${index + 1} loaded but has zero dimensions`);
+              }
+              resolve();
+            };
+            img.onerror = () => {
+              clearTimeout(timeout);
+              console.warn(`⚠️ Image ${index + 1} failed to load after conversion`);
+              resolve(); // Continue even if it fails
+            };
+            
+            // Set the base64 src
+            img.src = base64;
+            img.setAttribute('data-original-src', originalSrc); // Store original for reference
+            
+            // If already complete, resolve immediately
+            if (img.complete) {
+              clearTimeout(timeout);
+              resolve();
+            }
+          });
+        } else {
+          console.warn(`⚠️ Failed to convert image ${index + 1}, will try with html2canvas: ${originalSrc.substring(0, 60)}...`);
+        }
+      } catch (error) {
+        // If URL parsing fails, try to convert anyway
+        console.warn(`Error parsing image URL ${index + 1}, attempting conversion: ${originalSrc.substring(0, 60)}...`, error);
+        const base64 = await convertImageToBase64(originalSrc);
+        if (base64) {
+          return new Promise<void>((resolve) => {
+            const timeout = setTimeout(() => resolve(), 10000);
+            img.onload = () => {
+              clearTimeout(timeout);
+              resolve();
+            };
+            img.onerror = () => {
+              clearTimeout(timeout);
+              resolve();
+            };
+            img.src = base64;
+            if (img.complete) {
+              clearTimeout(timeout);
+              resolve();
+            }
+          });
+        }
+      }
+    });
+
+    await Promise.all(imagePromises);
+    console.log('✅ All images converted and loaded');
+  };
+
+  // Unified function to generate PDF that matches preview exactly (100% match)
+  const generatePDF = async (forUpload: boolean = false): Promise<{ blob: Blob; url?: string } | null> => {
+    try {
+      // Get the receipt preview element and its container
+      const receiptPreview = document.querySelector('[data-receipt-preview]') as HTMLElement;
+      const previewContainer = receiptPreview?.parentElement; // The container with background
+      
+      if (!receiptPreview) {
+        toast.error('Receipt preview not found');
+        return null;
+      }
+
+      // Convert ALL images to base64 to avoid CORS issues and ensure they render in PDF
+      console.log('🔄 Converting all images to base64 for PDF...');
+      await convertImagesToBase64(receiptPreview);
+      console.log('✅ Image conversion complete');
+
+      // Wait for all images to fully load after conversion
+      const images = receiptPreview.querySelectorAll('img');
+      console.log(`📸 Verifying ${images.length} images are loaded for PDF...`);
+      
+      const imagePromises = Array.from(images).map((img, index) => {
+        // Check if image is already loaded
+        if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+          console.log(`✅ Image ${index + 1} already loaded (${img.naturalWidth}x${img.naturalHeight}):`, img.src.substring(0, 50));
+          return Promise.resolve();
+        }
+        
+        // Wait for image to load
+        return new Promise<void>((resolve) => {
+          const timeout = setTimeout(() => {
+            if (img.complete && img.naturalWidth > 0) {
+              console.log(`✅ Image ${index + 1} loaded after timeout:`, img.src.substring(0, 50));
+            } else {
+              console.warn(`⏱️ Image ${index + 1} load timeout:`, img.src.substring(0, 50));
+            }
+            resolve(); // Continue even if timeout
+          }, 10000); // Increased timeout to 10 seconds
+          
+          img.onload = () => {
+            clearTimeout(timeout);
+            if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+              console.log(`✅ Image ${index + 1} loaded successfully (${img.naturalWidth}x${img.naturalHeight}):`, img.src.substring(0, 50));
+            } else {
+              console.warn(`⚠️ Image ${index + 1} loaded but has zero dimensions`);
+            }
+            resolve();
+          };
+          
+          img.onerror = () => {
+            clearTimeout(timeout);
+            console.warn(`❌ Image ${index + 1} failed to load:`, img.src.substring(0, 50));
+            resolve(); // Continue even if image fails
+          };
+          
+          // If image is already complete, resolve immediately
+          if (img.complete) {
+            clearTimeout(timeout);
+            resolve();
+          }
+        });
+      });
+
+      // Wait for all images to load
+      await Promise.all(imagePromises);
+      console.log('✅ All images verified, capturing preview...');
+      
+      // Additional delay to ensure all rendering is complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Get layout configuration for selected page size and orientation
+      const layout = getLayoutConfig(pageSize, orientation);
+      
+      // Get computed styles to get exact dimensions and background
+      const previewStyle = window.getComputedStyle(receiptPreview);
+      const containerStyle = previewContainer ? window.getComputedStyle(previewContainer) : null;
+      
+      // Get exact dimensions from the preview element
+      const previewRect = receiptPreview.getBoundingClientRect();
+      const containerRect = previewContainer?.getBoundingClientRect();
+      
+      console.log('📐 Preview dimensions:', {
+        previewWidth: receiptPreview.scrollWidth,
+        previewHeight: receiptPreview.scrollHeight,
+        previewOffsetWidth: receiptPreview.offsetWidth,
+        previewOffsetHeight: receiptPreview.offsetHeight,
+        previewRect: {
+          width: previewRect.width,
+          height: previewRect.height,
+          top: previewRect.top,
+          left: previewRect.left
+        },
+        containerRect: containerRect ? {
+          width: containerRect.width,
+          height: containerRect.height
+        } : null
+      });
+      
+      // Capture the preview element with exact dimensions
+      console.log('📷 Capturing preview with html2canvas (100% match)...');
+      
+      // Capture with EXACT dimensions and styling (100% match to preview)
+      const canvas = await html2canvas(receiptPreview, {
+        scale: 3, // Higher quality for PDF (3x for crisp rendering)
+        useCORS: false, // Set to false to allow tainted canvas (images may not be perfect but will render)
+        allowTaint: true, // Allow tainted canvas - this allows cross-origin images to render
+        logging: false,
+        backgroundColor: '#f9fafb', // Match the gradient background color exactly (#f9fafb = gray-50)
+        width: receiptPreview.scrollWidth,
+        height: receiptPreview.scrollHeight,
+        windowWidth: receiptPreview.scrollWidth,
+        windowHeight: receiptPreview.scrollHeight,
+        imageTimeout: 20000, // Wait longer for images to load
+        removeContainer: false,
+        x: 0,
+        y: 0,
+        foreignObjectRendering: false, // Disable to avoid issues with cross-origin images
+        onclone: (clonedDoc) => {
+          // Ensure all styles are preserved in the cloned document - 100% EXACT match
+          const clonedPreview = clonedDoc.querySelector('[data-receipt-preview]') as HTMLElement;
+          if (clonedPreview) {
+            // Force preserve ALL computed styles exactly as they appear in preview
+            const styles = [
+              'transform', 'willChange', 'boxSizing', 'padding', 'margin', 
+              'border', 'borderRadius', 'backgroundColor', 'boxShadow',
+              'width', 'height', 'display', 'flexDirection', 'alignItems',
+              'justifyContent', 'gap', 'fontSize', 'fontFamily', 'color',
+              'lineHeight', 'letterSpacing', 'textAlign', 'overflow'
+            ];
+            
+            styles.forEach(prop => {
+              const value = previewStyle.getPropertyValue(prop);
+              if (value) {
+                clonedPreview.style.setProperty(prop, value, 'important');
+              }
+            });
+            
+            // Ensure exact dimensions
+            clonedPreview.style.width = `${receiptPreview.scrollWidth}px`;
+            clonedPreview.style.height = `${receiptPreview.scrollHeight}px`;
+            clonedPreview.style.minWidth = `${receiptPreview.scrollWidth}px`;
+            clonedPreview.style.minHeight = `${receiptPreview.scrollHeight}px`;
+          }
+        }
+      });
+
+      // Convert canvas to image
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      console.log('✅ Canvas captured, generating PDF (100% match)...');
+      
+      // Create PDF with EXACT dimensions matching preview
+      const doc = new jsPDF(layout.orientation, 'mm', layout.pageSize);
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      
+      // Set PDF background to match preview background EXACTLY (#f9fafb = gray-50)
+      doc.setFillColor(249, 250, 251); // #f9fafb in RGB - exact match
+      doc.rect(0, 0, pageWidth, pageHeight, 'F');
+      
+      // Calculate margins to match preview EXACTLY (p-6 = 24px = ~6.35mm at 96 DPI)
+      // Get actual padding from computed styles
+      const paddingTop = parseFloat(previewStyle.paddingTop) || 0;
+      const paddingBottom = parseFloat(previewStyle.paddingBottom) || 0;
+      const paddingLeft = parseFloat(previewStyle.paddingLeft) || 0;
+      const paddingRight = parseFloat(previewStyle.paddingRight) || 0;
+      
+      // Container padding (p-6 = 24px = 6.35mm)
+      const containerPaddingMm = 6.35; // 24px in mm
+      
+      // Calculate exact dimensions in mm
+      const scaleFactor = 3; // html2canvas scale
+      const pxToMm = 25.4 / 96; // Convert pixels to mm at 96 DPI
+      
+      // Actual preview dimensions in mm (accounting for scale factor)
+      const previewWidthMm = (canvas.width / scaleFactor) * pxToMm;
+      const previewHeightMm = (canvas.height / scaleFactor) * pxToMm;
+      
+      // Available space accounting for container padding
+      const availableWidth = pageWidth - (containerPaddingMm * 2);
+      const availableHeight = pageHeight - (containerPaddingMm * 2);
+      
+      console.log('📐 Exact dimension calculations:', {
+        pageWidth: pageWidth.toFixed(2),
+        pageHeight: pageHeight.toFixed(2),
+        containerPaddingMm: containerPaddingMm.toFixed(2),
+        availableWidth: availableWidth.toFixed(2),
+        availableHeight: availableHeight.toFixed(2),
+        previewWidthMm: previewWidthMm.toFixed(2),
+        previewHeightMm: previewHeightMm.toFixed(2),
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height,
+        scaleFactor: scaleFactor
+      });
+      
+      // Scale to fit within available space while maintaining aspect ratio
+      // Try to use 1:1 scale (100% match) if preview fits, otherwise scale down proportionally
+      const widthScale = availableWidth / previewWidthMm;
+      const heightScale = availableHeight / previewHeightMm;
+      const scale = Math.min(widthScale, heightScale, 1); // Don't scale up, only down if needed
+      
+      // Use exact preview dimensions scaled proportionally
+      let finalWidth = previewWidthMm * scale;
+      let finalHeight = previewHeightMm * scale;
+      
+      // Center with EXACT margins matching preview (100% match)
+      // This ensures the receipt appears in the PDF exactly as it appears in the preview
+      const xOffset = containerPaddingMm + (availableWidth - finalWidth) / 2;
+      const yOffset = containerPaddingMm + (availableHeight - finalHeight) / 2;
+      
+      // Log for debugging to ensure 100% match
+      console.log('✅ PDF will match preview 100%:', {
+        scale: scale === 1 ? '1:1 (100% match)' : `${(scale * 100).toFixed(1)}%`,
+        previewSize: `${previewWidthMm.toFixed(2)}mm × ${previewHeightMm.toFixed(2)}mm`,
+        finalSize: `${finalWidth.toFixed(2)}mm × ${finalHeight.toFixed(2)}mm`,
+        margins: `${containerPaddingMm.toFixed(2)}mm on all sides`,
+        background: '#f9fafb (exact match)'
+      });
+      
+      console.log('📏 Final PDF dimensions (100% match):', {
+        finalWidth: finalWidth.toFixed(2),
+        finalHeight: finalHeight.toFixed(2),
+        scale: scale.toFixed(3),
+        xOffset: xOffset.toFixed(2),
+        yOffset: yOffset.toFixed(2),
+        containerPaddingMm: containerPaddingMm.toFixed(2),
+        availableWidth: availableWidth.toFixed(2),
+        availableHeight: availableHeight.toFixed(2),
+        pages: Math.ceil(finalHeight / availableHeight)
+      });
+      
+      // Add image to PDF - handle multi-page if needed (100% exact match)
+      if (finalHeight <= availableHeight) {
+        // Single page - add image with EXACT calculated offset matching preview
+        doc.addImage(imgData, 'PNG', xOffset, yOffset, finalWidth, finalHeight, undefined, 'FAST');
+      } else {
+        // Multi-page - split image across pages with EXACT margins
+        let currentY = 0;
+        let sourceY = 0;
+        let pageNumber = 0;
+        
+        while (currentY < finalHeight) {
+          const remainingHeight = finalHeight - currentY;
+          const pageImgHeight = Math.min(availableHeight, remainingHeight);
+          const sourceHeight = (pageImgHeight / finalHeight) * canvas.height;
+          
+          // Create a canvas for this page section
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = canvas.width;
+          pageCanvas.height = sourceHeight;
+          const ctx = pageCanvas.getContext('2d');
+          
+          if (ctx) {
+            // Draw the section of the original canvas
+            ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
+            const pageImgData = pageCanvas.toDataURL('image/png', 1.0);
+            
+            // Calculate Y offset for this page (first page uses yOffset, subsequent pages use margin)
+            const pageYOffset = pageNumber === 0 ? yOffset : containerPaddingMm;
+            
+            // Add to PDF with EXACT x offset for centering and margin (100% match)
+            doc.addImage(pageImgData, 'PNG', xOffset, pageYOffset, finalWidth, pageImgHeight, undefined, 'FAST');
+          }
+          
+          sourceY += sourceHeight;
+          currentY += pageImgHeight;
+          pageNumber++;
+          
+          // Add new page if there's more content
+          if (currentY < finalHeight) {
+            doc.addPage();
+            // Fill background on new page with EXACT same color (#f9fafb)
+            doc.setFillColor(249, 250, 251);
+            doc.rect(0, 0, pageWidth, pageHeight, 'F');
+          }
+        }
+      }
+      
+      // Generate PDF blob
+      const pdfBlob = doc.output('blob');
+      
+      // Calculate and log PDF file size
+      const pdfSizeBytes = pdfBlob.size;
+      const pdfSizeKB = (pdfSizeBytes / 1024).toFixed(2);
+      const pdfSizeMB = (pdfSizeBytes / (1024 * 1024)).toFixed(2);
+      
+      console.log('📄 PDF Generated:', {
+        size: `${pdfSizeMB} MB (${pdfSizeKB} KB)`,
+        bytes: pdfSizeBytes,
+        pages: doc.internal.pages.length,
+        quality: 'High (scale: 3x)'
+      });
+      
+      if (!forUpload) {
+        // For download, just return the blob
+        return { blob: pdfBlob };
+      }
+      
+      // For upload (WhatsApp), upload to storage and return URL
+      const pdfFile = new File([pdfBlob], `receipt-${receiptData.receiptNumber}.pdf`, { type: 'application/pdf' });
+      
+      // Upload to Supabase storage
+      const timestamp = Date.now();
+      const fileName = `receipts/${timestamp}-${receiptData.receiptNumber}.pdf`;
+      
+      console.log('📤 Uploading PDF to storage...');
+      
+      // Try whatsapp-media bucket first (most common)
+      let uploadError = null;
+      let bucketName = 'whatsapp-media';
+      let { data, error } = await supabase.storage
+        .from(bucketName)
+        .upload(fileName, pdfFile, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      // If whatsapp-media fails, try receipts bucket
+      if (error) {
+        console.warn('⚠️ whatsapp-media bucket failed, trying receipts bucket...', error.message);
+        uploadError = error;
+        bucketName = 'receipts';
+        const result = await supabase.storage
+          .from(bucketName)
+          .upload(fileName, pdfFile, {
+            cacheControl: '3600',
+            upsert: false
+          });
+        data = result.data;
+        error = result.error;
+      }
+
+      // If both fail, try public-files as last resort
+      if (error) {
+        console.warn('⚠️ receipts bucket failed, trying public-files bucket...', error.message);
+        uploadError = error;
+        bucketName = 'public-files';
+        const result = await supabase.storage
+          .from(bucketName)
+          .upload(fileName, pdfFile, {
+            cacheControl: '3600',
+            upsert: false
+          });
+        data = result.data;
+        error = result.error;
+      }
+
+      if (error) {
+        throw new Error(`Failed to upload PDF to any bucket. Last error: ${error.message}. Please ensure at least one of these buckets exists: whatsapp-media, receipts, or public-files`);
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(fileName);
+
+      console.log(`✅ PDF uploaded successfully to ${bucketName}:`, urlData.publicUrl);
+      return { blob: pdfBlob, url: urlData.publicUrl };
+    } catch (error) {
+      console.error('Error generating/uploading PDF:', error);
+      throw error;
+    }
+  };
+
+  // Helper function to generate PDF and upload to storage (for WhatsApp)
+  const generateAndUploadPDF = async (): Promise<string | null> => {
+    const result = await generatePDF(true);
+    return result?.url || null;
+  };
+
+  // Function to generate PNG image from receipt preview
+  const generatePNG = async (forUpload: boolean = false): Promise<{ blob: Blob; url?: string } | null> => {
+    setIsGeneratingPNG(true);
+    let clonedElement: HTMLElement | null = null;
+    try {
+      // Helper function to get the receipt preview element with retries
+      const getReceiptPreview = (): HTMLElement | null => {
+        // First try the ref
+        if (receiptPreviewRef.current && receiptPreviewRef.current.isConnected) {
+          return receiptPreviewRef.current;
+        }
+        // Fallback to querySelector
+        const element = document.querySelector('[data-receipt-preview]') as HTMLElement;
+        if (element && element.isConnected) {
+          receiptPreviewRef.current = element;
+          return element;
+        }
+        return null;
+      };
+
+      // Get the receipt preview element with retries
+      let receiptPreview = getReceiptPreview();
+      if (!receiptPreview) {
+        // Wait a bit and try again (in case of timing issues)
+        await new Promise(resolve => setTimeout(resolve, 100));
+        receiptPreview = getReceiptPreview();
+        if (!receiptPreview) {
+          // One more retry with longer delay
+          await new Promise(resolve => setTimeout(resolve, 200));
+          receiptPreview = getReceiptPreview();
+          if (!receiptPreview) {
+            throw new Error('Receipt preview element is no longer in the DOM');
+          }
+        }
+      }
+
+      // Verify modal is still open and element is still connected
+      if (!isOpen || !receiptPreview.isConnected) {
+        throw new Error('Receipt preview element is no longer in the DOM');
+      }
+
+      // Store element dimensions and clone early to use later even if element is removed
+      const previewRect = receiptPreview.getBoundingClientRect();
+      const previewWidth = Math.max(receiptPreview.scrollWidth, receiptPreview.offsetWidth, previewRect.width, 800);
+      const previewHeight = Math.max(receiptPreview.scrollHeight, receiptPreview.offsetHeight, previewRect.height, 600);
+      
+      if (previewWidth === 0 || previewHeight === 0) {
+        throw new Error('Receipt preview has invalid dimensions');
+      }
+
+      // Clone the element early to preserve it even if original is removed
+      const clonedElement = receiptPreview.cloneNode(true) as HTMLElement;
+      clonedElement.setAttribute('data-receipt-preview-clone', 'true');
+      clonedElement.style.position = 'absolute';
+      clonedElement.style.left = '-9999px';
+      clonedElement.style.top = '0';
+      clonedElement.style.width = `${previewWidth}px`;
+      clonedElement.style.height = `${previewHeight}px`;
+      clonedElement.style.visibility = 'hidden';
+      clonedElement.style.pointerEvents = 'none';
+      document.body.appendChild(clonedElement);
+
+      // Convert cross-origin images to base64 to avoid CORS issues
+      console.log('🔄 Converting images to base64 for PNG...');
+      await convertImagesToBase64(receiptPreview);
+      
+      // Also convert images in cloned element
+      await convertImagesToBase64(clonedElement);
+      console.log('✅ Image conversion complete');
+
+      // Wait for all images to load
+      const images = receiptPreview.querySelectorAll('img');
+      console.log(`📸 Found ${images.length} images to load for PNG...`);
+      
+      const imagePromises = Array.from(images).map((img, index) => {
+        if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+          console.log(`✅ Image ${index + 1} already loaded:`, img.src.substring(0, 50));
+          return Promise.resolve();
+        }
+        
+        return new Promise<void>((resolve) => {
+          const timeout = setTimeout(() => {
+            if (img.complete && img.naturalWidth > 0) {
+              console.log(`✅ Image ${index + 1} loaded after timeout`);
+            } else {
+              console.warn(`⏱️ Image ${index + 1} load timeout`);
+            }
+            resolve();
+          }, 10000);
+          
+          img.onload = () => {
+            clearTimeout(timeout);
+            if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+              console.log(`✅ Image ${index + 1} loaded successfully (${img.naturalWidth}x${img.naturalHeight})`);
+            }
+            resolve();
+          };
+          
+          img.onerror = () => {
+            clearTimeout(timeout);
+            console.warn(`❌ Image ${index + 1} failed to load`);
+            resolve();
+          };
+          
+          if (img.complete) {
+            clearTimeout(timeout);
+            resolve();
+          }
+        });
+      });
+
+      await Promise.all(imagePromises);
+      console.log('✅ All images verified, capturing PNG...');
+      
+      // Wait for rendering to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Capture the preview as canvas
+      console.log('📷 Capturing preview as PNG...');
+      
+      // Re-check element is still in DOM and modal is open
+      receiptPreview = getReceiptPreview();
+      if (!receiptPreview) {
+        throw new Error('Receipt preview element is no longer in the DOM');
+      }
+      
+      if (!isOpen) {
+        throw new Error('Receipt modal was closed during PNG generation');
+      }
+      
+      // Ensure element is visible and scrolled into view
+      receiptPreview.scrollIntoView({ behavior: 'instant', block: 'start' });
+      
+      // Wait a bit for any layout changes
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Get computed styles before cloning
+      const previewStyle = window.getComputedStyle(receiptPreview);
+      // Recalculate dimensions (previewWidth and previewHeight already declared above)
+      const currentPreviewWidth = Math.max(receiptPreview.scrollWidth, receiptPreview.offsetWidth, 800);
+      const currentPreviewHeight = Math.max(receiptPreview.scrollHeight, receiptPreview.offsetHeight, 600);
+      
+      if (currentPreviewWidth === 0 || currentPreviewHeight === 0) {
+        throw new Error(`Receipt preview has invalid dimensions: ${currentPreviewWidth}x${currentPreviewHeight}. Please ensure the receipt is visible.`);
+      }
+      
+      console.log(`📐 Preview dimensions: ${currentPreviewWidth}x${currentPreviewHeight}`);
+      
+      // Verify element is actually visible
+      const rect = receiptPreview.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        throw new Error('Receipt preview element has zero size. Please ensure it is visible on screen.');
+      }
+      
+      // Final check before html2canvas
+      receiptPreview = getReceiptPreview();
+      if (!receiptPreview) {
+        throw new Error('Receipt preview element disappeared before capture');
+      }
+      
+      if (!isOpen) {
+        throw new Error('Receipt modal was closed before capture');
+      }
+
+      let canvas: HTMLCanvasElement;
+      try {
+        // Try with simplified configuration first
+        const html2canvasOptions: any = {
+          scale: 2, // Reduced from 3 for better compatibility
+          useCORS: true, // Changed to true for better image handling
+          allowTaint: false, // Changed to false when useCORS is true
+          logging: false,
+          backgroundColor: '#ffffff',
+          width: currentPreviewWidth,
+          height: currentPreviewHeight,
+          imageTimeout: 30000, // Increased timeout
+          removeContainer: false,
+        };
+
+        // Only add onclone if element is found
+        html2canvasOptions.onclone = (clonedDoc: Document, element: Element | null) => {
+          try {
+            // Use the element parameter directly if available
+            if (element && element instanceof HTMLElement) {
+              const clonedPreview = element as HTMLElement;
+              // Ensure dimensions are preserved
+              clonedPreview.style.width = `${currentPreviewWidth}px`;
+              clonedPreview.style.height = `${currentPreviewHeight}px`;
+              clonedPreview.style.minWidth = `${currentPreviewWidth}px`;
+              clonedPreview.style.minHeight = `${currentPreviewHeight}px`;
+            }
+          } catch (error) {
+            console.warn('Error in onclone callback (non-critical):', error);
+            // Continue - this is not critical
+          }
+        };
+
+        console.log('📸 Starting html2canvas with options:', {
+          scale: html2canvasOptions.scale,
+          width: currentPreviewWidth,
+          height: currentPreviewHeight,
+        });
+
+        // Final verification before html2canvas call - with retry
+        let attempts = 0;
+        const maxAttempts = 3;
+        while (attempts < maxAttempts) {
+          receiptPreview = getReceiptPreview();
+          if (receiptPreview && receiptPreview.isConnected && isOpen) {
+            break;
+          }
+          if (attempts < maxAttempts - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+          attempts++;
+        }
+        
+        if (!receiptPreview || !receiptPreview.isConnected || !isOpen) {
+          throw new Error('Receipt preview element is no longer in the DOM');
+        }
+        
+        if (!isOpen) {
+          throw new Error('Receipt modal was closed before html2canvas could capture');
+        }
+
+        canvas = await html2canvas(receiptPreview, html2canvasOptions);
+        
+        if (!canvas || canvas.width === 0 || canvas.height === 0) {
+          throw new Error('Canvas generation failed: invalid dimensions');
+        }
+        
+        console.log('✅ Canvas generated successfully:', {
+          width: canvas.width,
+          height: canvas.height
+        });
+      } catch (html2canvasError: any) {
+        console.error('html2canvas error details:', {
+          message: html2canvasError?.message,
+          stack: html2canvasError?.stack,
+          name: html2canvasError?.name
+        });
+        
+        // Try with even simpler configuration as fallback
+        try {
+          console.log('🔄 Retrying with minimal configuration...');
+          
+          // Use cloned element if original is not available
+          let elementToCapture = receiptPreview;
+          receiptPreview = getReceiptPreview();
+          
+          if (!receiptPreview || !receiptPreview.isConnected || !isOpen) {
+            console.warn('⚠️ Using cloned element for fallback capture');
+            elementToCapture = clonedElement;
+          } else {
+            elementToCapture = receiptPreview;
+          }
+          
+          canvas = await html2canvas(elementToCapture, {
+            scale: 1,
+            useCORS: true,
+            allowTaint: false,
+            backgroundColor: '#ffffff',
+            logging: true, // Enable logging for debugging
+          });
+          
+          if (!canvas || canvas.width === 0 || canvas.height === 0) {
+            throw new Error('Fallback canvas generation also failed');
+          }
+          
+          console.log('✅ Fallback canvas generation succeeded');
+        } catch (fallbackError: any) {
+          const errorMessage = html2canvasError?.message || fallbackError?.message || 'Unknown error';
+          console.error('Both html2canvas attempts failed:', {
+            first: html2canvasError?.message,
+            fallback: fallbackError?.message
+          });
+          
+          // Provide more specific error message
+          if (errorMessage.includes('no longer in the DOM') || errorMessage.includes('not found')) {
+            throw new Error('Receipt preview is not available. Please close and reopen the receipt modal.');
+          }
+          
+          throw new Error(`Failed to capture receipt preview: ${errorMessage}. The receipt preview may not be fully rendered. Please wait a moment and try again.`);
+        }
+      }
+
+      // Convert canvas to PNG blob
+      const pngBlob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            console.log('✅ PNG generated successfully:', {
+              size: `${(blob.size / (1024 * 1024)).toFixed(2)} MB`,
+              dimensions: `${canvas.width}x${canvas.height}`
+            });
+            resolve(blob);
+          } else {
+            console.error('Failed to generate PNG blob');
+            resolve(null);
+          }
+        }, 'image/png', 1.0); // Maximum quality
+      });
+
+      if (!pngBlob) {
+        return null;
+      }
+
+      if (!forUpload) {
+        // For download, just return the blob
+        return { blob: pngBlob };
+      }
+
+      // For upload (WhatsApp), upload to storage and return URL
+      const pngFile = new File([pngBlob], `receipt-${receiptData.receiptNumber}.png`, { type: 'image/png' });
+      
+      // Upload to Supabase storage
+      const timestamp = Date.now();
+      const fileName = `receipts/${timestamp}-${receiptData.receiptNumber}.png`;
+      
+      console.log('📤 Uploading PNG to storage...');
+      
+      // Try whatsapp-media bucket first (most common)
+      let uploadError = null;
+      let bucketName = 'whatsapp-media';
+      let { data, error } = await supabase.storage
+        .from(bucketName)
+        .upload(fileName, pngFile, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      // If whatsapp-media fails, try receipts bucket
+      if (error) {
+        console.warn('⚠️ whatsapp-media bucket failed, trying receipts bucket...', error.message);
+        uploadError = error;
+        bucketName = 'receipts';
+        const result = await supabase.storage
+          .from(bucketName)
+          .upload(fileName, pngFile, {
+            cacheControl: '3600',
+            upsert: false
+          });
+        data = result.data;
+        error = result.error;
+      }
+
+      // If both fail, try public-files as last resort
+      if (error) {
+        console.warn('⚠️ receipts bucket failed, trying public-files bucket...', error.message);
+        uploadError = error;
+        bucketName = 'public-files';
+        const result = await supabase.storage
+          .from(bucketName)
+          .upload(fileName, pngFile, {
+            cacheControl: '3600',
+            upsert: false
+          });
+        data = result.data;
+        error = result.error;
+      }
+
+      if (error) {
+        throw new Error(`Failed to upload PNG to any bucket. Last error: ${error.message}`);
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(fileName);
+
+      console.log(`✅ PNG uploaded successfully to ${bucketName}:`, urlData.publicUrl);
+      return { blob: pngBlob, url: urlData.publicUrl };
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Unknown error occurred';
+      console.error('Error generating/uploading PNG:', {
+        message: errorMessage,
+        error: error,
+        stack: error?.stack
+      });
+      
+      // Provide more user-friendly error messages
+      if (errorMessage.includes('not found') || errorMessage.includes('no longer in the DOM')) {
+        throw new Error('Receipt preview is not available. Please close and reopen the receipt modal.');
+      } else if (errorMessage.includes('invalid dimensions') || errorMessage.includes('zero size')) {
+        throw new Error('Receipt preview is not visible. Please ensure the receipt is fully displayed on screen.');
+      } else if (errorMessage.includes('Failed to capture')) {
+        throw error; // Already user-friendly
+      } else {
+        throw new Error(`Failed to generate PNG: ${errorMessage}. Please try again or use PDF download instead.`);
+      }
+    } finally {
+      setIsGeneratingPNG(false);
+      // Clean up cloned element if it still exists
+      try {
+        if (clonedElement && clonedElement.parentNode) {
+          clonedElement.parentNode.removeChild(clonedElement);
+        }
+        // Also clean up any orphaned cloned elements
+        const orphanedClones = document.querySelectorAll('[data-receipt-preview-clone]');
+        orphanedClones.forEach((el) => {
+          if (el.parentNode) {
+            el.parentNode.removeChild(el);
+          }
+        });
+      } catch (cleanupError) {
+        console.warn('Error cleaning up cloned element:', cleanupError);
+      }
+    }
+  };
+
+  // Helper function to generate PNG and upload to storage (for WhatsApp)
+  const generateAndUploadPNG = async (): Promise<string | null> => {
+    const result = await generatePNG(true);
+    return result?.url || null;
+  };
+
   const generateReceiptText = () => {
     const lines = [
-      // Business Name Header
-      '═'.repeat(40),
-      businessInfo.name.toUpperCase(),
-      '═'.repeat(40),
+      `🧾 *Receipt #${receiptData.receiptNumber}*`,
       '',
     ];
 
-    // Greeting with customer name
+    // Simple greeting
     if (receiptData.customerName) {
-      lines.push(`Hello, ${receiptData.customerName}!`);
+      lines.push(`Hello ${receiptData.customerName}! 👋`);
     } else {
-      lines.push('Hello, valued customer!');
+      lines.push('Hello! 👋');
     }
     lines.push('');
 
-    lines.push('🧾 RECEIPT #' + receiptData.receiptNumber);
-    lines.push('📅 ' + new Date().toLocaleDateString() + ', ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    // Business name
+    lines.push(`*${businessInfo.name}*`);
     lines.push('');
 
+    // Summary of items
     if (receiptData.items && receiptData.items.length > 0) {
-      lines.push('📦 Items: ' + receiptData.items.length);
-      receiptData.items.forEach((item, index) => {
+      const totalItems = receiptData.items.reduce((sum, item) => sum + item.quantity, 0);
+      lines.push(`📦 *${totalItems} item${totalItems > 1 ? 's' : ''}* purchased`);
+      
+      // Show first few items (max 3)
+      const itemsToShow = receiptData.items.slice(0, 3);
+      itemsToShow.forEach((item) => {
         const productName = item.variantName && item.variantName !== 'Default' 
           ? `${item.productName} - ${item.variantName}`
           : item.productName;
-        const itemLine = `${index + 1}. ${productName}${item.quantity > 1 ? ' x' + item.quantity : ''} - ${item.totalPrice.toLocaleString()} TZS`;
-        lines.push(itemLine);
-        
-        // Add Serial Numbers/IMEI
-        if (item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0) {
-          item.selectedSerialNumbers.forEach((serial: any) => {
-            const serialInfo: string[] = [];
-            if (serial.serial_number) serialInfo.push(`S/N: ${serial.serial_number}`);
-            if (serial.imei) serialInfo.push(`IMEI: ${serial.imei}`);
-            if (serial.mac_address) serialInfo.push(`MAC: ${serial.mac_address}`);
-            if (serialInfo.length > 0) {
-              lines.push(`   ${serialInfo.join(' | ')}`);
-            }
-          });
-        }
-        
-        // Add Attributes
-        if (item.attributes && Object.keys(item.attributes).length > 0) {
-          const excludedFields = [
-            'id', 'created_at', 'updated_at', 'added_at', 
-            'variant_id', 'product_id', 'imei', 'serial_number',
-            'is_legacy', 'is_imei_child', 'notes', 
-            'parent_variant_name', 'data_source', 'created_without_po'
-          ];
-          Object.entries(item.attributes).forEach(([key, value]) => {
-            if (!excludedFields.includes(key) && value) {
-              const keyLabel = key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-              lines.push(`   ${keyLabel}: ${value}`);
-            }
-          });
-        }
+        lines.push(`   • ${productName}${item.quantity > 1 ? ` (x${item.quantity})` : ''}`);
       });
+      
+      if (receiptData.items.length > 3) {
+        lines.push(`   ... and ${receiptData.items.length - 3} more item${receiptData.items.length - 3 > 1 ? 's' : ''}`);
+      }
     }
 
     lines.push('');
-    lines.push('💰 TOTAL: ' + receiptData.amount.toLocaleString() + ' TZS');
+    lines.push(`💰 *Total: ${receiptData.amount.toLocaleString()} TZS*`);
     lines.push('');
-    lines.push('✨ Thank you for shopping with us!');
+
+    // Encourage opening PDF
+    lines.push('📄 *View the attached PDF receipt for:*');
+    lines.push('   • Complete item details');
+    lines.push('   • Serial numbers & specifications');
+    lines.push('   • Payment information');
+    lines.push('   • Business contact details');
+    lines.push('');
+
+    lines.push('✨ Thank you for your purchase!');
 
     return lines.join('\n');
   };
@@ -391,13 +1475,72 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       name: 'WhatsApp',
       icon: MessageCircle,
       color: '#25D366',
-      onClick: () => {
-        const text = generateReceiptText();
+      onClick: async () => {
         const phone = receiptData.customerPhone || '';
-        const whatsappUrl = phone
-          ? `https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`
-          : `https://wa.me/?text=${encodeURIComponent(text)}`;
-        window.open(whatsappUrl, '_blank');
+        
+        if (!phone) {
+          toast.error('No customer phone number available');
+          return;
+        }
+
+        // Clean phone number (remove spaces, dashes, etc.)
+        const cleanPhone = phone.replace(/[^0-9+]/g, '');
+        
+        setIsSending(true);
+        setSendingMethod('WhatsApp');
+        
+        try {
+          console.log('📱 Generating PDF receipt...');
+          
+          // Generate PDF and upload to storage
+          const pdfUrl = await generateAndUploadPDF();
+          
+          if (!pdfUrl) {
+            toast.error('Failed to generate PDF receipt');
+            setIsSending(false);
+            setSendingMethod('');
+            return;
+          }
+          
+          console.log('📤 Sending receipt PDF via WhatsApp API to:', cleanPhone);
+          
+          // Generate receipt text for caption
+          const text = generateReceiptText();
+          const caption = `🧾 Receipt #${receiptData.receiptNumber}\n\n${text}`;
+          
+          // Send PDF as document via WhatsApp API
+          // Note: For documents, the caption is passed as the message parameter
+          const result = await whatsappService.sendMessage(cleanPhone, caption, {
+            message_type: 'document',
+            media_url: pdfUrl,
+            caption: caption
+          });
+          
+          if (result.success) {
+            // Show success modal
+            successModal.show(
+              `Receipt PDF sent successfully to ${phone} via WhatsApp!`,
+              {
+                title: 'WhatsApp Sent! ✅',
+                icon: SuccessIcons.messageSent,
+                autoCloseDelay: 3000,
+              }
+            );
+            
+            // Close share modal after short delay
+            setTimeout(() => {
+              onClose();
+            }, 500);
+          } else {
+            toast.error(result.error || 'Failed to send WhatsApp message');
+          }
+        } catch (error) {
+          console.error('Error sending WhatsApp:', error);
+          toast.error('Failed to send WhatsApp. Please try again.');
+        } finally {
+          setIsSending(false);
+          setSendingMethod('');
+        }
       },
     },
     {
@@ -484,174 +1627,69 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
           setIsSending(true);
           setSendingMethod('Download');
           
-          // Get the receipt preview element
-          const receiptPreview = document.querySelector('[data-receipt-preview]') as HTMLElement;
-          if (!receiptPreview) {
-            toast.error('Receipt preview not found');
-            setIsSending(false);
-            setSendingMethod('');
-            return;
-          }
-
-          // Wait for all images to load before capturing
-          const images = receiptPreview.querySelectorAll('img');
-          console.log(`📸 Found ${images.length} images to load for PDF`);
+          // Use unified PDF generation function
+          const result = await generatePDF(false);
           
-          const imagePromises = Array.from(images).map((img, index) => {
-            if (img.complete && img.naturalWidth > 0) {
-              console.log(`✅ Image ${index + 1} already loaded:`, img.src.substring(0, 50));
-              return Promise.resolve();
-            }
-            return new Promise<void>((resolve) => {
-              const timeout = setTimeout(() => {
-                console.warn(`⏱️ Image ${index + 1} load timeout:`, img.src.substring(0, 50));
-                resolve(); // Continue even if timeout
-              }, 5000);
-              
-              img.onload = () => {
-                clearTimeout(timeout);
-                console.log(`✅ Image ${index + 1} loaded:`, img.src.substring(0, 50));
-                resolve();
-              };
-              img.onerror = () => {
-                clearTimeout(timeout);
-                console.warn(`❌ Image ${index + 1} failed to load:`, img.src.substring(0, 50));
-                resolve(); // Continue even if image fails
-              };
-            });
-          });
-
-          // Wait for all images to load
-          await Promise.all(imagePromises);
-          console.log('✅ All images loaded, capturing preview...');
-          
-          // Small delay to ensure rendering is complete
-          await new Promise(resolve => setTimeout(resolve, 200));
-
-          // Get layout configuration for selected page size and orientation
-          const layout = getLayoutConfig(pageSize, orientation);
-          
-          // Capture the preview as canvas with exact dimensions
-          console.log('📷 Capturing preview with html2canvas...');
-          console.log('Preview dimensions:', {
-            width: receiptPreview.scrollWidth,
-            height: receiptPreview.scrollHeight,
-            offsetWidth: receiptPreview.offsetWidth,
-            offsetHeight: receiptPreview.offsetHeight
-          });
-          
-          const canvas = await html2canvas(receiptPreview, {
-            scale: 2, // Higher quality
-            useCORS: true,
-            allowTaint: true, // Allow cross-origin images
-            logging: false,
-            backgroundColor: '#ffffff',
-            width: receiptPreview.scrollWidth,
-            height: receiptPreview.scrollHeight,
-            windowWidth: receiptPreview.scrollWidth,
-            windowHeight: receiptPreview.scrollHeight,
-          });
-
-          console.log('✅ Canvas captured:', {
-            width: canvas.width,
-            height: canvas.height,
-            scale: 2
-          });
-
-          // Convert canvas to image
-          const imgData = canvas.toDataURL('image/png', 1.0);
-          console.log('✅ Image data generated, size:', (imgData.length / 1024).toFixed(2), 'KB');
-          
-          // Create PDF with exact dimensions
-          const doc = new jsPDF(layout.orientation, 'mm', layout.pageSize);
-          const pageWidth = doc.internal.pageSize.getWidth();
-          const pageHeight = doc.internal.pageSize.getHeight();
-          
-          // Calculate image dimensions to fit page while maintaining aspect ratio
-          // html2canvas creates canvas at scale 2, so actual preview size is canvas/2
-          // Convert canvas pixels to mm (96 DPI: 1px = 25.4/96 mm)
-          const scaleFactor = 2; // html2canvas scale
-          const pxToMm = 25.4 / 96;
-          
-          // Actual preview dimensions in mm (accounting for scale factor)
-          const previewWidthMm = (canvas.width / scaleFactor) * pxToMm;
-          const previewHeightMm = (canvas.height / scaleFactor) * pxToMm;
-          
-          console.log('📐 Dimension calculations:', {
-            pageWidth,
-            pageHeight,
-            previewWidthMm: previewWidthMm.toFixed(2),
-            previewHeightMm: previewHeightMm.toFixed(2)
-          });
-          
-          // Scale to fit page width while maintaining aspect ratio
-          const widthScale = pageWidth / previewWidthMm;
-          const heightScale = pageHeight / previewHeightMm;
-          const scale = Math.min(widthScale, heightScale, 1); // Don't scale up, only down if needed
-          
-          let finalWidth = previewWidthMm * scale;
-          let finalHeight = previewHeightMm * scale;
-          
-          // Center on page if smaller than page
-          const xOffset = (pageWidth - finalWidth) / 2;
-          const yOffset = 0; // Start at top
-          
-          console.log('📏 Final PDF dimensions:', {
-            finalWidth: finalWidth.toFixed(2),
-            finalHeight: finalHeight.toFixed(2),
-            scale: scale.toFixed(3),
-            xOffset: xOffset.toFixed(2),
-            pages: Math.ceil(finalHeight / pageHeight)
-          });
-          
-          // Add image to PDF - handle multi-page if needed
-          if (finalHeight <= pageHeight) {
-            // Single page - add image with calculated offset
-            doc.addImage(imgData, 'PNG', xOffset, yOffset, finalWidth, finalHeight, undefined, 'FAST');
-          } else {
-            // Multi-page - split image across pages
-            let currentY = 0;
-            let sourceY = 0;
+          if (result && result.blob) {
+            // Create download link
+            const url = URL.createObjectURL(result.blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `receipt-${receiptData.receiptNumber}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
             
-            while (currentY < finalHeight) {
-              const remainingHeight = finalHeight - currentY;
-              const pageImgHeight = Math.min(pageHeight, remainingHeight);
-              const sourceHeight = (pageImgHeight / finalHeight) * canvas.height;
-              
-              // Create a canvas for this page section
-              const pageCanvas = document.createElement('canvas');
-              pageCanvas.width = canvas.width;
-              pageCanvas.height = sourceHeight;
-              const ctx = pageCanvas.getContext('2d');
-              
-              if (ctx) {
-                // Draw the section of the original canvas
-                ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
-                const pageImgData = pageCanvas.toDataURL('image/png', 1.0);
-                
-                // Add to PDF with x offset for centering
-                doc.addImage(pageImgData, 'PNG', xOffset, 0, finalWidth, pageImgHeight, undefined, 'FAST');
-              }
-              
-              sourceY += sourceHeight;
-              currentY += pageImgHeight;
-              
-              // Add new page if there's more content
-              if (currentY < finalHeight) {
-                doc.addPage();
-              }
-            }
+            toast.success('Receipt downloaded as PDF');
+          } else {
+            toast.error('Failed to generate PDF');
           }
-          
-          // Save PDF
-          doc.save(`receipt-${receiptData.receiptNumber}.pdf`);
-          toast.success('Receipt downloaded as PDF');
           
           setIsSending(false);
           setSendingMethod('');
         } catch (error) {
           console.error('Error generating PDF:', error);
           toast.error('Failed to generate PDF. Please try again.');
+          setIsSending(false);
+          setSendingMethod('');
+        }
+      },
+    },
+    {
+      name: 'Download PNG',
+      icon: ImageIcon,
+      color: '#06B6D4',
+      onClick: async () => {
+        try {
+          setIsSending(true);
+          setSendingMethod('Download PNG');
+          
+          console.log('📸 Generating PNG image...');
+          const result = await generatePNG(false);
+          
+          if (result && result.blob) {
+            // Create download link
+            const url = URL.createObjectURL(result.blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `receipt-${receiptData.receiptNumber}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            toast.success('Receipt downloaded as PNG');
+          } else {
+            toast.error('Failed to generate PNG');
+          }
+          
+          setIsSending(false);
+          setSendingMethod('');
+        } catch (error: any) {
+          console.error('Error generating PNG:', error);
+          const errorMessage = error?.message || 'Unknown error';
+          toast.error(errorMessage.length > 100 ? 'Failed to generate PNG. Please try again.' : errorMessage);
           setIsSending(false);
           setSendingMethod('');
         }
@@ -705,17 +1743,32 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       `}</style>
       <div
         className="fixed inset-0 z-[100001] flex items-center justify-center bg-black/40 animate-fadeIn"
-        onClick={onClose}
+        onClick={() => {
+          if (!isGeneratingPNG && !isSending) {
+            onClose();
+          } else {
+            toast.info('Please wait for the operation to complete before closing');
+          }
+        }}
       >
       <div
         className={`bg-white rounded-2xl w-full shadow-2xl overflow-hidden relative animate-slideUp max-h-[90vh] flex flex-col ${
           pageSize === 'a4' && orientation === 'landscape' ? 'max-w-6xl' : 'max-w-2xl'
         }`}
         onClick={(e) => e.stopPropagation()}
+        style={{
+          margin: 'auto', // Center the entire modal
+        }}
       >
         {/* Close button */}
         <button
-          onClick={onClose}
+          onClick={() => {
+          if (!isGeneratingPNG && !isSending) {
+            onClose();
+          } else {
+            toast.info('Please wait for the operation to complete before closing');
+          }
+        }}
           className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-10"
         >
           <X className="w-5 h-5" strokeWidth={2} />
@@ -782,17 +1835,23 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
         </div>
 
         {/* Receipt Preview Section - Matching Existing UI Design */}
-        <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-br from-gray-100 via-gray-50 to-gray-100 flex items-center justify-center" style={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div 
+            ref={receiptPreviewRef}
             data-receipt-preview
-            className={`bg-white rounded-2xl border-2 border-gray-200 shadow-sm mx-auto p-6 transition-all duration-300 ${
+            className={`bg-white rounded-3xl border-4 border-gray-300 shadow-2xl mx-auto my-auto p-8 transition-all duration-300 ${
               pageSize === 'a5' ? 'max-w-md' : 
               pageSize === 'legal' ? 'max-w-3xl' : 
               pageSize === 'a4' && orientation === 'landscape' ? 'w-full max-w-full' :
               'max-w-2xl'
             }`}
-            style={
-              pageSize === 'a4' && orientation === 'landscape' 
+            style={{
+              boxShadow: '0 20px 60px -15px rgba(0, 0, 0, 0.3), 0 10px 30px -10px rgba(0, 0, 0, 0.2)',
+              margin: 'auto', // Center both horizontally and vertically
+              alignSelf: 'center', // Additional vertical centering
+            }}
+            style={{
+              ...(pageSize === 'a4' && orientation === 'landscape' 
                 ? {
                     aspectRatio: '297/210',
                     minHeight: 'auto'
@@ -801,17 +1860,42 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                 ? {
                     aspectRatio: '210/297'
                   }
-                : {}
-            }
+                : {}),
+              backgroundColor: '#ffffff',
+            }}
           >
+            {/* Receipt Number - Prominently Displayed */}
+            <div className={`mb-4 pb-3 border-b-2 border-gray-300 ${pageSize === 'a4' && orientation === 'landscape' ? 'mb-3 pb-2' : ''}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className={`text-gray-500 font-medium ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>Receipt Number:</span>
+                  <h1 className={`font-extrabold text-gray-900 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xl' : 'text-2xl'}`}>
+                    #{receiptData.receiptNumber}
+                  </h1>
+                </div>
+                <div className="text-right">
+                  <span className={`text-gray-500 font-medium ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>
+                    {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                  <div className={`text-gray-600 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>
+                    {new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Logo and Business Info Section - Logo on Left */}
             <div className={`flex items-start gap-4 ${pageSize === 'a4' && orientation === 'landscape' ? 'mb-4' : 'mb-6'}`}>
               {/* Logo - Left Side, No Container */}
               {businessInfo.logo ? (
                 <img 
-                  src={businessInfo.logo} 
+                  src={convertedImages.get(businessInfo.logo) || businessInfo.logo}
+                  data-original-src={businessInfo.logo}
+                  crossOrigin="anonymous"
+                  referrerPolicy="no-referrer-when-downgrade"
                   alt={businessInfo.name}
                   className={`object-contain flex-shrink-0 ${pageSize === 'a4' && orientation === 'landscape' ? 'h-32' : 'h-36'}`}
+                  loading="eager"
                   onLoad={() => {
                     if (process.env.NODE_ENV === 'development') {
                       console.log('✅ Logo loaded successfully in receipt preview');
@@ -819,6 +1903,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                   }}
                   onError={(e) => {
                     console.error('❌ Logo failed to load:', businessInfo.logo?.substring(0, 50));
+                    // Hide logo and show text fallback
                     e.currentTarget.style.display = 'none';
                   }}
                 />
@@ -858,10 +1943,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                     <div className="space-y-2 mt-2">
                     {businessInfo.address && (
                       <div className="flex items-start gap-2">
-                        <svg className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
+                        <span className={`text-gray-500 mt-0.5 flex-shrink-0 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>📍</span>
                         <span className={`text-gray-700 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>{businessInfo.address}</span>
                       </div>
                     )}
@@ -874,9 +1956,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                       
                       return formattedPhones ? (
                         <div className="flex items-center gap-2">
-                          <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                          </svg>
+                          <span className={`text-gray-500 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>📞</span>
                           <span className={`text-gray-700 font-medium ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>
                             {formattedPhones}
                           </span>
@@ -885,17 +1965,13 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                     })()}
                     {businessInfo.email && (
                       <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
+                        <span className={`text-gray-500 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>✉️</span>
                         <span className={`text-gray-700 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>{businessInfo.email}</span>
                       </div>
                     )}
                     {businessInfo.website && (
                       <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                        </svg>
+                        <span className={`text-gray-500 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>🌐</span>
                         <span className={`text-gray-700 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>{businessInfo.website}</span>
                       </div>
                     )}
@@ -960,72 +2036,37 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
 
                   {/* Customer Info - Below Business Information */}
                   {(receiptData.customerName || receiptData.customerPhone || receiptData.customerEmail || receiptData.customerCity || receiptData.customerTag || receiptData.id) && (
-                    <div className={`border-t border-gray-200 ${pageSize === 'a4' && orientation === 'landscape' ? 'mt-4 pt-4' : 'mt-2 pt-2'}`}>
+                    <div className={`border-t-2 border-dashed border-gray-300 ${pageSize === 'a4' && orientation === 'landscape' ? 'mt-4 pt-4' : 'mt-3 pt-3'}`}>
+                      {/* Bill To Label */}
+                      <div className={`mb-2 ${pageSize === 'a4' && orientation === 'landscape' ? 'mb-3' : ''}`}>
+                        <span className={`font-bold text-gray-600 uppercase ${pageSize === 'a4' && orientation === 'landscape' ? 'text-sm' : 'text-xs'}`}>
+                          Bill To:
+                        </span>
+                      </div>
                       {/* Customer Name - Minimal in Portrait */}
                       {receiptData.customerName && (
-                        <h3 className={`font-semibold text-gray-700 uppercase mb-0 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-2xl mb-2' : 'text-sm mb-1'}`}>
+                        <h3 className={`font-semibold text-gray-700 uppercase mb-0 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-2xl mb-2' : 'text-base mb-1'}`}>
                           {receiptData.customerName}
                         </h3>
                       )}
                       
                       <div className={`grid ${pageSize === 'a4' && orientation === 'landscape' ? 'grid-cols-2 gap-2 mt-2' : 'grid-cols-2 gap-x-3 gap-y-1 mt-1'}`}>
                         {receiptData.customerPhone && (
-                          <div className={`flex items-center ${pageSize === 'a4' && orientation === 'landscape' ? 'gap-2 justify-end' : 'gap-1.5 justify-start'}`}>
-                            {pageSize === 'a4' && orientation === 'landscape' ? (
-                              <>
-                                <span className={`text-gray-700 font-medium text-xs`}>{receiptData.customerPhone}</span>
-                                <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                </svg>
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                </svg>
-                                <span className={`text-gray-600 text-xs`}>{receiptData.customerPhone}</span>
-                              </>
-                            )}
+                          <div className={`flex items-center ${pageSize === 'a4' && orientation === 'landscape' ? 'gap-2 justify-start' : 'gap-1.5 justify-start'}`}>
+                            <span className={`text-gray-500 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-xs'}`}>📞</span>
+                            <span className={`text-gray-700 font-medium ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-xs'}`}>{receiptData.customerPhone}</span>
                           </div>
                         )}
                         {receiptData.customerEmail && (
-                          <div className={`flex items-center ${pageSize === 'a4' && orientation === 'landscape' ? 'gap-2 justify-end' : 'gap-1.5 justify-start'}`}>
-                            {pageSize === 'a4' && orientation === 'landscape' ? (
-                              <>
-                                <span className={`text-gray-700 text-xs`}>{receiptData.customerEmail}</span>
-                                <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                </svg>
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                </svg>
-                                <span className={`text-gray-600 text-xs`}>{receiptData.customerEmail}</span>
-                              </>
-                            )}
+                          <div className={`flex items-center ${pageSize === 'a4' && orientation === 'landscape' ? 'gap-2 justify-start' : 'gap-1.5 justify-start'}`}>
+                            <span className={`text-gray-500 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-xs'}`}>✉️</span>
+                            <span className={`text-gray-700 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-xs'}`}>{receiptData.customerEmail}</span>
                           </div>
                         )}
                         {receiptData.customerCity && (
-                          <div className={`flex items-center ${pageSize === 'a4' && orientation === 'landscape' ? 'gap-2 justify-end' : 'gap-1.5 justify-start'}`}>
-                            {pageSize === 'a4' && orientation === 'landscape' ? (
-                              <>
-                                <span className={`text-gray-700 text-xs`}>{receiptData.customerCity}</span>
-                                <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                                <span className={`text-gray-600 text-xs`}>{receiptData.customerCity}</span>
-                              </>
-                            )}
+                          <div className={`flex items-center ${pageSize === 'a4' && orientation === 'landscape' ? 'gap-2 justify-start' : 'gap-1.5 justify-start'}`}>
+                            <span className={`text-gray-500 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-xs'}`}>📍</span>
+                            <span className={`text-gray-700 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-xs'}`}>{receiptData.customerCity}</span>
                           </div>
                         )}
                         {receiptData.customerTag && (
@@ -1086,28 +2127,55 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                           <div className="flex-shrink-0">
                             {item.image ? (
                               <img 
-                                src={item.image} 
+                                src={convertedImages.get(item.image) || item.image} 
                                 alt={productName}
-                                className={`object-cover rounded-lg border border-gray-200 ${
+                                data-original-src={item.image}
+                                className={`object-cover rounded-lg ${
                                   isLandscape && !isSingleItem 
                                     ? 'w-full h-20' 
                                     : isLandscape && isSingleItem
                                     ? 'w-28 h-28'
                                     : 'w-32 h-32'
                                 }`}
+                                loading="eager"
+                                crossOrigin="anonymous"
+                                referrerPolicy="no-referrer-when-downgrade"
+                                onLoad={() => {
+                                  if (process.env.NODE_ENV === 'development') {
+                                    console.log('✅ Product image loaded:', item.image?.substring(0, 50));
+                                  }
+                                }}
                                 onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
+                                  console.warn('⚠️ Product image failed to load:', item.image?.substring(0, 50));
+                                  
+                                  // Show placeholder if image fails to load
+                                  const imgElement = e.currentTarget;
+                                  const parent = imgElement.parentElement;
+                                  if (parent && !parent.querySelector('.image-placeholder')) {
+                                    imgElement.style.display = 'none';
+                                    const placeholder = document.createElement('div');
+                                    placeholder.className = `image-placeholder bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center ${
+                                      isLandscape && !isSingleItem 
+                                        ? 'w-full h-20' 
+                                        : isLandscape && isSingleItem
+                                        ? 'w-28 h-28'
+                                        : 'w-32 h-32'
+                                    }`;
+                                    placeholder.innerHTML = '<span class="text-xs text-gray-500 font-medium">📦</span><span class="text-[10px] text-gray-400 mt-1">No Image</span>';
+                                    parent.appendChild(placeholder);
+                                  }
                                 }}
                               />
                             ) : (
-                              <div className={`bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center ${
+                              <div className={`bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center ${
                                 isLandscape && !isSingleItem 
                                   ? 'w-full h-20' 
                                   : isLandscape && isSingleItem
                                   ? 'w-28 h-28'
                                   : 'w-32 h-32'
                               }`}>
-                                <span className="text-xs text-gray-400">No Image</span>
+                                <span className="text-lg text-gray-400 mb-1">📦</span>
+                                <span className="text-xs text-gray-500 font-medium">No Image</span>
                               </div>
                             )}
           </div>
@@ -1232,17 +2300,13 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                 }`}>SUMMARY</h3>
                 <div className={`space-y-2 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-sm' : 'text-base'}`}>
                         {/* Receipt Information */}
-                        <div className="space-y-1">
-                          <div className="grid grid-cols-2 gap-2 text-gray-600 text-xs">
-                            <p>{new Date().toLocaleDateString()}</p>
-                            <p>{new Date().toLocaleTimeString()}</p>
-                          </div>
-                          {receiptData.sellerName && (
+                        {receiptData.sellerName && (
+                          <div className="space-y-1">
                             <div className="text-gray-600 text-xs">
                               <p><span className="font-semibold">Seller:</span> {receiptData.sellerName}</p>
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
 
                         {/* Separator */}
                         <div className="border-t border-gray-300 my-2"></div>
@@ -1250,8 +2314,24 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                         {/* Pricing Details */}
                         {receiptData.items && receiptData.items.length > 0 && (
                           <div className="flex justify-between items-center text-gray-700">
-                            <span>Price</span>
-                            <span className="font-semibold">{formatMoney(receiptData.items.reduce((sum, item) => sum + item.totalPrice, 0))}</span>
+                            <span>Subtotal</span>
+                            <span className="font-semibold">{formatMoney(receiptData.subtotal || receiptData.items.reduce((sum, item) => sum + item.totalPrice, 0))}</span>
+                          </div>
+                        )}
+                        
+                        {/* Tax Information */}
+                        {receiptData.tax !== undefined && receiptData.tax > 0 && (
+                          <div className="flex justify-between items-center text-gray-700">
+                            <span>Tax (VAT)</span>
+                            <span className="font-semibold">{formatMoney(receiptData.tax)}</span>
+                          </div>
+                        )}
+                        
+                        {/* Discount Information */}
+                        {receiptData.discount !== undefined && receiptData.discount > 0 && (
+                          <div className="flex justify-between items-center text-green-700">
+                            <span>Discount</span>
+                            <span className="font-semibold">-{formatMoney(receiptData.discount)}</span>
                           </div>
                         )}
                         
@@ -1260,11 +2340,26 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                           <span className="font-semibold">TSh 0</span>
                         </div>
                         
+                        {/* Payment Method */}
+                        {receiptData.paymentMethod && (
+                          <>
+                            <div className="border-t border-gray-300 my-2"></div>
+                            <div className="flex justify-between items-center text-gray-700">
+                              <span className="font-medium">Payment Method:</span>
+                              <span className="font-semibold">
+                                {typeof receiptData.paymentMethod === 'string' 
+                                  ? receiptData.paymentMethod 
+                                  : receiptData.paymentMethod.name || 'N/A'}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                        
                         {/* Separator Line */}
-                        <div className="border-t border-gray-300 my-2"></div>
+                        <div className="border-t-2 border-gray-400 my-3"></div>
                         
                         {/* Total Amount - Bold and Large */}
-                        <div className="flex justify-between items-center">
+                        <div className="flex justify-between items-center bg-gray-50 -mx-2 px-2 py-2 rounded-lg">
                           <span className={`font-extrabold text-gray-900 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xl' : 'text-2xl'}`}>Total Amount</span>
                           <span className={`font-extrabold text-gray-900 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xl' : 'text-2xl'}`}>{formatMoney(receiptData.amount)}</span>
                         </div>
@@ -1375,13 +2470,14 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
             {shareOptions.map((option, index) => {
               const Icon = option.icon;
               const isSMSOption = option.name === 'SMS';
+              const isWhatsAppOption = option.name === 'WhatsApp';
               
               return (
                 <button
                   key={index}
                   onClick={() => {
-                    if (isSMSOption) {
-                      // SMS is async, handled in onClick
+                    if (isSMSOption || isWhatsAppOption) {
+                      // SMS and WhatsApp are async, handled in onClick
                       option.onClick();
                     } else {
                       // Other options are sync

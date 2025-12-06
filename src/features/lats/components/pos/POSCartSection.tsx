@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, User, XCircle, Phone, Crown, Search, Plus, Percent, DollarSign, Edit3, CreditCard, Repeat, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShoppingCart, User, XCircle, Phone, Crown, Search, Plus, Percent, DollarSign, Edit3, CreditCard, Repeat, FileText, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import GlassCard from '../../../../features/shared/components/ui/GlassCard';
 import VariantCartItem from './VariantCartItem';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
@@ -244,35 +244,57 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                       </button>
                     )}
                     <button
+                      type="button"
                       onClick={() => {
                         playDeleteSound();
                         onRemoveCustomer();
                       }}
-                      className="p-2.5 text-red-600 hover:bg-red-100 rounded-xl transition-all duration-200 hover:scale-110 active:scale-95"
+                      className="flex-shrink-0 inline-flex items-center justify-center w-9 h-9 text-sm font-medium text-white bg-red-500 hover:bg-red-600 border border-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors duration-200 shadow-lg"
                       title="Remove customer"
                     >
-                      <XCircle className="w-5 h-5" />
+                      <Trash2 className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
-              <button
-                onClick={() => {
-                  playClickSound();
-                  onShowCustomerSearch();
-                }}
-                className="w-full flex items-center justify-center gap-3 p-4 text-base border-2 border-blue-200 rounded-xl bg-white text-gray-900 hover:border-blue-300 hover:shadow-lg transition-all duration-200"
-              >
-                <Search className="w-5 h-5 text-blue-500" />
-                <span className="text-gray-600">Search Customer</span>
-                <Plus className="w-4 h-4 text-blue-500" />
-              </button>
+            <div 
+              onClick={() => {
+                playClickSound();
+                onShowCustomerSearch();
+              }}
+              className="bg-gradient-to-br from-blue-50 via-blue-50 to-blue-50 rounded-xl border-2 border-dashed border-blue-300 shadow-md hover:shadow-lg transition-all duration-300 cursor-pointer"
+            >
+              <div className="p-6 text-center">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 via-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white shadow-lg">
+                    <Search className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Select Customer</h3>
+                    <p className="text-sm text-gray-600">Choose a customer to continue</p>
+                    <p className="text-xs text-gray-500 mt-2">Click here to select</p>
+                  </div>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playClickSound();
+                      onShowCustomerSearch();
+                    }}
+                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-medium hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md hover:shadow-lg"
+                  >
+                    <Plus className="w-5 h-5" />
+                    <span>Select Customer</span>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
+
+        {/* Separator */}
+        <div className="my-4 border-t border-gray-200"></div>
 
         {/* Cart Items - Scrollable */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2" style={{ minHeight: 0 }}>
@@ -284,16 +306,6 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
             </div>
           ) : (
             <>
-              {/* Dynamic Pricing Display */}
-              {dynamicPricingEnabled && (
-                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-yellow-800">
-                    <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
-                    Dynamic pricing is active
-                  </div>
-                </div>
-              )}
-
               {/* Cart Items */}
               <div className="space-y-3 mb-6">
                 {reversedCartItems.map((item, index) => (

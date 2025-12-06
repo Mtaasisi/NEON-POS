@@ -25,28 +25,40 @@ import {
   Database, Star, UserPlus, MessageSquare, TrendingUp, BarChart3, Download, History, Award, 
   AlertCircle, Activity, Zap, UserX, FileText, Video, Music, MapPin, Gift, ThumbsUp, Calendar, 
   RotateCcw, Lock, Settings, Edit3, FileCheck, Plus, Smile, Code, Hash, AtSign, Paperclip, 
-  Type, Keyboard, Sparkles, Minimize2, Smartphone 
+  Type, Keyboard, Sparkles, Minimize2, Smartphone, Volume2, VolumeX 
 } from 'lucide-react';
 import whatsappService from '../../../services/whatsappService';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import { BackButton } from '../../shared/components/ui/BackButton';
 import { useAuth } from '../../../context/AuthContext';
 import { findCustomerByPhoneMatch, phonesMatch } from '../../../utils/phoneMatching';
 import whatsappAdvancedService from '../../../services/whatsappAdvancedService';
 import type { WhatsAppCampaign, BlacklistEntry } from '../../../types/whatsapp-advanced';
 import BulkStep1Enhanced from '../components/BulkStep1Enhanced';
-import CampaignHistoryModal from '../components/CampaignHistoryModal';
 import BlacklistManagementModal from '../components/BlacklistManagementModal';
 import MediaLibraryModal from '../components/MediaLibraryModal';
 import WhatsAppSessionModal from '../components/WhatsAppSessionModal';
 import CampaignManagementModal from '../components/CampaignManagementModal';
+import CampaignTemplatesModal from '../components/CampaignTemplatesModal';
+import ScheduledCampaignsModal from '../components/ScheduledCampaignsModal';
+import WhatsAppTopBar from '../components/WhatsAppTopBar';
+import WhatsAppAutomationModal from '../components/WhatsAppAutomationModal';
 import { errorExporter } from '../../../utils/errorExporter';
+import Modal from '../../shared/components/ui/Modal';
 import { createCampaignInDB, updateCampaignProgress, finalizeCampaign, getCurrentCampaignId, resetCampaignTracking } from '../utils/campaignSaver';
 import { getAllTemplates, saveTemplate, deleteTemplate, getTemplate, incrementTemplateUse, type CampaignTemplate } from '../utils/campaignTemplates';
 import { personalizeMessage as enhancedPersonalize, getAvailableVariables } from '../utils/personalization';
-import { createRetryableError, shouldRetry, incrementRetry, getRetryQueue, type RetryableError } from '../utils/smartRetry';
+import { createRetryableError, shouldRetry, incrementRetry, getRetryQueue, calculateRetryDelay, type RetryableError } from '../utils/smartRetry';
 import { scheduleCampaign, getAllScheduled, getPendingCampaigns, updateScheduledStatus, type ScheduledCampaign } from '../utils/scheduledCampaigns';
+import { filterRecipientsBySegment, getSegmentStats, type SegmentFilter } from '../utils/recipientSegmentation';
+import { checkMilestones, sendCompletionSummary, resetMilestones } from '../utils/notifications';
+import { localMediaStorage } from '../../../lib/localMediaStorage';
+import { 
+  createCampaignInCRM, 
+  updateCampaignStatusInCRM, 
+  logMessageSentToCRM,
+  logMessageReceivedFromCRM 
+} from '../utils/crmIntegration';
 
 interface IncomingMessage {
   id: string;
@@ -124,13 +136,19 @@ export default function WhatsAppInboxPage() {
   const [bulkSending, setBulkSending] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0, success: 0, failed: 0 });
   
+  // Message validation & warnings
+  const [messageWarnings, setMessageWarnings] = useState<Array<{type: 'spam' | 'duplicate' | 'character' | 'phone', message: string}>>([]);
+  const [messageHistory, setMessageHistory] = useState<string[]>([]); // For duplicate detection
+  const [messageUndoStack, setMessageUndoStack] = useState<string[]>([]); // For undo functionality
+  const [testSendPhone, setTestSendPhone] = useState('');
+  
   // Anti-ban settings - Comprehensive protection
   const [usePersonalization, setUsePersonalization] = useState(true);
   const [randomDelay, setRandomDelay] = useState(true);
   const [minDelay, setMinDelay] = useState(3);
   const [maxDelay, setMaxDelay] = useState(8);
   const [usePresence, setUsePresence] = useState(false); // Disabled by default due to API limitations
-  const [dailyLimit, setDailyLimit] = useState(100);
+  const [dailyLimit, setDailyLimit] = useState(999999); // Effectively unlimited
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   
   // Advanced anti-ban features
@@ -143,12 +161,15 @@ export default function WhatsAppInboxPage() {
   const [useInvisibleChars, setUseInvisibleChars] = useState(true); // Add invisible Unicode characters
   const [useEmojiVariation, setUseEmojiVariation] = useState(true); // Rotate similar emojis
   
+  // Track if settings are being loaded (to prevent auto-save during load)
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  
   // Advanced Features Modals
-  const [showCampaignHistory, setShowCampaignHistory] = useState(false);
   const [showCampaignManagement, setShowCampaignManagement] = useState(false);
   const [showBlacklistModal, setShowBlacklistModal] = useState(false);
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [showSessionModal, setShowSessionModal] = useState(false);
+  const [showAutomationModal, setShowAutomationModal] = useState(false);
   const [campaigns, setCampaigns] = useState<WhatsAppCampaign[]>([]);
   const [blacklist, setBlacklist] = useState<BlacklistEntry[]>([]);
   const [currentCampaignId, setCurrentCampaignId] = useState<string | null>(null);
@@ -194,6 +215,37 @@ export default function WhatsAppInboxPage() {
   const [showVariablesMenu, setShowVariablesMenu] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const messageTextareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const messageEditorRef = React.useRef<HTMLDivElement>(null);
+  
+  // Function to convert markdown to HTML for display
+  const renderFormattedText = (text: string): string => {
+    if (!text) return '';
+    
+    let html = text
+      // Escape HTML first
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      // Convert markdown to HTML
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') // Bold **text**
+      .replace(/\*([^*]+)\*/g, '<strong>$1</strong>') // Bold *text*
+      .replace(/__([^_]+)__/g, '<strong>$1</strong>') // Bold __text__
+      .replace(/_([^_]+)_/g, '<em>$1</em>') // Italic _text_
+      .replace(/~~([^~]+)~~/g, '<del>$1</del>') // Strikethrough ~~text~~
+      .replace(/~([^~]+)~/g, '<del>$1</del>') // Strikethrough ~text~
+      .replace(/```([^`]+)```/g, '<code class="bg-gray-100 px-1 py-0.5 rounded font-mono text-sm">$1</code>') // Code ```text```
+      // Highlight variables
+      .replace(/\{(\w+)\}/g, '<span class="text-green-600 font-semibold">{$1}</span>');
+    
+    return html;
+  };
+  
+  // Function to extract plain text from HTML (for storing markdown)
+  const extractPlainText = (html: string): string => {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div.textContent || div.innerText || '';
+  };
   
   // Draft management
   const [hasDraft, setHasDraft] = useState(false);
@@ -225,22 +277,50 @@ export default function WhatsAppInboxPage() {
   const [editingBeforeResume, setEditingBeforeResume] = useState(false);
   
   // Sound and notifications
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    // Load from localStorage on init
+    const saved = localStorage.getItem('whatsapp_sound_enabled');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  
+  // Track last known message IDs to detect new messages (use ref to avoid stale closures)
+  const lastKnownMessageIdsRef = React.useRef<Set<string>>(new Set());
+  
+  // Persist sound setting to localStorage
+  useEffect(() => {
+    localStorage.setItem('whatsapp_sound_enabled', JSON.stringify(soundEnabled));
+  }, [soundEnabled]);
   
   // Campaign Templates
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [templates, setTemplates] = useState<CampaignTemplate[]>([]);
   
+  // Message editor focus state for formatted preview
+  const [isMessageFocused, setIsMessageFocused] = useState(false);
+  
   // Scheduled Campaigns
   const [showScheduledModal, setShowScheduledModal] = useState(false);
   const [scheduledCampaigns, setScheduledCampaigns] = useState<ScheduledCampaign[]>([]);
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
+  
+  // Date/Time Scheduling Modal
+  const [showDateTimeModal, setShowDateTimeModal] = useState(false);
+  const [dateTimeDate, setDateTimeDate] = useState('');
+  const [dateTimeTime, setDateTimeTime] = useState('');
   
   // Retry Queue
   const [retryQueue, setRetryQueue] = useState<RetryableError[]>([]);
-
+  
+  // Recipient Segmentation
+  const [segmentFilter, setSegmentFilter] = useState<SegmentFilter | null>(null);
+  const [showSegmentFilter, setShowSegmentFilter] = useState(false);
+  const [segmentStats, setSegmentStats] = useState<any>(null);
+  
   // Play sound notification
-  const playSound = (type: 'pause' | 'complete' | 'error' | 'resume') => {
+  const playSound = (type: 'pause' | 'complete' | 'error' | 'resume' | 'success') => {
     if (!soundEnabled) return;
     
     try {
@@ -256,7 +336,8 @@ export default function WhatsAppInboxPage() {
         pause: [400, 300],
         complete: [500, 600, 700],
         error: [300, 200],
-        resume: [300, 400, 500]
+        resume: [300, 400, 500],
+        success: [600, 700] // Short, pleasant sound for successful sends
       };
       
       const freqs = frequencies[type];
@@ -264,11 +345,14 @@ export default function WhatsAppInboxPage() {
       
       freqs.forEach((freq, i) => {
         oscillator.frequency.setValueAtTime(freq, time);
-        gainNode.gain.setValueAtTime(0.3, time);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
-        time += 0.15;
+        // Softer sound for individual success (less intrusive)
+        const volume = type === 'success' ? 0.15 : 0.3;
+        gainNode.gain.setValueAtTime(volume, time);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, time + (type === 'success' ? 0.05 : 0.1));
+        time += type === 'success' ? 0.08 : 0.15;
       });
       
+      oscillator.type = 'sine';
       oscillator.start(audioContext.currentTime);
       oscillator.stop(time);
     } catch (error) {
@@ -319,6 +403,49 @@ export default function WhatsAppInboxPage() {
     const hours = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     return `${hours}h ${mins}m`;
+  };
+
+  // Resolve media URL - check localStorage first, then fallback to original URL
+  const resolveMediaUrl = (mediaUrl: string | undefined): string | undefined => {
+    console.log('🔍 [DEBUG] resolveMediaUrl() called', { mediaUrl: mediaUrl?.substring(0, 50) + '...' });
+    
+    if (!mediaUrl) {
+      console.log('⚠️ [DEBUG] No mediaUrl provided, returning undefined');
+      return undefined;
+    }
+    
+    // If it's already a data URL or external URL, return as is
+    if (mediaUrl.startsWith('data:') || mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://')) {
+      console.log('✅ [DEBUG] Media URL is already a full URL (data/http/https), returning as is');
+      return mediaUrl;
+    }
+    
+    // If it's a relative path like /media/whatsapp/General/..., try to get from localStorage
+    if (mediaUrl.startsWith('/media/whatsapp/')) {
+      console.log('📁 [DEBUG] Media URL is a /media/whatsapp/ path, checking localStorage...');
+      const relativePath = mediaUrl.replace('/media/whatsapp/', '');
+      console.log('📁 [DEBUG] Extracted relative path:', relativePath);
+      
+      const base64Url = localMediaStorage.getMedia(relativePath, true);
+      if (base64Url) {
+        console.log('✅ [DEBUG] Found in localStorage, returning base64 URL');
+        return base64Url;
+      }
+      // If not found in localStorage, return a placeholder to prevent 404 errors
+      // Return undefined so the component can handle it gracefully
+      console.log('⚠️ [DEBUG] Not found in localStorage, returning undefined to prevent 404');
+      return undefined;
+    }
+    
+    // Fallback to original URL (but this might cause 404 if it's a local path)
+    // For local paths that don't exist, return undefined to prevent 404s
+    if (mediaUrl.startsWith('/')) {
+      console.log('⚠️ [DEBUG] Media URL is a local path starting with /, returning undefined to prevent 404');
+      return undefined;
+    }
+    
+    console.log('✅ [DEBUG] Returning original mediaUrl as fallback');
+    return mediaUrl;
   };
 
   // Export recipients to CSV
@@ -568,7 +695,7 @@ export default function WhatsAppInboxPage() {
         setBatchSize(settings.batchSize || 20);
         setBatchDelay(settings.batchDelay || 60);
         setMaxPerHour(settings.maxPerHour || 30);
-        setDailyLimit(settings.dailyLimit || 100);
+        setDailyLimit(settings.dailyLimit || 999999); // Effectively unlimited
         setSkipRecentlyContacted(settings.skipRecentlyContacted ?? true);
         setRespectQuietHours(settings.respectQuietHours ?? true);
         setUseInvisibleChars(settings.useInvisibleChars ?? true);
@@ -591,7 +718,7 @@ export default function WhatsAppInboxPage() {
             setBatchSize(settings.batchSize || 20);
             setBatchDelay(settings.batchDelay || 60);
             setMaxPerHour(settings.maxPerHour || 30);
-            setDailyLimit(settings.dailyLimit || 100);
+            setDailyLimit(settings.dailyLimit || 999999); // Effectively unlimited
             setSkipRecentlyContacted(settings.skipRecentlyContacted ?? true);
             setRespectQuietHours(settings.respectQuietHours ?? true);
             setUseInvisibleChars(settings.useInvisibleChars ?? true);
@@ -741,7 +868,7 @@ export default function WhatsAppInboxPage() {
           // Load campaign data and start
           setCampaignName(nextCampaign.name);
           setBulkMessage(nextCampaign.message);
-          setBulkMessageType(nextCampaign.messageType);
+          setBulkMessageType(nextCampaign.messageType as typeof bulkMessageType);
           setSelectedRecipients(nextCampaign.selectedRecipients);
           Object.entries(nextCampaign.settings).forEach(([key, value]) => {
             // Apply settings
@@ -873,6 +1000,18 @@ export default function WhatsAppInboxPage() {
   // This component receives messages from WasenderAPI webhooks
   // The webhooks are configured in Admin Settings → Integrations → WhatsApp
   // Webhook events: messages.received, messages.upsert (for incoming messages)
+  
+  // Request notification permission on mount if not already granted
+  useEffect(() => {
+    if ('Notification' in window) {
+      if (Notification.permission === 'default') {
+        // Permission not yet requested - will be requested when user enables notifications
+      } else if (Notification.permission === 'granted') {
+        setNotificationsEnabled(true);
+      }
+    }
+  }, []);
+  
   useEffect(() => {
     async function initializeMessages() {
       try {
@@ -899,8 +1038,61 @@ export default function WhatsAppInboxPage() {
           schema: 'public',
           table: 'whatsapp_incoming_messages'
         },
-        () => {
-          // New message received via webhook - reload messages
+        async (payload: any) => {
+          // Check if this is a new message (INSERT event)
+          if (payload.eventType === 'INSERT' && payload.new) {
+            const newMessage = payload.new;
+            const messageId = newMessage.id;
+            
+            // Check if this is actually a new message we haven't seen
+            if (!lastKnownMessageIdsRef.current.has(messageId)) {
+              // Add to known messages
+              lastKnownMessageIdsRef.current.add(messageId);
+              
+              // Only notify if message is unread
+              if (!newMessage.is_read) {
+                // Fetch customer info if needed
+                let customerName = 'Unknown';
+                if (newMessage.from_phone) {
+                  try {
+                    // Try to find customer by phone
+                    const { data: customerData } = await supabase
+                      .from('customers')
+                      .select('name, phone')
+                      .or(`phone.eq.${newMessage.from_phone},phone.eq.+${newMessage.from_phone},whatsapp.eq.${newMessage.from_phone},whatsapp.eq.+${newMessage.from_phone}`)
+                      .limit(1)
+                      .single();
+                    
+                    if (customerData) {
+                      customerName = customerData.name || `+${newMessage.from_phone}`;
+                    } else {
+                      customerName = `+${newMessage.from_phone}`;
+                    }
+                  } catch (err) {
+                    customerName = newMessage.from_phone ? `+${newMessage.from_phone}` : 'Unknown';
+                  }
+                }
+                
+                const messagePreview = newMessage.message_text?.substring(0, 50) || 'New message';
+                
+                // Send browser notification
+                if (notificationsEnabled) {
+                  sendBrowserNotification(
+                    `New WhatsApp Message from ${customerName}`,
+                    messagePreview + (newMessage.message_text?.length > 50 ? '...' : ''),
+                    '/whatsapp-icon.svg'
+                  );
+                }
+                
+                // Play sound notification
+                if (soundEnabled) {
+                  playSound('success');
+                }
+              }
+            }
+          }
+          
+          // Reload messages to update UI
           loadMessages().catch(err => {
             console.error('Error reloading messages:', err);
           });
@@ -1124,6 +1316,41 @@ export default function WhatsAppInboxPage() {
         });
       }
 
+      // Track previous message IDs to detect new messages
+      const previousMessageIds = lastKnownMessageIdsRef.current;
+      const currentMessageIds = new Set<string>((incomingData || []).map((msg: any) => String(msg.id)));
+      
+      // Find new unread messages that weren't in the previous set
+      const newUnreadMessages = (incomingData || []).filter((msg: any) => 
+        !previousMessageIds.has(String(msg.id)) && !msg.is_read
+      );
+      
+      // Update tracked message IDs
+      lastKnownMessageIdsRef.current = currentMessageIds;
+      
+      // Send notifications for new unread messages (only if not from initial load)
+      if (previousMessageIds.size > 0 && newUnreadMessages.length > 0) {
+        for (const msg of newUnreadMessages) {
+          const customerName = msg.customers?.name || 
+                             (msg.from_phone ? `+${msg.from_phone}` : 'Unknown');
+          const messagePreview = msg.message_text?.substring(0, 50) || 'New message';
+          
+          // Send browser notification
+          if (notificationsEnabled) {
+            sendBrowserNotification(
+              `New WhatsApp Message from ${customerName}`,
+              messagePreview + (msg.message_text?.length > 50 ? '...' : ''),
+              '/whatsapp-icon.svg'
+            );
+          }
+          
+          // Play sound notification
+          if (soundEnabled) {
+            playSound('success');
+          }
+        }
+      }
+      
       setConversations(conversationsArray);
       setMessages(incomingData || []);
       
@@ -1364,6 +1591,27 @@ export default function WhatsAppInboxPage() {
       return;
     }
     
+    // Validate message and recipients before sending
+    const messageWarnings = validateMessage(bulkMessage);
+    const phoneWarnings = validatePhoneNumbers(selectedRecipients);
+    const allWarnings = [...messageWarnings, ...phoneWarnings];
+    
+    // Show warnings but allow sending (user can proceed)
+    if (allWarnings.length > 0) {
+      const warningMessages = allWarnings.map(w => w.message).join('\n');
+      const proceed = window.confirm(
+        `⚠️ Warnings detected:\n\n${warningMessages}\n\nDo you want to proceed anyway?`
+      );
+      if (!proceed) {
+        return;
+      }
+    }
+    
+    // Track message in history for duplicate detection
+    if (bulkMessage.trim().length > 10) {
+      setMessageHistory(prev => [bulkMessage.trim(), ...prev].slice(0, 100)); // Keep last 100
+    }
+    
     // CRITICAL: If resuming, ensure we have sentPhones from paused campaign
     // This handles race conditions where React state might not have updated yet
     if (resuming && pausedCampaignState && sentPhones.length === 0 && pausedCampaignState.sentPhones?.length > 0) {
@@ -1383,8 +1631,45 @@ export default function WhatsAppInboxPage() {
       }
     }
     
-    // Validate phone numbers before sending (only if not resuming)
+    // Apply recipient segmentation if enabled
     let recipientsToSend = [...selectedRecipients];
+    if (segmentFilter && !resuming) {
+      console.log('🎯 Applying recipient segmentation...');
+      const filtered = await filterRecipientsBySegment(recipientsToSend, segmentFilter);
+      const stats = await getSegmentStats(recipientsToSend);
+      console.log(`   Filtered: ${filtered.length}/${recipientsToSend.length} recipients match criteria`);
+      console.log(`   Stats:`, stats);
+      recipientsToSend = filtered;
+      
+      if (recipientsToSend.length === 0) {
+        toast.error('No recipients match the segmentation criteria');
+        return;
+      }
+    }
+    
+    // Exclude recently contacted recipients if enabled
+    if (skipRecentlyContacted && !resuming) {
+      const sixHoursAgo = Date.now() - (6 * 60 * 60 * 1000);
+      const recentPhones = new Set(
+        conversations
+          .filter(conv => {
+            const lastMessageTime = new Date(conv.last_message_time).getTime();
+            return lastMessageTime > sixHoursAgo;
+          })
+          .map(conv => conv.phone)
+      );
+      
+      const beforeCount = recipientsToSend.length;
+      recipientsToSend = recipientsToSend.filter(phone => !recentPhones.has(phone));
+      const excludedCount = beforeCount - recipientsToSend.length;
+      
+      if (excludedCount > 0) {
+        console.log(`   ⏭️  Excluded ${excludedCount} recently contacted recipients`);
+        toast(`Excluded ${excludedCount} recently contacted recipients`, { icon: 'ℹ️', duration: 3000 });
+      }
+    }
+    
+    // Validate phone numbers before sending (only if not resuming)
     if (!resuming) {
       console.log('📋 Validating phone numbers...');
       toast.loading('Validating phone numbers...', { id: 'phone-validation' });
@@ -1394,15 +1679,37 @@ export default function WhatsAppInboxPage() {
       
       for (const phone of recipientsToSend) {
         // Validate phone format
-        const validation = await whatsappService.validatePhoneNumber(phone);
-        
-        if (!validation.valid) {
-          console.warn(`❌ Invalid phone: ${phone} - ${validation.error}`);
-          invalidPhones.push({ 
-            phone, 
-            reason: validation.error || 'Invalid format' 
-          });
-        } else {
+        try {
+          // Check if validatePhoneNumber method exists
+          if (typeof whatsappService.validatePhoneNumber === 'function') {
+            const validation = await whatsappService.validatePhoneNumber(phone);
+            
+            if (!validation.valid) {
+              console.warn(`❌ Invalid phone: ${phone} - ${validation.error}`);
+              invalidPhones.push({ 
+                phone, 
+                reason: validation.error || 'Invalid format' 
+              });
+            } else {
+              validatedPhones.push(phone);
+            }
+          } else {
+            // Fallback: Use basic validation if method doesn't exist
+            console.warn('⚠️ validatePhoneNumber method not available, using basic validation');
+            const phoneRegex = /^[+]?[1-9]\d{9,14}$/;
+            const cleanedPhone = phone.replace(/\D/g, '');
+            if (phoneRegex.test(cleanedPhone)) {
+              validatedPhones.push(phone);
+            } else {
+              invalidPhones.push({ 
+                phone, 
+                reason: 'Invalid phone number format' 
+              });
+            }
+          }
+        } catch (error) {
+          console.error(`Error validating phone ${phone}:`, error);
+          // On error, assume valid to not block sending
           validatedPhones.push(phone);
         }
       }
@@ -1428,7 +1735,8 @@ export default function WhatsAppInboxPage() {
           return;
         }
         
-        toast.warning(`Sending to ${validatedPhones.length} valid numbers (skipped ${invalidPhones.length} invalid)`, { 
+        toast(`Sending to ${validatedPhones.length} valid numbers (skipped ${invalidPhones.length} invalid)`, { 
+          icon: '⚠️',
           duration: 5000 
         });
       } else {
@@ -1481,19 +1789,15 @@ export default function WhatsAppInboxPage() {
       return;
     }
     
-    // Check daily limit
-    if (recipientsToSend.length > dailyLimit) {
-      toast.error(`Daily limit is ${dailyLimit} messages. Current: ${recipientsToSend.length}. Increase limit or reduce recipients.`);
-      setBulkStep(3);
-      return;
-    }
+    // Removed daily limit check - allow unlimited sending
+    // Note: Rate limiting is still enforced per hour to prevent spam detection
     
-    // Check hourly limit
+    // Check hourly limit - show info but don't block
     const estimatedHours = Math.ceil(recipientsToSend.length / maxPerHour);
     if (estimatedHours > 3 && !resuming) {
       const confirmSend = window.confirm(
         `This will take approximately ${estimatedHours} hours to send at ${maxPerHour} messages/hour.\n\n` +
-        `This is to prevent spam detection. Continue?`
+        `Rate limiting is applied to prevent spam detection. Continue?`
       );
       if (!confirmSend) {
         setBulkStep(3);
@@ -1519,6 +1823,9 @@ export default function WhatsAppInboxPage() {
       const startTime = Date.now();
       setCampaignStartTime(startTime);
       addTimelineEvent('Campaign Started', `${selectedRecipients.length} recipients`);
+      
+      // Reset milestone tracking
+      resetMilestones();
       
       // Create campaign in database for incremental saving
       try {
@@ -1756,7 +2063,7 @@ export default function WhatsAppInboxPage() {
           const waitTime = 3600 - (Date.now() - hourStartTime) / 1000;
           if (waitTime > 0) {
             console.log(`⏳ Hourly limit reached (${maxPerHour}). Waiting ${Math.ceil(waitTime / 60)} minutes...`);
-            toast(`Rate limit: Pausing for ${Math.ceil(waitTime / 60)} minutes`, { duration: 5000, icon: '⏸️' });
+            toast(`⏸️ Rate limit: Pausing for ${Math.ceil(waitTime / 60)} minutes`, { duration: 5000 });
             await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
             messagesThisHour = 0;
             hourStartTime = Date.now();
@@ -1770,17 +2077,28 @@ export default function WhatsAppInboxPage() {
           await new Promise(resolve => setTimeout(resolve, batchDelay * 1000));
         }
         
+        const messageStartTime = Date.now();
         try {
-          const startTime = Date.now();
           console.log(`\n📤 [${i + 1}/${recipientsToSend.length}] Sending to: ${phone}`);
           console.log(`   Customer: ${conversation?.customer_name || 'Unknown'}`);
           console.log(`   Batch: ${Math.floor(i / batchSize) + 1} | Messages this hour: ${messagesThisHour}`);
           
           // Update progress - show attempt position
+          const newCurrent = alreadySentCount + i + 1;
           setBulkProgress(prev => ({ 
             ...prev, 
-            current: alreadySentCount + i + 1 
+            current: newCurrent 
           }));
+          
+          // Check for milestone notifications
+          if (notificationsEnabled) {
+            checkMilestones(newCurrent, originalTotal, {
+              milestones: [25, 50, 75, 90],
+              enableSounds: soundEnabled,
+              enableDesktop: true,
+              enableEmail: false
+            });
+          }
           
           // Personalize message (replace all variables)
           let personalizedMessage = bulkMessage;
@@ -1789,17 +2107,51 @@ export default function WhatsAppInboxPage() {
             const greetingHour = now.getHours();
             const greeting = greetingHour < 12 ? 'Good morning' : greetingHour < 18 ? 'Good afternoon' : 'Good evening';
             
-            console.log(`   🎨 Personalizing message...`);
-            // Replace all variables
-            personalizedMessage = personalizedMessage
-              .replace(/\{name\}/gi, conversation?.customer_name || 'Customer')
-              .replace(/\{phone\}/gi, phone)
-              .replace(/\{date\}/gi, now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }))
-              .replace(/\{time\}/gi, now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }))
-              .replace(/\{day\}/gi, now.toLocaleDateString('en-US', { weekday: 'long' }))
-              .replace(/\{month\}/gi, now.toLocaleDateString('en-US', { month: 'long' }))
-              .replace(/\{greeting\}/gi, greeting)
-              .replace(/\{company\}/gi, 'Dukani Pro'); // You can make this dynamic later
+            console.log(`   🎨 Personalizing message with enhanced variables...`);
+            // Use enhanced personalization (includes customer purchase data)
+            try {
+              personalizedMessage = await enhancedPersonalize(
+                personalizedMessage,
+                phone,
+                conversation?.customer_name
+              );
+              // Also replace {company} if present
+              personalizedMessage = personalizedMessage.replace(/\{company\}/gi, 'Dukani Pro');
+            } catch (error) {
+              console.warn('⚠️ Enhanced personalization failed, using basic:', error);
+              // Fallback to basic personalization
+              // Generate unique content function
+              const generateUnique = () => {
+                const options = [
+                  () => {
+                    const emojis = ['✨', '🌟', '💫', '⭐', '🎉', '🎊', '💎', '🔥', '💯', '🎯', '🚀', '💪', '👍', '👏', '🙌', '🤝', '💝', '🎁', '🎈', '🏆'];
+                    return emojis[Math.floor(Math.random() * emojis.length)];
+                  },
+                  () => {
+                    const invisibleChars = ['\u200B', '\u200C', '\u200D', '\uFEFF'];
+                    return invisibleChars[Math.floor(Math.random() * invisibleChars.length)];
+                  },
+                  () => {
+                    const smallEmojis = ['•', '▪', '▫', '◦', '▪', '▫'];
+                    return smallEmojis[Math.floor(Math.random() * smallEmojis.length)];
+                  },
+                  () => ''
+                ];
+                const selectedOption = options[Math.floor(Math.random() * options.length)];
+                return selectedOption();
+              };
+              
+              personalizedMessage = personalizedMessage
+                .replace(/\{name\}/gi, conversation?.customer_name || 'Customer')
+                .replace(/\{phone\}/gi, phone)
+                .replace(/\{date\}/gi, now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }))
+                .replace(/\{time\}/gi, now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }))
+                .replace(/\{day\}/gi, now.toLocaleDateString('en-US', { weekday: 'long' }))
+                .replace(/\{month\}/gi, now.toLocaleDateString('en-US', { month: 'long' }))
+                .replace(/\{greeting\}/gi, greeting)
+                .replace(/\{company\}/gi, 'Dukani Pro')
+                .replace(/\{unique\}/gi, () => generateUnique());
+            }
           }
           
           // Apply advanced message uniqueness techniques
@@ -1954,11 +2306,14 @@ export default function WhatsAppInboxPage() {
             });
           }
           
-          const sendDuration = Date.now() - startTime;
+          const sendDuration = Date.now() - messageStartTime;
           
           if (result.success) {
             successCount++;
             messagesThisHour++; // Increment hourly counter
+            
+            // Play success sound for each message sent
+            playSound('success');
             
             // Add to sent phones list for pause/resume functionality
             const newSentPhones = [...sentPhones, phone];
@@ -1966,6 +2321,9 @@ export default function WhatsAppInboxPage() {
             
             // IMPORTANT: Remove from selectedRecipients in real-time to keep only pending
             setSelectedRecipients(prev => prev.filter(p => p !== phone));
+            
+            // Log to CRM
+            await logMessageSentToCRM(phone, personalizedMessage, currentCampaignId || undefined);
             
             console.log(`   ✅ SUCCESS (${sendDuration}ms)`);
             console.log(`   📊 Progress: ${alreadySentCount + i + 1}/${originalTotal} | Success: ${successCount} | Failed: ${failCount}`);
@@ -2169,7 +2527,7 @@ export default function WhatsAppInboxPage() {
             await new Promise(resolve => setTimeout(resolve, delayMs));
           }
         } catch (error) {
-          const sendDuration = Date.now() - startTime;
+          const sendDuration = Date.now() - messageStartTime;
           failCount++;
           
           // Track the exception as a failed message
@@ -2199,6 +2557,72 @@ export default function WhatsAppInboxPage() {
         }
       }
 
+      // Process Smart Retry Queue for temporary failures
+      if (failedMessages.length > 0) {
+        console.log('\n🔄 Processing Smart Retry Queue...');
+        const retryableErrors = failedMessages.map(f => 
+          createRetryableError(f.phone, f.name, f.error, f.timestamp)
+        );
+        const retryQueue = getRetryQueue(retryableErrors);
+        
+        if (retryQueue.length > 0) {
+          console.log(`   📋 ${retryQueue.length} messages eligible for retry`);
+          toast(`🔄 Retrying ${retryQueue.length} failed messages...`, { duration: 4000, icon: '🔄' });
+          
+          let retrySuccess = 0;
+          let retryFailed = 0;
+          
+          for (const retryError of retryQueue) {
+            try {
+              // Wait for retry delay
+              const delay = calculateRetryDelay(retryError.retryCount, retryError.errorType);
+              console.log(`   ⏱️  Waiting ${delay/1000}s before retry (attempt ${retryError.retryCount + 1})...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              
+              // Retry sending
+              console.log(`   🔄 Retrying ${retryError.phone}...`);
+              const retryResult = await whatsappService.sendMessage(
+                retryError.phone,
+                bulkMessage,
+                { session_id: activeSession?.id || undefined }
+              );
+              
+              if (retryResult.success) {
+                retrySuccess++;
+                successCount++;
+                setSentPhones(prev => [...prev, retryError.phone]);
+                console.log(`   ✅ Retry SUCCESS for ${retryError.phone}`);
+                
+                // Remove from failed messages
+                setFailedMessages(prev => prev.filter(f => f.phone !== retryError.phone));
+              } else {
+                retryFailed++;
+                const incremented = incrementRetry(retryError);
+                if (incremented.retryCount < 3) {
+                  // Will retry again later
+                  console.log(`   ⏸️  Retry failed, will try again (attempt ${incremented.retryCount})`);
+                } else {
+                  console.log(`   ❌ Retry failed after ${incremented.retryCount} attempts`);
+                }
+              }
+            } catch (error) {
+              retryFailed++;
+              console.error(`   ❌ Retry exception for ${retryError.phone}:`, error);
+            }
+          }
+          
+          if (retrySuccess > 0) {
+            toast.success(`✅ Retry successful: ${retrySuccess} messages sent`, { duration: 4000 });
+            addTimelineEvent('Smart Retry', `${retrySuccess} messages retried successfully`);
+          }
+          if (retryFailed > 0) {
+            console.log(`   ⚠️  ${retryFailed} messages still failed after retry`);
+          }
+        } else {
+          console.log(`   ℹ️  No retryable errors (all failures are permanent)`);
+        }
+      }
+      
       // Show final results with detailed stats
       const totalProcessed = recipientsToSend.length;
       const totalSkipped = selectedRecipients.length - recipientsToSend.length;
@@ -2226,6 +2650,21 @@ export default function WhatsAppInboxPage() {
             `${successCount} sent, ${failCount} failed`
           );
         }
+        
+        // Enhanced completion summary
+        const duration = campaignStartTime ? Math.floor((Date.now() - campaignStartTime) / 1000) : 0;
+        sendCompletionSummary(
+          successCount,
+          failCount,
+          totalProcessed,
+          duration,
+          {
+            milestones: [25, 50, 75, 90],
+            enableSounds: soundEnabled,
+            enableDesktop: true,
+            enableEmail: false
+          }
+        );
       }
       
       if (successCount === totalProcessed && totalProcessed > 0) {
@@ -2282,6 +2721,19 @@ export default function WhatsAppInboxPage() {
           conversations: conversations.map(c => ({ phone: c.phone, customer_name: c.customer_name }))
         }, isSuccess);
         console.log(`✅ Campaign finalized in database`);
+        
+        // Update campaign status in CRM
+        if (campaignId) {
+          await updateCampaignStatusInCRM(
+            campaignId,
+            failCount === totalProcessed ? 'failed' : 'completed',
+            {
+              success: successCount,
+              failed: failCount,
+              total: originalTotal
+            }
+          );
+        }
       }
       
       // Categorize and display failed messages by error type
@@ -2715,6 +3167,37 @@ export default function WhatsAppInboxPage() {
     setSelectedRecipients([]);
   };
   
+  // Apply recipient segmentation
+  const applySegmentation = async (filter: SegmentFilter) => {
+    if (selectedRecipients.length === 0) {
+      toast.error('Please select recipients first');
+      return;
+    }
+    
+    toast.loading('Filtering recipients by segment criteria...', { id: 'segment-filter' });
+    try {
+      const filtered = await filterRecipientsBySegment(selectedRecipients, filter);
+      setSelectedRecipients(filtered);
+      setSegmentFilter(filter);
+      
+      const removed = selectedRecipients.length - filtered.length;
+      toast.dismiss('segment-filter');
+      if (removed > 0) {
+        toast.success(`Filtered: ${filtered.length} recipients match criteria (${removed} removed)`, { duration: 4000 });
+      } else {
+        toast.success(`All ${filtered.length} recipients match criteria`, { duration: 3000 });
+      }
+      
+      // Get segment stats
+      const stats = await getSegmentStats(filtered);
+      setSegmentStats(stats);
+    } catch (error) {
+      toast.dismiss('segment-filter');
+      console.error('Error applying segmentation:', error);
+      toast.error('Failed to apply segmentation filter');
+    }
+  };
+  
   const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -2829,28 +3312,196 @@ export default function WhatsAppInboxPage() {
   
   const loadAllCustomers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('phone, whatsapp');
+      toast.loading('Loading all customers from database...', { id: 'load-customers' });
       
-      if (error) throw error;
+      // Fetch all customers without limit - use pagination to get all
+      let allCustomers: any[] = [];
+      let from = 0;
+      const pageSize = 1000; // Fetch in batches of 1000
+      let hasMore = true;
+      
+      while (hasMore) {
+        const { data, error, count } = await supabase
+          .from('customers')
+          .select('phone, whatsapp', { count: 'exact' })
+          .range(from, from + pageSize - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allCustomers = [...allCustomers, ...data];
+          from += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
       
       const phones: string[] = [];
-      data?.forEach((customer: any) => {
+      allCustomers.forEach((customer: any) => {
         // Only add customers that have a phone or whatsapp number
-        if (customer.whatsapp) phones.push(customer.whatsapp);
-        else if (customer.phone) phones.push(customer.phone);
+        // Clean phone numbers (remove spaces, dashes, etc.)
+        const cleanPhone = (phone: string) => phone?.replace(/[\s\-\(\)]/g, '') || '';
+        
+        if (customer.whatsapp) {
+          const phone = cleanPhone(customer.whatsapp);
+          if (phone && !phones.includes(phone)) phones.push(phone);
+        } else if (customer.phone) {
+          const phone = cleanPhone(customer.phone);
+          if (phone && !phones.includes(phone)) phones.push(phone);
+        }
       });
       
       setSelectedRecipients(phones);
-      toast.success(`Loaded ${phones.length} customers with phone numbers`);
+      toast.success(`Loaded ${phones.length} customers with phone numbers`, { id: 'load-customers' });
     } catch (error) {
       console.error('Error loading customers:', error);
-      toast.error('Failed to load customers');
+      toast.error('Failed to load customers', { id: 'load-customers' });
     }
   };
 
   // Insert variable into message at cursor position
+  // Message validation functions
+  const validateMessage = (message: string): Array<{type: 'spam' | 'duplicate' | 'character' | 'phone', message: string}> => {
+    const warnings: Array<{type: 'spam' | 'duplicate' | 'character' | 'phone', message: string}> = [];
+    
+    // Spam trigger words
+    const spamWords = [
+      'free money', 'click here', 'limited time', 'act now', 'urgent', 'guaranteed',
+      'no risk', 'winner', 'congratulations', 'prize', 'claim now', 'click below',
+      'buy now', 'discount code', 'special offer', 'exclusive deal', 'one time only'
+    ];
+    const lowerMessage = message.toLowerCase();
+    const foundSpamWords = spamWords.filter(word => lowerMessage.includes(word));
+    if (foundSpamWords.length > 0) {
+      warnings.push({
+        type: 'spam',
+        message: `Potential spam words detected: ${foundSpamWords.slice(0, 3).join(', ')}`
+      });
+    }
+    
+    // Character limit warning (WhatsApp limit is 4096)
+    if (message.length > 3500) {
+      warnings.push({
+        type: 'character',
+        message: `Message is very long (${message.length}/4096 characters). Consider shortening.`
+      });
+    } else if (message.length > 3000) {
+      warnings.push({
+        type: 'character',
+        message: `Message is getting long (${message.length}/4096 characters)`
+      });
+    }
+    
+    // Duplicate detection
+    const normalizedMessage = message.toLowerCase().trim().replace(/\s+/g, ' ');
+    const isDuplicate = messageHistory.some(prev => 
+      prev.toLowerCase().trim().replace(/\s+/g, ' ') === normalizedMessage
+    );
+    if (isDuplicate && message.trim().length > 10) {
+      warnings.push({
+        type: 'duplicate',
+        message: 'This message was sent recently. Consider using a variation.'
+      });
+    }
+    
+    return warnings;
+  };
+  
+  // Validate phone numbers
+  const validatePhoneNumbers = (phones: string[]): Array<{type: 'phone', message: string}> => {
+    const warnings: Array<{type: 'phone', message: string}> = [];
+    const invalidPhones: string[] = [];
+    
+    phones.forEach(phone => {
+      // Basic validation - should start with country code
+      const cleanPhone = phone.replace(/\D/g, '');
+      if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+        invalidPhones.push(phone);
+      }
+    });
+    
+    if (invalidPhones.length > 0) {
+      warnings.push({
+        type: 'phone',
+        message: `${invalidPhones.length} phone number(s) may be invalid: ${invalidPhones.slice(0, 3).join(', ')}`
+      });
+    }
+    
+    return warnings;
+  };
+  
+  // Undo/Redo functionality
+  const handleMessageChange = (newMessage: string) => {
+    // Save to undo stack before changing
+    setMessageUndoStack(prev => [...prev, bulkMessage].slice(-50)); // Keep last 50
+    setBulkMessage(newMessage);
+    
+    // Validate message
+    const warnings = validateMessage(newMessage);
+    setMessageWarnings(warnings);
+  };
+  
+  const undoMessage = () => {
+    if (messageUndoStack.length > 0) {
+      const previousMessage = messageUndoStack[messageUndoStack.length - 1];
+      setMessageUndoStack(prev => prev.slice(0, -1));
+      setBulkMessage(previousMessage);
+      const warnings = validateMessage(previousMessage);
+      setMessageWarnings(warnings);
+    }
+  };
+  
+  // Test send to own number
+  const sendTestMessage = async () => {
+    if (!testSendPhone || !bulkMessage.trim()) {
+      toast.error('Please enter your phone number and message');
+      return;
+    }
+    
+    try {
+      toast.loading('Sending test message...', { id: 'test-send' });
+      
+      // Personalize message for test
+      let testMessage = bulkMessage;
+      try {
+        testMessage = await enhancedPersonalize(bulkMessage, testSendPhone, 'Test User');
+        testMessage = testMessage.replace(/\{company\}/gi, 'Dukani Pro');
+      } catch (error) {
+        // Fallback basic personalization
+        testMessage = bulkMessage
+          .replace(/\{name\}/gi, 'Test User')
+          .replace(/\{phone\}/gi, testSendPhone)
+          .replace(/\{company\}/gi, 'Dukani Pro');
+      }
+      
+      const result = await whatsappService.sendMessage(testSendPhone, testMessage, {
+        session_id: activeSession?.id || undefined
+      });
+      
+      if (result.success) {
+        toast.success('Test message sent successfully!', { id: 'test-send' });
+      } else {
+        toast.error(result.error || 'Failed to send test message', { id: 'test-send' });
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to send test message', { id: 'test-send' });
+    }
+  };
+  
+  // Copy/paste templates
+  const pasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text && text.trim()) {
+        handleMessageChange(bulkMessage + (bulkMessage ? '\n' : '') + text);
+        toast.success('Template pasted from clipboard');
+      }
+    } catch (error) {
+      toast.error('Failed to read from clipboard');
+    }
+  };
+  
   const insertVariable = (variable: string) => {
     const textarea = messageTextareaRef.current;
     if (!textarea) return;
@@ -2862,7 +3513,7 @@ export default function WhatsAppInboxPage() {
     const after = text.substring(end);
     
     const newText = before + variable + after;
-    setBulkMessage(newText);
+    handleMessageChange(newText);
     
     // Set cursor position after inserted variable
     setTimeout(() => {
@@ -2877,6 +3528,10 @@ export default function WhatsAppInboxPage() {
   const quickChangeMessageType = (type: typeof bulkMessageType) => {
     setBulkMessageType(type);
     setShowAttachMenu(false);
+    // Add default text if switching to text type and message is empty
+    if (type === 'text' && !bulkMessage.trim()) {
+      setBulkMessage('Hey {name}!! We miss you!! Come visit us and enjoy special discounts for returning customers.');
+    }
     toast.success(`Switched to ${type} message`);
   };
   
@@ -2944,15 +3599,20 @@ export default function WhatsAppInboxPage() {
     return modifiedText;
   };
   
-  // Save draft to localStorage
+  // Save draft to localStorage (only for step 1 and 2)
   const saveDraft = () => {
+    // Only save drafts in step 1 and 2
+    if (bulkStep > 2) {
+      return;
+    }
+    
     try {
       const draft = {
         // Step 1
         selectedRecipients,
         campaignName,
         // Step 2
-        bulkStep,
+        bulkStep: Math.min(bulkStep, 2), // Cap at step 2
         bulkMessage,
         bulkMessageType,
         bulkMedia: typeof bulkMedia === 'string' ? bulkMedia : null, // Only save URLs, not File objects
@@ -3006,7 +3666,8 @@ export default function WhatsAppInboxPage() {
       // Restore state
       setSelectedRecipients(draft.selectedRecipients || []);
       setCampaignName(draft.campaignName || '');
-      setBulkStep(draft.bulkStep || 1);
+      // Cap at step 2 - drafts only work for step 1 and 2
+      setBulkStep(Math.min(draft.bulkStep || 1, 2));
       setBulkMessage(draft.bulkMessage || '');
       setBulkMessageType(draft.bulkMessageType || 'text');
       setBulkMedia(draft.bulkMedia || null);
@@ -3059,6 +3720,11 @@ export default function WhatsAppInboxPage() {
   
   // Auto-save anti-ban settings to database when they change
   useEffect(() => {
+    // Don't save during initial load
+    if (isLoadingSettings) {
+      return;
+    }
+    
     const saveSettings = async () => {
       try {
         const settings = {
@@ -3126,22 +3792,24 @@ export default function WhatsAppInboxPage() {
       }
     };
     
-    // Debounce saves to avoid too frequent API calls
+    // Debounce saves to avoid too frequent API calls (1 second after last change)
     const timeoutId = setTimeout(() => {
       saveSettings();
     }, 1000);
     
     return () => clearTimeout(timeoutId);
   }, [
+    isLoadingSettings,
     usePersonalization, randomDelay, minDelay, maxDelay, usePresence,
     batchSize, batchDelay, maxPerHour, dailyLimit,
     skipRecentlyContacted, respectQuietHours, useInvisibleChars,
     useEmojiVariation, varyMessageLength
   ]);
   
-  // Auto-save draft when key state changes
+  // Auto-save draft when key state changes (only for step 1 and 2)
   useEffect(() => {
-    if (showBulkModal && (selectedRecipients.length > 0 || bulkMessage.trim() || campaignName.trim())) {
+    // Only auto-save in step 1 and 2
+    if (showBulkModal && bulkStep <= 2 && (selectedRecipients.length > 0 || bulkMessage.trim() || campaignName.trim())) {
       // Debounce saves to avoid too frequent writes
       const timeoutId = setTimeout(() => {
         saveDraft();
@@ -3530,80 +4198,15 @@ export default function WhatsAppInboxPage() {
               )
             )}
           </div>
-        </div>
       </div>
     );
   };
   
-  // Main component return
-  return (
-    <>
-      {/* Main Content */}
-      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
-      {/* Combined Container - WhatsApp Style */}
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
-        {/* Fixed Header Section - WhatsApp Style */}
-        <div className="p-6 bg-gradient-to-r from-green-600 to-emerald-600 border-b border-green-700 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            {/* Left: WhatsApp Branding */}
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
-                <MessageCircle className="w-7 h-7 text-green-600" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-white mb-1">WhatsApp Business</h1>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <p className="text-sm text-green-100 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></span>
-                    {messages.length} conversations • {unreadCount} new
-                  </p>
-                  {activeSession && (
-                    <div className="flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full">
-                      <span className={`w-2 h-2 rounded-full ${activeSession.status === 'connected' ? 'bg-green-300' : 'bg-red-400'}`}></span>
-                      <span className="text-xs text-white font-medium">
-                        📱 {activeSession.name}
-                      </span>
-                    </div>
-                  )}
-                  {!activeSession && !loadingActiveSession && (
-                    <button
-                      onClick={() => setShowSessionModal(true)}
-                      className="px-3 py-1 bg-yellow-500 hover:bg-yellow-600 rounded-full text-xs text-white font-semibold transition-all flex items-center gap-1"
-                      title="No active session - click to set up"
-                    >
-                      <AlertCircle className="w-3 h-3" />
-                      No Session
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Action Buttons */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowSessionModal(true)}
-                className="px-4 py-2 bg-white text-indigo-600 rounded-full flex items-center gap-2 font-semibold hover:bg-indigo-50 transition-all shadow-lg"
-                title="Manage WhatsApp sessions"
-              >
-                <Smartphone className="w-4 h-4" />
-                <span className="hidden lg:inline">Sessions</span>
-              </button>
-              <button
-                onClick={() => setShowComposeModal(true)}
-                className="px-4 py-2 bg-white text-green-600 rounded-full flex items-center gap-2 font-semibold hover:bg-green-50 transition-all shadow-lg"
-                title="Send new message"
-              >
-                <Send className="w-4 h-4" />
-                <span className="hidden sm:inline">New Message</span>
-              </button>
-              
-              {/* Resume Campaign Button - Shows when there's a paused campaign */}
-              {pausedCampaignState && (
-                <>
-                  <button
-                    onClick={() => {
+  // Handler for resuming paused campaign
+  const handleResumeCampaign = () => {
                       console.log('▶️ Opening resume options...');
+    
+    if (!pausedCampaignState) return;
                       
                       // Check if campaign is old
                       const pausedTime = new Date(pausedCampaignState.pauseTimestamp || pausedCampaignState.timestamp).getTime();
@@ -3631,7 +4234,7 @@ export default function WhatsAppInboxPage() {
                       
                       // Filter out already-sent phones from selectedRecipients
                       const pendingRecipients = (state.selectedRecipients || []).filter(
-                        phone => !restoredSentPhones.includes(phone)
+                        (phone: string) => !restoredSentPhones.includes(phone)
                       );
                       setSelectedRecipients(pendingRecipients);
                       console.log(`📋 ${pendingRecipients.length} pending recipients remaining (filtered out ${restoredSentPhones.length} already sent)`);
@@ -3681,46 +4284,15 @@ export default function WhatsAppInboxPage() {
                           sendBulkMessages(true); // true = resuming
                         }, 500);
                       }
-                    }}
-                    className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-full flex items-center gap-2 font-bold hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg animate-pulse"
-                    title={`Resume paused campaign (${sentPhones.length} sent, ${(pausedCampaignState.selectedRecipients?.length || 0) - sentPhones.length} remaining)`}
-                  >
-                    <Activity className="w-4 h-4" />
-                    <span className="hidden lg:inline">Resume Campaign</span>
-                    <span className="bg-white text-green-600 px-2 py-0.5 rounded-full text-xs font-bold">
-                      {(pausedCampaignState.selectedRecipients?.length || 0) - sentPhones.length} left
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      // Show edit option
-                      const action = window.confirm(
-                        '📝 Edit Message Before Resuming?\n\n' +
-                        'Click OK to edit the message first\n' +
-                        'Click Cancel to discard this campaign'
-                      );
-                      
-                      if (action) {
-                        setEditingBeforeResume(true);
-                        // Trigger resume which will go to edit step
-                        document.querySelector<HTMLButtonElement>('button[title*="Resume paused campaign"]')?.click();
-                      } else {
-                        if (window.confirm('Are you sure you want to discard the paused campaign? This cannot be undone.')) {
-                          clearPausedCampaignState();
-                          toast.success('Paused campaign discarded');
-                        }
-                      }
-                    }}
-                    className="px-3 py-2 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 transition-all flex items-center gap-1"
-                    title="Edit or discard paused campaign"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                </>
-              )}
-              
-              <button
-                onClick={() => {
+  };
+
+  // Main component return
+  return (
+    <React.Fragment>
+      {/* WhatsApp Top Action Bar */}
+      <WhatsAppTopBar
+        onNewMessage={() => setShowComposeModal(true)}
+        onBulkSend={() => {
                   console.log('🚀 Opening Bulk Send modal...');
                   
                   // Check if draft exists and ask user
@@ -3748,48 +4320,61 @@ export default function WhatsAppInboxPage() {
                   setBulkProgress({ current: 0, total: 0, success: 0, failed: 0 }); // Reset progress
                   setShowBulkModal(true);
                 }}
-                className="px-4 py-2 bg-white text-blue-600 rounded-full flex items-center gap-2 font-semibold hover:bg-blue-50 transition-all shadow-lg relative"
-                title={hasDraft ? "Send bulk messages (Draft available)" : "Send bulk messages"}
-              >
-                <Users className="w-4 h-4" />
-                <span className="hidden lg:inline">Bulk Send</span>
-                {hasDraft && (
-                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" title="Draft saved"></span>
-                )}
-              </button>
+        onCampaignManagement={() => setShowCampaignManagement(true)}
+        onTemplates={() => setShowTemplatesModal(true)}
+        onScheduled={() => setShowScheduledModal(true)}
+        onBlacklist={() => setShowBlacklistModal(true)}
+        onMediaLibrary={() => setShowMediaLibrary(true)}
+        onSessionManagement={() => setShowSessionModal(true)}
+        onAutomation={() => setShowAutomationModal(true)}
+        onRefresh={loadMessages}
+        onResumeCampaign={pausedCampaignState ? handleResumeCampaign : undefined}
+        refreshing={refreshing}
+        hasDraft={hasDraft}
+        pausedCampaignState={pausedCampaignState}
+        unreadCount={unreadCount}
+        conversationsCount={conversations.length}
+      />
+
+      {/* Main Content */}
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto" style={{ paddingTop: 'calc(var(--app-topbar-height, 0px) + 20px)' }}>
+        {/* Combined Container - WhatsApp Style */}
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col" style={{ maxHeight: 'calc(95vh - 20px)' }}>
+          {/* Fixed Header Section - Enhanced Modal Style */}
+          <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            {/* Left: Icon + Text */}
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                <MessageCircle className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">WhatsApp Business</h1>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <p className="text-sm text-gray-600 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                    {messages.length} conversations • {unreadCount} new
+                  </p>
+                  {activeSession && (
+                    <div className="flex items-center gap-2 px-3 py-1 bg-green-50 border border-green-200 rounded-full">
+                      <span className={`w-2 h-2 rounded-full ${activeSession.status === 'connected' ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                      <span className="text-xs text-gray-700 font-medium">
+                        📱 {activeSession.name}
+                      </span>
+                    </div>
+                  )}
+                  {!activeSession && !loadingActiveSession && (
               <button
-                onClick={() => setShowCampaignHistory(true)}
-                className="px-4 py-2 bg-white text-purple-600 rounded-full flex items-center gap-2 font-semibold hover:bg-purple-50 transition-all shadow-lg"
-                title="View campaign history"
+                      onClick={() => setShowSessionModal(true)}
+                      className="px-3 py-1 bg-yellow-500 hover:bg-yellow-600 rounded-full text-xs text-white font-semibold transition-all flex items-center gap-1"
+                      title="No active session - click to set up"
               >
-                <History className="w-4 h-4" />
-                <span className="hidden xl:inline">History</span>
+                      <AlertCircle className="w-3 h-3" />
+                      No Session
               </button>
-              <button
-                onClick={() => setShowCampaignManagement(true)}
-                className="px-4 py-2 bg-white text-indigo-600 rounded-full flex items-center gap-2 font-semibold hover:bg-indigo-50 transition-all shadow-lg"
-                title="Manage campaigns"
-              >
-                <Activity className="w-4 h-4" />
-                <span className="hidden xl:inline">Campaigns</span>
-              </button>
-              <button
-                onClick={() => setShowBlacklistModal(true)}
-                className="px-4 py-2 bg-white text-red-600 rounded-full flex items-center gap-2 font-semibold hover:bg-red-50 transition-all shadow-lg"
-                title="Manage blacklist"
-              >
-                <UserX className="w-4 h-4" />
-                <span className="hidden xl:inline">Blacklist</span>
-              </button>
-              <button
-                onClick={loadMessages}
-                disabled={refreshing}
-                className="w-10 h-10 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full flex items-center justify-center transition-all disabled:opacity-50"
-                title="Refresh messages"
-              >
-                <RefreshCw className={`w-5 h-5 text-white ${refreshing ? 'animate-spin' : ''}`} />
-              </button>
-              <BackButton to="/" label="" className="!w-10 !h-10 !p-0 !rounded-full !bg-white/20 hover:!bg-white/30 !backdrop-blur-sm !shadow-none flex items-center justify-center" iconClassName="text-white" />
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -3964,29 +4549,53 @@ export default function WhatsAppInboxPage() {
                                   {msg.message}
                                 </p>
                                 
-                                {msg.media_url && (
-                                  <div className="mt-2">
-                                    {msg.message_type === 'image' ? (
-                                      <img 
-                                        src={msg.media_url} 
-                                        alt="Message attachment" 
-                                        className="max-w-full rounded-lg"
-                                      />
-                                    ) : (
-                                      <a 
-                                        href={msg.media_url} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
-                                          msg.type === 'sent' ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-100 hover:bg-gray-200'
-                                        }`}
-                                      >
-                                        <ImageIcon className="w-4 h-4" />
-                                        View {msg.message_type}
-                                      </a>
-                                    )}
-                                  </div>
-                                )}
+                                {msg.media_url && (() => {
+                                  const resolvedUrl = resolveMediaUrl(msg.media_url);
+                                  if (!resolvedUrl) {
+                                    // Media not found in localStorage and it's a local path
+                                    return (
+                                      <div className="mt-2 p-3 bg-gray-100 rounded-lg text-sm text-gray-600">
+                                        <ImageIcon className="w-4 h-4 inline mr-2" />
+                                        Media file not available
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <div className="mt-2">
+                                      {msg.message_type === 'image' ? (
+                                        <img 
+                                          src={resolvedUrl} 
+                                          alt="Message attachment" 
+                                          className="max-w-full rounded-lg"
+                                          onError={(e) => {
+                                            // Hide broken image and show placeholder
+                                            const img = e.target as HTMLImageElement;
+                                            img.style.display = 'none';
+                                            const parent = img.parentElement;
+                                            if (parent && !parent.querySelector('.media-error-placeholder')) {
+                                              const placeholder = document.createElement('div');
+                                              placeholder.className = 'media-error-placeholder p-3 bg-gray-100 rounded-lg text-sm text-gray-600';
+                                              placeholder.textContent = 'Media file could not be loaded';
+                                              parent.appendChild(placeholder);
+                                            }
+                                          }}
+                                        />
+                                      ) : (
+                                        <a 
+                                          href={resolvedUrl} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
+                                            msg.type === 'sent' ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-100 hover:bg-gray-200'
+                                          }`}
+                                        >
+                                          <ImageIcon className="w-4 h-4" />
+                                          View {msg.message_type}
+                                        </a>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                                 
                                 <div className={`mt-1 text-xs flex items-center justify-between gap-2 ${
                                   msg.type === 'sent' ? 'text-green-100' : 'text-gray-500'
@@ -4210,27 +4819,51 @@ export default function WhatsAppInboxPage() {
                       {selectedMessage.message_text}
                     </p>
                     
-                    {selectedMessage.media_url && (
-                      <div className="mt-3">
-                        {selectedMessage.message_type === 'image' ? (
-                          <img 
-                            src={selectedMessage.media_url} 
-                            alt="Message attachment" 
-                            className="max-w-full rounded-lg shadow-md"
-                          />
-                        ) : (
-                          <a 
-                            href={selectedMessage.media_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-all text-sm font-medium"
-                          >
-                            <ImageIcon className="w-4 h-4" />
-                            View {selectedMessage.message_type}
-                          </a>
-                        )}
-                      </div>
-                    )}
+                    {selectedMessage.media_url && (() => {
+                      const resolvedUrl = resolveMediaUrl(selectedMessage.media_url);
+                      if (!resolvedUrl) {
+                        // Media not found in localStorage and it's a local path
+                        return (
+                          <div className="mt-3 p-3 bg-gray-100 rounded-lg text-sm text-gray-600">
+                            <ImageIcon className="w-4 h-4 inline mr-2" />
+                            Media file not available
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="mt-3">
+                          {selectedMessage.message_type === 'image' ? (
+                            <img 
+                              src={resolvedUrl} 
+                              alt="Message attachment" 
+                              className="max-w-full rounded-lg shadow-md"
+                              onError={(e) => {
+                                // Hide broken image and show placeholder
+                                const img = e.target as HTMLImageElement;
+                                img.style.display = 'none';
+                                const parent = img.parentElement;
+                                if (parent && !parent.querySelector('.media-error-placeholder')) {
+                                  const placeholder = document.createElement('div');
+                                  placeholder.className = 'media-error-placeholder p-3 bg-gray-100 rounded-lg text-sm text-gray-600';
+                                  placeholder.textContent = 'Media file could not be loaded';
+                                  parent.appendChild(placeholder);
+                                }
+                              }}
+                            />
+                          ) : (
+                            <a 
+                              href={resolvedUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-all text-sm font-medium"
+                            >
+                              <ImageIcon className="w-4 h-4" />
+                              View {selectedMessage.message_type}
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })()}
                     
                     <div className="mt-2 text-xs text-gray-500">
                       {formatDate(selectedMessage.received_at)}
@@ -4435,13 +5068,14 @@ export default function WhatsAppInboxPage() {
           </div>
         </div>
       )}
+      </div>
       
       {/* Bulk Message Modal - Step Wizard */}
       {showBulkModal && !isMinimized && (() => {
         console.log('📋 Rendering Bulk Modal - showBulkModal:', showBulkModal, 'isMinimized:', isMinimized, 'bulkStep:', bulkStep);
         return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden relative">
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999] p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden relative">
             {/* Close Button */}
                 <button
                   onClick={() => {
@@ -4552,8 +5186,8 @@ export default function WhatsAppInboxPage() {
                     </span>
                   </div>
                   
-                  {/* Draft Auto-save Indicator */}
-                  {showBulkModal && (selectedRecipients.length > 0 || bulkMessage.trim()) && (
+                  {/* Draft Auto-save Indicator (only for step 1 and 2) */}
+                  {showBulkModal && bulkStep <= 2 && (selectedRecipients.length > 0 || bulkMessage.trim()) && (
                     <div className="mt-2 flex items-center gap-1 text-xs text-gray-500">
                       <Save className="w-3 h-3" />
                       <span>Auto-saving draft...</span>
@@ -4604,6 +5238,12 @@ export default function WhatsAppInboxPage() {
                   getEngagementScore={getEngagementScore}
                   isPhoneBlacklisted={isPhoneBlacklisted}
                   isValidPhone={isValidPhone}
+                  segmentFilter={segmentFilter}
+                  applySegmentation={applySegmentation}
+                  clearSegmentation={() => {
+                    setSegmentFilter(null);
+                    toast.success('Segmentation filter cleared');
+                  }}
                 />
               )}
 
@@ -4613,10 +5253,21 @@ export default function WhatsAppInboxPage() {
                   
               {/* Message Type Selector */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4" />
-                  Message Type
-                </label>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4" />
+                    Message Type
+                  </label>
+                  <button
+                    onClick={() => setShowTemplatesModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-lg shadow-md transition-all"
+                    title="Choose from saved templates"
+                  >
+                    <FolderOpen className="w-4 h-4" />
+                    <span className="hidden sm:inline">Choose Template</span>
+                    <span className="sm:hidden">Template</span>
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <button
                     onClick={() => setBulkMessageType('text')}
@@ -4701,10 +5352,21 @@ export default function WhatsAppInboxPage() {
               {/* Quick Templates - Only for text messages */}
               {bulkMessageType === 'text' && (
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                    <FileCheck className="w-4 h-4" />
-                    Quick Templates
-                </label>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <FileCheck className="w-4 h-4" />
+                      Quick Templates
+                    </label>
+                    <button
+                      onClick={() => setShowTemplatesModal(true)}
+                      className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 transition-colors"
+                      title="Browse all saved templates"
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                      <span className="hidden sm:inline">Choose from Templates</span>
+                      <span className="sm:hidden">Templates</span>
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   <button
                     onClick={() => setBulkMessage('Hi {name}! We have exciting news for you. Check out our latest offers today!')}
@@ -4745,13 +5407,9 @@ export default function WhatsAppInboxPage() {
               {/* Media Upload Section - For image, video, document, audio */}
               {(['image', 'video', 'document', 'audio'].includes(bulkMessageType)) && (
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    <Upload className="w-4 h-4" />
-                    Media File
-                </label>
-                  
                   {!bulkMedia ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {/* Upload from device */}
                       <label className="px-4 py-4 bg-white border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all text-center" title={`Upload ${bulkMessageType} file (Max 16MB)`}>
                         <Upload className="w-6 h-6 mx-auto mb-2 text-gray-600" />
@@ -4780,6 +5438,7 @@ export default function WhatsAppInboxPage() {
                         <span className="block text-sm font-medium text-gray-900">Media Library</span>
                         <span className="block text-xs text-gray-500 mt-1">Reuse saved</span>
                       </button>
+                      </div>
                     </div>
                   ) : (
                     /* Media Preview */
@@ -4959,241 +5618,252 @@ export default function WhatsAppInboxPage() {
                 </div>
               )}
 
-              {/* Message Composer - Professional with WhatsApp-style features */}
+              {/* Message Composer - WhatsApp Style */}
               {(['text', 'image', 'video', 'document'].includes(bulkMessageType)) && (
                 <div className="mb-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      {bulkMessageType === 'text' ? 'Message *' : 'Caption'}
-                    </label>
-                    <button
-                      onClick={() => setShowShortcutsHelp(!showShortcutsHelp)}
-                      className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1"
-                      title="View keyboard shortcuts"
-                    >
-                      <Keyboard className="w-3 h-3" />
-                      Shortcuts
-                    </button>
-                  </div>
-                  
-                  {/* Shortcuts Help - Collapsible */}
-                  {showShortcutsHelp && (
-                    <div className="mb-2 p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded">Ctrl+B</kbd> Bold</div>
-                        <div><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded">Ctrl+I</kbd> Italic</div>
-                        <div><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded">Ctrl+K</kbd> Insert Variable</div>
-                        <div><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded">Ctrl+Enter</kbd> Next Step</div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Message Composer with Toolbar */}
-                  <div className="border-2 border-gray-300 rounded-xl focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 transition-all relative">
-                    {/* Toolbar */}
-                    <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-gray-200 bg-white relative">
-                      {/* Attach Menu - WhatsApp Style */}
+                  {/* WhatsApp-style Message Input */}
+                  <div className="bg-white rounded-3xl border border-gray-200 shadow-sm focus-within:border-green-500 focus-within:shadow-md transition-all overflow-hidden">
+                    {/* Toolbar - WhatsApp Style */}
+                    <div className="flex items-center gap-1 px-3 py-2 bg-gray-50/30">
+                      {/* Attach Button - WhatsApp Style */}
                       <div className="relative attach-menu-container">
                         <button
                           onClick={() => setShowAttachMenu(!showAttachMenu)}
-                          className={`p-2 rounded-lg transition-all flex items-center justify-center ${
-                            showAttachMenu ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-600'
+                          className={`p-2 rounded-full transition-all flex items-center justify-center ${
+                            showAttachMenu ? 'bg-green-100 text-green-600' : 'hover:bg-gray-100 text-gray-500'
                           }`}
-                          title="Attach media"
+                          title="Attach"
                         >
-                          <Plus className="w-4 h-4" />
+                          <Paperclip className="w-5 h-5" />
                         </button>
                         
-                        {/* Attach Dropdown Menu - Grid Layout */}
+                        {/* Attach Dropdown Menu - WhatsApp Style - Single Line */}
                         {showAttachMenu && (
-                          <div className="absolute left-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-2xl shadow-xl z-[100] p-3 attach-menu-container">
-                            <div className="mb-2">
-                              <p className="text-xs font-semibold text-gray-900">Message Types</p>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2">
+                          <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-2xl z-[9999] overflow-hidden attach-menu-container">
+                            <div className="flex items-center gap-0 p-2">
                               <button
-                                onClick={() => quickChangeMessageType('image')}
-                                className="flex flex-col items-center gap-2 p-3 hover:bg-gray-50 rounded-xl transition-all group"
-                                title="Send images & photos"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  quickChangeMessageType('text');
+                                }}
+                                className="flex flex-col items-center gap-1.5 p-3 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Text"
                               >
-                                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center group-hover:bg-purple-200 transition-colors">
-                                  <ImageIcon className="w-6 h-6 text-purple-600" />
+                                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                  <Type className="w-6 h-6 text-green-600" />
                                 </div>
-                                <span className="text-xs font-semibold text-gray-900">Image</span>
+                                <span className="text-xs font-medium text-gray-700">Text</span>
                               </button>
                               
                               <button
-                                onClick={() => quickChangeMessageType('video')}
-                                className="flex flex-col items-center gap-2 p-3 hover:bg-gray-50 rounded-xl transition-all group"
-                                title="Send video clips"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  quickChangeMessageType('image');
+                                }}
+                                className="flex flex-col items-center gap-1.5 p-3 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Image"
                               >
-                                <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center group-hover:bg-red-200 transition-colors">
-                                  <Video className="w-6 h-6 text-red-600" />
+                                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                  <ImageIcon className="w-6 h-6 text-green-600" />
                                 </div>
-                                <span className="text-xs font-semibold text-gray-900">Video</span>
+                                <span className="text-xs font-medium text-gray-700">Image</span>
                               </button>
                               
                               <button
-                                onClick={() => quickChangeMessageType('document')}
-                                className="flex flex-col items-center gap-2 p-3 hover:bg-gray-50 rounded-xl transition-all group"
-                                title="Send PDF, Office files"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  quickChangeMessageType('video');
+                                }}
+                                className="flex flex-col items-center gap-1.5 p-3 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Video"
                               >
-                                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                                  <FileText className="w-6 h-6 text-blue-600" />
+                                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                  <Video className="w-6 h-6 text-green-600" />
                                 </div>
-                                <span className="text-xs font-semibold text-gray-900">Document</span>
+                                <span className="text-xs font-medium text-gray-700">Video</span>
                               </button>
                               
                               <button
-                                onClick={() => quickChangeMessageType('audio')}
-                                className="flex flex-col items-center gap-2 p-3 hover:bg-gray-50 rounded-xl transition-all group"
-                                title="Send audio files"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  quickChangeMessageType('document');
+                                }}
+                                className="flex flex-col items-center gap-1.5 p-3 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Document"
                               >
-                                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                  <FileText className="w-6 h-6 text-green-600" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700">Document</span>
+                              </button>
+                              
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  quickChangeMessageType('audio');
+                                }}
+                                className="flex flex-col items-center gap-1.5 p-3 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Audio"
+                              >
+                                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
                                   <Music className="w-6 h-6 text-green-600" />
                                 </div>
-                                <span className="text-xs font-semibold text-gray-900">Audio</span>
+                                <span className="text-xs font-medium text-gray-700">Audio</span>
                               </button>
                               
                               <button
-                                onClick={() => quickChangeMessageType('location')}
-                                className="flex flex-col items-center gap-2 p-3 hover:bg-gray-50 rounded-xl transition-all group"
-                                title="Share GPS location"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  quickChangeMessageType('location');
+                                }}
+                                className="flex flex-col items-center gap-1.5 p-3 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Location"
                               >
-                                <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center group-hover:bg-orange-200 transition-colors">
-                                  <MapPin className="w-6 h-6 text-orange-600" />
+                                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                  <MapPin className="w-6 h-6 text-green-600" />
                                 </div>
-                                <span className="text-xs font-semibold text-gray-900">Location</span>
+                                <span className="text-xs font-medium text-gray-700">Location</span>
                               </button>
                               
                               <button
-                                onClick={() => quickChangeMessageType('poll')}
-                                className="flex flex-col items-center gap-2 p-3 hover:bg-gray-50 rounded-xl transition-all group"
-                                title="Create interactive poll"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  quickChangeMessageType('poll');
+                                }}
+                                className="flex flex-col items-center gap-1.5 p-3 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Poll"
                               >
-                                <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
-                                  <BarChart3 className="w-6 h-6 text-indigo-600" />
+                                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                  <BarChart3 className="w-6 h-6 text-green-600" />
                                 </div>
-                                <span className="text-xs font-semibold text-gray-900">Poll</span>
+                                <span className="text-xs font-medium text-gray-700">Poll</span>
                               </button>
                             </div>
                           </div>
                         )}
                       </div>
                       
-                      {/* Variables Menu */}
+                      {/* Variables Button - WhatsApp Style */}
                       <div className="relative variables-menu-container">
                         <button
                           onClick={() => setShowVariablesMenu(!showVariablesMenu)}
-                          className={`p-2 rounded-lg transition-all flex items-center justify-center ${
-                            showVariablesMenu ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-600'
+                          className={`p-2 rounded-full transition-all flex items-center justify-center ${
+                            showVariablesMenu ? 'bg-green-100 text-green-600' : 'hover:bg-gray-100 text-gray-500'
                           }`}
                           title="Variables (Ctrl+K)"
                         >
-                          <Code className="w-4 h-4" />
+                          <AtSign className="w-5 h-5" />
                         </button>
                         
-                        {/* Variables Dropdown Menu - Grid Layout */}
+                        {/* Variables Dropdown Menu - WhatsApp Style - Single Line */}
                         {showVariablesMenu && (
-                          <div className="absolute left-0 top-full mt-2 w-[400px] bg-white border border-gray-200 rounded-2xl shadow-xl z-[100] p-3 variables-menu-container">
-                            <div className="mb-2">
-                              <p className="text-xs font-semibold text-gray-900">Dynamic Variables</p>
-                            </div>
-                            <div className="grid grid-cols-4 gap-2">
+                          <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-2xl z-[9999] overflow-hidden variables-menu-container">
+                            <div className="flex items-center gap-0 p-2">
                               <button
                                 onClick={() => insertVariable('{name}')}
-                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-gray-50 rounded-xl transition-all group"
-                                title="Customer name"
+                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Name"
                               >
-                                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                                  <User className="w-5 h-5 text-blue-600" />
+                                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                  <User className="w-5 h-5 text-green-600" />
                                 </div>
-                                <span className="text-xs font-semibold text-gray-900">{'{name}'}</span>
+                                <span className="text-xs font-medium text-gray-700">{'{name}'}</span>
                               </button>
                               
                               <button
                                 onClick={() => insertVariable('{phone}')}
-                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-gray-50 rounded-xl transition-all group"
-                                title="Phone number"
+                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Phone"
                               >
-                                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
                                   <Phone className="w-5 h-5 text-green-600" />
                                 </div>
-                                <span className="text-xs font-semibold text-gray-900">{'{phone}'}</span>
+                                <span className="text-xs font-medium text-gray-700">{'{phone}'}</span>
                               </button>
                               
                               <button
                                 onClick={() => insertVariable('{greeting}')}
-                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-gray-50 rounded-xl transition-all group"
-                                title="Good morning/afternoon/evening"
+                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Greeting"
                               >
-                                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
-                                  <Smile className="w-5 h-5 text-purple-600" />
+                                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                  <Smile className="w-5 h-5 text-green-600" />
                                 </div>
-                                <span className="text-xs font-semibold text-gray-900">{'{greeting}'}</span>
+                                <span className="text-xs font-medium text-gray-700">{'{greeting}'}</span>
                               </button>
                               
                               <button
                                 onClick={() => insertVariable('{company}')}
-                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-gray-50 rounded-xl transition-all group"
-                                title="Your company name"
+                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Company"
                               >
-                                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-gray-200 transition-colors">
-                                  <Database className="w-5 h-5 text-gray-600" />
+                                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                  <Database className="w-5 h-5 text-green-600" />
                                 </div>
-                                <span className="text-xs font-semibold text-gray-900">{'{company}'}</span>
+                                <span className="text-xs font-medium text-gray-700">{'{company}'}</span>
                               </button>
                               
                               <button
                                 onClick={() => insertVariable('{date}')}
-                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-gray-50 rounded-xl transition-all group"
-                                title="December 3, 2025"
+                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Date"
                               >
-                                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center group-hover:bg-orange-200 transition-colors">
-                                  <Calendar className="w-5 h-5 text-orange-600" />
+                                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                  <Calendar className="w-5 h-5 text-green-600" />
                                 </div>
-                                <span className="text-xs font-semibold text-gray-900">{'{date}'}</span>
+                                <span className="text-xs font-medium text-gray-700">{'{date}'}</span>
                               </button>
                               
                               <button
                                 onClick={() => insertVariable('{time}')}
-                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-gray-50 rounded-xl transition-all group"
-                                title="02:30 PM"
+                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Time"
                               >
-                                <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
-                                  <Clock className="w-5 h-5 text-indigo-600" />
+                                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                  <Clock className="w-5 h-5 text-green-600" />
                                 </div>
-                                <span className="text-xs font-semibold text-gray-900">{'{time}'}</span>
+                                <span className="text-xs font-medium text-gray-700">{'{time}'}</span>
                               </button>
                               
                               <button
                                 onClick={() => insertVariable('{day}')}
-                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-gray-50 rounded-xl transition-all group"
-                                title="Wednesday"
+                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Day"
                               >
-                                <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center group-hover:bg-pink-200 transition-colors">
-                                  <Calendar className="w-5 h-5 text-pink-600" />
+                                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                  <Calendar className="w-5 h-5 text-green-600" />
                                 </div>
-                                <span className="text-xs font-semibold text-gray-900">{'{day}'}</span>
+                                <span className="text-xs font-medium text-gray-700">{'{day}'}</span>
                               </button>
                               
                               <button
                                 onClick={() => insertVariable('{month}')}
-                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-gray-50 rounded-xl transition-all group"
-                                title="December"
+                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Month"
                               >
-                                <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center group-hover:bg-teal-200 transition-colors">
-                                  <Calendar className="w-5 h-5 text-teal-600" />
+                                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                  <Calendar className="w-5 h-5 text-green-600" />
                                 </div>
-                                <span className="text-xs font-semibold text-gray-900">{'{month}'}</span>
+                                <span className="text-xs font-medium text-gray-700">{'{month}'}</span>
+                              </button>
+                              
+                              <button
+                                onClick={() => insertVariable('{unique}')}
+                                className="flex flex-col items-center gap-1.5 p-2.5 hover:bg-green-50 rounded-xl transition-all group"
+                                title="Unique Content (Random emoji/invisible text - different for each message)"
+                              >
+                                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                  <Sparkles className="w-5 h-5 text-green-600" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700">{'{unique}'}</span>
                               </button>
                             </div>
                           </div>
                         )}
                       </div>
                       
-                      {/* Formatting Group */}
-                      <div className="flex items-center bg-gray-50 rounded-lg px-0.5 py-0.5">
+                      {/* Formatting Buttons - Minimal WhatsApp Style */}
+                      <div className="flex items-center gap-1 ml-1">
                         <button
                           onClick={() => {
                             const textarea = messageTextareaRef.current;
@@ -5203,18 +5873,18 @@ export default function WhatsAppInboxPage() {
                             const selectedText = bulkMessage.substring(start, end);
                             if (selectedText) {
                               const newText = bulkMessage.substring(0, start) + `*${selectedText}*` + bulkMessage.substring(end);
-                              setBulkMessage(newText);
-                              textarea.focus();
-                            } else {
-                              toast('Select text first, then click to format', { icon: 'ℹ️' });
+                              handleMessageChange(newText);
+                              setTimeout(() => {
+                                textarea.focus();
+                                textarea.setSelectionRange(start + 1, end + 1);
+                              }, 0);
                             }
                           }}
-                          className="p-1.5 hover:bg-white rounded transition-all"
+                          className="p-1.5 hover:bg-gray-200 rounded transition-all"
                           title="Bold (Ctrl+B)"
                         >
-                          <span className="text-gray-700 font-bold text-sm">B</span>
+                          <span className="text-gray-600 font-bold text-sm">B</span>
                         </button>
-                        
                         <button
                           onClick={() => {
                             const textarea = messageTextareaRef.current;
@@ -5224,18 +5894,18 @@ export default function WhatsAppInboxPage() {
                             const selectedText = bulkMessage.substring(start, end);
                             if (selectedText) {
                               const newText = bulkMessage.substring(0, start) + `_${selectedText}_` + bulkMessage.substring(end);
-                              setBulkMessage(newText);
-                              textarea.focus();
-                            } else {
-                              toast('Select text first, then click to format', { icon: 'ℹ️' });
+                              handleMessageChange(newText);
+                              setTimeout(() => {
+                                textarea.focus();
+                                textarea.setSelectionRange(start + 1, end + 1);
+                              }, 0);
                             }
                           }}
-                          className="p-1.5 hover:bg-white rounded transition-all"
+                          className="p-1.5 hover:bg-gray-200 rounded transition-all"
                           title="Italic (Ctrl+I)"
                         >
-                          <span className="text-gray-700 italic text-sm font-serif">I</span>
+                          <span className="text-gray-600 italic text-sm">I</span>
                         </button>
-                        
                         <button
                           onClick={() => {
                             const textarea = messageTextareaRef.current;
@@ -5245,18 +5915,18 @@ export default function WhatsAppInboxPage() {
                             const selectedText = bulkMessage.substring(start, end);
                             if (selectedText) {
                               const newText = bulkMessage.substring(0, start) + `~${selectedText}~` + bulkMessage.substring(end);
-                              setBulkMessage(newText);
-                              textarea.focus();
-                            } else {
-                              toast('Select text first, then click to format', { icon: 'ℹ️' });
+                              handleMessageChange(newText);
+                              setTimeout(() => {
+                                textarea.focus();
+                                textarea.setSelectionRange(start + 1, end + 1);
+                              }, 0);
                             }
                           }}
-                          className="p-1.5 hover:bg-white rounded transition-all"
+                          className="p-1.5 hover:bg-gray-200 rounded transition-all"
                           title="Strikethrough"
                         >
-                          <span className="text-gray-700 line-through text-sm">S</span>
+                          <span className="text-gray-600 line-through text-sm">S</span>
                         </button>
-                        
                         <button
                           onClick={() => {
                             const textarea = messageTextareaRef.current;
@@ -5266,94 +5936,181 @@ export default function WhatsAppInboxPage() {
                             const selectedText = bulkMessage.substring(start, end);
                             if (selectedText) {
                               const newText = bulkMessage.substring(0, start) + `\`\`\`${selectedText}\`\`\`` + bulkMessage.substring(end);
-                              setBulkMessage(newText);
-                              textarea.focus();
-                            } else {
-                              toast('Select text first, then click to format', { icon: 'ℹ️' });
+                              handleMessageChange(newText);
+                              setTimeout(() => {
+                                textarea.focus();
+                                textarea.setSelectionRange(start + 3, end + 3);
+                              }, 0);
                             }
                           }}
-                          className="p-1.5 hover:bg-white rounded transition-all"
+                          className="p-1.5 hover:bg-gray-200 rounded transition-all"
                           title="Monospace"
                         >
                           <Code className="w-4 h-4 text-gray-600" />
                         </button>
                       </div>
                       
-                      {/* Emoji Picker Placeholder */}
-                      <button
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-all"
-                        title="Emojis"
-                      >
-                        <Smile className="w-4 h-4 text-gray-600" />
-                      </button>
-                      
                       <div className="flex-1"></div>
                       
-                      {/* Stats Section */}
-                      <div className="flex items-center gap-3 px-2">
-                    {usePersonalization && bulkMessage.includes('{name}') && (
-                      <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-                            <Sparkles className="w-3 h-3" />
-                        Personalized
-                      </span>
-                    )}
-                        <span className="text-xs text-gray-500">
-                          {bulkMessage.length}
+                      {/* Emoji Button - WhatsApp Style */}
+                      <button
+                        className="p-2 hover:bg-gray-200 rounded-full transition-all"
+                        title="Emoji"
+                      >
+                        <Smile className="w-5 h-5 text-gray-500" />
+                      </button>
+                      
+                      {/* Action Buttons */}
+                      <div className="flex items-center gap-1">
+                        {/* Undo Button */}
+                        {messageUndoStack.length > 0 && (
+                          <button
+                            onClick={undoMessage}
+                            className="p-2 hover:bg-gray-200 rounded-full transition-all"
+                            title="Undo (Ctrl+Z)"
+                          >
+                            <RotateCcw className="w-4 h-4 text-gray-500" />
+                          </button>
+                        )}
+                        
+                        {/* Paste Button */}
+                        <button
+                          onClick={pasteFromClipboard}
+                          className="p-2 hover:bg-gray-200 rounded-full transition-all"
+                          title="Paste from clipboard"
+                        >
+                          <FileText className="w-4 h-4 text-gray-500" />
+                        </button>
+                        
+                        {/* Test Send Button */}
+                        <button
+                          onClick={() => {
+                            if (!testSendPhone) {
+                              const phone = prompt('Enter your phone number to test:');
+                              if (phone) setTestSendPhone(phone);
+                            } else {
+                              sendTestMessage();
+                            }
+                          }}
+                          className="p-2 hover:bg-blue-100 rounded-full transition-all"
+                          title="Send test message"
+                        >
+                          <Send className="w-4 h-4 text-blue-600" />
+                        </button>
+                      </div>
+                      
+                      {/* Character Count with Warnings */}
+                      <div className="flex items-center gap-2 px-2">
+                        <span className={`text-xs px-2 py-0.5 rounded ${
+                          bulkMessage.length > 3500 
+                            ? 'text-red-600 bg-red-50 font-semibold' 
+                            : bulkMessage.length > 3000 
+                            ? 'text-orange-600 bg-orange-50' 
+                            : 'text-gray-400'
+                        }`}>
+                          {bulkMessage.length}/4096
                         </span>
-                  </div>
-                </div>
-                
-                    {/* Textarea */}
-                    <textarea
-                      ref={messageTextareaRef}
-                      value={bulkMessage}
-                      onChange={(e) => setBulkMessage(e.target.value)}
-                      onKeyDown={(e) => {
-                        // Keyboard shortcuts
-                        if (e.ctrlKey || e.metaKey) {
-                          if (e.key === 'b') {
+                      </div>
+                    </div>
+                    
+                    {/* Rich Text Editor - WhatsApp Style with Formatting Preview */}
+                    <div className="relative">
+                      {/* Formatted display overlay (when not focused) */}
+                      {!isMessageFocused && bulkMessage && (
+                        <div 
+                          className="absolute inset-0 px-4 py-3 pointer-events-none text-gray-900 min-h-[60px] max-h-[200px] overflow-y-auto z-0"
+                          style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}
+                          dangerouslySetInnerHTML={{ __html: renderFormattedText(bulkMessage) }}
+                        />
+                      )}
+                      
+                      {/* Message Warnings */}
+                      {messageWarnings.length > 0 && (
+                        <div className="mb-2 space-y-1">
+                          {messageWarnings.map((warning, idx) => (
+                            <div
+                              key={idx}
+                              className={`p-2 rounded-lg text-xs flex items-start gap-2 ${
+                                warning.type === 'spam' 
+                                  ? 'bg-red-50 border border-red-200 text-red-800'
+                                  : warning.type === 'duplicate'
+                                  ? 'bg-yellow-50 border border-yellow-200 text-yellow-800'
+                                  : warning.type === 'character'
+                                  ? 'bg-orange-50 border border-orange-200 text-orange-800'
+                                  : 'bg-blue-50 border border-blue-200 text-blue-800'
+                              }`}
+                            >
+                              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                              <span>{warning.message}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* Editable textarea - Always visible when focused */}
+                      <textarea
+                        ref={messageTextareaRef}
+                        value={bulkMessage}
+                        onChange={(e) => handleMessageChange(e.target.value)}
+                        onFocus={() => setIsMessageFocused(true)}
+                        onBlur={() => setIsMessageFocused(false)}
+                        onKeyDown={(e) => {
+                          // Undo with Ctrl+Z
+                          if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
                             e.preventDefault();
-                            const start = e.currentTarget.selectionStart;
-                            const end = e.currentTarget.selectionEnd;
-                            const selectedText = bulkMessage.substring(start, end);
-                            if (selectedText) {
-                              const newText = bulkMessage.substring(0, start) + `*${selectedText}*` + bulkMessage.substring(end);
-                              setBulkMessage(newText);
-                            }
-                          } else if (e.key === 'i') {
-                            e.preventDefault();
-                            const start = e.currentTarget.selectionStart;
-                            const end = e.currentTarget.selectionEnd;
-                            const selectedText = bulkMessage.substring(start, end);
-                            if (selectedText) {
-                              const newText = bulkMessage.substring(0, start) + `_${selectedText}_` + bulkMessage.substring(end);
-                              setBulkMessage(newText);
-                            }
-                          } else if (e.key === 'k') {
-                            e.preventDefault();
-                            setShowVariablesMenu(!showVariablesMenu);
+                            undoMessage();
+                            return;
                           }
+                          // Keyboard shortcuts
+                          if (e.ctrlKey || e.metaKey) {
+                            if (e.key === 'b') {
+                              e.preventDefault();
+                              const start = e.currentTarget.selectionStart;
+                              const end = e.currentTarget.selectionEnd;
+                              const selectedText = bulkMessage.substring(start, end);
+                              if (selectedText) {
+                                const newText = bulkMessage.substring(0, start) + `*${selectedText}*` + bulkMessage.substring(end);
+                                handleMessageChange(newText);
+                                setTimeout(() => {
+                                  e.currentTarget.focus();
+                                  e.currentTarget.setSelectionRange(start + 1, end + 1);
+                                }, 0);
+                              }
+                            } else if (e.key === 'i') {
+                              e.preventDefault();
+                              const start = e.currentTarget.selectionStart;
+                              const end = e.currentTarget.selectionEnd;
+                              const selectedText = bulkMessage.substring(start, end);
+                              if (selectedText) {
+                                const newText = bulkMessage.substring(0, start) + `_${selectedText}_` + bulkMessage.substring(end);
+                                handleMessageChange(newText);
+                                setTimeout(() => {
+                                  e.currentTarget.focus();
+                                  e.currentTarget.setSelectionRange(start + 1, end + 1);
+                                }, 0);
+                              }
+                            } else if (e.key === 'k') {
+                              e.preventDefault();
+                              setShowVariablesMenu(!showVariablesMenu);
+                            }
+                          }
+                        }}
+                        placeholder={
+                          bulkMessageType === 'text'
+                            ? "Type your message..."
+                            : "Add a caption..."
                         }
-                      }}
-                      placeholder={
-                        bulkMessageType === 'text'
-                          ? "Type your message..."
-                          : "Add a caption..."
-                      }
-                      rows={bulkMessageType === 'text' ? 6 : 3}
-                      className="w-full px-4 py-3 focus:outline-none resize-none"
-                      autoFocus
-                    />
+                        rows={bulkMessageType === 'text' ? 4 : 3}
+                        className={`w-full px-4 py-3 focus:outline-none resize-none bg-transparent relative z-10 ${isMessageFocused ? 'text-gray-900' : 'text-transparent'}`}
+                        style={{ 
+                          minHeight: '60px', 
+                          maxHeight: '200px',
+                          caretColor: isMessageFocused ? '#000' : 'transparent'
+                        }}
+                        autoFocus
+                      />
+                    </div>
                   </div>
-                  
-                  {/* Formatting Help */}
-                  <div className="mt-2 text-xs text-gray-400 flex items-center gap-2">
-                    <span>WhatsApp formatting:</span>
-                    <code className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">*bold*</code>
-                    <code className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">_italic_</code>
-                    <code className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">~strike~</code>
-                    <code className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">```code```</code>
-              </div>
                 </div>
               )}
               
@@ -5367,144 +6124,258 @@ export default function WhatsAppInboxPage() {
                   <span className="font-medium text-gray-900 flex items-center gap-2">
                     <Settings className="w-4 h-4" />
                     Anti-Ban Protection
-                    <span className="text-xs text-green-600 flex items-center gap-1 ml-2">
-                      <Save className="w-3 h-3" />
-                      Settings saved
-                    </span>
+                    {(() => {
+                      // Get initial recipient count
+                      let recipientCount = selectedRecipients.length || csvRecipients.length || 0;
+                      
+                      // Apply skip recently contacted filtering (if enabled)
+                      // Note: Segmentation is async, so we show a note instead
+                      if (skipRecentlyContacted && recipientCount > 0) {
+                        try {
+                          const sixHoursAgo = Date.now() - (6 * 60 * 60 * 1000);
+                          const recentPhones = new Set(
+                            conversations
+                              .filter(conv => {
+                                const lastMessageTime = new Date(conv.last_message_time).getTime();
+                                return lastMessageTime > sixHoursAgo;
+                              })
+                              .map(conv => conv.phone)
+                          );
+                          recipientCount = (selectedRecipients.length > 0 ? selectedRecipients : csvRecipients.map(r => r.phone))
+                            .filter(phone => !recentPhones.has(phone)).length;
+                        } catch (error) {
+                          // If filtering fails, use previous count
+                        }
+                      }
+                      
+                      if (recipientCount === 0) return null;
+                      
+                      const avgDelay = randomDelay ? (minDelay + maxDelay) / 2 : minDelay;
+                      const typingDelay = usePresence ? 1.5 : 0;
+                      const processingTime = 0.3;
+                      const timePerMessage = avgDelay + typingDelay + 1 + processingTime;
+                      const numberOfBatches = Math.ceil(recipientCount / batchSize);
+                      const batchBreakTime = (numberOfBatches - 1) * batchDelay;
+                      const initialProcessingTime = 2;
+                      const totalSeconds = (recipientCount * timePerMessage) + batchBreakTime + initialProcessingTime;
+                      
+                      const hours = Math.floor(totalSeconds / 3600);
+                      const minutes = Math.floor((totalSeconds % 3600) / 60);
+                      const seconds = Math.floor(totalSeconds % 60);
+                      
+                      let timeString = '';
+                      if (hours > 0) {
+                        timeString = `${hours}h ${minutes}m`;
+                      } else if (minutes > 0) {
+                        timeString = `${minutes}m`;
+                      } else {
+                        timeString = `${seconds}s`;
+                      }
+                      
+                      return (
+                        <span className="ml-2 text-xs text-gray-500">
+                          ~{timeString}
+                        </span>
+                      );
+                    })()}
                   </span>
                   <ChevronDown className={`w-5 h-5 text-gray-600 transition-transform ${showAdvancedSettings ? 'rotate-180' : ''}`} />
                 </button>
                 
                 {showAdvancedSettings && (
-                  <div className="mt-2 p-4 bg-white border border-gray-200 rounded-xl">
-                    {/* Basic Settings */}
-                    <div className="mb-4">
-                      <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Basic Protection</p>
+                  <div className="mt-2 p-4 bg-white border border-gray-200 rounded-xl space-y-4">
+                    {/* Time Calculator */}
+                    {(() => {
+                      // Get initial recipient count
+                      let recipientCount = selectedRecipients.length || csvRecipients.length || 0;
+                      const initialCount = recipientCount;
+                      
+                      // Apply skip recently contacted filtering (if enabled)
+                      // Note: Segmentation filtering is async, so we can't calculate it in real-time here
+                      if (skipRecentlyContacted && recipientCount > 0) {
+                        try {
+                          const sixHoursAgo = Date.now() - (6 * 60 * 60 * 1000);
+                          const recentPhones = new Set(
+                            conversations
+                              .filter(conv => {
+                                const lastMessageTime = new Date(conv.last_message_time).getTime();
+                                return lastMessageTime > sixHoursAgo;
+                              })
+                              .map(conv => conv.phone)
+                          );
+                          recipientCount = (selectedRecipients.length > 0 ? selectedRecipients : csvRecipients.map(r => r.phone))
+                            .filter(phone => !recentPhones.has(phone)).length;
+                        } catch (error) {
+                          console.warn('Error calculating skip recent recipients:', error);
+                        }
+                      }
+                      
+                      // Note: If segmentation is enabled, actual count may differ
+                      const estimatedFiltered = segmentFilter ? Math.floor(recipientCount * 0.8) : recipientCount;
+                      
+                      // Calculate average delay per message
+                      const avgDelay = randomDelay ? (minDelay + maxDelay) / 2 : minDelay;
+                      const typingDelay = usePresence ? 1.5 : 0;
+                      const processingTime = 0.3;
+                      const timePerMessage = avgDelay + typingDelay + 1 + processingTime;
+                      const numberOfBatches = recipientCount > 0 ? Math.ceil(recipientCount / batchSize) : 0;
+                      const batchBreakTime = (numberOfBatches - 1) * batchDelay;
+                      const initialProcessingTime = 2;
+                      const totalSeconds = recipientCount > 0 
+                        ? (recipientCount * timePerMessage) + batchBreakTime + initialProcessingTime 
+                        : 0;
+                      
+                      // Format time
+                      const hours = Math.floor(totalSeconds / 3600);
+                      const minutes = Math.floor((totalSeconds % 3600) / 60);
+                      const seconds = Math.floor(totalSeconds % 60);
+                      
+                      let timeString = '';
+                      if (hours > 0) {
+                        timeString = `${hours}h ${minutes}m`;
+                      } else if (minutes > 0) {
+                        timeString = `${minutes}m ${seconds}s`;
+                      } else if (recipientCount > 0) {
+                        timeString = `${seconds}s`;
+                      } else {
+                        timeString = '0s';
+                      }
+                      
+                      const filteredCount = initialCount - recipientCount;
+                      const showFilterInfo = filteredCount > 0 && skipRecentlyContacted;
+                      const showSegmentNote = segmentFilter && recipientCount > 0;
+                      
+                      return (
+                        <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-gray-500" />
+                              <div>
+                                <span className="text-sm text-gray-600">Estimated time: </span>
+                                <span className="text-lg font-semibold text-gray-900">{timeString}</span>
+                                {recipientCount > 0 && (
+                                  <span className="text-xs text-gray-500 ml-2">
+                                    ({recipientCount} message{recipientCount !== 1 ? 's' : ''}
+                                    {showFilterInfo && `, ${filteredCount} filtered`}
+                                    {showSegmentNote && ' (segmentation may reduce count)'})
+                                  </span>
+                                )}
+                                {recipientCount === 0 && initialCount > 0 && (
+                                  <span className="text-xs text-orange-600 ml-2">(all filtered out)</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs text-gray-500">~{timePerMessage.toFixed(1)}s per message</span>
+                              {numberOfBatches > 1 && (
+                                <div className="text-xs text-gray-400 mt-0.5">
+                                  {numberOfBatches} batch{numberOfBatches !== 1 ? 'es' : ''}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    
+                    {/* Basic Protection */}
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900 mb-3">Basic Protection</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {/* Personalization */}
-                        <label 
-                          className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 transition-all border border-gray-200"
-                          title="Replace {name} and other variables - prevents identical messages"
-                        >
-                    <input
-                      type="checkbox"
-                      checked={usePersonalization}
-                      onChange={(e) => setUsePersonalization(e.target.checked)}
-                            className="w-4 h-4 text-blue-600 rounded"
-                          />
-                          <User className="w-4 h-4 text-gray-600" />
-                          <span className="font-medium text-gray-900 text-sm">Personalize</span>
-                  </label>
-                  
-                  {/* Random Delay */}
-                        <label 
-                          className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 transition-all border border-gray-200"
-                          title="Randomize timing between messages - appears more human"
-                        >
-                    <input
-                      type="checkbox"
-                      checked={randomDelay}
-                      onChange={(e) => setRandomDelay(e.target.checked)}
-                            className="w-4 h-4 text-blue-600 rounded"
-                          />
-                          <Clock className="w-4 h-4 text-gray-600" />
-                          <span className="font-medium text-gray-900 text-sm">Random Delays</span>
-                  </label>
-                  
-                        {/* Message Variation */}
-                        <label 
-                          className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 transition-all border border-gray-200"
-                          title="Add slight variations to message length - looks more natural"
-                        >
-                    <input
-                      type="checkbox"
-                            checked={varyMessageLength}
-                            onChange={(e) => setVaryMessageLength(e.target.checked)}
-                            className="w-4 h-4 text-blue-600 rounded"
-                          />
-                          <Sparkles className="w-4 h-4 text-gray-600" />
-                          <span className="font-medium text-gray-900 text-sm">Vary Length</span>
-                  </label>
-                  
-                        {/* Skip Recently Contacted */}
-                        <label 
-                          className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 transition-all border border-gray-200"
-                          title="Skip contacts messaged in last 6 hours - prevents spam"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={skipRecentlyContacted}
-                            onChange={(e) => setSkipRecentlyContacted(e.target.checked)}
-                            className="w-4 h-4 text-blue-600 rounded"
-                          />
-                          <RefreshCw className="w-4 h-4 text-gray-600" />
-                          <span className="font-medium text-gray-900 text-sm">Skip Recent</span>
-                        </label>
-                        
-                        {/* Invisible Characters */}
-                        <label 
-                          className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 transition-all border border-gray-200"
-                          title="Add invisible Unicode characters - makes each message hash unique"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={useInvisibleChars}
-                            onChange={(e) => setUseInvisibleChars(e.target.checked)}
-                            className="w-4 h-4 text-blue-600 rounded"
-                          />
-                          <Eye className="w-4 h-4 text-gray-600" />
-                          <span className="font-medium text-gray-900 text-sm">Invisible Chars</span>
-                        </label>
-                        
-                        {/* Emoji Variation */}
-                        <label 
-                          className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 transition-all border border-gray-200"
-                          title="Rotate similar emojis (😊→😃→🙂) - unique messages, same meaning"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={useEmojiVariation}
-                            onChange={(e) => setUseEmojiVariation(e.target.checked)}
-                            className="w-4 h-4 text-blue-600 rounded"
-                          />
-                          <Smile className="w-4 h-4 text-gray-600" />
-                          <span className="font-medium text-gray-900 text-sm">Emoji Rotation</span>
-                        </label>
+                        {/* Toggle Component */}
+                        {([
+                          { icon: User, label: 'Personalize', checked: usePersonalization, onChange: setUsePersonalization, title: 'Replace {name} and other variables' },
+                          { icon: Clock, label: 'Random Delays', checked: randomDelay, onChange: setRandomDelay, title: 'Randomize timing between messages' },
+                          { icon: Sparkles, label: 'Vary Length', checked: varyMessageLength, onChange: setVaryMessageLength, title: 'Add slight variations to message length' },
+                          { icon: RefreshCw, label: 'Skip Recent', checked: skipRecentlyContacted, onChange: setSkipRecentlyContacted, title: 'Skip contacts messaged in last 6 hours' },
+                          { icon: Eye, label: 'Invisible Chars', checked: useInvisibleChars, onChange: setUseInvisibleChars, title: 'Add invisible Unicode characters' },
+                          { icon: Smile, label: 'Emoji Rotation', checked: useEmojiVariation, onChange: setUseEmojiVariation, title: 'Rotate similar emojis' },
+                          { icon: Type, label: 'Typing Indicator', checked: usePresence, onChange: setUsePresence, title: 'Show typing indicator before sending' },
+                          { icon: soundEnabled ? Volume2 : VolumeX, label: 'Sound Notifications', checked: soundEnabled, onChange: setSoundEnabled, title: 'Play sound for each successful message send' },
+                        ] as const).map(({ icon: Icon, label, checked, onChange, title }) => (
+                          <button
+                            key={label}
+                            onClick={() => onChange(!checked)}
+                            className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50/50 transition-all"
+                            title={title}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Icon className="w-4 h-4 text-gray-600" />
+                              <span className="text-sm font-medium text-gray-900">{label}</span>
+                            </div>
+                            <div
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                checked ? 'bg-blue-600' : 'bg-gray-300'
+                              }`}
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                  checked ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                              />
+                            </div>
+                          </button>
+                        ))}
                       </div>
                     </div>
                     
                     {/* Timing Controls */}
-                    <div className="mb-4">
-                      <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Timing Controls</p>
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900 mb-3">Timing Controls</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {/* Delay Range */}
-                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                          <div className="flex items-center gap-2 mb-2">
+                        {/* Message Delay */}
+                        <div className="p-3 bg-white border border-gray-200 rounded-lg">
+                          <div className="flex items-center gap-2 mb-3">
                             <Clock className="w-4 h-4 text-gray-600" />
-                            <span className="font-medium text-gray-900 text-sm">Message Delay</span>
+                            <span className="text-sm font-medium text-gray-900">Message Delay</span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-gray-600">{minDelay}s</span>
-                      <input
-                        type="range"
-                        value={maxDelay}
-                        onChange={(e) => setMaxDelay(parseInt(e.target.value))}
-                        min={minDelay}
-                              max="30"
-                        className="flex-1 h-2"
-                      />
-                            <span className="text-xs font-medium text-gray-600">{maxDelay}s</span>
-                    </div>
-                  </div>
+                          <div className="space-y-3">
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-gray-600">Min</span>
+                                <span className="text-xs font-medium text-gray-900">{minDelay}s</span>
+                              </div>
+                              <input
+                                type="range"
+                                value={minDelay}
+                                onChange={(e) => {
+                                  const newMin = parseInt(e.target.value);
+                                  setMinDelay(newMin);
+                                  if (newMin >= maxDelay) setMaxDelay(newMin + 1);
+                                }}
+                                min="1"
+                                max="15"
+                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                              />
+                            </div>
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-gray-600">Max</span>
+                                <span className="text-xs font-medium text-gray-900">{maxDelay}s</span>
+                              </div>
+                              <input
+                                type="range"
+                                value={maxDelay}
+                                onChange={(e) => setMaxDelay(parseInt(e.target.value))}
+                                min={minDelay}
+                                max="30"
+                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                              />
+                            </div>
+                          </div>
+                        </div>
                         
-                        {/* Batch Delay */}
-                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                          <div className="flex items-center gap-2 mb-2">
+                        {/* Batch Break */}
+                        <div className="p-3 bg-white border border-gray-200 rounded-lg">
+                          <div className="flex items-center gap-2 mb-3">
                             <Activity className="w-4 h-4 text-gray-600" />
-                            <span className="font-medium text-gray-900 text-sm">Batch Break</span>
+                            <span className="text-sm font-medium text-gray-900">Batch Break</span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-gray-600">30s</span>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs text-gray-600">Delay</span>
+                              <span className="text-xs font-medium text-gray-900">{batchDelay}s</span>
+                            </div>
                             <input
                               type="range"
                               value={batchDelay}
@@ -5512,144 +6383,87 @@ export default function WhatsAppInboxPage() {
                               min="30"
                               max="300"
                               step="30"
-                              className="flex-1 h-2"
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                             />
-                            <span className="text-xs font-medium text-gray-600">{batchDelay}s</span>
                           </div>
-                          <p className="text-xs text-gray-500 mt-1">Break every {batchSize} messages</p>
                         </div>
                       </div>
                     </div>
                     
                     {/* Rate Limits */}
-                    <div className="mb-4">
-                      <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Rate Limits</p>
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900 mb-3">Rate Limits</h3>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {/* Batch Size */}
-                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                          <label className="block text-xs font-medium text-gray-700 mb-2">Batch Size</label>
-                          <input
-                            type="number"
-                            value={batchSize}
-                            onChange={(e) => setBatchSize(parseInt(e.target.value) || 20)}
-                            min="10"
-                            max="50"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                            title="Send in batches to avoid spam detection"
-                          />
-                        </div>
-                        
-                        {/* Hourly Limit */}
-                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                          <label className="block text-xs font-medium text-gray-700 mb-2">Per Hour</label>
-                          <input
-                            type="number"
-                            value={maxPerHour}
-                            onChange={(e) => setMaxPerHour(parseInt(e.target.value) || 30)}
-                            min="10"
-                            max="100"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                            title="Maximum messages per hour"
-                          />
-                        </div>
-                        
-                        {/* Daily Limit */}
-                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                          <label className="block text-xs font-medium text-gray-700 mb-2">Per Day</label>
-                          <input
-                            type="number"
-                            value={dailyLimit}
-                            onChange={(e) => setDailyLimit(parseInt(e.target.value) || 100)}
-                            min="50"
-                            max="500"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                            title="Maximum messages per day"
-                          />
-                        </div>
+                        {([
+                          { label: 'Batch Size', value: batchSize, onChange: setBatchSize, min: 10, max: 50, isUnlimited: false },
+                          { label: 'Per Hour', value: maxPerHour, onChange: setMaxPerHour, min: 10, max: 100, isUnlimited: false },
+                          { label: 'Per Day', value: dailyLimit, onChange: setDailyLimit, min: 50, max: 999999, isUnlimited: true },
+                        ] as Array<{ label: string; value: number; onChange: (val: number) => void; min: number; max: number; isUnlimited: boolean }>).map(({ label, value, onChange, min, max, isUnlimited }) => (
+                          <div key={label} className="p-3 bg-white border border-gray-200 rounded-lg">
+                            <label className="block text-xs font-medium text-gray-700 mb-2">{label}</label>
+                            <input
+                              type="number"
+                              value={isUnlimited && value >= 999999 ? '' : value}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? 999999 : Number(e.target.value);
+                                onChange(Math.min(val, 999999));
+                              }}
+                              min={min}
+                              max={max}
+                              placeholder={isUnlimited && value >= 999999 ? 'Unlimited' : `${min}-${max}`}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            {isUnlimited && value >= 999999 && (
+                              <p className="text-xs text-gray-500 mt-1">Unlimited</p>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </div>
                     
-                    {/* Smart Features */}
+                    {/* Smart Protection */}
                     <div>
-                      <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Smart Protection</p>
-                      <div className="space-y-2">
-                        <label 
-                          className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 transition-all border border-gray-200"
-                          title="Don't send between 10 PM and 8 AM - prevents annoyance and spam reports"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={respectQuietHours}
-                            onChange={(e) => setRespectQuietHours(e.target.checked)}
-                            className="w-4 h-4 text-blue-600 rounded"
-                          />
+                      <h3 className="text-sm font-semibold text-gray-900 mb-3">Smart Protection</h3>
+                      <button
+                        onClick={() => setRespectQuietHours(!respectQuietHours)}
+                        className="w-full flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50/50 transition-all"
+                        title="Don't send between 10 PM and 8 AM"
+                      >
+                        <div className="flex items-center gap-2">
                           <Clock className="w-4 h-4 text-gray-600" />
-                          <div className="flex-1">
-                            <span className="font-medium text-gray-900 text-sm">Respect Quiet Hours</span>
-                            <p className="text-xs text-gray-500">No messages 10 PM - 8 AM</p>
+                          <div className="text-left">
+                            <span className="text-sm font-medium text-gray-900 block">Respect Quiet Hours</span>
+                            <span className="text-xs text-gray-500">No messages 10 PM - 8 AM</span>
                           </div>
-                        </label>
-                        
-                        <label 
-                          className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 transition-all border border-gray-200"
-                          title="Play sound for campaign events (pause, complete, error)"
+                        </div>
+                        <div
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            respectQuietHours ? 'bg-blue-600' : 'bg-gray-300'
+                          }`}
                         >
-                          <input
-                            type="checkbox"
-                            checked={soundEnabled}
-                            onChange={(e) => setSoundEnabled(e.target.checked)}
-                            className="w-4 h-4 text-blue-600 rounded"
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              respectQuietHours ? 'translate-x-6' : 'translate-x-1'
+                            }`}
                           />
-                          <Music className="w-4 h-4 text-gray-600" />
-                          <div className="flex-1">
-                            <span className="font-medium text-gray-900 text-sm">Sound Notifications</span>
-                            <p className="text-xs text-gray-500">Audio feedback for events</p>
-                          </div>
-                        </label>
-                        
-                        <label 
-                          className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 transition-all border border-gray-200"
-                          title="Show browser notifications for progress updates"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={notificationsEnabled}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                requestNotificationPermission();
-                              } else {
-                                setNotificationsEnabled(false);
-                              }
-                            }}
-                            className="w-4 h-4 text-blue-600 rounded"
-                          />
-                          <Smartphone className="w-4 h-4 text-gray-600" />
-                          <div className="flex-1">
-                            <span className="font-medium text-gray-900 text-sm">Browser Notifications</span>
-                            <p className="text-xs text-gray-500">Progress updates (25%, 50%, 75%, complete)</p>
-                          </div>
-                        </label>
-                      </div>
+                        </div>
+                      </button>
                     </div>
                     
                     {/* Reset to Defaults */}
-                    <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="pt-4 border-t border-gray-200">
                       <button
                         onClick={async () => {
                           try {
-                            // Reset in database
-                            const response = await fetch('/api/antiban-settings', {
+                            // First delete existing settings
+                            const deleteResponse = await fetch('/api/antiban-settings', {
                               method: 'DELETE',
-                              headers: {
-                                'Content-Type': 'application/json',
-                              },
+                              headers: { 'Content-Type': 'application/json' },
                             });
                             
-                            if (!response.ok) {
-                              throw new Error('Failed to reset settings in database');
-                            }
+                            if (!deleteResponse.ok) throw new Error('Failed to reset settings in database');
                             
-                            // Reset to safe defaults in UI
+                            // Reset to safe defaults
                             setUsePersonalization(true);
                             setRandomDelay(true);
                             setMinDelay(3);
@@ -5665,13 +6479,45 @@ export default function WhatsAppInboxPage() {
                             setUseEmojiVariation(true);
                             setVaryMessageLength(true);
                             
-                            console.log('⚙️ Anti-ban settings reset to defaults (database cleared)');
-                            toast.success('Anti-ban settings reset to safe defaults');
+                            // Save the defaults to database
+                            const defaults = {
+                              usePersonalization: true,
+                              randomDelay: true,
+                              minDelay: 3,
+                              maxDelay: 8,
+                              usePresence: false,
+                              batchSize: 20,
+                              batchDelay: 60,
+                              maxPerHour: 30,
+                              dailyLimit: 100,
+                              skipRecentlyContacted: true,
+                              respectQuietHours: true,
+                              useInvisibleChars: true,
+                              useEmojiVariation: true,
+                              varyMessageLength: true,
+                            };
+                            
+                            const saveResponse = await fetch('/api/antiban-settings', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify(defaults),
+                            });
+                            
+                            if (!saveResponse.ok) throw new Error('Failed to save defaults');
+                            
+                            // Also save to localStorage
+                            localStorage.setItem('whatsapp_antiban_settings', JSON.stringify({
+                              ...defaults,
+                              savedAt: new Date().toISOString(),
+                            }));
+                            
+                            console.log('⚙️ Anti-ban settings reset to defaults and saved');
+                            toast.success('Settings reset to safe defaults');
                           } catch (error) {
                             console.error('Failed to reset settings:', error);
-                            toast.error('Failed to reset settings. Using local defaults.');
+                            toast.error('Failed to reset settings');
                             
-                            // Fallback: just reset UI
+                            // Fallback: reset UI only
                             setUsePersonalization(true);
                             setRandomDelay(true);
                             setMinDelay(3);
@@ -5688,7 +6534,7 @@ export default function WhatsAppInboxPage() {
                             setVaryMessageLength(true);
                           }
                         }}
-                        className="w-full px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all font-medium text-sm flex items-center justify-center gap-2"
+                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 hover:border-gray-400 transition-all text-sm font-medium flex items-center justify-center gap-2"
                         title="Reset all settings to recommended safe defaults"
                       >
                         <RefreshCw className="w-4 h-4" />
@@ -5703,87 +6549,101 @@ export default function WhatsAppInboxPage() {
 
               {/* STEP 3: Review & Confirm */}
               {bulkStep === 3 && (
-                <div>
-                    
-                    {/* Recipients Summary */}
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {sentPhones.length > 0 ? 'Pending Recipients' : 'Recipients'}
+                <div className="space-y-6">
+                  {/* Step Info Header - Matching Step 2 */}
+                  {(() => {
+                    const pendingRecipients = selectedRecipients.filter(phone => !sentPhones.includes(phone));
+                    return (
+                      <div className="p-5 bg-purple-50 border-2 border-purple-200 rounded-xl">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-bold text-purple-900 mb-2 text-lg flex items-center gap-2">
+                              <CheckCheck className="w-5 h-5" />
+                              Review & Confirm
+                            </h3>
+                            <p className="text-sm text-purple-700">
+                              Review your message and settings before sending. {sentPhones.length > 0 && `${sentPhones.length} already sent.`}
+                            </p>
+                          </div>
+                          <div className="text-right bg-white rounded-xl px-4 py-3 border-2 border-purple-300 shadow-sm">
+                            <p className="text-xs text-gray-600 font-medium">Sending to</p>
+                            <p className="text-3xl font-bold text-purple-900">{pendingRecipients.length}</p>
+                            <p className="text-xs text-gray-600 font-medium">recipients</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Recipients Section - Matching Step 2 Style */}
+                  <div className="p-5 bg-white border-2 border-gray-200 rounded-xl">
+                    <label className="block text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+                      <Users className="w-5 h-5" />
+                      Recipients
                     </label>
-                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                      {(() => {
-                        const pendingRecipients = selectedRecipients.filter(phone => !sentPhones.includes(phone));
-                        return (
-                          <>
-                            <div className="flex items-center gap-3 mb-3">
-                              <span className="text-3xl font-bold text-blue-600">{pendingRecipients.length}</span>
-                              <span className="text-sm text-gray-600">
-                                {sentPhones.length > 0 ? 'pending recipients' : 'recipients selected'}
-                              </span>
-                            </div>
-                            {sentPhones.length > 0 && (
-                              <div className="mb-3 p-2 bg-green-100 border border-green-300 rounded-lg">
-                                <p className="text-xs text-green-800">
-                                  ✅ {sentPhones.length} already sent • {pendingRecipients.length} remaining
-                                </p>
-                              </div>
-                            )}
-                            {pendingRecipients.length > 0 && (
-                              <div className="max-h-32 overflow-y-auto text-sm text-gray-600 space-y-1">
-                                {pendingRecipients.slice(0, 5).map(phone => {
-                                  const conv = conversations.find(c => c.phone === phone);
-                                  return (
-                                    <div key={phone} className="flex items-center gap-2">
-                                      <CheckCheck className="w-3 h-3 text-blue-600" />
-                                      <span className="font-medium">{conv?.customer_name || 'Unknown'}</span>
-                                      <span className="text-gray-400">-</span>
-                                      <span className="font-mono text-xs">{phone}</span>
+                    {(() => {
+                      const pendingRecipients = selectedRecipients.filter(phone => !sentPhones.includes(phone));
+                      return (
+                        <div className="space-y-2">
+                          {pendingRecipients.length > 0 ? (
+                            <>
+                              {pendingRecipients.slice(0, 5).map(phone => {
+                                const conv = conversations.find(c => c.phone === phone);
+                                return (
+                                  <div key={phone} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border-2 border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-all">
+                                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-semibold">
+                                      {conv?.customer_name?.charAt(0) || '?'}
                                     </div>
-                                  );
-                                })}
-                                {pendingRecipients.length > 5 && (
-                                  <p className="text-xs text-gray-500 italic">
-                                    ... and {pendingRecipients.length - 5} more pending
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-semibold text-gray-900 truncate">{conv?.customer_name || 'Unknown'}</p>
+                                      <p className="text-xs text-gray-500 font-mono truncate">{phone}</p>
+                                    </div>
+                                    <CheckCheck className="w-5 h-5 text-green-600 flex-shrink-0" />
+                                  </div>
+                                );
+                              })}
+                              {pendingRecipients.length > 5 && (
+                                <div className="pt-2 border-t-2 border-gray-200">
+                                  <p className="text-sm text-gray-600 text-center font-medium">
+                                    +{pendingRecipients.length - 5} more recipient{pendingRecipients.length - 5 !== 1 ? 's' : ''}
                                   </p>
-                                )}
-                              </div>
-                            )}
-                            {pendingRecipients.length === 0 && sentPhones.length > 0 && (
-                              <div className="text-center py-4">
-                                <CheckCheck className="w-12 h-12 text-green-500 mx-auto mb-2" />
-                                <p className="text-sm font-medium text-green-700">All messages sent!</p>
-                                <p className="text-xs text-gray-600 mt-1">No pending recipients</p>
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
+                                </div>
+                              )}
+                            </>
+                          ) : sentPhones.length > 0 ? (
+                            <div className="text-center py-6 bg-green-50 rounded-xl border-2 border-green-200">
+                              <CheckCheck className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                              <p className="text-base font-semibold text-green-700">All messages sent!</p>
+                              <p className="text-sm text-gray-500 mt-1">No pending recipients</p>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                   </div>
-                    
-                  {/* WhatsApp-Style Message Preview */}
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">WhatsApp Preview</label>
-                    
-                    {/* WhatsApp Chat Background */}
-                    <div className="relative rounded-xl overflow-hidden" style={{ 
-                      background: '#e5ddd5', 
-                      backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'100\' height=\'100\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0 0h100v100H0z\' fill=\'%23e5ddd5\'/%3E%3Cpath d=\'M25 25h50v50H25z\' fill=\'%23ffffff\' opacity=\'0.03\'/%3E%3C/svg%3E")'
-                    }}>
-                      <div className="p-4 min-h-[200px] flex flex-col justify-end">
-                        {/* WhatsApp Message Bubble - Sent Style */}
-                        <div className="flex justify-end mb-2">
+
+                  {/* WhatsApp Preview - Matching Step 2 Style */}
+                  <div className="p-5 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl">
+                    <label className="block text-base font-bold text-green-900 mb-3 flex items-center gap-2">
+                      <MessageCircle className="w-5 h-5" />
+                      WhatsApp Preview
+                    </label>
+                    <p className="text-sm text-green-700 mb-4">Exact preview as it will appear</p>
+                      
+                      <div className="relative rounded-xl overflow-hidden bg-[#e5ddd5] p-6 min-h-[240px] flex flex-col justify-end" style={{ 
+                        backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'100\' height=\'100\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0 0h100v100H0z\' fill=\'%23e5ddd5\'/%3E%3Cpath d=\'M25 25h50v50H25z\' fill=\'%23ffffff\' opacity=\'0.03\'/%3E%3C/svg%3E")'
+                      }}>
+                        <div className="flex justify-end mb-3">
                           <div className="max-w-[85%]">
-                            {/* Message Bubble */}
-                            <div className="bg-[#dcf8c6] rounded-lg rounded-tr-none shadow-sm">
-                              {/* Media Content - If image/video/document/audio */}
+                            <div className="bg-[#dcf8c6] rounded-2xl rounded-tr-none shadow-lg">
+                              {/* Media Content */}
                               {bulkMedia && (['image', 'video', 'document', 'audio'].includes(bulkMessageType)) && (
-                                <div className="p-1">
+                                <div className="p-1.5">
                                   {bulkMessageType === 'image' && bulkMediaPreview && (
                                     <div className="relative">
-                                      <img src={bulkMediaPreview} alt="Preview" className="w-full rounded-lg max-h-64 object-cover" />
+                                      <img src={bulkMediaPreview} alt="Preview" className="w-full rounded-xl max-h-64 object-cover" />
                                       {viewOnce && (
-                                        <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 rounded-full flex items-center gap-1">
+                                        <div className="absolute top-2 left-2 px-2 py-1 bg-black/70 rounded-full flex items-center gap-1 backdrop-blur-sm">
                                           <Lock className="w-3 h-3 text-white" />
                                           <span className="text-xs text-white font-medium">View once</span>
                                         </div>
@@ -5791,12 +6651,12 @@ export default function WhatsAppInboxPage() {
                                     </div>
                                   )}
                                   {bulkMessageType === 'video' && (
-                                    <div className="relative bg-black rounded-lg h-48 flex items-center justify-center">
-                                      <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-                                        <Video className="w-8 h-8 text-white" />
+                                    <div className="relative bg-black rounded-xl h-48 flex items-center justify-center">
+                                      <div className="w-20 h-20 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+                                        <Video className="w-10 h-10 text-white" />
                                       </div>
                                       {viewOnce && (
-                                        <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 rounded-full flex items-center gap-1">
+                                        <div className="absolute top-2 left-2 px-2 py-1 bg-black/70 rounded-full flex items-center gap-1 backdrop-blur-sm">
                                           <Lock className="w-3 h-3 text-white" />
                                           <span className="text-xs text-white font-medium">View once</span>
                                         </div>
@@ -5804,25 +6664,25 @@ export default function WhatsAppInboxPage() {
                                     </div>
                                   )}
                                   {bulkMessageType === 'document' && (
-                                    <div className="bg-white rounded-lg p-3 flex items-center gap-3">
-                                      <div className="w-12 h-12 bg-blue-100 rounded flex items-center justify-center">
+                                    <div className="bg-white rounded-xl p-4 flex items-center gap-3">
+                                      <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                                         <FileText className="w-6 h-6 text-blue-600" />
                                       </div>
                                       <div className="flex-1">
-                                        <p className="text-sm font-medium text-gray-900">Document</p>
+                                        <p className="text-sm font-semibold text-gray-900">Document</p>
                                         <p className="text-xs text-gray-500">PDF, DOC, or other file</p>
                                       </div>
                                     </div>
                                   )}
                                   {bulkMessageType === 'audio' && (
-                                    <div className="bg-white rounded-lg p-3 flex items-center gap-3">
-                                      <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-                                        <Music className="w-5 h-5 text-white" />
+                                    <div className="bg-white rounded-xl p-4 flex items-center gap-3">
+                                      <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
+                                        <Music className="w-6 h-6 text-white" />
                                       </div>
-                                      <div className="flex-1 h-8 bg-gray-200 rounded-full flex items-center px-3">
-                                        <div className="w-full h-1 bg-gray-400 rounded-full"></div>
+                                      <div className="flex-1 h-10 bg-gray-200 rounded-full flex items-center px-4">
+                                        <div className="w-full h-1.5 bg-gray-400 rounded-full"></div>
                                       </div>
-                                      <span className="text-xs text-gray-600">0:00</span>
+                                      <span className="text-xs text-gray-600 font-medium">0:00</span>
                                     </div>
                                   )}
                                 </div>
@@ -5830,7 +6690,7 @@ export default function WhatsAppInboxPage() {
                               
                               {/* Text Content */}
                               {bulkMessage && (['text', 'image', 'video', 'document'].includes(bulkMessageType)) && (
-                                <div className="px-3 py-2">
+                                <div className="px-4 py-3">
                                   <div 
                                     className="text-sm text-gray-900 leading-relaxed whitespace-pre-wrap break-words"
                                     dangerouslySetInnerHTML={{ __html: renderWhatsAppFormatting(bulkMessage) }}
@@ -5840,21 +6700,21 @@ export default function WhatsAppInboxPage() {
                               
                               {/* Poll Content */}
                               {bulkMessageType === 'poll' && pollQuestion && (
-                                <div className="p-3">
+                                <div className="p-4">
                                   <div className="mb-3">
                                     <p className="text-sm font-semibold text-gray-900">{pollQuestion}</p>
                                   </div>
-                                  <div className="space-y-1.5">
+                                  <div className="space-y-2">
                                     {pollOptions.filter(o => o.trim()).map((option, idx) => (
-                                      <div key={idx} className="flex items-center gap-2 p-2 bg-white/50 rounded-lg border border-gray-300">
+                                      <div key={idx} className="flex items-center gap-2 p-2.5 bg-white/60 rounded-lg border border-gray-300/50">
                                         <div className={`w-4 h-4 rounded-full border-2 border-gray-400 ${allowMultiSelect ? '' : 'bg-white'}`}></div>
                                         <span className="text-sm text-gray-800">{option}</span>
                                       </div>
                                     ))}
                                   </div>
-                                  <div className="mt-2 pt-2 border-t border-gray-300">
+                                  <div className="mt-3 pt-3 border-t border-gray-300/50">
                                     <p className="text-xs text-gray-600 flex items-center gap-1">
-                                      <BarChart3 className="w-3 h-3" />
+                                      <BarChart3 className="w-3.5 h-3.5" />
                                       {allowMultiSelect ? 'Select one or more options' : 'Select one option'}
                                     </p>
                                   </div>
@@ -5863,17 +6723,15 @@ export default function WhatsAppInboxPage() {
                               
                               {/* Location Content */}
                               {bulkMessageType === 'location' && locationLat && locationLng && (
-                                <div className="p-1">
-                                  {/* Map Preview */}
-                                  <div className="bg-gray-200 rounded-lg h-32 flex items-center justify-center relative overflow-hidden">
+                                <div className="p-1.5">
+                                  <div className="bg-gray-200 rounded-xl h-40 flex items-center justify-center relative overflow-hidden">
                                     <div className="absolute inset-0 opacity-30" style={{
                                       backgroundImage: 'repeating-linear-gradient(0deg, #ccc 0px, #ccc 1px, transparent 1px, transparent 20px), repeating-linear-gradient(90deg, #ccc 0px, #ccc 1px, transparent 1px, transparent 20px)'
                                     }}></div>
-                                    <MapPin className="w-12 h-12 text-red-500 drop-shadow-lg relative z-10" />
+                                    <MapPin className="w-14 h-14 text-red-500 drop-shadow-xl relative z-10" />
                                   </div>
-                                  {/* Location Details */}
                                   {(locationName || locationAddress) && (
-                                    <div className="bg-white p-3 mt-1 rounded-lg">
+                                    <div className="bg-white p-3 mt-1.5 rounded-xl">
                                       {locationName && (
                                         <p className="text-sm font-semibold text-gray-900">{locationName}</p>
                                       )}
@@ -5887,223 +6745,192 @@ export default function WhatsAppInboxPage() {
                               )}
                               
                               {/* Timestamp and Status */}
-                              <div className="px-3 pb-1 flex items-center justify-end gap-1">
+                              <div className="px-4 pb-2 flex items-center justify-end gap-1.5">
                                 <span className="text-[10px] text-gray-600">
                                   {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                                 </span>
-                                <CheckCheck className="w-3.5 h-3.5 text-blue-500" />
+                                <CheckCheck className="w-4 h-4 text-blue-500" />
                               </div>
                             </div>
                             
                             {/* Recipient Name */}
-                            <div className="text-right mt-1">
-                              <span className="text-xs text-gray-600">
+                            <div className="text-right mt-2">
+                              <span className="text-sm text-gray-600 font-medium">
                                 To: {conversations.find(c => c.phone === selectedRecipients[0])?.customer_name || 'Customer'}
                               </span>
                             </div>
                           </div>
                         </div>
-                        
-                        {/* WhatsApp Info */}
-                        <div className="text-center mt-3 mb-2">
-                          <p className="text-xs text-gray-600 flex items-center justify-center gap-1">
-                            <MessageCircle className="w-3 h-3" />
-                            Exact preview as it will appear in WhatsApp
-                          </p>
-                        </div>
                       </div>
-                      </div>
-                    </div>
-                    
-                    {/* Settings Summary */}
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Protection Settings</label>
-                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div className="flex items-center gap-1.5">
+                  </div>
+
+                  {/* Protection Settings - Matching Step 2 Style */}
+                  <div className="p-5 bg-purple-50 border-2 border-purple-200 rounded-xl">
+                    <label className="block text-base font-bold text-purple-900 mb-3 flex items-center gap-2">
+                      <Settings className="w-5 h-5" />
+                      Protection Settings
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className={`p-3 rounded-xl border-2 ${usePersonalization ? 'bg-white border-purple-300' : 'bg-white/50 border-gray-200'}`}>
+                        <div className="flex items-center gap-2">
                           {usePersonalization ? (
-                            <>
-                              <CheckCheck className="w-3.5 h-3.5 text-green-600" />
-                              <span className="text-gray-700">Personalization</span>
-                            </>
+                            <CheckCheck className="w-5 h-5 text-green-600" />
                           ) : (
-                            <>
-                              <X className="w-3.5 h-3.5 text-gray-400" />
-                              <span className="text-gray-500">Personalization</span>
-                            </>
+                            <X className="w-5 h-5 text-gray-400" />
                           )}
+                          <span className={`text-sm font-semibold ${usePersonalization ? 'text-gray-900' : 'text-gray-500'}`}>
+                            Personalization
+                          </span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          {randomDelay ? (
-                            <>
-                              <CheckCheck className="w-3.5 h-3.5 text-green-600" />
-                              <span className="text-gray-700">Random Delays ({minDelay}-{maxDelay}s)</span>
-                            </>
-                          ) : (
-                            <>
-                              <X className="w-3.5 h-3.5 text-gray-400" />
-                              <span className="text-gray-500">Fixed Delay</span>
-                            </>
-                          )}
+                      </div>
+                      <div className="p-3 rounded-xl border-2 bg-white border-purple-300">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-5 h-5 text-purple-600" />
+                          <span className="text-sm font-semibold text-gray-900">
+                            Delays: {randomDelay ? `${minDelay}-${maxDelay}s` : `${minDelay}s`}
+                          </span>
                         </div>
-                        <div className="flex items-center gap-1.5">
+                      </div>
+                      <div className={`p-3 rounded-xl border-2 ${usePresence ? 'bg-white border-purple-300' : 'bg-white/50 border-gray-200'}`}>
+                        <div className="flex items-center gap-2">
                           {usePresence ? (
-                            <>
-                              <CheckCheck className="w-3.5 h-3.5 text-green-600" />
-                              <span className="text-gray-700">Typing Indicator</span>
-                            </>
+                            <CheckCheck className="w-5 h-5 text-green-600" />
                           ) : (
-                            <>
-                              <X className="w-3.5 h-3.5 text-gray-400" />
-                              <span className="text-gray-500">No Typing</span>
-                            </>
+                            <X className="w-5 h-5 text-gray-400" />
                           )}
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <BarChart3 className="w-3.5 h-3.5 text-gray-600" />
-                          <span className="text-gray-700">Limit: {dailyLimit}</span>
-                        </div>
+                          <span className={`text-sm font-semibold ${usePresence ? 'text-gray-900' : 'text-gray-500'}`}>
+                            Typing Indicator
+                          </span>
                         </div>
                       </div>
-                    </div>
-                    
-                    {/* Time Estimate */}
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Estimated Time</label>
-                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-gray-600" />
-                        <span className="text-sm text-gray-700 font-medium">
-                            {(() => {
-                              const avgDelay = randomDelay ? (minDelay + maxDelay) / 2 : minDelay;
-                              const typingTime = usePresence ? 1.5 : 0;
-                              const totalSeconds = selectedRecipients.length * (avgDelay + typingTime + 1);
-                              const minutes = Math.floor(totalSeconds / 60);
-                              const seconds = Math.floor(totalSeconds % 60);
-                            return `${minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`}`;
-                            })()}
-                        </span>
+                      <div className="p-3 rounded-xl border-2 bg-white border-purple-300">
+                        <div className="flex items-center gap-2">
+                          <BarChart3 className="w-5 h-5 text-purple-600" />
+                          <span className="text-sm font-semibold text-gray-900">Limit: Unlimited</span>
+                        </div>
                       </div>
-                      <span className="text-2xl font-bold text-gray-900">{selectedRecipients.length}</span>
                     </div>
                   </div>
-                  
-                  {/* Sending Mode Selection */}
-                  <div className="mb-6 p-6 bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-2xl shadow-sm">
-                    <h4 className="text-lg font-bold text-purple-900 mb-4 flex items-center gap-2">
-                      <Zap className="w-5 h-5" />
-                      Choose Sending Mode
-                    </h4>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Browser Mode */}
-                      <div
-                        onClick={() => setSendingMode('browser')}
-                        className={`p-5 rounded-xl border-2 cursor-pointer transition-all ${
-                          sendingMode === 'browser'
-                            ? 'bg-blue-600 border-blue-600 text-white shadow-lg scale-105'
-                            : 'bg-white border-purple-200 text-gray-700 hover:border-blue-400 hover:shadow-md'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3 mb-3">
-                          <div className={`p-2 rounded-lg ${sendingMode === 'browser' ? 'bg-blue-500' : 'bg-blue-100'}`}>
-                            <Activity className={`w-6 h-6 ${sendingMode === 'browser' ? 'text-white' : 'text-blue-600'}`} />
+
+                  {/* Estimated Time & Sending Mode - Matching Step 2 Style */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Estimated Time */}
+                    <div className="p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl">
+                      <label className="block text-base font-bold text-blue-900 mb-3 flex items-center gap-2">
+                        <Clock className="w-5 h-5" />
+                        Estimated Time
+                      </label>
+                      <div className="flex items-center gap-4">
+                        <div className="text-4xl font-bold text-blue-900">
+                          {(() => {
+                            const avgDelay = randomDelay ? (minDelay + maxDelay) / 2 : minDelay;
+                            const typingTime = usePresence ? 1.5 : 0;
+                            const totalSeconds = selectedRecipients.length * (avgDelay + typingTime + 1);
+                            const minutes = Math.floor(totalSeconds / 60);
+                            const seconds = Math.floor(totalSeconds % 60);
+                            return `${minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`}`;
+                          })()}
+                        </div>
+                      </div>
+                      <p className="text-sm text-blue-700 mt-2">
+                        for {selectedRecipients.length} message{selectedRecipients.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+
+                    {/* Sending Mode */}
+                    <div className="p-5 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl">
+                      <label className="block text-base font-bold text-green-900 mb-3 flex items-center gap-2">
+                        <Zap className="w-5 h-5" />
+                        Sending Mode
+                      </label>
+                      <div className="space-y-3">
+                        <div
+                          onClick={() => setSendingMode('browser')}
+                          className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                            sendingMode === 'browser'
+                              ? 'bg-green-600 text-white border-green-600 shadow-lg'
+                              : 'bg-white border-green-200 hover:border-green-400'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-3">
+                              <Activity className={`w-5 h-5 ${sendingMode === 'browser' ? 'text-white' : 'text-green-600'}`} />
+                              <div>
+                                <h4 className={`font-bold text-sm ${sendingMode === 'browser' ? 'text-white' : 'text-gray-900'}`}>
+                                  Browser Sending
+                                </h4>
+                                <p className={`text-xs ${sendingMode === 'browser' ? 'text-green-100' : 'text-gray-500'}`}>
+                                  Real-time feedback
+                                </p>
+                              </div>
+                            </div>
+                            {sendingMode === 'browser' && (
+                              <CheckCheck className="w-5 h-5 text-white" />
+                            )}
                           </div>
-                          <div className="flex-1">
-                            <h5 className={`font-bold text-base mb-1 ${sendingMode === 'browser' ? 'text-white' : 'text-gray-900'}`}>
-                              Browser Sending
-                            </h5>
-                            <p className={`text-sm ${sendingMode === 'browser' ? 'text-blue-100' : 'text-gray-600'}`}>
-                              Real-time feedback
+                          <p className={`text-xs ${sendingMode === 'browser' ? 'text-green-100' : 'text-gray-600'}`}>
+                            Best for &lt; 100 recipients
                           </p>
                         </div>
-                          {sendingMode === 'browser' && (
-                            <CheckCheck className="w-6 h-6 text-white" />
-                          )}
+                        
+                        <div
+                          onClick={() => setSendingMode('cloud')}
+                          className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                            sendingMode === 'cloud'
+                              ? 'bg-green-600 text-white border-green-600 shadow-lg'
+                              : 'bg-white border-green-200 hover:border-green-400'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-3">
+                              <Database className={`w-5 h-5 ${sendingMode === 'cloud' ? 'text-white' : 'text-green-600'}`} />
+                              <div>
+                                <h4 className={`font-bold text-sm ${sendingMode === 'cloud' ? 'text-white' : 'text-gray-900'}`}>
+                                  Cloud Processing
+                                </h4>
+                                <p className={`text-xs ${sendingMode === 'cloud' ? 'text-green-100' : 'text-gray-500'}`}>
+                                  Background processing
+                                </p>
+                              </div>
+                            </div>
+                            {sendingMode === 'cloud' && (
+                              <CheckCheck className="w-5 h-5 text-white" />
+                            )}
+                          </div>
+                          <p className={`text-xs ${sendingMode === 'cloud' ? 'text-green-100' : 'text-gray-600'}`}>
+                            Best for 100+ recipients
+                          </p>
                         </div>
-                        <ul className={`text-xs space-y-1.5 ${sendingMode === 'browser' ? 'text-blue-100' : 'text-gray-600'}`}>
-                          <li className="flex items-center gap-2">
-                            <CheckCheck className="w-3 h-3" />
-                            Instant feedback
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCheck className="w-3 h-3" />
-                            Can minimize to topbar
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCheck className="w-3 h-3" />
-                            Best for &lt; 100 recipients
-                          </li>
-                        </ul>
                       </div>
                       
-                      {/* Cloud Mode */}
-                      <div
-                        onClick={() => setSendingMode('cloud')}
-                        className={`p-5 rounded-xl border-2 cursor-pointer transition-all ${
-                          sendingMode === 'cloud'
-                            ? 'bg-purple-600 border-purple-600 text-white shadow-lg scale-105'
-                            : 'bg-white border-purple-200 text-gray-700 hover:border-purple-400 hover:shadow-md'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3 mb-3">
-                          <div className={`p-2 rounded-lg ${sendingMode === 'cloud' ? 'bg-purple-500' : 'bg-purple-100'}`}>
-                            <Database className={`w-6 h-6 ${sendingMode === 'cloud' ? 'text-white' : 'text-purple-600'}`} />
-                    </div>
-                          <div className="flex-1">
-                            <h5 className={`font-bold text-base mb-1 ${sendingMode === 'cloud' ? 'text-white' : 'text-gray-900'}`}>
-                              Cloud Processing ☁️
-                            </h5>
-                            <p className={`text-sm ${sendingMode === 'cloud' ? 'text-purple-100' : 'text-gray-600'}`}>
-                              Background processing
-                            </p>
-                          </div>
-                          {sendingMode === 'cloud' && (
-                            <CheckCheck className="w-6 h-6 text-white" />
-                          )}
+                      {/* Campaign Name for Cloud Mode */}
+                      {sendingMode === 'cloud' && (
+                        <div className="mt-4">
+                          <input
+                            type="text"
+                            value={campaignName}
+                            onChange={(e) => setCampaignName(e.target.value)}
+                            placeholder={`Campaign ${new Date().toLocaleDateString()}`}
+                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all text-sm font-medium"
+                          />
                         </div>
-                        <ul className={`text-xs space-y-1.5 ${sendingMode === 'cloud' ? 'text-purple-100' : 'text-gray-600'}`}>
-                          <li className="flex items-center gap-2">
-                            <CheckCheck className="w-3 h-3" />
-                            Can close browser
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCheck className="w-3 h-3" />
-                            Server handles sending
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCheck className="w-3 h-3" />
-                            Best for 100+ recipients
-                          </li>
-                        </ul>
-                      </div>
+                      )}
                     </div>
-                    
-                    {/* Campaign Name for Cloud Mode */}
-                    {sendingMode === 'cloud' && (
-                      <div className="mt-4 p-4 bg-white rounded-xl border-2 border-purple-200">
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Campaign Name
-                        </label>
-                        <input
-                          type="text"
-                          value={campaignName}
-                          onChange={(e) => setCampaignName(e.target.value)}
-                          placeholder={`Campaign ${new Date().toLocaleDateString()}`}
-                          className="w-full p-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
-                        />
-                      </div>
-                    )}
                   </div>
                   
-                  {/* Warning Box */}
-                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-                    <p className="text-sm text-yellow-900 font-medium flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                      <span>
-                        You are about to send <strong>{selectedRecipients.length} messages</strong>. This action cannot be undone.
-                      </span>
-                    </p>
+                  {/* Final Confirmation Warning - Matching Step 2 Style */}
+                  <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl">
+                    <div className="flex items-start gap-4">
+                      <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
+                        <AlertCircle className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-base font-bold text-amber-900 mb-2">Final Confirmation</h4>
+                        <p className="text-sm text-amber-800">
+                          You are about to send <strong className="font-bold">{selectedRecipients.length} message{selectedRecipients.length !== 1 ? 's' : ''}</strong> to your recipients. This action cannot be undone.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -6112,15 +6939,15 @@ export default function WhatsAppInboxPage() {
               {bulkStep === 4 && (
                 <div>
                   {/* Progress Display */}
-                  <div className="p-8 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border-2 border-blue-200 mb-6 shadow-lg">
-                    <div className="text-center mb-8">
-                      <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse shadow-xl">
-                        <Send className="w-10 h-10 text-white" />
+                  <div className="p-5 bg-white rounded-xl border-2 border-gray-200 mb-6">
+                    <div className="text-center mb-4">
+                      <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <Send className="w-6 h-6 text-white" />
                       </div>
-                      <h3 className="text-2xl font-bold text-blue-900 mb-2">
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">
                         {sendingMode === 'cloud' ? 'Processing in Cloud ☁️' : 'Sending Messages...'}
                       </h3>
-                      <p className="text-base text-blue-700 font-medium">
+                      <p className="text-sm text-gray-600 font-medium">
                         {sendingMode === 'cloud' 
                           ? 'You can close this window safely - campaign continues in background' 
                           : 'Please keep this window open'}
@@ -6135,47 +6962,47 @@ export default function WhatsAppInboxPage() {
                               icon: '🔽'
                             });
                           }}
-                          className="mt-4 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full hover:from-blue-700 hover:to-indigo-700 transition-all font-bold text-base border-2 border-blue-700 flex items-center gap-2 mx-auto shadow-lg animate-bounce"
+                          className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-sm flex items-center gap-2 mx-auto"
                         >
-                          <Minimize2 className="w-5 h-5" />
-                          Click Here to Minimize to Topbar
+                          <Minimize2 className="w-4 h-4" />
+                          Minimize to Topbar
                         </button>
                       )}
                     </div>
                     
-                    <div className="mb-6">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-base font-bold text-blue-900">
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-700">
                           Progress
                         </span>
-                        <span className="text-2xl font-bold text-blue-700">
+                        <span className="text-lg font-bold text-gray-900">
                           {bulkProgress.current} / {bulkProgress.total}
                         </span>
                       </div>
-                      <div className="w-full bg-blue-200 rounded-full h-6 overflow-hidden shadow-inner">
+                      <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
                         <div
-                          className="h-6 bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-300 flex items-center justify-end pr-3"
+                          className="h-4 bg-green-500 transition-all duration-300 flex items-center justify-end pr-2"
                           style={{ width: `${bulkProgress.total > 0 ? (bulkProgress.current / bulkProgress.total) * 100 : 0}%` }}
                         >
-                          <span className="text-sm text-white font-bold">
+                          <span className="text-xs text-white font-bold">
                             {bulkProgress.total > 0 ? Math.round((bulkProgress.current / bulkProgress.total) * 100) : 0}%
                           </span>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-5 bg-white rounded-xl border-2 border-green-200 shadow-sm">
-                        <p className="text-sm text-gray-600 mb-2 font-medium">Successful</p>
-                        <p className="text-4xl font-bold text-green-600 flex items-center gap-2">
-                          <CheckCheck className="w-8 h-8" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-4 bg-white rounded-xl border-2 border-gray-200">
+                        <p className="text-sm text-gray-600 mb-1 font-medium">Successful</p>
+                        <p className="text-2xl font-bold text-green-600 flex items-center gap-2">
+                          <CheckCheck className="w-5 h-5" />
                           {bulkProgress.success}
                         </p>
                       </div>
-                      <div className="p-5 bg-white rounded-xl border-2 border-red-200 shadow-sm">
-                        <p className="text-sm text-gray-600 mb-2 font-medium">Failed</p>
-                        <p className="text-4xl font-bold text-red-600 flex items-center gap-2">
-                          <X className="w-8 h-8" />
+                      <div className="p-4 bg-white rounded-xl border-2 border-gray-200">
+                        <p className="text-sm text-gray-600 mb-1 font-medium">Failed</p>
+                        <p className="text-2xl font-bold text-red-600 flex items-center gap-2">
+                          <X className="w-5 h-5" />
                           {bulkProgress.failed}
                         </p>
                       </div>
@@ -6183,17 +7010,17 @@ export default function WhatsAppInboxPage() {
                     
                     {/* Paused State Message */}
                     {isPaused && !bulkSending && (
-                      <div className="mt-6 p-6 bg-yellow-50 border-2 border-yellow-300 rounded-xl">
+                      <div className="mt-4 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-xl">
                         <div className="text-center">
-                          <Clock className="w-16 h-16 text-yellow-600 mx-auto mb-3" />
-                          <h4 className="text-2xl font-bold text-yellow-900 mb-2">Campaign Paused</h4>
-                          <p className="text-base text-yellow-800 mb-1">
+                          <Clock className="w-10 h-10 text-yellow-600 mx-auto mb-2" />
+                          <h4 className="text-lg font-bold text-yellow-900 mb-1">Campaign Paused</h4>
+                          <p className="text-sm text-yellow-800 mb-1">
                             Progress saved: {sentPhones.length} messages sent
                           </p>
-                          <p className="text-sm text-yellow-700">
+                          <p className="text-xs text-yellow-700">
                             {selectedRecipients.length - sentPhones.length} messages remaining
                           </p>
-                          <p className="text-xs text-yellow-600 mt-3">
+                          <p className="text-xs text-yellow-600 mt-2">
                             Your progress is saved. You can refresh the page and resume later.
                           </p>
                         </div>
@@ -6203,37 +7030,37 @@ export default function WhatsAppInboxPage() {
                   
                   {/* Campaign Statistics */}
                   {(bulkProgress.success > 0 || bulkProgress.failed > 0) && (
-                    <div className="p-5 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border-2 border-purple-200 mb-6">
-                      <h4 className="font-bold text-gray-900 text-base mb-3 flex items-center gap-2">
-                        <BarChart3 className="w-5 h-5" />
+                    <div className="p-4 bg-white rounded-xl border-2 border-gray-200 mb-6">
+                      <h4 className="font-semibold text-gray-900 text-sm mb-3 flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4" />
                         Campaign Statistics
                       </h4>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                        <div className="bg-white p-3 rounded-lg">
-                          <p className="text-gray-600 text-xs mb-1">Success Rate</p>
-                          <p className="text-2xl font-bold text-green-600">
+                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                          <p className="text-gray-600 text-xs mb-1 font-medium">Success Rate</p>
+                          <p className="text-xl font-bold text-green-600">
                             {bulkProgress.success + bulkProgress.failed > 0 
                               ? Math.round((bulkProgress.success / (bulkProgress.success + bulkProgress.failed)) * 100) 
                               : 0}%
                           </p>
                         </div>
-                        <div className="bg-white p-3 rounded-lg">
-                          <p className="text-gray-600 text-xs mb-1">Avg Time</p>
-                          <p className="text-2xl font-bold text-blue-600">
+                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                          <p className="text-gray-600 text-xs mb-1 font-medium">Avg Time</p>
+                          <p className="text-xl font-bold text-blue-600">
                             {campaignStartTime && bulkProgress.current > 0
                               ? `${Math.round((Date.now() - campaignStartTime) / bulkProgress.current / 1000)}s`
                               : '—'}
                           </p>
                         </div>
-                        <div className="bg-white p-3 rounded-lg">
-                          <p className="text-gray-600 text-xs mb-1">Remaining</p>
-                          <p className="text-2xl font-bold text-orange-600">
+                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                          <p className="text-gray-600 text-xs mb-1 font-medium">Remaining</p>
+                          <p className="text-xl font-bold text-orange-600">
                             {estimatedTimeRemaining ? formatDuration(estimatedTimeRemaining) : '—'}
                           </p>
                         </div>
-                        <div className="bg-white p-3 rounded-lg">
-                          <p className="text-gray-600 text-xs mb-1">Duration</p>
-                          <p className="text-2xl font-bold text-purple-600">
+                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                          <p className="text-gray-600 text-xs mb-1 font-medium">Duration</p>
+                          <p className="text-xl font-bold text-purple-600">
                             {campaignStartTime ? formatDuration(Math.floor((Date.now() - campaignStartTime) / 1000)) : '—'}
                           </p>
                         </div>
@@ -6246,7 +7073,7 @@ export default function WhatsAppInboxPage() {
                     <div className="mb-6 flex flex-wrap gap-2">
                       <button
                         onClick={exportSentRecipients}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all flex items-center gap-2 text-sm font-medium"
+                        className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all flex items-center gap-2 text-sm font-medium"
                       >
                         <Download className="w-4 h-4" />
                         Export Sent ({sentPhones.length})
@@ -6254,7 +7081,7 @@ export default function WhatsAppInboxPage() {
                       {selectedRecipients.length > sentPhones.length && (
                         <button
                           onClick={exportPendingRecipients}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2 text-sm font-medium"
+                          className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2 text-sm font-medium"
                         >
                           <Download className="w-4 h-4" />
                           Export Pending ({selectedRecipients.length - sentPhones.length})
@@ -6264,7 +7091,7 @@ export default function WhatsAppInboxPage() {
                         <>
                           <button
                             onClick={exportFailedRecipients}
-                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all flex items-center gap-2 text-sm font-medium"
+                            className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all flex items-center gap-2 text-sm font-medium"
                           >
                             <Download className="w-4 h-4" />
                             Export Failed ({failedMessages.length})
@@ -6272,7 +7099,7 @@ export default function WhatsAppInboxPage() {
                           {!bulkSending && (
                             <button
                               onClick={addFailedToBlacklist}
-                              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2 text-sm font-medium"
+                              className="px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2 text-sm font-medium"
                               title="Add failed contacts to blacklist"
                             >
                               <UserX className="w-4 h-4" />
@@ -6286,10 +7113,10 @@ export default function WhatsAppInboxPage() {
                   
                   {/* Failed Messages Details */}
                   {failedMessages.length > 0 && (
-                    <div className="mb-6 p-5 bg-red-50 rounded-xl border-2 border-red-200">
+                    <div className="mb-6 p-4 bg-white rounded-xl border-2 border-red-200">
                       <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-bold text-gray-900 text-base flex items-center gap-2">
-                          <AlertCircle className="w-5 h-5 text-red-600" />
+                        <h4 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-red-600" />
                           Failed Messages ({failedMessages.length})
                         </h4>
                         <div className="flex items-center gap-2">
@@ -6336,30 +7163,30 @@ export default function WhatsAppInboxPage() {
                           return (
                             <>
                               {errorCounts.not_on_whatsapp > 0 && (
-                                <div className="bg-orange-100 p-3 rounded-lg border border-orange-300">
-                                  <div className="text-2xl mb-1">📵</div>
-                                  <div className="text-xl font-bold text-orange-700">{errorCounts.not_on_whatsapp}</div>
+                                <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
+                                  <div className="text-lg mb-1">📵</div>
+                                  <div className="text-lg font-bold text-orange-700">{errorCounts.not_on_whatsapp}</div>
                                   <div className="text-xs text-orange-600 font-medium">Not on WhatsApp</div>
                                 </div>
                               )}
                               {errorCounts.invalid_format > 0 && (
-                                <div className="bg-yellow-100 p-3 rounded-lg border border-yellow-300">
-                                  <div className="text-2xl mb-1">⚠️</div>
-                                  <div className="text-xl font-bold text-yellow-700">{errorCounts.invalid_format}</div>
+                                <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                                  <div className="text-lg mb-1">⚠️</div>
+                                  <div className="text-lg font-bold text-yellow-700">{errorCounts.invalid_format}</div>
                                   <div className="text-xs text-yellow-600 font-medium">Invalid Format</div>
                                 </div>
                               )}
                               {errorCounts.rate_limit > 0 && (
-                                <div className="bg-blue-100 p-3 rounded-lg border border-blue-300">
-                                  <div className="text-2xl mb-1">⏱️</div>
-                                  <div className="text-xl font-bold text-blue-700">{errorCounts.rate_limit}</div>
+                                <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                  <div className="text-lg mb-1">⏱️</div>
+                                  <div className="text-lg font-bold text-blue-700">{errorCounts.rate_limit}</div>
                                   <div className="text-xs text-blue-600 font-medium">Rate Limited</div>
                                 </div>
                               )}
                               {errorCounts.other > 0 && (
-                                <div className="bg-gray-100 p-3 rounded-lg border border-gray-300">
-                                  <div className="text-2xl mb-1">❌</div>
-                                  <div className="text-xl font-bold text-gray-700">{errorCounts.other}</div>
+                                <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                  <div className="text-lg mb-1">❌</div>
+                                  <div className="text-lg font-bold text-gray-700">{errorCounts.other}</div>
                                   <div className="text-xs text-gray-600 font-medium">Other Errors</div>
                                 </div>
                               )}
@@ -6370,11 +7197,11 @@ export default function WhatsAppInboxPage() {
                       
                       {/* Quick Tips for Common Errors */}
                       {failedMessages.some(m => m.errorType === 'not_on_whatsapp') && (
-                        <div className="mb-4 p-3 bg-white rounded-lg border border-orange-200">
+                        <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
                           <div className="flex items-start gap-2">
-                            <span className="text-lg">💡</span>
+                            <span className="text-sm">💡</span>
                             <div className="flex-1">
-                              <p className="text-sm font-semibold text-gray-900 mb-1">Tips for "Not on WhatsApp" errors:</p>
+                              <p className="text-sm font-medium text-gray-900 mb-1">Tips for "Not on WhatsApp" errors:</p>
                               <ul className="text-xs text-gray-700 space-y-1">
                                 <li>• Verify the number is correct and active</li>
                                 <li>• For Tanzania: Use prefixes 71X-78X, 65X, 68X, 69X (e.g., 255712345678)</li>
@@ -6399,17 +7226,17 @@ export default function WhatsAppInboxPage() {
                               : { icon: '❌', color: 'red', label: 'Error' };
                             
                             return (
-                              <div key={idx} className="bg-white p-3 rounded-lg border border-red-200 hover:border-red-300 transition-colors">
+                              <div key={idx} className="bg-gray-50 p-3 rounded-lg border border-gray-200 hover:border-red-300 transition-colors">
                                 <div className="flex items-start justify-between">
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-1">
-                                      <span className="text-lg">{errorTypeInfo.icon}</span>
-                                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full bg-${errorTypeInfo.color}-100 text-${errorTypeInfo.color}-700`}>
+                                      <span className="text-sm">{errorTypeInfo.icon}</span>
+                                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full bg-${errorTypeInfo.color}-100 text-${errorTypeInfo.color}-700`}>
                                         {errorTypeInfo.label}
                                       </span>
                                     </div>
-                                    <p className="font-semibold text-gray-900">{failed.name}</p>
-                                    <p className="text-sm text-gray-600 font-mono">{failed.phone}</p>
+                                    <p className="font-medium text-gray-900 text-sm">{failed.name}</p>
+                                    <p className="text-xs text-gray-600 font-mono">{failed.phone}</p>
                                     <div className="mt-2 p-2 bg-red-50 rounded text-xs text-red-700 leading-relaxed whitespace-pre-line">
                                       {failed.error}
                                     </div>
@@ -6428,10 +7255,10 @@ export default function WhatsAppInboxPage() {
                   
                   {/* Detailed Progress View */}
                   {sentPhones.length > 0 && (
-                    <div className="mb-6 p-5 bg-blue-50 rounded-xl border-2 border-blue-200">
+                    <div className="mb-6 p-4 bg-white rounded-xl border-2 border-gray-200">
                       <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-bold text-gray-900 text-base flex items-center gap-2">
-                          <Users className="w-5 h-5 text-blue-600" />
+                        <h4 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
+                          <Users className="w-4 h-4 text-gray-600" />
                           Recipients Progress
                         </h4>
                         <button
@@ -6446,8 +7273,8 @@ export default function WhatsAppInboxPage() {
                       {showProgressDetails && (
                         <div className="space-y-3">
                           {/* Sent Recipients */}
-                          <div className="bg-white p-3 rounded-lg">
-                            <p className="font-semibold text-green-600 mb-2 flex items-center gap-2">
+                          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                            <p className="font-semibold text-green-600 mb-2 flex items-center gap-2 text-sm">
                               <CheckCheck className="w-4 h-4" />
                               Sent Recipients ({sentPhones.length})
                             </p>
@@ -6473,8 +7300,8 @@ export default function WhatsAppInboxPage() {
                           
                           {/* Pending Recipients */}
                           {selectedRecipients.length > sentPhones.length && (
-                            <div className="bg-white p-3 rounded-lg">
-                              <p className="font-semibold text-orange-600 mb-2 flex items-center gap-2">
+                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                              <p className="font-semibold text-orange-600 mb-2 flex items-center gap-2 text-sm">
                                 <Clock className="w-4 h-4" />
                                 Pending Recipients ({selectedRecipients.length - sentPhones.length})
                               </p>
@@ -6508,9 +7335,9 @@ export default function WhatsAppInboxPage() {
                   
                   {/* Campaign Timeline */}
                   {campaignTimeline.length > 0 && (
-                    <div className="mb-6 p-5 bg-gray-50 rounded-xl border-2 border-gray-200">
-                      <h4 className="font-bold text-gray-900 text-base mb-3 flex items-center gap-2">
-                        <History className="w-5 h-5" />
+                    <div className="mb-6 p-4 bg-white rounded-xl border-2 border-gray-200">
+                      <h4 className="font-semibold text-gray-900 text-sm mb-3 flex items-center gap-2">
+                        <History className="w-4 h-4" />
                         Campaign Timeline
                       </h4>
                       <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -6533,9 +7360,9 @@ export default function WhatsAppInboxPage() {
                   )}
                   
                   {/* Live Activity Log */}
-                  <div className="p-5 bg-gray-50 rounded-xl border-2 border-gray-200">
-                    <h4 className="font-bold text-gray-900 text-base mb-3 flex items-center gap-2">
-                      <Activity className="w-5 h-5" />
+                  <div className="p-4 bg-white rounded-xl border-2 border-gray-200">
+                    <h4 className="font-semibold text-gray-900 text-sm mb-3 flex items-center gap-2">
+                      <Activity className="w-4 h-4" />
                       Activity Log
                       {bulkSending && <span className="text-xs text-gray-500 ml-2">(Keyboard: Space/P=Pause, S=Stop)</span>}
                     </h4>
@@ -6581,20 +7408,20 @@ export default function WhatsAppInboxPage() {
                   
                   {/* Success Message */}
                   {bulkProgress.current === bulkProgress.total && bulkProgress.total > 0 && (
-                    <div className="p-8 bg-green-50 border-2 border-green-200 rounded-2xl mt-6 shadow-lg">
+                    <div className="p-5 bg-green-50 border-2 border-green-200 rounded-xl mt-6">
                       <div className="text-center">
-                        <div className="w-24 h-24 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl">
-                          <CheckCheck className="w-12 h-12 text-white" />
+                        <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <CheckCheck className="w-6 h-6 text-white" />
                         </div>
-                        <h3 className="text-3xl font-bold text-green-900 mb-3 flex items-center justify-center gap-2">
-                          <CheckCheck className="w-8 h-8" />
+                        <h3 className="text-lg font-bold text-green-900 mb-2 flex items-center justify-center gap-2">
+                          <CheckCheck className="w-5 h-5" />
                           Sending Complete!
                         </h3>
-                        <p className="text-lg text-green-700 font-medium">
+                        <p className="text-sm text-green-700 font-medium">
                           Successfully sent {bulkProgress.success} out of {bulkProgress.total} messages
                         </p>
                         {bulkProgress.failed > 0 && (
-                          <p className="text-base text-red-600 mt-3 font-medium">
+                          <p className="text-sm text-red-600 mt-2 font-medium">
                             {bulkProgress.failed} message{bulkProgress.failed !== 1 ? 's' : ''} failed to send
                           </p>
                         )}
@@ -6690,6 +7517,8 @@ export default function WhatsAppInboxPage() {
                           return;
                         }
                       }
+                      // Clear draft when moving to step 3 (drafts only work in step 1 and 2)
+                      clearDraft();
                       setBulkStep(3);
                     }}
                     disabled={
@@ -6707,13 +7536,24 @@ export default function WhatsAppInboxPage() {
                 {/* Step 3: Confirm & Send Button */}
                 {bulkStep === 3 && (
                   <>
+                    <button
+                      onClick={() => {
+                        setDateTimeDate(new Date().toISOString().split('T')[0]);
+                        setDateTimeTime('09:00');
+                        setShowDateTimeModal(true);
+                      }}
+                      className="px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg flex items-center justify-center gap-2"
+                    >
+                      <Calendar className="w-5 h-5" />
+                      Schedule
+                    </button>
                     {sendingMode === 'browser' ? (
                   <button
                     onClick={() => {
                       setBulkStep(4);
                       sendBulkMessages();
                     }}
-                    className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
                   >
                     <Send className="w-5 h-5" />
                     {(() => {
@@ -6726,7 +7566,7 @@ export default function WhatsAppInboxPage() {
                     ) : (
                       <button
                         onClick={submitCloudCampaign}
-                        className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                        className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-xl font-semibold hover:from-purple-600 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
                       >
                         <Database className="w-5 h-5" />
                         Submit to Cloud
@@ -6820,32 +7660,14 @@ export default function WhatsAppInboxPage() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-    
-    {/* Floating Detailed Campaign Panel - SHOWS ALL DETAILS */}
-    {renderMinimizedPanel()}
-    
-    {/* Advanced Feature Modals */}
-    <React.Fragment key="modals">
-        <CampaignHistoryModal
-        isOpen={showCampaignHistory}
-        onClose={() => setShowCampaignHistory(false)}
-        onClone={(campaign) => {
-          // Load cloned campaign data into bulk modal
-          setBulkMessage(campaign.message);
-          if (campaign.recipients_data) {
-            const phones = campaign.recipients_data.map((r: any) => r.phone);
-            setSelectedRecipients(phones);
-          }
-          setCampaignName(`${campaign.name} (Copy)`);
-          setShowBulkModal(true);
-          setBulkStep(2); // Go to compose step
-          toast.success(`Campaign cloned! Edit and send when ready.`);
-        }}
-      />
-
+        );
+      })()}
+      
+      {/* Floating Detailed Campaign Panel - SHOWS ALL DETAILS */}
+      {renderMinimizedPanel()}
+      
+      {/* Advanced Feature Modals */}
+      <React.Fragment key="modals">
       <CampaignManagementModal
         isOpen={showCampaignManagement}
         onClose={() => setShowCampaignManagement(false)}
@@ -6870,7 +7692,7 @@ export default function WhatsAppInboxPage() {
           // Restore campaign state
           setSelectedRecipients(campaign.selectedRecipients || []);
           setBulkMessage(campaign.bulkMessage || '');
-          setBulkMessageType(campaign.bulkMessageType || 'text');
+          setBulkMessageType((campaign.bulkMessageType || 'text') as typeof bulkMessageType);
           setBulkMedia(campaign.bulkMedia || null);
           setSentPhones(campaign.sentPhones || []);
           setBulkProgress(campaign.bulkProgress || { current: 0, total: 0, success: 0, failed: 0 });
@@ -6894,6 +7716,129 @@ export default function WhatsAppInboxPage() {
             clearPausedCampaignState();
           }
           toast.success('Campaign deleted');
+        }}
+        onClone={(campaign) => {
+          // Load cloned campaign data into bulk modal
+          setBulkMessage(campaign.message);
+          if (campaign.recipients_data) {
+            const phones = campaign.recipients_data.map((r: any) => r.phone);
+            setSelectedRecipients(phones);
+          }
+          setCampaignName(`${campaign.name} (Copy)`);
+          setShowBulkModal(true);
+          setBulkStep(2); // Go to compose step
+          toast.success(`Campaign cloned! Edit and send when ready.`);
+        }}
+      />
+
+      <CampaignTemplatesModal
+        isOpen={showTemplatesModal}
+        onClose={() => setShowTemplatesModal(false)}
+        onLoadTemplate={(template) => {
+          console.log('📋 Loading template:', template.name);
+          
+          // Set message and type
+          setBulkMessage(template.message);
+          setBulkMessageType(template.messageType as any);
+          
+          // Clear media when loading template (user needs to select media for image/video/document/audio templates)
+          if (['image', 'video', 'document', 'audio'].includes(template.messageType)) {
+            setBulkMedia(null);
+            setBulkMediaPreview('');
+            setBulkMediaType('');
+            setBulkMediaCaption(template.message); // Set caption from template
+          }
+          
+          // Handle poll settings if template is a poll
+          if (template.messageType === 'poll' && template.settings) {
+            if (template.settings.pollQuestion) setPollQuestion(template.settings.pollQuestion);
+            if (template.settings.pollOptions) setPollOptions(template.settings.pollOptions);
+            if (template.settings.allowMultiSelect !== undefined) setAllowMultiSelect(template.settings.allowMultiSelect);
+          }
+          
+          // Handle viewOnce setting for image/video
+          if (['image', 'video'].includes(template.messageType) && template.settings.viewOnce !== undefined) {
+            setViewOnce(template.settings.viewOnce);
+          }
+          
+          // Load all settings
+          Object.entries(template.settings).forEach(([key, value]) => {
+            if (key === 'usePersonalization' && typeof value === 'boolean') setUsePersonalization(value);
+            if (key === 'randomDelay' && typeof value === 'boolean') setRandomDelay(value);
+            if (key === 'minDelay' && typeof value === 'number') setMinDelay(value);
+            if (key === 'maxDelay' && typeof value === 'number') setMaxDelay(value);
+            if (key === 'usePresence' && typeof value === 'boolean') setUsePresence(value);
+            if (key === 'batchSize' && typeof value === 'number') setBatchSize(value);
+            if (key === 'batchDelay' && typeof value === 'number') setBatchDelay(value);
+            if (key === 'maxPerHour' && typeof value === 'number') setMaxPerHour(value);
+            if (key === 'dailyLimit' && typeof value === 'number') setDailyLimit(value);
+            if (key === 'skipRecentlyContacted' && typeof value === 'boolean') setSkipRecentlyContacted(value);
+            if (key === 'respectQuietHours' && typeof value === 'boolean') setRespectQuietHours(value);
+            if (key === 'useInvisibleChars' && typeof value === 'boolean') setUseInvisibleChars(value);
+            if (key === 'useEmojiVariation' && typeof value === 'boolean') setUseEmojiVariation(value);
+            if (key === 'varyMessageLength' && typeof value === 'boolean') setVaryMessageLength(value);
+          });
+          
+          // IMPORTANT: Open the bulk modal and go to step 2 (message composition)
+          setBulkStep(2);
+          setIsMinimized(false); // Ensure modal is visible
+          setBulkSending(false); // Reset sending state
+          setBulkProgress({ current: 0, total: 0, success: 0, failed: 0 }); // Reset progress
+          setShowBulkModal(true); // Open the modal
+          
+          console.log('✅ Template loaded, opening bulk modal at step 2');
+          
+          // Show helpful message based on template type
+          if (['image', 'video', 'document', 'audio'].includes(template.messageType)) {
+            toast.success(`Template "${template.name}" loaded! Please select ${template.messageType} media to continue.`, { duration: 4000 });
+          } else if (template.messageType === 'poll') {
+            toast.success(`Template "${template.name}" loaded! Poll is ready. Review and send when ready.`, { duration: 4000 });
+          } else {
+            toast.success(`Template "${template.name}" loaded! Review and send when ready.`, { duration: 3000 });
+          }
+        }}
+        currentCampaignData={
+          bulkMessage || selectedRecipients.length > 0 ? {
+            message: bulkMessage,
+            messageType: bulkMessageType,
+            settings: {
+              usePersonalization,
+              randomDelay,
+              minDelay,
+              maxDelay,
+              usePresence,
+              batchSize,
+              batchDelay,
+              maxPerHour,
+              dailyLimit,
+              skipRecentlyContacted,
+              respectQuietHours,
+              useInvisibleChars,
+              useEmojiVariation,
+              varyMessageLength
+            }
+          } : undefined
+        }
+      />
+
+      <ScheduledCampaignsModal
+        isOpen={showScheduledModal}
+        onClose={() => setShowScheduledModal(false)}
+        onLoadCampaign={(campaign) => {
+          setCampaignName(campaign.name);
+          setBulkMessage(campaign.message);
+          setBulkMessageType(campaign.messageType as any);
+          setSelectedRecipients(campaign.selectedRecipients);
+          Object.entries(campaign.settings).forEach(([key, value]) => {
+            if (key === 'usePersonalization') setUsePersonalization(value);
+            if (key === 'randomDelay') setRandomDelay(value);
+            if (key === 'minDelay') setMinDelay(value);
+            if (key === 'maxDelay') setMaxDelay(value);
+            // Add more settings as needed
+          });
+          setShowBulkModal(true);
+          setBulkStep(4);
+          setTimeout(() => sendBulkMessages(false), 500);
         }}
       />
 
@@ -6937,8 +7882,130 @@ export default function WhatsAppInboxPage() {
           loadActiveSession();
         }}
       />
+
+      <WhatsAppAutomationModal
+        isOpen={showAutomationModal}
+        onClose={() => setShowAutomationModal(false)}
+      />
+
+      {/* Date/Time Scheduling Modal */}
+      <Modal
+        isOpen={showDateTimeModal}
+        onClose={() => setShowDateTimeModal(false)}
+        title="Schedule Campaign"
+        maxWidth="md"
+        actions={
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowDateTimeModal(false)}
+              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (!dateTimeDate || !dateTimeTime) {
+                  toast.error('Please enter both date and time');
+                  return;
+                }
+                
+                // Validate date format
+                const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+                if (!dateRegex.test(dateTimeDate)) {
+                  toast.error('Please enter a valid date (YYYY-MM-DD)');
+                  return;
+                }
+                
+                // Validate time format
+                const timeRegex = /^\d{2}:\d{2}$/;
+                if (!timeRegex.test(dateTimeTime)) {
+                  toast.error('Please enter a valid time (HH:MM)');
+                  return;
+                }
+                
+                const scheduledDateTime = `${dateTimeDate}T${dateTimeTime}:00`;
+                const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                
+                try {
+                  const scheduledId = scheduleCampaign(
+                    campaignName || `Campaign ${new Date().toLocaleDateString()}`,
+                    scheduledDateTime,
+                    timezone,
+                    bulkMessage,
+                    bulkMessageType,
+                    selectedRecipients,
+                    {
+                      usePersonalization,
+                      randomDelay,
+                      minDelay,
+                      maxDelay,
+                      usePresence,
+                      batchSize,
+                      batchDelay,
+                      maxPerHour,
+                      dailyLimit,
+                      skipRecentlyContacted,
+                      respectQuietHours,
+                      useInvisibleChars,
+                      useEmojiVariation,
+                      varyMessageLength
+                    }
+                  );
+                  toast.success(`Campaign scheduled for ${new Date(scheduledDateTime).toLocaleString()}`);
+                  setShowBulkModal(false);
+                  setBulkStep(1);
+                  setShowDateTimeModal(false);
+                } catch (error) {
+                  console.error('Error scheduling campaign:', error);
+                  toast.error('Failed to schedule campaign');
+                }
+              }}
+              className="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-medium hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg"
+            >
+              Schedule
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Date <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="date"
+                value={dateTimeDate}
+                onChange={(e) => setDateTimeDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                required
+              />
+            </div>
+            <p className="mt-1 text-xs text-gray-500">Format: YYYY-MM-DD</p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Time <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="time"
+                value={dateTimeTime}
+                onChange={(e) => setDateTimeTime(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                required
+              />
+            </div>
+            <p className="mt-1 text-xs text-gray-500">Format: HH:MM (24-hour format)</p>
+          </div>
+        </div>
+      </Modal>
       </React.Fragment>
-    </>
+    </React.Fragment>
   );
 }
 

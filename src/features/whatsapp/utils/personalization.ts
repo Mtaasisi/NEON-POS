@@ -115,6 +115,36 @@ function getGreeting(): string {
 }
 
 /**
+ * Generate unique content (emoji, invisible text, or random characters)
+ * This helps make each message unique to avoid spam detection
+ */
+function generateUniqueContent(): string {
+  const options = [
+    // Random emoji
+    () => {
+      const emojis = ['✨', '🌟', '💫', '⭐', '🎉', '🎊', '💎', '🔥', '💯', '🎯', '🚀', '💪', '👍', '👏', '🙌', '🤝', '💝', '🎁', '🎈', '🏆'];
+      return emojis[Math.floor(Math.random() * emojis.length)];
+    },
+    // Invisible zero-width characters
+    () => {
+      const invisibleChars = ['\u200B', '\u200C', '\u200D', '\uFEFF'];
+      return invisibleChars[Math.floor(Math.random() * invisibleChars.length)];
+    },
+    // Random small emoji
+    () => {
+      const smallEmojis = ['•', '▪', '▫', '◦', '▪', '▫'];
+      return smallEmojis[Math.floor(Math.random() * smallEmojis.length)];
+    },
+    // Empty string (no visible change)
+    () => ''
+  ];
+  
+  // Randomly choose one option
+  const selectedOption = options[Math.floor(Math.random() * options.length)];
+  return selectedOption();
+}
+
+/**
  * Personalize message with all available variables
  */
 export async function personalizeMessage(
@@ -135,6 +165,10 @@ export async function personalizeMessage(
   personalized = personalized.replace(/{time}/g, new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
   personalized = personalized.replace(/{day}/g, new Date().toLocaleDateString('en-US', { weekday: 'long' }));
   personalized = personalized.replace(/{month}/g, new Date().toLocaleDateString('en-US', { month: 'long' }));
+  
+  // Unique content generator - generates random emoji/invisible text for each message
+  // Replace each occurrence with a new unique value (case-insensitive)
+  personalized = personalized.replace(/\{unique\}/gi, () => generateUniqueContent());
 
   // Customer data variables (if customer found)
   if (customer) {
@@ -175,6 +209,7 @@ export function getAvailableVariables(): Array<{variable: string, description: s
     { variable: '{time}', description: 'Current time', example: '02:30 PM' },
     { variable: '{day}', description: 'Day of week', example: 'Friday' },
     { variable: '{month}', description: 'Current month', example: 'December' },
+    { variable: '{unique}', description: 'Random unique content (emoji/invisible text) - different for each message', example: '✨' },
     { variable: '{totalSpent}', description: 'Total amount spent', example: 'TZS 150,000' },
     { variable: '{lastPurchase}', description: 'Last purchase date', example: 'November 15, 2025' },
     { variable: '{lastPurchaseAmount}', description: 'Last purchase amount', example: 'TZS 25,000' },

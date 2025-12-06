@@ -45,7 +45,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
       console.error('Failed to log React error:', err);
     });
 
-    // Auto-export critical React errors
+    // Cache error logs (auto-download disabled)
     errorExporter.exportError(error, {
       severity: 'critical',
       module: 'ReactErrorBoundary',
@@ -54,9 +54,8 @@ export class GlobalErrorBoundary extends Component<Props, State> {
       context: {
         componentStack: errorInfo.componentStack,
       },
-      autoDownload: true,
     }).catch(err => {
-      console.error('Failed to export React error:', err);
+      console.error('Failed to cache React error:', err);
     });
 
     this.setState({

@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build:prod"
+  command = "npm run build:hosting"
   publish = "dist"
 
 [build.environment]
@@ -43,4 +43,18 @@
 
 # Redirects are now handled by public/_redirects file
 # This provides better control over asset file serving
+
+# Netlify Functions Configuration
+[functions]
+  # Functions directory
+  directory = "netlify/functions"
+  # Node.js version for functions
+  node_bundler = "esbuild"
+
+# Redirect webhook URL to function
+[[redirects]]
+  from = "/api/whatsapp/webhook"
+  to = "/.netlify/functions/whatsapp-webhook"
+  status = 200
+  force = true
 

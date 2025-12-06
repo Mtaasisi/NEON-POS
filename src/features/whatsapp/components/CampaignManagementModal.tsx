@@ -5,7 +5,7 @@ import {
   ChevronDown, Download, Filter, Calendar, TrendingUp, Users,
   CheckCircle, XCircle, Loader, AlertTriangle, Activity,
   Send, Pause, StopCircle, Play, MessageSquare, CheckCheck,
-  BarChart3, Edit3, Copy
+  BarChart3, Edit3, Copy, CheckSquare
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import whatsappAdvancedService from '../../../services/whatsappAdvancedService';
@@ -21,7 +21,7 @@ interface CampaignProgress {
 interface Campaign {
   id: string;
   name: string;
-  status: 'paused' | 'completed' | 'stopped' | 'failed' | 'active';
+  status: 'paused' | 'completed' | 'stopped' | 'failed' | 'active' | 'pending' | 'draft' | 'sending';
   timestamp: string;
   pauseTimestamp?: string;
   selectedRecipients: string[];
@@ -61,6 +61,7 @@ interface CampaignManagementModalProps {
   onResumeCampaign?: (campaign: Campaign) => void;
   onViewCampaign?: (campaign: Campaign) => void;
   onDeleteCampaign?: (campaignId: string) => void;
+  onClone?: (campaign: WhatsAppCampaign) => void;
 }
 
 const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
@@ -69,7 +70,8 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
   currentActiveCampaign,
   onResumeCampaign,
   onViewCampaign,
-  onDeleteCampaign
+  onDeleteCampaign,
+  onClone
 }) => {
   const modalRef = useRef<HTMLDivElement | null>(null);
   
@@ -82,6 +84,9 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<'all' | 'database' | 'localStorage'>('all');
+  const [selectedCampaigns, setSelectedCampaigns] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedCampaignForDetails, setSelectedCampaignForDetails] = useState<Campaign | null>(null);
 
   // Load campaigns from both database and localStorage
   const loadCampaigns = async () => {
@@ -103,7 +108,7 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
           loadedCampaigns.push({
             id: `db_${dbCampaign.id}`,
             name: dbCampaign.name,
-            status: dbCampaign.status as any || 'completed',
+            status: (dbCampaign.status as any) || 'pending',
             timestamp: dbCampaign.created_at,
             selectedRecipients: dbCampaign.recipients_data?.map((r: any) => r.phone) || [],
             sentPhones: [], // DB campaigns are completed, all sent
@@ -320,6 +325,86 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
     }
   };
 
+  const handleCancelCampaign = async (campaign: Campaign) => {
+    const canCancel = ['pending', 'sending', 'draft', 'active', 'paused'].includes(campaign.status);
+    
+    if (!canCancel) {
+      toast.error(`Cannot cancel campaign with status: ${campaign.status}`);
+      return;
+    }
+
+    const confirmMessage = campaign.source === 'database'
+      ? `Are you sure you want to cancel "${campaign.name}"? This will stop the campaign and mark it as stopped.`
+      : `Are you sure you want to cancel "${campaign.name}"? This will delete the campaign.`;
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      if (campaign.source === 'database') {
+        // Cancel database campaign
+        const campaignId = campaign.id.replace('db_', '');
+        await whatsappAdvancedService.campaign.cancel(campaignId);
+        toast.success('Campaign cancelled successfully');
+        // Reload campaigns to reflect the change
+        loadCampaigns();
+      } else {
+        // Delete localStorage campaign
+        localStorage.removeItem(campaign.id);
+        setCampaigns(campaigns.filter(c => c.id !== campaign.id));
+        toast.success('Campaign cancelled and deleted');
+        if (onDeleteCampaign) {
+          onDeleteCampaign(campaign.id);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error cancelling campaign:', error);
+      toast.error(error.message || 'Failed to cancel campaign');
+    }
+  };
+
+  const handleCloneCampaign = async (campaign: Campaign) => {
+    if (!campaign.dbCampaign && campaign.source === 'database') {
+      // Need to fetch the full campaign data
+      try {
+        const campaignId = campaign.id.replace('db_', '');
+        const dbCampaign = await whatsappAdvancedService.campaign.getById(campaignId);
+        if (dbCampaign) {
+          const newName = prompt('Enter name for cloned campaign:', `${campaign.name} (Copy)`);
+          if (!newName) return;
+          
+          const cloned = await whatsappAdvancedService.campaign.clone(campaignId, newName);
+          toast.success(`Campaign "${newName}" created!`);
+          
+          if (onClone) {
+            onClone(cloned);
+            onClose();
+          }
+        }
+      } catch (error) {
+        toast.error('Clone failed');
+      }
+    } else if (campaign.dbCampaign) {
+      const newName = prompt('Enter name for cloned campaign:', `${campaign.name} (Copy)`);
+      if (!newName) return;
+      
+      try {
+        const cloned = await whatsappAdvancedService.campaign.clone(campaign.dbCampaign.id, newName);
+        toast.success(`Campaign "${newName}" created!`);
+        
+        if (onClone) {
+          onClone(cloned);
+          onClose();
+        }
+      } catch (error) {
+        toast.error('Clone failed');
+      }
+    } else {
+      toast.error('Cannot clone local campaigns. Only database campaigns can be cloned.');
+    }
+  };
+
   const getStatusBadge = (status: Campaign['status']) => {
     switch (status) {
       case 'active':
@@ -334,6 +419,27 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
           <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium flex items-center gap-1">
             <Pause className="w-3 h-3" />
             Paused
+          </span>
+        );
+      case 'pending':
+        return (
+          <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            Pending
+          </span>
+        );
+      case 'draft':
+        return (
+          <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium flex items-center gap-1">
+            <Edit3 className="w-3 h-3" />
+            Draft
+          </span>
+        );
+      case 'sending':
+        return (
+          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium flex items-center gap-1">
+            <Send className="w-3 h-3" />
+            Sending
           </span>
         );
       case 'completed':
@@ -357,6 +463,12 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
             Failed
           </span>
         );
+      default:
+        return (
+          <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium flex items-center gap-1">
+            {status}
+          </span>
+        );
     }
   };
 
@@ -366,6 +478,11 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
   };
 
   const getRemainingCount = (campaign: Campaign) => {
+    // For database campaigns, use bulkProgress data
+    if (campaign.source === 'database') {
+      return Math.max(0, campaign.bulkProgress.total - campaign.bulkProgress.current);
+    }
+    // For localStorage campaigns, use sentPhones and selectedRecipients
     const sent = campaign.sentPhones?.length || 0;
     const total = campaign.selectedRecipients?.length || 0;
     return Math.max(0, total - sent);
@@ -532,7 +649,65 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
               <RefreshCw className="w-4 h-4" />
               Refresh
             </button>
+
+            {/* Bulk Operations Toggle */}
+            <button
+              onClick={() => {
+                setIsSelectionMode(!isSelectionMode);
+                if (isSelectionMode) setSelectedCampaigns(new Set());
+              }}
+              className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                isSelectionMode 
+                  ? 'bg-purple-600 text-white hover:bg-purple-700' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              <CheckSquare className="w-4 h-4" />
+              {isSelectionMode ? 'Cancel' : 'Select'}
+            </button>
           </div>
+          
+          {/* Bulk Actions Bar */}
+          {isSelectionMode && selectedCampaigns.size > 0 && (
+            <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg flex items-center justify-between">
+              <span className="text-sm font-medium text-purple-900">
+                {selectedCampaigns.size} campaign{selectedCampaigns.size !== 1 ? 's' : ''} selected
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const selected = filteredAndSortedCampaigns.filter(c => selectedCampaigns.has(c.id));
+                    const deletable = selected.filter(c => c.source === 'localStorage' && c.id !== 'current_active');
+                    if (deletable.length > 0) {
+                      if (window.confirm(`Delete ${deletable.length} campaign(s)?`)) {
+                        deletable.forEach(c => {
+                          handleDeleteCampaign(c.id);
+                          setSelectedCampaigns(prev => {
+                            const next = new Set(prev);
+                            next.delete(c.id);
+                            return next;
+                          });
+                        });
+                        toast.success(`Deleted ${deletable.length} campaign(s)`);
+                      }
+                    } else {
+                      toast.error('Selected campaigns cannot be deleted');
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium flex items-center gap-1"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Delete Selected
+                </button>
+                <button
+                  onClick={() => setSelectedCampaigns(new Set())}
+                  className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-medium"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Campaign List */}
@@ -578,9 +753,29 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
                   {/* Campaign Header */}
                   <div className="p-4">
                     <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <h3 className="font-bold text-gray-900 text-lg">{campaign.name}</h3>
+                      <div className="flex-1 flex items-start gap-3">
+                        {/* Selection Checkbox */}
+                        {isSelectionMode && campaign.id !== 'current_active' && campaign.source === 'localStorage' && (
+                          <input
+                            type="checkbox"
+                            checked={selectedCampaigns.has(campaign.id)}
+                            onChange={(e) => {
+                              setSelectedCampaigns(prev => {
+                                const next = new Set(prev);
+                                if (e.target.checked) {
+                                  next.add(campaign.id);
+                                } else {
+                                  next.delete(campaign.id);
+                                }
+                                return next;
+                              });
+                            }}
+                            className="mt-1 w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <h3 className="font-bold text-gray-900 text-lg">{campaign.name}</h3>
                           {campaign.id === 'current_active' && (
                             <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium flex items-center gap-1 animate-pulse">
                               <span className="w-2 h-2 bg-blue-600 rounded-full"></span>
@@ -595,6 +790,7 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
                           }`}>
                             {campaign.source === 'database' ? '☁️ Database' : '💾 Local'}
                           </span>
+                        </div>
                         </div>
                         <div className="flex items-center gap-4 text-sm text-gray-600">
                           <span className="flex items-center gap-1">
@@ -646,25 +842,35 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
                               {expandedCampaign === campaign.id ? 'Hide' : 'View'}
                             </button>
                             {campaign.source === 'database' && campaign.dbCampaign && (
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    const blob = await whatsappAdvancedService.analytics.exportCampaign(campaign.dbCampaign!.id);
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = `campaign-${campaign.name}-${new Date().toISOString().split('T')[0]}.csv`;
-                                    a.click();
-                                    toast.success('Campaign exported!');
-                                  } catch (error) {
-                                    toast.error('Export failed');
-                                  }
-                                }}
-                                className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 text-sm font-medium"
-                                title="Export campaign data"
-                              >
-                                <Download className="w-4 h-4" />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleCloneCampaign(campaign)}
+                                  className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium"
+                                  title="Clone campaign"
+                                >
+                                  <Copy className="w-4 h-4" />
+                                  Clone
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const blob = await whatsappAdvancedService.analytics.exportCampaign(campaign.dbCampaign!.id);
+                                      const url = URL.createObjectURL(blob);
+                                      const a = document.createElement('a');
+                                      a.href = url;
+                                      a.download = `campaign-${campaign.name}-${new Date().toISOString().split('T')[0]}.csv`;
+                                      a.click();
+                                      toast.success('Campaign exported!');
+                                    } catch (error) {
+                                      toast.error('Export failed');
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 text-sm font-medium"
+                                  title="Export campaign data"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </button>
+                              </>
                             )}
                             {campaign.id !== 'current_active' && (
                               <button
@@ -689,7 +895,7 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
                       <div className="flex items-center justify-between mb-2 text-sm">
                         <span className="font-medium text-gray-700">Progress</span>
                         <span className="font-bold text-blue-600">
-                          {campaign.bulkProgress.current} / {campaign.bulkProgress.total} ({getProgressPercentage(campaign)}%)
+                          {campaign.bulkProgress.current || 0} / {campaign.bulkProgress.total || 0} ({getProgressPercentage(campaign)}%)
                         </span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
@@ -711,14 +917,14 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
                         <p className="text-xs text-green-700 mb-1">Successful</p>
                         <p className="text-lg font-bold text-green-600 flex items-center gap-1">
                           <CheckCheck className="w-4 h-4" />
-                          {campaign.bulkProgress.success}
+                          {campaign.bulkProgress.success || 0}
                         </p>
                       </div>
                       <div className="bg-red-50 rounded-lg p-3">
                         <p className="text-xs text-red-700 mb-1">Failed</p>
                         <p className="text-lg font-bold text-red-600 flex items-center gap-1">
                           <XCircle className="w-4 h-4" />
-                          {campaign.bulkProgress.failed}
+                          {campaign.bulkProgress.failed || 0}
                         </p>
                       </div>
                       <div className="bg-blue-50 rounded-lg p-3">
@@ -793,7 +999,7 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {campaign.status === 'paused' && campaign.source === 'localStorage' && (
                           <button
                             onClick={() => handleResumeCampaign(campaign)}
@@ -803,7 +1009,25 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
                             Resume Campaign
                           </button>
                         )}
-                        {campaign.source === 'database' && (
+                        {campaign.source === 'database' && campaign.dbCampaign && (
+                          <>
+                            <button
+                              onClick={() => handleCloneCampaign(campaign)}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
+                            >
+                              <Copy className="w-4 h-4" />
+                              Clone
+                            </button>
+                            <button
+                              onClick={() => setSelectedCampaignForDetails(campaign)}
+                              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 font-medium"
+                            >
+                              <Eye className="w-4 h-4" />
+                              View Details
+                            </button>
+                          </>
+                        )}
+                        {campaign.source === 'database' && !campaign.dbCampaign && (
                           <div className="flex-1 px-4 py-2 bg-purple-50 border border-purple-200 text-purple-700 rounded-lg text-center text-sm font-medium">
                             ☁️ Completed campaign from database
                           </div>
@@ -813,11 +1037,20 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
                             navigator.clipboard.writeText(campaign.bulkMessage);
                             toast.success('Message copied to clipboard');
                           }}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
+                          className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2 font-medium"
                         >
                           <Copy className="w-4 h-4" />
                           Copy Message
                         </button>
+                        {['pending', 'sending', 'draft', 'active', 'paused'].includes(campaign.status) && (
+                          <button
+                            onClick={() => handleCancelCampaign(campaign)}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 font-medium"
+                          >
+                            <StopCircle className="w-4 h-4" />
+                            Cancel
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -842,6 +1075,127 @@ const CampaignManagementModal: React.FC<CampaignManagementModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Campaign Details Modal */}
+      {selectedCampaignForDetails && selectedCampaignForDetails.dbCampaign && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100000] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <div className="p-6 bg-gradient-to-r from-blue-600 to-indigo-600">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">Campaign Details</h3>
+                <button
+                  onClick={() => setSelectedCampaignForDetails(null)}
+                  className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center"
+                >
+                  <X className="w-5 h-5 text-white" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <h4 className="text-2xl font-bold text-gray-900 mb-4">{selectedCampaignForDetails.name}</h4>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Message:</label>
+                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <p className="whitespace-pre-wrap">{selectedCampaignForDetails.bulkMessage}</p>
+                  </div>
+                </div>
+
+                {selectedCampaignForDetails.dbCampaign.media_url && (
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Media:</label>
+                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="text-sm text-gray-600">Type: {selectedCampaignForDetails.dbCampaign.media_type}</p>
+                      <a href={selectedCampaignForDetails.dbCampaign.media_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">
+                        View Media
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Status:</label>
+                    <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${
+                      selectedCampaignForDetails.status === 'completed' ? 'bg-green-100 text-green-700' :
+                      selectedCampaignForDetails.status === 'failed' ? 'bg-red-100 text-red-700' :
+                      selectedCampaignForDetails.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                      selectedCampaignForDetails.status === 'sending' ? 'bg-blue-100 text-blue-700' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
+                      {selectedCampaignForDetails.status}
+                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Duration:</label>
+                    <p className="text-gray-900">
+                      {selectedCampaignForDetails.dbCampaign.duration_seconds 
+                        ? `${Math.floor(selectedCampaignForDetails.dbCampaign.duration_seconds / 60)}m ${selectedCampaignForDetails.dbCampaign.duration_seconds % 60}s`
+                        : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Performance:</label>
+                  <div className="grid grid-cols-4 gap-3">
+                    <div className="p-3 bg-blue-50 rounded-lg text-center">
+                      <p className="text-xl font-bold text-blue-600">{selectedCampaignForDetails.dbCampaign.sent_count || 0}</p>
+                      <p className="text-xs text-gray-600">Sent</p>
+                    </div>
+                    <div className="p-3 bg-green-50 rounded-lg text-center">
+                      <p className="text-xl font-bold text-green-600">{selectedCampaignForDetails.dbCampaign.success_count || 0}</p>
+                      <p className="text-xs text-gray-600">Success</p>
+                    </div>
+                    <div className="p-3 bg-red-50 rounded-lg text-center">
+                      <p className="text-xl font-bold text-red-600">{selectedCampaignForDetails.dbCampaign.failed_count || 0}</p>
+                      <p className="text-xs text-gray-600">Failed</p>
+                    </div>
+                    <div className="p-3 bg-purple-50 rounded-lg text-center">
+                      <p className="text-xl font-bold text-purple-600">{selectedCampaignForDetails.dbCampaign.replied_count || 0}</p>
+                      <p className="text-xs text-gray-600">Replied</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    handleCloneCampaign(selectedCampaignForDetails);
+                    setSelectedCampaignForDetails(null);
+                  }}
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold flex items-center justify-center gap-2"
+                >
+                  <Copy className="w-5 h-5" />
+                  Clone Campaign
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const blob = await whatsappAdvancedService.analytics.exportCampaign(selectedCampaignForDetails.dbCampaign!.id);
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `campaign-${selectedCampaignForDetails.name}-${new Date().toISOString().split('T')[0]}.csv`;
+                      a.click();
+                      toast.success('Campaign exported!');
+                    } catch (error) {
+                      toast.error('Export failed');
+                    }
+                  }}
+                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 font-semibold flex items-center justify-center gap-2"
+                >
+                  <Download className="w-5 h-5" />
+                  Export Data
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>,
     document.body
   );

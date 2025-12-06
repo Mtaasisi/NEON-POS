@@ -1,10 +1,10 @@
 /**
  * Error Exporter Utility
- * Automatically downloads errors as JSON files for debugging
+ * Caches errors to localStorage for debugging (auto-download disabled)
  * 
  * Features:
- * - Auto-download critical errors
- * - Manual export functionality
+ * - Cache errors to localStorage for analysis
+ * - Manual export functionality when needed
  * - Organized file naming with timestamps
  * - Includes full error context and stack traces
  * - Browser compatibility handling
@@ -39,7 +39,7 @@ interface ErrorExportData {
 }
 
 class ErrorExporter {
-  private autoDownloadEnabled: boolean = true;
+  private autoDownloadEnabled: boolean = false; // Auto-download disabled by default
   private downloadPath: string = 'error-logs';
   private minSeverityForAutoDownload: 'medium' | 'high' | 'critical' = 'high';
 
@@ -74,9 +74,9 @@ class ErrorExporter {
   ): Promise<void> {
     try {
       const severity = options.severity || 'medium';
-      const shouldAutoDownload = options.autoDownload !== undefined 
-        ? options.autoDownload 
-        : this.shouldAutoDownload(severity);
+      // Auto-download is COMPLETELY DISABLED - only download if explicitly requested with autoDownload: true
+      // This prevents any automatic file downloads - errors are cached only
+      const shouldAutoDownload = options.autoDownload === true;
 
       // Build comprehensive error data
       const errorData = this.buildErrorData(error, {
@@ -87,15 +87,20 @@ class ErrorExporter {
         context: options.context,
       });
 
-      // Save to downloads folder
+      // NO automatic downloads - only cache to localStorage
+      // Downloads only happen if explicitly requested (e.g., manual download button)
       if (shouldAutoDownload) {
+        console.warn('⚠️ [ErrorExporter] Manual download requested - downloading error file');
         this.downloadJSON(errorData);
+      } else {
+        // Just cache - no download
+        console.log(`💾 [ErrorExporter] Error cached (no download): ${errorData.timestamp}`);
       }
 
       // Also save to localStorage as backup
       this.saveToLocalStorage(errorData);
 
-      console.log(`📥 Error exported: ${errorData.timestamp}`, errorData);
+      console.log(`💾 Error cached: ${errorData.timestamp}`, errorData);
     } catch (exportError) {
       console.error('Failed to export error:', exportError);
       // Fallback: at least try to save basic info
@@ -252,9 +257,9 @@ class ErrorExporter {
         .sort()
         .reverse();
 
-      // Keep only last 10 errors
-      if (errorKeys.length > 10) {
-        errorKeys.slice(10).forEach(key => {
+      // Keep only last 50 errors (increased for better caching)
+      if (errorKeys.length > 50) {
+        errorKeys.slice(50).forEach(key => {
           localStorage.removeItem(key);
         });
       }

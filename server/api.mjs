@@ -9,7 +9,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { neon } from '@neondatabase/serverless';
-import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import neonMigrationRouter from './routes/neon-migration.mjs';
 import multer from 'multer';
 import FormData from 'form-data';
@@ -31,6 +31,11 @@ app.use(express.json());
 const uploadsDir = path.join(__dirname, '../public/uploads/whatsapp-media');
 mkdirSync(uploadsDir, { recursive: true });
 app.use('/uploads/whatsapp-media', express.static(uploadsDir));
+
+// Serve images statically
+const imagesDir = path.join(__dirname, '../public/images');
+mkdirSync(imagesDir, { recursive: true });
+app.use('/images', express.static(imagesDir));
 
 // Get database URL from environment variables or fallback to config file
 let DATABASE_URL = process.env.DATABASE_URL;
@@ -792,6 +797,144 @@ app.post('/api/whatsapp/upload-media', upload.single('file'), async (req, res) =
     res.status(500).json({ 
       success: false, 
       error: error.message 
+    });
+  }
+});
+
+// WhatsApp media proxy endpoint (fixes CORS issues when fetching images from WasenderAPI)
+// Handle CORS preflight
+app.options('/api/whatsapp/proxy-media', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.sendStatus(200);
+});
+
+app.get('/api/whatsapp/proxy-media', async (req, res) => {
+  try {
+    const { url } = req.query;
+    
+    if (!url) {
+      return res.status(400).json({ success: false, error: 'URL parameter required' });
+    }
+
+    // Only allow proxying WasenderAPI URLs for security
+    if (!url.includes('wasenderapi.com')) {
+      return res.status(403).json({ success: false, error: 'Only WasenderAPI URLs are allowed' });
+    }
+
+    console.log(`\n📥 [MEDIA PROXY] Fetching image from WasenderAPI: ${url.substring(0, 60)}...`);
+
+    // Fetch the image from WasenderAPI
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; NEON-POS/1.0)',
+      },
+    });
+
+    if (!response.ok) {
+      console.error(`❌ [ERROR] Failed to fetch image: ${response.status} ${response.statusText}`);
+      return res.status(response.status).json({ 
+        success: false, 
+        error: `Failed to fetch image: ${response.statusText}` 
+      });
+    }
+
+    // Get the content type from the response
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    
+    // Handle different fetch implementations (node-fetch v2 uses buffer(), v3 uses arrayBuffer())
+    let imageBuffer;
+    if (typeof response.buffer === 'function') {
+      imageBuffer = await response.buffer();
+    } else {
+      const arrayBuffer = await response.arrayBuffer();
+      imageBuffer = Buffer.from(arrayBuffer);
+    }
+
+    console.log(`✅ [SUCCESS] Image fetched successfully (${imageBuffer.length} bytes, ${contentType})`);
+
+    // Set CORS headers to allow the frontend to access this
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+
+    // Send the image
+    res.send(imageBuffer);
+  } catch (error) {
+    console.error('\n❌ [EXCEPTION] Media proxy error:', error.message);
+    console.error('   Error details:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Image upload endpoint for media library
+app.post('/api/upload-image', upload.single('image'), async (req, res) => {
+  try {
+    console.log('\n📤 [IMAGE UPLOAD] Received image upload request');
+    
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No image file uploaded' });
+    }
+
+    const filename = req.body.filename || `image-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${req.file.originalname.split('.').pop()}`;
+    
+    // Save to public/images directory
+    const imagesDir = path.join(__dirname, '../public/images');
+    mkdirSync(imagesDir, { recursive: true });
+    
+    const filePath = path.join(imagesDir, filename);
+    writeFileSync(filePath, req.file.buffer);
+    
+    console.log('✅ [SUCCESS] Image saved to:', filePath);
+    console.log('   Filename:', filename);
+    console.log('   Size:', req.file.size, 'bytes');
+    
+    res.json({
+      success: true,
+      filename: filename,
+      path: `images/${filename}`
+    });
+  } catch (error) {
+    console.error('❌ [ERROR] Image upload error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Image delete endpoint
+app.delete('/api/delete-image', async (req, res) => {
+  try {
+    const { filename } = req.body;
+    
+    if (!filename) {
+      return res.status(400).json({ success: false, error: 'Filename required' });
+    }
+
+    const imagesDir = path.join(__dirname, '../public/images');
+    const filePath = path.join(imagesDir, filename);
+    
+    if (existsSync(filePath)) {
+      unlinkSync(filePath);
+      console.log('✅ [SUCCESS] Image deleted:', filename);
+      res.json({ success: true });
+    } else {
+      console.warn('⚠️ [WARNING] Image not found:', filename);
+      res.json({ success: true, message: 'File not found, but deletion considered successful' });
+    }
+  } catch (error) {
+    console.error('❌ [ERROR] Image delete error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });

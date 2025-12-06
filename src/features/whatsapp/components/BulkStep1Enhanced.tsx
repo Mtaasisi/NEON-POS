@@ -13,6 +13,8 @@ import {
 import { toast } from 'react-hot-toast';
 import type { Conversation } from '../pages/WhatsAppInboxPage';
 import type { BlacklistEntry } from '../../../types/whatsapp-advanced';
+import type { SegmentFilter } from '../utils/recipientSegmentation';
+import RecipientSegmentationPanel from './RecipientSegmentationPanel';
 
 interface Props {
   // Data
@@ -58,6 +60,11 @@ interface Props {
   getEngagementScore: (conversation: Conversation) => { level: string; color: string; score: number };
   isPhoneBlacklisted: (phone: string) => boolean;
   isValidPhone: (phone: string) => boolean;
+  
+  // Segmentation
+  segmentFilter: SegmentFilter | null;
+  applySegmentation: (filter: SegmentFilter) => void;
+  clearSegmentation: () => void;
 }
 
 export default function BulkStep1Enhanced(props: Props) {
@@ -97,7 +104,10 @@ export default function BulkStep1Enhanced(props: Props) {
     getInitials,
     getEngagementScore,
     isPhoneBlacklisted,
-    isValidPhone
+    isValidPhone,
+    segmentFilter,
+    applySegmentation,
+    clearSegmentation
   } = props;
 
   // Filter conversations based on search AND exclude already-sent contacts
@@ -297,6 +307,13 @@ export default function BulkStep1Enhanced(props: Props) {
           </button>
         )}
       </div>
+
+      {/* Advanced Segmentation */}
+      <RecipientSegmentationPanel
+        onApply={applySegmentation}
+        onClear={clearSegmentation}
+        currentFilter={segmentFilter}
+      />
 
       {/* Search */}
       <div className="mb-6">

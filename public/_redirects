@@ -9,6 +9,9 @@
 /*.png  /:splat  200!
 /*.ico  /:splat  200!
 
+# Webhook redirect (must come before SPA fallback)
+/api/whatsapp/webhook  /.netlify/functions/whatsapp-webhook  200
+
 # SPA fallback for all routes (only for non-asset files)
 /*       /index.html       200
 

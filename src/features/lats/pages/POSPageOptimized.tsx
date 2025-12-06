@@ -1857,6 +1857,18 @@ const POSPageOptimized: React.FC = () => {
           return;
         }
 
+        // Extract product image - handle both images array and single image fields
+        let productImage: string | undefined;
+        if (product.images && Array.isArray(product.images) && product.images.length > 0) {
+          // If images is an array, get the first image
+          // Handle both string arrays and object arrays with url property
+          const firstImage = product.images[0];
+          productImage = typeof firstImage === 'string' ? firstImage : (firstImage?.url || firstImage?.thumbnailUrl);
+        } else {
+          // Fallback to single image fields
+          productImage = product.thumbnail_url || product.image || product.primary_image;
+        }
+
         const newItem = {
           id: `${product.id}-${variant.id}-${Date.now()}`,
           productId: product.id,
@@ -1868,7 +1880,7 @@ const POSPageOptimized: React.FC = () => {
           unitPrice: price,
           totalPrice: price * quantity,
           availableQuantity: availableStock,
-          image: product.thumbnail_url || product.image,
+          image: productImage,
           attributes: { 
             ...(variant.attributes || {}), 
             ...(variant.variant_attributes || {}),
@@ -3968,38 +3980,36 @@ const POSPageOptimized: React.FC = () => {
                         
                         <div className="flex items-start gap-2 md:gap-3">
                           {/* Thumbnail */}
-                          <div className="relative w-16 h-16 md:w-20 md:h-20 rounded-xl flex items-center justify-center flex-shrink-0">
-                            {item.image ? (
-                              <div className="w-full h-full rounded-xl overflow-hidden bg-gray-100 border border-gray-200">
-                                <SafeImage
-                                  src={item.image}
-                                  alt={item.productName}
-                                  className="w-full h-full object-cover rounded-xl"
-                                  fallbackText={item.productName.charAt(0).toUpperCase()}
-                                />
-                              </div>
-                            ) : (
-                              <div className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center w-full h-full">
-                                <Package className="w-8 h-8 md:w-10 md:h-10 text-gray-400" />
-                              </div>
-                            )}
-                          </div>
-                          
+                          {item.image ? (
+                            <div className="relative w-16 h-16 md:w-20 md:h-20 rounded-md flex items-center justify-center flex-shrink-0 overflow-hidden">
+                              <SafeImage
+                                src={item.image}
+                                alt={item.productName}
+                                className="w-full h-full object-cover rounded-md"
+                                fallbackText={item.productName.charAt(0).toUpperCase()}
+                              />
+                            </div>
+                          ) : (
+                            <div className="relative w-16 h-16 md:w-20 md:h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-md flex items-center justify-center flex-shrink-0">
+                              <Package className="w-8 h-8 md:w-10 md:h-10 text-gray-400" />
+                            </div>
+                          )}
+                  
                           <div className="flex-1 min-w-0 flex flex-col justify-between">
                             <div>
                               <div className="font-medium text-gray-800 truncate text-sm md:text-base leading-tight" title={item.productName}>
                                 {item.productName}
-                              </div>
+                    </div>
                               {item.variantName && item.variantName !== 'Default' && (
                                 <p className="text-xs text-gray-500 mt-0.5 font-medium">
                                   {item.variantName}
-                                </p>
+                      </p>
                               )}
-                            </div>
+                    </div>
                             <div className="mt-2">
                               <div className="text-lg md:text-xl text-gray-700 font-bold">
                                 {format.money(item.totalPrice)}
-                              </div>
+                    </div>
                               <div className="text-xs text-gray-500 mt-0.5">
                                 {format.money(item.unitPrice)} each
                               </div>

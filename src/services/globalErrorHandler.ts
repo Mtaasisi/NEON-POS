@@ -84,7 +84,7 @@ class GlobalErrorHandler {
           this.originalConsoleError('Failed to log unhandled rejection:', err);
         });
         
-        // Auto-export critical errors
+        // Cache error logs (auto-download disabled)
         errorExporter.exportError(error, {
           severity: 'high',
           module: 'globalErrorHandler',
@@ -94,9 +94,8 @@ class GlobalErrorHandler {
             isCacheError,
             promise: event.promise?.toString(),
           },
-          autoDownload: true,
         }).catch(err => {
-          this.originalConsoleError('Failed to export error:', err);
+          this.originalConsoleError('Failed to cache error:', err);
         });
       }
 
@@ -142,7 +141,7 @@ class GlobalErrorHandler {
           this.originalConsoleError('Failed to log window error:', err);
         });
         
-        // Auto-export critical errors
+        // Cache error logs (auto-download disabled)
         errorExporter.exportError(error, {
           severity: 'high',
           module: 'globalErrorHandler',
@@ -154,9 +153,8 @@ class GlobalErrorHandler {
             colno: event.colno,
             isCacheError,
           },
-          autoDownload: true,
         }).catch(err => {
-          this.originalConsoleError('Failed to export error:', err);
+          this.originalConsoleError('Failed to cache error:', err);
         });
       }
 
@@ -262,7 +260,7 @@ class GlobalErrorHandler {
           this.isLogging = false;
         });
         
-        // Auto-export cache-related errors
+        // Cache error logs (auto-download disabled)
         errorExporter.exportError(errorObj, {
           severity: 'medium',
           module: 'globalErrorHandler',
@@ -275,9 +273,8 @@ class GlobalErrorHandler {
             isCacheRelated,
             fullMessage: allArgsString.substring(0, 500),
           },
-          autoDownload: true,
         }).catch(err => {
-          this.originalConsoleError('Failed to export error:', err);
+          this.originalConsoleError('Failed to cache error:', err);
         });
       }
     };

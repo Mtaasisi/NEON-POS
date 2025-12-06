@@ -716,6 +716,20 @@ class InstallmentService {
       const finalPlan = await this.getInstallmentPlanById(input.installment_plan_id);
       const wasCompleted = finalPlan?.status === 'completed';
       
+      // If plan was completed, send completion notification with PDF receipt
+      // Use setTimeout to avoid rate limiting (wait 6 seconds after payment notification)
+      if (wasCompleted && finalPlan) {
+        console.log('🎉 [Installment Payment] Plan completed! Will send completion notification with PDF receipt in 6 seconds...');
+        // Don't await - let it run in background to avoid blocking payment response
+        setTimeout(async () => {
+          try {
+            await this.sendCompletionNotificationWithReceipt(finalPlan, userId);
+          } catch (error) {
+            console.error('⚠️ [Installment Completion] Error sending completion notification:', error);
+          }
+        }, 6000); // Wait 6 seconds to avoid rate limiting (API allows 1 message per 5 seconds)
+      }
+      
       return { 
         success: true, 
         payment: payment as InstallmentPayment,
@@ -1170,8 +1184,12 @@ class InstallmentService {
   ): Promise<void> {
     try {
       const plan = await this.getInstallmentPlanById(planId);
-      if (!plan || !plan.customer) return;
+      if (!plan || !plan.customer) {
+        console.warn('⚠️ [Installment Payment] Cannot send notification: Plan or customer not found');
+        return;
+      }
 
+      // Create in-app notification
       try {
         await supabase.from('notifications').insert({
           user_id: userId,
@@ -1184,10 +1202,576 @@ class InstallmentService {
           metadata: { planId: plan.id, amount }
         });
       } catch (error) {
-        console.error('Error creating notification:', error);
+        console.error('Error creating in-app notification:', error);
+      }
+
+      // Send WhatsApp/SMS notification to customer
+      if (!plan.customer.phone) {
+        console.warn('⚠️ [Installment Payment] Customer has no phone number, skipping WhatsApp notification');
+        return;
+      }
+
+      try {
+        // Check if notifications are enabled and auto-send is on
+        const { notificationSettingsService } = await import('../services/notificationSettingsService');
+        const settings = notificationSettingsService.getSettings();
+        
+        // Check if any notification method is enabled with auto-send
+        const shouldSend = (settings.whatsappEnabled && settings.whatsappAutoSend) || 
+                          (settings.smsEnabled && settings.smsAutoSend);
+        
+        if (!shouldSend) {
+          console.log('ℹ️ [Installment Payment] Auto-send notifications disabled in settings');
+          return;
+        }
+
+        // Get business info
+        let businessName = 'inauzwa';
+        let businessPhone = '';
+        try {
+          const { businessInfoService } = await import('./businessInfoService');
+          const businessInfo = await businessInfoService.getBusinessInfo();
+          businessName = businessInfo.name || 'inauzwa';
+          businessPhone = businessInfo.phone || '';
+        } catch (error) {
+          console.warn('⚠️ Could not load business info for payment notification, using defaults');
+        }
+
+        // Format contact phone numbers properly
+        let formattedContact = '';
+        if (businessPhone) {
+          try {
+            const { formatContactForMessage } = await import('../utils/formatPhoneForInvoice');
+            formattedContact = formatContactForMessage(businessPhone);
+          } catch (error) {
+            console.warn('⚠️ Could not format contact, using raw phone:', error);
+            formattedContact = businessPhone;
+          }
+        }
+
+        // Generate payment receipt message
+        const paymentMessage = `✅ Payment Received!\n\n` +
+          `📋 Plan: ${plan.plan_number}\n` +
+          `💰 Amount Paid: ${this.formatCurrency(amount)}\n` +
+          `💵 Total Paid: ${this.formatCurrency(plan.total_paid)}\n` +
+          `📊 Balance Due: ${this.formatCurrency(plan.balance_due)}\n` +
+          `📅 Payment Date: ${new Date().toLocaleDateString()}\n\n` +
+          `Thank you for your payment! 🙏\n\n` +
+          (formattedContact ? `📞 Contact: ${formattedContact}\n` : '');
+
+        // Use smart notification service (WhatsApp first, SMS fallback)
+        const { smartNotificationService } = await import('../services/smartNotificationService');
+        
+        console.log('📱 [Installment Payment] Sending payment notification to customer...');
+        const result = await smartNotificationService.sendNotification(
+          plan.customer.phone,
+          paymentMessage
+        );
+
+        if (result.success) {
+          console.log(`✅ [Installment Payment] Notification sent via ${result.method} to ${plan.customer.phone}`);
+        } else {
+          console.warn(`⚠️ [Installment Payment] Notification failed: ${result.error}`);
+        }
+      } catch (error) {
+        // Don't fail the payment if notification fails
+        console.error('⚠️ [Installment Payment] Error sending customer notification:', error);
       }
     } catch (error) {
-      console.error('Error sending payment received notification:', error);
+      console.error('❌ [Installment Payment] Error in payment notification:', error);
+    }
+  }
+
+  /**
+   * Send completion notification with PDF receipt when installment plan is completed
+   */
+  private async sendCompletionNotificationWithReceipt(
+    plan: InstallmentPlan,
+    userId: string
+  ): Promise<void> {
+    try {
+      if (!plan.customer || !plan.customer.phone) {
+        console.warn('⚠️ [Installment Completion] Cannot send notification: Customer or phone not found');
+        return;
+      }
+
+      // Check if notifications are enabled
+      const { notificationSettingsService } = await import('../services/notificationSettingsService');
+      const settings = notificationSettingsService.getSettings();
+      
+      const shouldSend = (settings.whatsappEnabled && settings.whatsappAutoSend) || 
+                        (settings.smsEnabled && settings.smsAutoSend);
+      
+      if (!shouldSend) {
+        console.log('ℹ️ [Installment Completion] Auto-send notifications disabled in settings');
+        return;
+      }
+
+      // Get business info
+      let businessName = 'inauzwa';
+      let businessPhone = '';
+      let businessLogo = '';
+      let businessAddress = '';
+      try {
+        const { businessInfoService } = await import('./businessInfoService');
+        const businessInfo = await businessInfoService.getBusinessInfo();
+        businessName = businessInfo.name || 'inauzwa';
+        businessPhone = businessInfo.phone || '';
+        businessLogo = businessInfo.logo || '';
+        businessAddress = businessInfo.address || '';
+      } catch (error) {
+        console.warn('⚠️ Could not load business info for completion notification, using defaults');
+      }
+
+      // Format contact phone numbers properly
+      let formattedContact = '';
+      if (businessPhone) {
+        try {
+          const { formatContactForMessage } = await import('../utils/formatPhoneForInvoice');
+          formattedContact = formatContactForMessage(businessPhone);
+        } catch (error) {
+          formattedContact = businessPhone;
+        }
+      }
+
+      // Generate completion message
+      const completionMessage = `🎉 Congratulations! Your installment plan is now complete!\n\n` +
+        `📋 Plan: ${plan.plan_number}\n` +
+        `💰 Total Amount: ${this.formatCurrency(plan.total_amount)}\n` +
+        `✅ Total Paid: ${this.formatCurrency(plan.total_paid)}\n` +
+        `📅 Completion Date: ${new Date().toLocaleDateString()}\n\n` +
+        `Thank you for completing all payments! 🙏\n\n` +
+        `Please find your receipt attached.\n\n` +
+        (formattedContact ? `📞 Contact: ${formattedContact}\n` : '');
+
+      // Generate receipt (PDF and PNG)
+      try {
+        // Generate both PDF and PNG
+        const [pdfDataUrl, pngDataUrl] = await Promise.all([
+          this.generateInstallmentReceiptPDF(plan, {
+            businessName,
+            businessPhone: formattedContact,
+            businessAddress,
+            businessLogo
+          }),
+          this.generateInstallmentReceiptPNG(plan, {
+            businessName,
+            businessPhone: formattedContact,
+            businessAddress,
+            businessLogo
+          })
+        ]);
+
+        // Send via WhatsApp with receipt attachment (try PNG first, fallback to PDF)
+        const { default: whatsappService } = await import('../services/whatsappService');
+        
+        // Retry logic for rate limiting
+        let result;
+        let retries = 3;
+        let delay = 6000; // Start with 6 seconds delay
+        let usePNG = true; // Try PNG first
+        
+        while (retries > 0) {
+          const mediaUrl = usePNG ? pngDataUrl : pdfDataUrl;
+          const messageType = usePNG ? 'image' : 'document';
+          const caption = usePNG 
+            ? `Receipt for Installment Plan ${plan.plan_number}` 
+            : `Receipt for Installment Plan ${plan.plan_number}`;
+          
+          result = await whatsappService.sendMessage(
+            plan.customer.phone,
+            completionMessage,
+            {
+              message_type: messageType,
+              media_url: mediaUrl,
+              caption: caption
+            }
+          );
+
+          if (result.success) {
+            console.log(`✅ [Installment Completion] ${usePNG ? 'PNG' : 'PDF'} receipt sent via WhatsApp to ${plan.customer.phone}`);
+            break;
+          }
+
+          // Check if it's a rate limit error
+          const isRateLimit = result.error && (
+            result.error.includes('429') ||
+            result.error.includes('rate limit') ||
+            result.error.includes('too many') ||
+            result.error.includes('account protection') ||
+            result.error.includes('5 seconds')
+          );
+
+          if (isRateLimit && retries > 0) {
+            retries--;
+            console.warn(`⚠️ [Installment Completion] Rate limited. Retrying in ${delay / 1000} seconds... (${retries} retries left)`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay *= 2; // Exponential backoff: 6s, 12s, 24s
+          } else if (usePNG && !isRateLimit) {
+            // If PNG fails for non-rate-limit reason, try PDF
+            console.warn(`⚠️ [Installment Completion] PNG failed, trying PDF: ${result.error}`);
+            usePNG = false;
+            retries = 3; // Reset retries for PDF attempt
+            delay = 6000;
+          } else {
+            // Not a rate limit error or out of retries
+            break;
+          }
+        }
+
+        if (!result.success) {
+          // If both PNG and PDF fail, try sending text message only
+          console.warn(`⚠️ [Installment Completion] Both PNG and PDF failed, sending text message: ${result.error}`);
+          const { smartNotificationService } = await import('../services/smartNotificationService');
+          await smartNotificationService.sendNotification(plan.customer.phone, completionMessage);
+        }
+      } catch (error) {
+        console.error('⚠️ [Installment Completion] Error generating receipt, sending text message only:', error);
+        // Send text message if receipt generation fails
+        const { smartNotificationService } = await import('../services/smartNotificationService');
+        await smartNotificationService.sendNotification(plan.customer.phone, completionMessage);
+      }
+    } catch (error) {
+      console.error('❌ [Installment Completion] Error sending completion notification:', error);
+    }
+  }
+
+  /**
+   * Generate PDF receipt for completed installment plan
+   */
+  private async generateInstallmentReceiptPDF(
+    plan: InstallmentPlan,
+    businessInfo: { businessName: string; businessPhone: string; businessAddress: string; businessLogo?: string }
+  ): Promise<string> {
+    // Dynamically import jsPDF
+    const { default: jsPDF } = await import('jspdf');
+    
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const contentWidth = pageWidth - (margin * 2);
+    let yPos = margin;
+
+    // Helper to add text with word wrap
+    const addText = (text: string, x: number, y: number, maxWidth: number, fontSize: number = 10) => {
+      doc.setFontSize(fontSize);
+      const lines = doc.splitTextToSize(text, maxWidth);
+      doc.text(lines, x, y);
+      return lines.length * (fontSize * 0.4); // Return height used
+    };
+
+    // Header
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('INSTALLMENT PLAN RECEIPT', margin, yPos);
+    yPos += 10;
+
+    // Business Info
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(businessInfo.businessName, margin, yPos);
+    yPos += 6;
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    if (businessInfo.businessAddress) {
+      doc.text(businessInfo.businessAddress, margin, yPos);
+      yPos += 5;
+    }
+    if (businessInfo.businessPhone) {
+      doc.text(`Phone: ${businessInfo.businessPhone}`, margin, yPos);
+      yPos += 5;
+    }
+    yPos += 5;
+
+    // Receipt Details
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.5);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 8;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Plan Information:', margin, yPos);
+    yPos += 6;
+    
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Plan Number: ${plan.plan_number}`, margin, yPos);
+    yPos += 5;
+    doc.text(`Customer: ${plan.customer?.name || 'N/A'}`, margin, yPos);
+    yPos += 5;
+    doc.text(`Phone: ${plan.customer?.phone || 'N/A'}`, margin, yPos);
+    yPos += 5;
+    doc.text(`Completion Date: ${plan.completion_date ? new Date(plan.completion_date).toLocaleDateString() : new Date().toLocaleDateString()}`, margin, yPos);
+    yPos += 8;
+
+    // Payment Summary
+    doc.setFont('helvetica', 'bold');
+    doc.text('Payment Summary:', margin, yPos);
+    yPos += 6;
+    
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Total Amount: ${this.formatCurrency(plan.total_amount)}`, margin, yPos);
+    yPos += 5;
+    doc.text(`Down Payment: ${this.formatCurrency(plan.down_payment || 0)}`, margin, yPos);
+    yPos += 5;
+    doc.text(`Number of Installments: ${plan.number_of_installments}`, margin, yPos);
+    yPos += 5;
+    doc.text(`Total Paid: ${this.formatCurrency(plan.total_paid)}`, margin, yPos);
+    yPos += 5;
+    doc.text(`Balance Due: ${this.formatCurrency(plan.balance_due)}`, margin, yPos);
+    yPos += 8;
+
+    // Payment History
+    if (plan.payments && plan.payments.length > 0) {
+      doc.setFont('helvetica', 'bold');
+      doc.text('Payment History:', margin, yPos);
+      yPos += 6;
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      
+      plan.payments.forEach((payment, index) => {
+        if (yPos > doc.internal.pageSize.getHeight() - 30) {
+          doc.addPage();
+          yPos = margin;
+        }
+        
+        const paymentDate = payment.payment_date || payment.created_at || '';
+        const paymentLabel = payment.installment_number === 0 ? 'Down Payment' : `Installment #${payment.installment_number}`;
+        doc.text(`${paymentLabel}: ${this.formatCurrency(payment.amount)} - ${paymentDate ? new Date(paymentDate).toLocaleDateString() : 'N/A'}`, margin + 5, yPos);
+        yPos += 5;
+      });
+      yPos += 5;
+    }
+
+    // Footer
+    yPos = doc.internal.pageSize.getHeight() - 30;
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 8;
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'italic');
+    doc.text('Thank you for your business!', margin, yPos);
+    yPos += 5;
+    doc.text(`Generated on ${new Date().toLocaleString()}`, margin, yPos);
+
+    // Convert to data URL
+    return doc.output('dataurlstring');
+  }
+
+  /**
+   * Generate PNG receipt for completed installment plan
+   */
+  private async generateInstallmentReceiptPNG(
+    plan: InstallmentPlan,
+    businessInfo: { businessName: string; businessPhone: string; businessAddress: string; businessLogo?: string }
+  ): Promise<string> {
+    // Create HTML receipt
+    const receiptHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: Arial, sans-serif;
+            padding: 40px;
+            background: white;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #10b981;
+            padding-bottom: 20px;
+          }
+          .header h1 {
+            font-size: 24px;
+            color: #10b981;
+            margin-bottom: 10px;
+          }
+          .business-info {
+            margin-bottom: 20px;
+          }
+          .business-info h2 {
+            font-size: 18px;
+            margin-bottom: 8px;
+          }
+          .section {
+            margin-bottom: 25px;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 8px;
+          }
+          .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: #1f2937;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 8px;
+          }
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+          }
+          .info-row:last-child {
+            border-bottom: none;
+          }
+          .info-label {
+            font-weight: 600;
+            color: #6b7280;
+          }
+          .info-value {
+            color: #1f2937;
+            text-align: right;
+          }
+          .payment-history {
+            margin-top: 15px;
+          }
+          .payment-item {
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border-left: 4px solid #10b981;
+          }
+          .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #e5e7eb;
+            text-align: center;
+            color: #6b7280;
+            font-style: italic;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>INSTALLMENT PLAN RECEIPT</h1>
+        </div>
+        
+        <div class="business-info">
+          <h2>${businessInfo.businessName}</h2>
+          ${businessInfo.businessAddress ? `<p>${businessInfo.businessAddress}</p>` : ''}
+          ${businessInfo.businessPhone ? `<p>Phone: ${businessInfo.businessPhone}</p>` : ''}
+        </div>
+        
+        <div class="section">
+          <div class="section-title">Plan Information</div>
+          <div class="info-row">
+            <span class="info-label">Plan Number:</span>
+            <span class="info-value">${plan.plan_number}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Customer:</span>
+            <span class="info-value">${plan.customer?.name || 'N/A'}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Phone:</span>
+            <span class="info-value">${plan.customer?.phone || 'N/A'}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Completion Date:</span>
+            <span class="info-value">${plan.completion_date ? new Date(plan.completion_date).toLocaleDateString() : new Date().toLocaleDateString()}</span>
+          </div>
+        </div>
+        
+        <div class="section">
+          <div class="section-title">Payment Summary</div>
+          <div class="info-row">
+            <span class="info-label">Total Amount:</span>
+            <span class="info-value">${this.formatCurrency(plan.total_amount)}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Down Payment:</span>
+            <span class="info-value">${this.formatCurrency(plan.down_payment || 0)}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Number of Installments:</span>
+            <span class="info-value">${plan.number_of_installments}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Total Paid:</span>
+            <span class="info-value">${this.formatCurrency(plan.total_paid)}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Balance Due:</span>
+            <span class="info-value">${this.formatCurrency(plan.balance_due)}</span>
+          </div>
+        </div>
+        
+        ${plan.payments && plan.payments.length > 0 ? `
+        <div class="section">
+          <div class="section-title">Payment History</div>
+          <div class="payment-history">
+            ${plan.payments.map(payment => {
+              const paymentDate = payment.payment_date || payment.created_at || '';
+              const paymentLabel = payment.installment_number === 0 ? 'Down Payment' : `Installment #${payment.installment_number}`;
+              return `
+                <div class="payment-item">
+                  <div class="info-row">
+                    <span class="info-label">${paymentLabel}</span>
+                    <span class="info-value">${this.formatCurrency(payment.amount)}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-label">Date:</span>
+                    <span class="info-value">${paymentDate ? new Date(paymentDate).toLocaleDateString() : 'N/A'}</span>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        ` : ''}
+        
+        <div class="footer">
+          <p>Thank you for your business! 🙏</p>
+          <p>Generated on ${new Date().toLocaleString()}</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Create a temporary container and render HTML
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.width = '800px';
+    container.innerHTML = receiptHTML;
+    document.body.appendChild(container);
+
+    try {
+      // Use html2canvas to convert HTML to PNG
+      const { default: html2canvas } = await import('html2canvas');
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        width: 800,
+        useCORS: true,
+        allowTaint: true
+      });
+
+      // Convert canvas to data URL
+      const pngDataUrl = canvas.toDataURL('image/png', 1.0);
+      
+      // Clean up
+      document.body.removeChild(container);
+      
+      return pngDataUrl;
+    } catch (error) {
+      // Clean up on error
+      if (container.parentNode) {
+        document.body.removeChild(container);
+      }
+      throw error;
     }
   }
 

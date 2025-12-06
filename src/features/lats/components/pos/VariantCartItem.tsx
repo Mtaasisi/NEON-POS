@@ -73,6 +73,7 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
   const [requiresIMEI, setRequiresIMEI] = useState(false);
   const [checkingIMEI, setCheckingIMEI] = useState(false);
   const [internalIsExpanded, setInternalIsExpanded] = useState(autoExpand);
+  const [productImage, setProductImage] = useState<string | null>(item.image || null);
   const { playClickSound, playDeleteSound } = usePOSClickSounds();
 
   // Use controlled state if provided, otherwise use internal state
@@ -254,9 +255,53 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
   // Check if item has variant attributes
   const hasVariantAttributes = availableVariants.length > 1;
 
+  // Fetch product image from database (same as products do)
+  useEffect(() => {
+    const fetchProductImage = async () => {
+      // If we already have an image, use it
+      if (item.image) {
+        setProductImage(item.image);
+        return;
+      }
+
+      // Otherwise, fetch from database
+      try {
+        const { data: product, error } = await supabase
+          .from('lats_products')
+          .select('images, thumbnail_url, image, primary_image')
+          .eq('id', item.productId)
+          .single();
+
+        if (error) {
+          console.error('Error fetching product image:', error);
+          return;
+        }
+
+        if (product) {
+          // Extract image the same way as addToCart does
+          let extractedImage: string | undefined;
+          if (product.images && Array.isArray(product.images) && product.images.length > 0) {
+            const firstImage = product.images[0];
+            extractedImage = typeof firstImage === 'string' ? firstImage : (firstImage?.url || firstImage?.thumbnailUrl);
+          } else {
+            extractedImage = product.thumbnail_url || product.image || product.primary_image;
+          }
+
+          if (extractedImage) {
+            setProductImage(extractedImage);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching product image:', error);
+      }
+    };
+
+    fetchProductImage();
+  }, [item.productId, item.image]);
+
   // Get product thumbnail
   const getProductThumbnail = () => {
-    return item.image || null;
+    return productImage;
   };
 
   const thumbnail = getProductThumbnail();
@@ -296,18 +341,20 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
               </div>
               
               {/* Product Icon - Styled like SetPricingModal */}
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
-                {thumbnail ? (
+              {thumbnail ? (
+                <div className="w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 overflow-hidden">
                   <SafeImage
-                    images={convertToProductImages([thumbnail])}
-                    productName={item.productName}
-                    size="sm"
-                    className="w-full h-full rounded-xl"
+                    src={thumbnail}
+                    alt={item.productName}
+                    className="w-full h-full rounded-md"
+                    fallbackText={item.productName.charAt(0).toUpperCase()}
                   />
-                ) : (
+                </div>
+              ) : (
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-md flex items-center justify-center flex-shrink-0">
                   <Package className="w-6 h-6 text-white" />
-                )}
-              </div>
+                </div>
+              )}
               
               {/* Product Details */}
               <div className="flex-1 min-w-0">
@@ -455,18 +502,20 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center space-x-4 flex-1 min-w-0">
           {/* Product Thumbnail */}
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
-            {thumbnail ? (
+          {thumbnail ? (
+            <div className="w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 overflow-hidden">
               <SafeImage
-                images={convertToProductImages([thumbnail])}
-                productName={item.productName}
-                size="sm"
-                className="w-full h-full rounded-xl"
+                src={thumbnail}
+                alt={item.productName}
+                className="w-full h-full rounded-md"
+                fallbackText={item.productName.charAt(0).toUpperCase()}
               />
-            ) : (
+            </div>
+          ) : (
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-md flex items-center justify-center flex-shrink-0">
               <Package className="w-6 h-6 text-blue-600" />
-            )}
-          </div>
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <h3 className="text-lg font-semibold text-gray-900 truncate min-w-0 max-w-full">{item.productName}</h3>
             {item.variantName !== 'Default' && (

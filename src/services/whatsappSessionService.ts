@@ -65,13 +65,41 @@ class WhatsAppSessionService {
     if (!this.bearerToken) {
       try {
         const integration = await getIntegration('WHATSAPP_WASENDER');
-        this.bearerToken = integration?.credentials?.bearer_token || integration?.credentials?.api_key || '';
         
-        if (!this.bearerToken) {
+        if (!integration) {
           throw new Error('WhatsApp integration not configured. Please configure WaSender API in Admin Settings > Integrations.');
+        }
+
+        if (!integration.is_enabled) {
+          throw new Error('WhatsApp integration is disabled. Please enable it in Admin Settings > Integrations.');
+        }
+
+        // Parse credentials if they're a string
+        let credentials = integration.credentials;
+        if (typeof credentials === 'string') {
+          try {
+            credentials = JSON.parse(credentials);
+          } catch (e) {
+            console.error('⚠️ [WhatsApp] Failed to parse credentials:', e);
+            throw new Error('Invalid integration credentials format. Please reconfigure the integration.');
+          }
+        }
+
+        this.bearerToken = credentials?.bearer_token || credentials?.api_key || '';
+        
+        // Debug logging (only in development)
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('🔑 [WhatsApp] Token retrieved:', this.bearerToken ? `${this.bearerToken.substring(0, 10)}...` : 'EMPTY');
+          console.debug('🔑 [WhatsApp] Credentials keys:', credentials ? Object.keys(credentials) : 'null');
+        }
+        
+        if (!this.bearerToken || this.bearerToken.trim() === '') {
+          throw new Error('WhatsApp API token is missing. Please configure your WaSender API Bearer Token in Admin Settings > Integrations.');
         }
       } catch (error) {
         console.error('⚠️ [WhatsApp] Integration not configured:', error);
+        // Clear cached token on error so it can be retried
+        this.bearerToken = null;
         throw error;
       }
     }
@@ -83,27 +111,58 @@ class WhatsAppSessionService {
   }
 
   /**
+   * Clear cached bearer token (useful when credentials are updated)
+   */
+  public clearTokenCache(): void {
+    this.bearerToken = null;
+  }
+
+  /**
    * Get all WhatsApp sessions
    * GET /api/whatsapp-sessions
    */
   async getAllSessions(): Promise<{ success: boolean; data: WhatsAppSession[]; error?: string }> {
     try {
       const headers = await this.getHeaders();
+      
+      // Debug: Verify token is present (only log first few chars for security)
+      if (process.env.NODE_ENV === 'development') {
+        const authHeader = headers['Authorization'] as string;
+        console.debug('🔑 [WhatsApp] Making request with token:', authHeader ? `${authHeader.substring(0, 20)}...` : 'MISSING');
+      }
+      
       const response = await fetch(`${this.baseUrl}/whatsapp-sessions`, {
         method: 'GET',
         headers,
       });
 
-      const data = await response.json();
+      // Handle non-JSON responses
+      let data: any;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        data = { message: text || `HTTP ${response.status}: ${response.statusText}` };
+      }
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch sessions');
+        // Clear token cache on authentication errors to allow retry with fresh credentials
+        if (response.status === 401) {
+          this.bearerToken = null;
+          const apiMessage = data.message || data.error || '';
+          const errorMessage = apiMessage.includes('personal access token') || apiMessage.includes('valid') || apiMessage.includes('token')
+            ? 'Invalid or expired API token. Please verify your WaSender API Bearer Token in Admin Settings > Integrations and ensure it is correct and active.'
+            : apiMessage || 'Authentication failed. Please check your API token in Admin Settings > Integrations.';
+          throw new Error(errorMessage);
+        }
+        throw new Error(data.message || data.error || `Failed to fetch sessions: ${response.status} ${response.statusText}`);
       }
 
       return { success: true, data: data.data || [] };
     } catch (error: any) {
       // Only log error if it's not about missing configuration
-      if (!error.message?.includes('not configured')) {
+      if (!error.message?.includes('not configured') && !error.message?.includes('disabled')) {
         console.error('❌ [WhatsApp] Error fetching sessions:', error);
       }
       return { success: false, data: [], error: error.message };

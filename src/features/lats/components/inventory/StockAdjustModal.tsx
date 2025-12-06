@@ -267,6 +267,17 @@ const StockAdjustModal: React.FC<StockAdjustModalProps> = ({
         });
       }
 
+      // Check for low stock and send WhatsApp notifications (non-blocking)
+      try {
+        const { inventoryNotificationService } = await import('../../../../services/inventoryNotificationService');
+        const result = await inventoryNotificationService.sendLowStockNotification(variant.id);
+        if (result.success && result.sent) {
+          console.log(`📱 Low stock notification sent for ${variant.id}`);
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to check/send low stock notification:', error);
+      }
+
       toast.success('Stock adjustment completed successfully');
         onClose?.();
     } catch (error) {

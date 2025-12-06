@@ -76,16 +76,22 @@ export default function CampaignHistoryModal({ isOpen, onClose, onClone }: Props
     if (filter === 'completed') return c.status === 'completed';
     if (filter === 'failed') return c.status === 'failed';
     return true;
-  });
+  }).map(c => ({
+    ...c,
+    sent_count: c.sent_count || 0,
+    success_count: c.success_count || 0,
+    failed_count: c.failed_count || 0,
+    replied_count: c.replied_count || 0
+  }));
 
   const stats = {
     total: campaigns.length,
     completed: campaigns.filter(c => c.status === 'completed').length,
     failed: campaigns.filter(c => c.status === 'failed').length,
-    totalSent: campaigns.reduce((sum, c) => sum + c.sent_count, 0),
+    totalSent: campaigns.reduce((sum, c) => sum + (c.sent_count || 0), 0),
     avgSuccessRate: campaigns.length > 0 
-      ? (campaigns.reduce((sum, c) => sum + (c.success_count / Math.max(c.sent_count, 1) * 100), 0) / campaigns.length).toFixed(1)
-      : 0
+      ? (campaigns.reduce((sum, c) => sum + ((c.success_count || 0) / Math.max(c.sent_count || 1, 1) * 100), 0) / campaigns.length).toFixed(1)
+      : '0.0'
   };
 
   if (!isOpen) return null;
@@ -202,18 +208,27 @@ export default function CampaignHistoryModal({ isOpen, onClose, onClone }: Props
                           campaign.status === 'completed' ? 'bg-green-100 text-green-700' :
                           campaign.status === 'failed' ? 'bg-red-100 text-red-700' :
                           campaign.status === 'sending' ? 'bg-blue-100 text-blue-700' :
+                          campaign.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                          campaign.status === 'draft' ? 'bg-gray-100 text-gray-700' :
                           'bg-gray-100 text-gray-700'
                         }`}>
                           {campaign.status}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-600 mb-3">{campaign.message.substring(0, 150)}...</p>
+                      <p className="text-sm text-gray-600 mb-3">
+                        {campaign.message.length > 150 
+                          ? `${campaign.message.substring(0, 150)}...` 
+                          : campaign.message}
+                      </p>
                       
                       <div className="flex items-center gap-6 text-sm">
                         <div className="flex items-center gap-1">
                           <Calendar className="w-4 h-4 text-gray-500" />
                           <span className="text-gray-700">
-                            {new Date(campaign.created_at).toLocaleDateString()}
+                            {(() => {
+                              const date = new Date(campaign.created_at);
+                              return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+                            })()}
                           </span>
                         </div>
                         <div className="flex items-center gap-1">
@@ -263,19 +278,19 @@ export default function CampaignHistoryModal({ isOpen, onClose, onClone }: Props
                   {/* Campaign Metrics */}
                   <div className="grid grid-cols-4 gap-3 pt-4 border-t border-gray-200">
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-blue-600">{campaign.sent_count}</p>
+                      <p className="text-2xl font-bold text-blue-600">{campaign.sent_count || 0}</p>
                       <p className="text-xs text-gray-600">Sent</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-green-600">{campaign.success_count}</p>
+                      <p className="text-2xl font-bold text-green-600">{campaign.success_count || 0}</p>
                       <p className="text-xs text-gray-600">Success</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-red-600">{campaign.failed_count}</p>
+                      <p className="text-2xl font-bold text-red-600">{campaign.failed_count || 0}</p>
                       <p className="text-xs text-gray-600">Failed</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-purple-600">{campaign.replied_count}</p>
+                      <p className="text-2xl font-bold text-purple-600">{campaign.replied_count || 0}</p>
                       <p className="text-xs text-gray-600">Replied</p>
                     </div>
                   </div>
@@ -331,6 +346,8 @@ export default function CampaignHistoryModal({ isOpen, onClose, onClone }: Props
                     <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${
                       selectedCampaign.status === 'completed' ? 'bg-green-100 text-green-700' :
                       selectedCampaign.status === 'failed' ? 'bg-red-100 text-red-700' :
+                      selectedCampaign.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                      selectedCampaign.status === 'sending' ? 'bg-blue-100 text-blue-700' :
                       'bg-gray-100 text-gray-700'
                     }`}>
                       {selectedCampaign.status}
@@ -350,19 +367,19 @@ export default function CampaignHistoryModal({ isOpen, onClose, onClone }: Props
                   <label className="block text-sm font-bold text-gray-700 mb-2">Performance:</label>
                   <div className="grid grid-cols-4 gap-3">
                     <div className="p-3 bg-blue-50 rounded-lg text-center">
-                      <p className="text-xl font-bold text-blue-600">{selectedCampaign.sent_count}</p>
+                      <p className="text-xl font-bold text-blue-600">{selectedCampaign.sent_count || 0}</p>
                       <p className="text-xs text-gray-600">Sent</p>
                     </div>
                     <div className="p-3 bg-green-50 rounded-lg text-center">
-                      <p className="text-xl font-bold text-green-600">{selectedCampaign.success_count}</p>
+                      <p className="text-xl font-bold text-green-600">{selectedCampaign.success_count || 0}</p>
                       <p className="text-xs text-gray-600">Success</p>
                     </div>
                     <div className="p-3 bg-red-50 rounded-lg text-center">
-                      <p className="text-xl font-bold text-red-600">{selectedCampaign.failed_count}</p>
+                      <p className="text-xl font-bold text-red-600">{selectedCampaign.failed_count || 0}</p>
                       <p className="text-xs text-gray-600">Failed</p>
                     </div>
                     <div className="p-3 bg-purple-50 rounded-lg text-center">
-                      <p className="text-xl font-bold text-purple-600">{selectedCampaign.replied_count}</p>
+                      <p className="text-xl font-bold text-purple-600">{selectedCampaign.replied_count || 0}</p>
                       <p className="text-xs text-gray-600">Replied</p>
                     </div>
                   </div>
