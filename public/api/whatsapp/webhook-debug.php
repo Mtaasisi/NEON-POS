@@ -85,11 +85,11 @@ debugLog(json_encode($webhook, JSON_PRETTY_PRINT));
 $eventType = $webhook['event'] ?? 'unknown';
 debugLog("\n🎯 Event Type: $eventType");
 
-// Database connection
-$DB_HOST = 'ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech';
+// Database connection - DEVELOPMENT DATABASE
+$DB_HOST = 'ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech';
 $DB_NAME = 'neondb';
 $DB_USER = 'neondb_owner';
-$DB_PASS = 'npg_vABqUKk73tEW';
+$DB_PASS = 'npg_dMyv1cG4KSOR';
 
 debugLog("\n🔌 Attempting database connection...");
 

@@ -55,9 +55,17 @@ declare class WhatsAppService {
         message_id?: string;
     }>;
     /**
-     * Send text message
+     * Retry helper with exponential backoff for rate limiting
+     */
+    private retryWithBackoff;
+    /**
+     * Send text message with retry logic
      */
     private sendTextMessage;
+    /**
+     * Generic media message sender with retry logic
+     */
+    private sendMediaMessage;
     /**
      * Send image message
      */
@@ -90,6 +98,18 @@ declare class WhatsAppService {
      * Format phone number for WhatsApp (remove + and ensure proper format)
      */
     private formatPhoneNumber;
+    /**
+     * Validate phone number before sending (public method)
+     */
+    validatePhoneNumber(phone: string): Promise<{
+        valid: boolean;
+        error?: string;
+        formatted?: string;
+    }>;
+    /**
+     * Validate phone number before sending (private helper)
+     */
+    private validatePhoneNumberSync;
     /**
      * Get WhatsApp logs
      */

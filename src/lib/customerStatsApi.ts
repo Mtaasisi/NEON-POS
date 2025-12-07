@@ -18,18 +18,33 @@ export const fetchCustomerStats = async (): Promise<CustomerStats> => {
     console.log('   - 🌐 CUSTOMERS: SHARED ACROSS ALL BRANCHES');
     console.log('   - 📊 Will fetch stats for ALL customers from ALL branches');
 
-    // Fetch total customers count (ALL CUSTOMERS - NO BRANCH FILTERING)
-    const { count: totalCustomers, error: totalError } = await supabase
-      .from('customers')
+    // Determine which customer table to use
+    // Try lats_customers first (primary table), fallback to customers if it exists
+    let customerTable = 'lats_customers';
+    let { count: totalCustomers, error: totalError } = await supabase
+      .from(customerTable)
       .select('id', { count: 'exact', head: true });
 
     if (totalError) {
-      console.error('Error fetching total customers count:', totalError);
+      console.warn('⚠️  Error fetching from lats_customers, trying customers table:', totalError);
+      // Fallback to customers table
+      const fallbackResult = await supabase
+        .from('customers')
+        .select('id', { count: 'exact', head: true });
+      if (!fallbackResult.error) {
+        customerTable = 'customers';
+        totalCustomers = fallbackResult.count;
+        totalError = null;
+      } else {
+        console.error('❌ Error fetching total customers count from both tables:', totalError);
+        // Continue with 0 if both fail
+        totalCustomers = 0;
+      }
     }
 
     // Fetch active customers count (ALL CUSTOMERS - NO BRANCH FILTERING)
     const { count: activeCustomers, error: activeError } = await supabase
-      .from('customers')
+      .from(customerTable)
       .select('id', { count: 'exact', head: true })
       .eq('is_active', true);
 
@@ -43,7 +58,7 @@ export const fetchCustomerStats = async (): Promise<CustomerStats> => {
     const currentDay = today.getDate();
 
     const { data: birthdayCustomers, error: birthdayError } = await supabase
-      .from('customers')
+      .from(customerTable)
       .select('id, birth_month, birth_day')
       .not('birth_month', 'is', null)
       .not('birth_day', 'is', null);
@@ -141,28 +156,101 @@ export const fetchCustomerStats = async (): Promise<CustomerStats> => {
     let totalRevenue = 0;
     let revenueError: any = null;
     
+    // Calculate revenue - try lats_customers first, fallback to customers
+    let revenueTable = 'lats_customers';
+    
     if (currentBranchId) {
       console.log('💰 Calculating revenue for current branch:', currentBranchId);
       
       try {
-        const { data: revenueData, error: revenueError } = await supabase
-          .from('customers')
+        let { data: revenueData, error: revenueError } = await supabase
+          .from(revenueTable)
           .select('total_spent')
           .eq('branch_id', currentBranchId);
+
+        // If error and table is lats_customers, try customers table
+        if (revenueError && revenueTable === 'lats_customers') {
+          console.warn('⚠️  Error fetching from lats_customers, trying customers table');
+          const fallbackResult = await supabase
+            .from('customers')
+            .select('total_spent')
+            .eq('branch_id', currentBranchId);
+          
+          if (!fallbackResult.error) {
+            revenueData = fallbackResult.data;
+            revenueError = null;
+            revenueTable = 'customers';
+          }
+        }
 
         if (revenueError) {
           console.error('❌ Error fetching branch revenue data:', revenueError);
           console.error('❌ Revenue query details:', { currentBranchId, revenueError });
         } else {
-          totalRevenue = revenueData?.reduce((sum, customer) => sum + (customer.total_spent || 0), 0) || 0;
+          // Safely calculate sum, handling null/undefined values
+          totalRevenue = revenueData?.reduce((sum, customer) => {
+            const spent = customer?.total_spent;
+            if (spent === null || spent === undefined || isNaN(Number(spent))) {
+              return sum;
+            }
+            return sum + Number(spent);
+          }, 0) || 0;
+          
+          // Ensure it's a valid number
+          if (isNaN(totalRevenue) || !isFinite(totalRevenue)) {
+            totalRevenue = 0;
+          }
+          
           console.log('💰 Branch revenue calculated:', totalRevenue);
         }
       } catch (error) {
         console.error('❌ Error calculating branch revenue:', error);
         revenueError = error;
+        totalRevenue = 0;
       }
     } else {
-      console.warn('⚠️  No branch selected - revenue will be 0');
+      // No branch selected - calculate revenue from all customers
+      console.log('💰 Calculating revenue from all customers (no branch filter)');
+      
+      try {
+        let { data: revenueData, error: revenueError } = await supabase
+          .from(revenueTable)
+          .select('total_spent');
+
+        // If error and table is lats_customers, try customers table
+        if (revenueError && revenueTable === 'lats_customers') {
+          console.warn('⚠️  Error fetching from lats_customers, trying customers table');
+          const fallbackResult = await supabase
+            .from('customers')
+            .select('total_spent');
+          
+          if (!fallbackResult.error) {
+            revenueData = fallbackResult.data;
+            revenueError = null;
+            revenueTable = 'customers';
+          }
+        }
+
+        if (!revenueError && revenueData) {
+          totalRevenue = revenueData.reduce((sum, customer) => {
+            const spent = customer?.total_spent;
+            if (spent === null || spent === undefined || isNaN(Number(spent))) {
+              return sum;
+            }
+            return sum + Number(spent);
+          }, 0);
+          
+          // Ensure it's a valid number
+          if (isNaN(totalRevenue) || !isFinite(totalRevenue)) {
+            totalRevenue = 0;
+          }
+          
+          console.log('💰 Total revenue calculated (all customers):', totalRevenue);
+        }
+      } catch (error) {
+        console.error('❌ Error calculating total revenue:', error);
+        totalRevenue = 0;
+      }
     }
 
     const finalStats = {

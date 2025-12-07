@@ -18,7 +18,7 @@ const getDatabaseConfig = () => {
   const productionDbUrl = 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
   
   // Fallback to old Neon database if needed (for backward compatibility)
-  const fallbackDbUrl = 'postgresql://neondb_owner:npg_dMyv1cG4KSOR@ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+  const fallbackDbUrl = 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
   
   // Check for environment variable override (allows Netlify env vars to override)
   const dbUrl = process.env.DATABASE_URL || productionDbUrl;
@@ -81,7 +81,7 @@ const getPool = () => {
     // Check if pool is ended or invalid
     try {
       if (pool.ended || pool._ending) {
-        console.log('⚠️ Pool was ended, creating new pool...');
+      console.log('⚠️ Pool was ended, creating new pool...');
         pool = null;
       }
     } catch (e) {
@@ -144,61 +144,61 @@ exports.handler = async (event, context) => {
     const maxRetries = 2;
     
     while (retryCount <= maxRetries) {
-      try {
+    try {
         // Always get a fresh pool for health check in serverless
         resetPool();
-        const dbPool = getPool();
+      const dbPool = getPool();
         
-        // Get a client from the pool for health check
-        client = await dbPool.connect();
-        const result = await client.query('SELECT NOW() as current_time');
-        client.release();
-        
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({
-            status: 'healthy',
-            service: 'whatsapp-webhook',
-            timestamp: new Date().toISOString(),
-            environment: 'production',
-            message: 'WhatsApp webhook endpoint is active',
-            database_connected: true,
-            db_time: result.rows[0].current_time,
-            database_host: 'aws-0-eu-north-1.pooler.supabase.com',
-            database_name: 'postgres',
-            database_type: 'production'
-          })
-        };
-      } catch (error) {
+      // Get a client from the pool for health check
+      client = await dbPool.connect();
+      const result = await client.query('SELECT NOW() as current_time');
+      client.release();
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          status: 'healthy',
+          service: 'whatsapp-webhook',
+          timestamp: new Date().toISOString(),
+          environment: 'production',
+          message: 'WhatsApp webhook endpoint is active',
+          database_connected: true,
+          db_time: result.rows[0].current_time,
+          database_host: 'aws-0-eu-north-1.pooler.supabase.com',
+          database_name: 'postgres',
+          database_type: 'production'
+        })
+      };
+    } catch (error) {
         retryCount++;
         
-        if (client) {
-          try {
-            client.release();
-          } catch (e) {
-            // Ignore release errors
-          }
-          client = null;
+      if (client) {
+        try {
+          client.release();
+        } catch (e) {
+          // Ignore release errors
         }
+          client = null;
+      }
         
-        // Reset pool on error to force recreation
-        resetPool();
-        
+      // Reset pool on error to force recreation
+      resetPool();
+      
         // If we've exhausted retries, return error status
         if (retryCount > maxRetries) {
-          return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({
-              status: 'healthy',
-              service: 'whatsapp-webhook',
-              timestamp: new Date().toISOString(),
-              database_connected: false,
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          status: 'healthy',
+          service: 'whatsapp-webhook',
+          timestamp: new Date().toISOString(),
+          database_connected: false,
               error: error.message,
               retries: retryCount
-            })
-          };
+        })
+      };
         }
         
         // Wait a bit before retrying

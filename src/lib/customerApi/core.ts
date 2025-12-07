@@ -131,7 +131,13 @@ function normalizeColorTag(colorTag: string): 'new' | 'vip' | 'complainer' | 'pu
 
 // Utility for formatting currency with full numbers
 export function formatCurrency(amount: number) {
-  const formatted = Number(amount).toLocaleString('en-TZ', {
+  // Handle NaN, null, undefined, and invalid numbers
+  if (amount === null || amount === undefined || isNaN(Number(amount)) || !isFinite(Number(amount))) {
+    return 'Tsh 0';
+  }
+  
+  const numAmount = Number(amount);
+  const formatted = numAmount.toLocaleString('en-TZ', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   });
@@ -584,6 +590,7 @@ async function performFetchAllCustomersLight() {
       }
 
       // Lightweight query - only essential fields for app initialization
+      // Use REQUEST_TIMEOUT (90s) instead of hardcoded 30s for better reliability
       const { data, error } = await withTimeout(
         retryRequest(async () => {
           let query = checkSupabase()
@@ -591,8 +598,9 @@ async function performFetchAllCustomersLight() {
             .select(`
               id,name,phone,email,is_active,total_spent,last_visit,points,city,branch_id
             `)
-            .order('created_at', { ascending: false })
-            .limit(5000); // Reasonable limit for initial load
+            // Order by id instead of created_at for better performance (id is indexed)
+            .order('id', { ascending: false })
+            .limit(2000); // Reduced limit for faster queries
 
           // Apply branch filter based on isolation mode
           if (currentBranchId) {
@@ -619,12 +627,21 @@ async function performFetchAllCustomersLight() {
           const result = await query;
           return result;
         }),
-        30000 // 30 second timeout for lightweight query
+        REQUEST_TIMEOUT // Use default 90s timeout instead of 30s
       );
 
       if (error) {
         console.error('❌ Error fetching customers (light):', error);
-        console.error('❌ Error details:', JSON.stringify(error, null, 2));
+        // Try to return cached data as fallback instead of throwing
+        try {
+          const cachedCustomers = await import('../offlineCache').then(m => m.cacheGetAll('customers'));
+          if (cachedCustomers && cachedCustomers.length > 0) {
+            console.log(`⚠️ Using cached customers (${cachedCustomers.length}) due to fetch error`);
+            return cachedCustomers;
+          }
+        } catch (cacheError) {
+          // Ignore cache errors
+        }
         throw error;
       }
 
@@ -633,16 +650,34 @@ async function performFetchAllCustomersLight() {
 
     } catch (error: any) {
       console.error('❌ Error fetching customers (light):', error.message || error);
-      console.error('❌ Error type:', typeof error);
-      console.error('❌ Error stringified:', JSON.stringify(error, null, 2));
-      if (error && typeof error === 'object') {
-        console.error('❌ Error keys:', Object.keys(error as any));
-        console.error('❌ Error message:', (error as any)?.message);
-        console.error('❌ Error code:', (error as any)?.code);
-        console.error('❌ Error details:', (error as any)?.details);
-        console.error('❌ Error hint:', (error as any)?.hint);
+      
+      // Try to return cached data as fallback
+      try {
+        const cachedCustomers = await import('../offlineCache').then(m => m.cacheGetAll('customers'));
+        if (cachedCustomers && cachedCustomers.length > 0) {
+          console.log(`⚠️ Using cached customers (${cachedCustomers.length}) due to error`);
+          return cachedCustomers;
+        }
+      } catch (cacheError) {
+        console.warn('⚠️ Could not load cached customers:', cacheError);
       }
-      throw error;
+      
+      // Only log detailed error info in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Error type:', typeof error);
+        console.error('❌ Error stringified:', JSON.stringify(error, null, 2));
+        if (error && typeof error === 'object') {
+          console.error('❌ Error keys:', Object.keys(error as any));
+          console.error('❌ Error message:', (error as any)?.message);
+          console.error('❌ Error code:', (error as any)?.code);
+          console.error('❌ Error details:', (error as any)?.details);
+          console.error('❌ Error hint:', (error as any)?.hint);
+        }
+      }
+      
+      // Return empty array instead of throwing to prevent app crash
+      console.warn('⚠️ Returning empty customer array due to error');
+      return [];
     }
   } else {
     // Return cached data when offline

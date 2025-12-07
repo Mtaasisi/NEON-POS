@@ -268,7 +268,7 @@ export const getInventorySettings = async (): Promise<InventorySettings> => {
     }
 
     if (!data || data.length === 0) {
-      console.warn('No inventory settings found, using defaults');
+      // No settings in database is expected for new installations - use defaults silently
       return defaultInventorySettings;
     }
 

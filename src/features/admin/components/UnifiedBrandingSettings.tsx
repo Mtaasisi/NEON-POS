@@ -43,18 +43,56 @@ const UnifiedBrandingSettings: React.FC = () => {
       
       // Fetch basic fields first (social media columns don't exist in database)
       // @ts-ignore - Neon query builder implements thenable interface
-      const { data: baseData, error: baseError } = await supabase
+      let { data: baseData, error: baseError } = await supabase
         .from('lats_pos_general_settings')
         .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
-        .limit(1)
-        .single();
+        .limit(1);
 
+      // Handle case where no record exists
       if (baseError) {
-        throw baseError;
+        // If table doesn't exist or other error, try to continue with defaults
+        console.warn('Error fetching settings:', baseError);
+        baseData = null;
       }
 
-      if (!baseData) {
-        throw new Error('No settings record found');
+      // If no record exists, create a default one
+      if (!baseData || baseData.length === 0) {
+        console.log('📝 No settings record found, creating default...');
+        const { data: newRecord, error: createError } = await supabase
+          .from('lats_pos_general_settings')
+          .insert({
+            business_name: 'My Store',
+            business_phone: '',
+            business_email: '',
+            business_website: '',
+            business_address: '',
+            business_logo: null
+          })
+          .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
+          .single();
+        
+        if (createError) {
+          console.error('Error creating default settings:', createError);
+          // Use defaults in UI even if creation fails
+          setSettingsId(null);
+          setFormData({
+            businessName: '',
+            businessPhone: '',
+            businessEmail: '',
+            businessWebsite: '',
+            businessAddress: '',
+            businessLogo: null,
+            businessInstagram: '',
+            businessTiktok: '',
+            businessWhatsapp: ''
+          });
+          setLogoPreview(null);
+          return;
+        }
+        baseData = newRecord;
+      } else {
+        // Get first record
+        baseData = baseData[0];
       }
 
       // Set data (social media fields will be empty since columns don't exist)
@@ -75,7 +113,7 @@ const UnifiedBrandingSettings: React.FC = () => {
       setFormData(formDataToSet);
     } catch (error: any) {
       console.error('Error fetching business info:', error);
-      toast.error('Failed to load business information');
+      toast.error(`Failed to load business information: ${error.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -149,12 +187,34 @@ const UnifiedBrandingSettings: React.FC = () => {
       // Try to save basic data first
       console.log('💾 Saving basic business info...');
       
-      // @ts-ignore - Neon query builder implements thenable interface
-      let { data, error } = await supabase
-        .from('lats_pos_general_settings')
-        .update(basicUpdateData)
-        .eq('id', settingsId)
-        .select();
+      let data, error;
+      
+      if (settingsId) {
+        // Update existing record
+        // @ts-ignore - Neon query builder implements thenable interface
+        const result = await supabase
+          .from('lats_pos_general_settings')
+          .update(basicUpdateData)
+          .eq('id', settingsId)
+          .select();
+        data = result.data;
+        error = result.error;
+      } else {
+        // Create new record if none exists
+        console.log('📝 Creating new business info record...');
+        // @ts-ignore - Neon query builder implements thenable interface
+        const result = await supabase
+          .from('lats_pos_general_settings')
+          .insert(basicUpdateData)
+          .select()
+          .single();
+        data = result.data ? [result.data] : null;
+        error = result.error;
+        
+        if (!error && result.data) {
+          setSettingsId(result.data.id);
+        }
+      }
 
       if (error) {
         throw error;

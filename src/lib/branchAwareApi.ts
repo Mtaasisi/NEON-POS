@@ -118,11 +118,32 @@ export const addBranchFilter = async (
     return query;
   }
 
-  // ISOLATED MODE: Only show data from this branch (ignore is_shared flag)
+  // ISOLATED MODE: Check if this entity type should be shared
+  // Even in isolated mode, some entities like suppliers might be shared
   if (branch?.data_isolation_mode === 'isolated') {
-    console.log(`🔒 ISOLATED MODE: Filtering ${entityType} by branch ${branchId} (ignoring is_shared flag)`);
-    logQueryDebug(entityType, query, 'isolated', true);
-    return query.eq('branch_id', branchId);
+    // Check if this entity type is configured as shared (via share_suppliers, share_customers, etc.)
+    const shareMapping: Record<string, boolean> = {
+      suppliers: branch.share_suppliers ?? false,
+      customers: branch.share_customers ?? false,
+      products: branch.share_products ?? false,
+      inventory: branch.share_inventory ?? false,
+      categories: branch.share_categories ?? false,
+      employees: branch.share_employees ?? false,
+    };
+    
+    const isSharedInIsolated = shareMapping[entityType] ?? false;
+    
+    if (isSharedInIsolated || shared) {
+      // Entity is shared even in isolated mode - show branch data + shared data
+      console.log(`🔄 ISOLATED MODE BUT SHARED: ${entityType} - branch ${branchId} + shared data`);
+      logQueryDebug(entityType, query, 'isolated_shared', true);
+      return query.or(`branch_id.eq.${branchId},is_shared.eq.true,branch_id.is.null`);
+    } else {
+      // Entity is truly isolated - only show this branch's data
+      console.log(`🔒 ISOLATED MODE: Filtering ${entityType} by branch ${branchId}`);
+      logQueryDebug(entityType, query, 'isolated', true);
+      return query.eq('branch_id', branchId);
+    }
   }
 
   // HYBRID MODE: Check if this entity type is shared
@@ -133,10 +154,11 @@ export const addBranchFilter = async (
       logQueryDebug(entityType, query, 'hybrid', true);
       return query.or(`branch_id.eq.${branchId},is_shared.eq.true,branch_id.is.null`);
     } else {
-      // Entity is NOT shared - only show this branch's data
-      console.log(`⚖️ HYBRID NOT SHARED: ${entityType} - only branch ${branchId}`);
+      // Entity is NOT shared - show this branch's data + NULL branch_id (global/shared entities)
+      // NULL branch_id entities are typically global/shared and should be visible to all branches
+      console.log(`⚖️ HYBRID NOT SHARED: ${entityType} - branch ${branchId} + NULL (global)`);
       logQueryDebug(entityType, query, 'hybrid', true);
-      return query.eq('branch_id', branchId);
+      return query.or(`branch_id.eq.${branchId},branch_id.is.null`);
     }
   }
 

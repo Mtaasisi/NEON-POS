@@ -23,13 +23,13 @@ neonConfig.disableWarningInBrowsers = true; // Suppress browser warnings
 // Pool connects directly using PostgreSQL wire protocol over WebSocket
 // The pooler endpoint handles WebSocket upgrades automatically
 // Database URL - Load from environment variable (REQUIRED)
-// Priority: VITE_DATABASE_URL (frontend accessible) > DATABASE_URL (fallback)
+// Priority: VITE_DATABASE_URL (frontend accessible) > DATABASE_URL (fallback) > Development database (default)
 let DATABASE_URL = import.meta.env.VITE_DATABASE_URL || import.meta.env.DATABASE_URL;
-// Validate that DATABASE_URL is configured
+// Fallback to production Supabase database if not configured
 if (!DATABASE_URL) {
-    console.error('❌ CRITICAL: DATABASE_URL is not configured!');
-    console.error('Please set VITE_DATABASE_URL in your .env file');
-    throw new Error('DATABASE_URL environment variable is required. Check your .env file.');
+    // PRODUCTION SUPABASE DATABASE - Default fallback
+    DATABASE_URL = 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
+    console.log('⚠️  Using production Supabase database (VITE_DATABASE_URL not set)');
 }
 console.log('✅ Neon client initializing with URL:', DATABASE_URL.substring(0, 50) + '...');
 // Global error handler for WebSocket connection errors

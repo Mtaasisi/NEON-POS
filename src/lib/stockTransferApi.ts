@@ -294,10 +294,14 @@ export const getStockTransfers = async (
       console.log('📦 [DEBUG] Sample transfer:', transfers[0]);
       console.log('📦 [DEBUG] Transfer IDs:', transfers.map((t: any) => t.id));
     } else {
-      console.warn('⚠️ [WARNING] No transfers found! Check:');
-      console.warn('  1. Branch ID in localStorage:', localStorage.getItem('current_branch_id'));
-      console.warn('  2. RLS policies on branch_transfers table');
-      console.warn('  3. Foreign key constraints');
+      // Only log detailed warning in development mode or if branch ID is missing
+      const branchId = localStorage.getItem('current_branch_id');
+      if (import.meta.env.DEV || !branchId) {
+        console.log('ℹ️ [INFO] No transfers found' + (branchId ? ' for this branch' : ' (no branch ID set)'));
+        if (!branchId) {
+          console.warn('⚠️ [WARNING] Branch ID not found in localStorage. Transfers may not be filtered correctly.');
+        }
+      }
     }
     
     return transfers || [];

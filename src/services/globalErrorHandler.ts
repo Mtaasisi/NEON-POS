@@ -318,9 +318,30 @@ class GlobalErrorHandler {
 
         return response;
       } catch (error) {
+        // Skip logging CORS errors for image/media URLs - these are expected
+        const url = typeof args[0] === 'string' ? args[0] : args[0].url;
+        const isImageUrl = typeof url === 'string' && (
+          url.includes('/media/') || 
+          url.includes('.jpg') || 
+          url.includes('.jpeg') || 
+          url.includes('.png') || 
+          url.includes('.gif') || 
+          url.includes('.webp') ||
+          url.includes('wasenderapi.com/media')
+        );
+        
+        const isCorsError = error instanceof TypeError && 
+                           (error.message.includes('Failed to fetch') || 
+                            error.message.includes('CORS') ||
+                            error.message.includes('network'));
+        
+        // Don't log CORS errors for images - they're handled gracefully by the app
+        if (isImageUrl && isCorsError) {
+          throw error; // Re-throw but don't log
+        }
+        
         // Log network errors
         if (this.shouldLogError()) {
-          const url = typeof args[0] === 'string' ? args[0] : args[0].url;
           const isCacheRelated = url.includes('cache') || 
                                 url.includes('sync') ||
                                 url.includes('offline');

@@ -32,15 +32,10 @@ if (file_exists($envFile)) {
 // Get DATABASE_URL from environment
 $databaseUrl = getenv('DATABASE_URL');
 
-// Fallback to production database if not set
+// Fallback to production Supabase database if not set
 if (!$databaseUrl) {
-    // Use production database based on NODE_ENV
-    $nodeEnv = getenv('NODE_ENV') ?: 'development';
-    if ($nodeEnv === 'production') {
-        $databaseUrl = 'postgresql://neondb_owner:npg_vABqUKk73tEW@ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
-    } else {
-        $databaseUrl = 'postgresql://neondb_owner:npg_dMyv1cG4KSOR@ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
-    }
+    // Always use production Supabase database
+    $databaseUrl = 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
 }
 
 try {

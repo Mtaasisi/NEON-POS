@@ -9,6 +9,7 @@
 // 2. Deploy as serverless function (Vercel, Netlify, Cloudflare Workers)
 
 import { neon, neonConfig, Pool } from '@neondatabase/serverless';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 // Configure Neon Pool for browser environment
 // Pool uses native PostgreSQL protocol over WebSocket - different from neon() HTTP API
@@ -28,17 +29,28 @@ neonConfig.disableWarningInBrowsers = true; // Suppress browser warnings
 // The pooler endpoint handles WebSocket upgrades automatically
 
 // Database URL - Load from environment variable (REQUIRED)
-// Priority: VITE_DATABASE_URL (frontend accessible) > DATABASE_URL (fallback)
+// Priority: VITE_DATABASE_URL (frontend accessible) > DATABASE_URL (fallback) > Development database (default)
 let DATABASE_URL = import.meta.env.VITE_DATABASE_URL || import.meta.env.DATABASE_URL;
 
-// Validate that DATABASE_URL is configured
+// Fallback to production Supabase database if not configured
 if (!DATABASE_URL) {
-  console.error('❌ CRITICAL: DATABASE_URL is not configured!');
-  console.error('Please set VITE_DATABASE_URL in your .env file');
-  throw new Error('DATABASE_URL environment variable is required. Check your .env file.');
+  // PRODUCTION SUPABASE DATABASE - Default fallback
+  DATABASE_URL = 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
+  console.log('⚠️  Using production Supabase database (VITE_DATABASE_URL not set)');
 }
 
-console.log('✅ Neon client initializing with URL:', DATABASE_URL.substring(0, 50) + '...');
+// Detect Supabase EARLY - before pool initialization
+const SUPABASE_URL_ENV = import.meta.env.VITE_SUPABASE_URL || 'https://jxhzveborezjhsmzsgbc.supabase.co';
+const isSupabaseDatabase = DATABASE_URL?.toLowerCase().includes('supabase') || 
+                           DATABASE_URL?.toLowerCase().includes('jxhzveborezjhsmzsgbc') ||
+                           SUPABASE_URL_ENV?.toLowerCase().includes('supabase') ||
+                           import.meta.env.VITE_SUPABASE_URL?.toLowerCase().includes('supabase');
+
+if (isSupabaseDatabase) {
+  console.log('✅ Detected Supabase database - will use REST API instead of WebSocket');
+} else {
+  console.log('✅ Neon client initializing with URL:', DATABASE_URL.substring(0, 50) + '...');
+}
 
 // Global error handler for WebSocket connection errors
 if (typeof window !== 'undefined') {
@@ -211,13 +223,43 @@ if (typeof window !== 'undefined') {
 let sql: any;
 let pool: Pool;
 
-console.log('📡 Using Neon WebSocket Pooler for browser-compatible database connections');
-console.log('ℹ️  Note: WebSocket pooler enabled for CORS-free browser access');
+// Supabase REST API client for authentication (works even if WebSocket fails)
+const SUPABASE_URL = SUPABASE_URL_ENV;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4aHp2ZWJvcmV6amhzbXpzZ2JjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI3MTE1MjQsImV4cCI6MjA2ODI4NzUyNH0.pIug4PlJ3Q14GxcYilW-u0blByYoyeOfN3q9RNIjgfw';
+// Create Supabase client with real-time completely disabled to prevent WebSocket connections
+// This ensures no WebSocket connections are attempted
+const supabaseRestClient = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  realtime: {
+    // Disable real-time completely
+    disabled: true
+  },
+  global: {
+    headers: {
+      'x-client-info': 'supabase-js-rest-only'
+    }
+  },
+  // Disable auto-refresh token to prevent additional connections
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
 
-try {
-  // Create a Pool instance for WebSocket connections with proper configuration
-  // These settings prevent "Connection terminated unexpectedly" errors
-  pool = new Pool({ 
+if (isSupabaseDatabase) {
+  console.log('✅ Supabase REST client initialized for all database operations');
+  console.log('🌐 Using Supabase REST API (no WebSocket needed)');
+} else {
+  console.log('✅ Supabase REST client initialized for authentication');
+  console.log('📡 Using Neon WebSocket Pooler for browser-compatible database connections');
+  console.log('ℹ️  Note: WebSocket pooler enabled for CORS-free browser access');
+}
+
+// Only initialize Neon pool if NOT using Supabase
+if (!isSupabaseDatabase) {
+  try {
+    // Create a Pool instance for WebSocket connections with proper configuration
+    // These settings prevent "Connection terminated unexpectedly" errors
+    pool = new Pool({ 
     connectionString: DATABASE_URL,
     // Connection pool settings optimized for browser environments
     max: 10,                          // Maximum number of clients in the pool (browser-friendly limit)
@@ -314,39 +356,52 @@ try {
     return result.rows;
   };
   
-  console.log('✅ Neon WebSocket Pool created successfully');
-  console.log('ℹ️  Pool config: max=10, idle=30s, timeout=30s, statement_timeout=60s');
-  console.log('ℹ️  Note: Transient errors are automatically retried - no action needed');
+    console.log('✅ Neon WebSocket Pool created successfully');
+    console.log('ℹ️  Pool config: max=10, idle=30s, timeout=30s, statement_timeout=60s');
+    console.log('ℹ️  Note: Transient errors are automatically retried - no action needed');
+    
+    // Warm up the connection pool in the background (non-blocking)
+    // This helps reduce cold start latency for the first query
+    setTimeout(async () => {
+      try {
+        console.log('🔥 Warming up connection pool...');
+        await pool.query('SELECT 1');
+        console.log('✅ Connection pool warmed up successfully');
+      } catch (warmupError) {
+        // Ignore warmup errors - they'll be retried on actual queries
+        console.log('ℹ️  Pool warmup deferred - will connect on first query');
+      }
+    }, 1000); // Start warmup after 1 second
+    
+    // Keep-alive: Ping database every 4 minutes to prevent it from sleeping
+    // Neon free tier databases sleep after ~5 minutes of inactivity
+    setInterval(async () => {
+      try {
+        await pool.query('SELECT 1');
+        console.log('💓 Database keep-alive ping successful');
+      } catch (error) {
+        console.debug('⚠️ Keep-alive ping failed (will retry):', getErrorMessage(error));
+      }
+    }, 4 * 60 * 1000); // Ping every 4 minutes
+  } catch (error: any) {
+    console.error('❌ Failed to initialize Neon pool:', error);
+    // Don't throw - let the app continue with Supabase REST API if available
+  }
+} else {
+  // Using Supabase - no pool needed
+  console.log('✅ Skipping Neon pool initialization (using Supabase REST API)');
   
-  // Warm up the connection pool in the background (non-blocking)
-  // This helps reduce cold start latency for the first query
-  setTimeout(async () => {
-    try {
-      console.log('🔥 Warming up connection pool...');
-      await pool.query('SELECT 1');
-      console.log('✅ Connection pool warmed up successfully');
-    } catch (warmupError) {
-      // Ignore warmup errors - they'll be retried on actual queries
-      console.log('ℹ️  Pool warmup deferred - will connect on first query');
-    }
-  }, 1000); // Start warmup after 1 second
+  // Create a dummy sql function that throws helpful error
+  sql = async (strings: TemplateStringsArray, ...values: any[]) => {
+    console.error('❌ Attempted to use sql template with Supabase. Use supabase.from() instead.');
+    throw new Error('Direct SQL queries not supported with Supabase. Use supabase.from() for REST API queries.');
+  };
   
-  // Keep-alive: Ping database every 4 minutes to prevent it from sleeping
-  // Neon free tier databases sleep after ~5 minutes of inactivity
-  // This significantly reduces cold start issues for better user experience
-  setInterval(async () => {
-    try {
-      // Simple lightweight query to keep connection alive
-      await pool.query('SELECT 1');
-      console.log('💓 Database keep-alive ping successful');
-    } catch (error) {
-      // Silently fail - the retry mechanism will handle reconnection
-      console.debug('⚠️ Keep-alive ping failed (will retry):', getErrorMessage(error));
-    }
-  }, 4 * 60 * 1000); // Ping every 4 minutes (240000ms)
-} catch (error) {
-  console.error('❌ Failed to create Neon pool:', error);
-  throw error;
+  // Create a dummy pool object to prevent errors
+  pool = null as any;
+  
+  // Keep-alive not needed for Supabase REST API
+  console.log('ℹ️  Keep-alive not needed (Supabase REST API handles connections)');
 }
 
 // Helper function to safely get error message
@@ -1487,55 +1542,91 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
 const mockAuth = {
   signInWithPassword: async ({ email, password }: { email: string; password: string }) => {
     try {
-      console.log('🔐 Attempting login with:', { email, password });
+      console.log('🔐 Attempting login with:', { email });
       
-      // Escape single quotes in email and password to prevent SQL injection
-      const escapedEmail = email.replace(/'/g, "''");
-      const escapedPassword = password.replace(/'/g, "''");
+      // Ensure Supabase client is initialized
+      if (!supabaseRestClient) {
+        console.error('❌ Supabase REST client not initialized');
+        return { 
+          data: { user: null, session: null }, 
+          error: { message: 'Authentication service not available' } 
+        };
+      }
       
-      // Query users table for authentication
-      // NOTE: Using string interpolation instead of parameterized queries ($1, $2)
-      // because WebSocket pooler connections in browser don't support them the same way
-      const query = `
-        SELECT id, email, full_name, role, is_active, created_at, updated_at 
-        FROM users 
-        WHERE email = '${escapedEmail}'
-        AND password = '${escapedPassword}'
-        AND is_active = true
-        LIMIT 1
-      `;
+      // Use Supabase REST API instead of direct SQL to avoid WebSocket issues
+      // This works even if the WebSocket pooler connection fails
+      const { data: users, error } = await supabaseRestClient
+        .from('users')
+        .select('id, email, full_name, role, is_active, created_at, updated_at, password')
+        .eq('email', email)
+        .eq('is_active', true)
+        .limit(1);
       
-      const rawResult = await pool.query(query);
-      const result = rawResult.rows;
+      if (error) {
+        console.error('❌ Supabase query error:', error);
+        const errorMessage = error.message || error.code || 'Database query failed';
+        return { 
+          data: { user: null, session: null }, 
+          error: { message: errorMessage } 
+        };
+      }
       
-      console.log('🔍 Login query result:', { result, length: result?.length });
+      console.log('🔍 Login query result:', { found: users?.length || 0 });
       
-      if (result && Array.isArray(result) && result.length > 0) {
-        const user = result[0];
+      if (users && users.length > 0) {
+        const user = users[0];
+        
+        // Verify password (plain text comparison - in production, use hashing)
+        if (user.password !== password) {
+          console.log('❌ Password mismatch');
+          return { 
+            data: { user: null, session: null }, 
+            error: { message: 'Invalid login credentials' } 
+          };
+        }
+        
+        // Remove password from user object before storing
+        const { password: _, ...userWithoutPassword } = user;
+        
         // Store session in localStorage
         const session = {
           access_token: btoa(JSON.stringify({ userId: user.id, email: user.email })),
           refresh_token: btoa(JSON.stringify({ userId: user.id })),
           expires_at: Date.now() + 3600000, // 1 hour
-          user: user
+          user: userWithoutPassword
         };
         localStorage.setItem('supabase.auth.session', JSON.stringify(session));
         
+        console.log('✅ Login successful');
         return { 
-          data: { user, session }, 
+          data: { user: userWithoutPassword, session }, 
           error: null 
         };
       }
       
+      console.log('❌ User not found or inactive');
       return { 
         data: { user: null, session: null }, 
         error: { message: 'Invalid login credentials' } 
       };
     } catch (error: any) {
-      console.error('Auth error:', error);
+      // Handle different error types
+      let errorMessage = 'Login failed';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error?.toString) {
+        errorMessage = error.toString();
+      }
+      
+      console.error('❌ Auth error:', { error, message: errorMessage, type: typeof error });
       return { 
         data: { user: null, session: null }, 
-        error: { message: error.message } 
+        error: { message: errorMessage } 
       };
     }
   },
@@ -1813,14 +1904,35 @@ export interface SupabaseClient {
   channel: (name: string) => any;
 }
 
-// Create Neon-based Supabase client
-export const supabase: SupabaseClient = {
+// Detect if we're using Supabase (by checking if URL contains supabase)  
+const isSupabaseDatabase = DATABASE_URL?.toLowerCase().includes('supabase') || 
+                           DATABASE_URL?.toLowerCase().includes('jxhzveborezjhsmzsgbc') ||
+                           SUPABASE_URL?.toLowerCase().includes('supabase') ||
+                           import.meta.env.VITE_SUPABASE_URL?.toLowerCase().includes('supabase');
+
+// Create Supabase client - use REST API if Supabase detected, otherwise use Neon WebSocket
+// When using Supabase, override auth to use our REST API implementation
+export const supabase: SupabaseClient = isSupabaseDatabase ? {
+  ...supabaseRestClient,
+  auth: {
+    ...supabaseRestClient.auth,
+    signInWithPassword: mockAuth.signInWithPassword,
+    signIn: mockAuth.signIn,
+  }
+} as any : {
   from: (table: string) => new NeonQueryBuilder(table),
   auth: mockAuth,
   storage: mockStorage,
   rpc: rpcCall,
   channel: mockChannel,
 };
+
+// Log which client is being used
+if (isSupabaseDatabase) {
+  console.log('✅ Using Supabase REST API client for all database operations');
+} else {
+  console.log('✅ Using Neon WebSocket pooler for database operations');
+}
 
 // Retry utility function with exponential backoff
 export async function retryWithBackoff<T>(

@@ -5,11 +5,11 @@
  * Uses the working database credentials from webhook.php
  */
 
-// Working database credentials from webhook.php
-const DB_HOST = 'ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech';
+// Working database credentials - DEVELOPMENT DATABASE
+const DB_HOST = 'ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech';
 const DB_NAME = 'neondb';
 const DB_USER = 'neondb_owner';
-const DB_PASS = 'npg_vABqUKk73tEW';
+const DB_PASS = 'npg_dMyv1cG4KSOR';
 
 // Get credentials from command line arguments
 const apiKey = process.argv[2];

@@ -1865,8 +1865,8 @@ const POSPageOptimized: React.FC = () => {
           const firstImage = product.images[0];
           productImage = typeof firstImage === 'string' ? firstImage : (firstImage?.url || firstImage?.thumbnailUrl);
         } else {
-          // Fallback to single image fields
-          productImage = product.thumbnail_url || product.image || product.primary_image;
+          // Fallback to single image fields (only use existing columns)
+          productImage = product.thumbnail_url || product.image_url;
         }
 
         const newItem = {

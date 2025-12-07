@@ -221,29 +221,34 @@ export class RobustImageService {
         data = result.data;
         error = result.error;
       } catch (e) {
-        // If product_images table doesn't exist, try to get images from lats_products
-        console.warn('product_images table not accessible, trying lats_products.images column');
+        // If product_images table doesn't exist, try to get image from lats_products.image_url
+        console.warn('product_images table not accessible, trying lats_products.image_url column');
         const productResult = await supabase
           .from('lats_products')
-          .select('images')
+          .select('image_url, thumbnail_url')
           .eq('id', productId)
           .single();
         
-        if (productResult.data?.images && Array.isArray(productResult.data.images)) {
-          // Convert string array to ProductImage format
-          data = productResult.data.images.map((url: string, index: number) => ({
-            id: `fallback-${index}`,
-            image_url: url,
-            thumbnail_url: url,
-            file_name: `image-${index + 1}`,
-            file_size: 0,
-            is_primary: index === 0,
-            created_at: new Date().toISOString(),
-            mime_type: 'image/jpeg',
-            width: null,
-            height: null
-          }));
-          error = null;
+        if (productResult.data && (productResult.data.image_url || productResult.data.thumbnail_url)) {
+          // Convert single image_url to ProductImage format
+          const imageUrl = productResult.data.thumbnail_url || productResult.data.image_url;
+          if (imageUrl) {
+            data = [{
+              id: `fallback-0`,
+              image_url: imageUrl,
+              thumbnail_url: productResult.data.thumbnail_url || imageUrl,
+              file_name: `product-image`,
+              file_size: 0,
+              is_primary: true,
+              created_at: new Date().toISOString(),
+              mime_type: 'image/jpeg',
+              width: null,
+              height: null
+            }];
+            error = null;
+          } else {
+            error = productResult.error;
+          }
         } else {
           error = productResult.error;
         }

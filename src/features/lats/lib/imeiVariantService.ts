@@ -668,8 +668,12 @@ export const markIMEIAsSold = async (
             .insert({
               product_id: inventoryItem.product_id || null,
               variant_id: validVariantId, // NULL if variant doesn't exist in lats_product_variants
+              type: 'sale', // ✅ FIX: Required 'type' column (NOT NULL)
               movement_type: 'sale',
               quantity: -1,
+              previous_quantity: 1, // ✅ FIX: Required (NOT NULL)
+              new_quantity: 0, // ✅ FIX: Required (NOT NULL)
+              reason: 'Sale', // ✅ FIX: Required (NOT NULL)
               reference_type: 'pos_sale',
               reference_id: sale_id || null,
               notes: `Sold legacy item ${child_variant_id}`,

@@ -13,7 +13,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 dotenv.config({ path: join(__dirname, '../../.env') });
 
-const databaseUrl = process.env.DATABASE_URL;
+// Get database URL from environment or use development database as default
+const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
 
 // Create connection with pooling (only if DATABASE_URL is set)
 // This allows the server to start for SMS proxy functionality without a database

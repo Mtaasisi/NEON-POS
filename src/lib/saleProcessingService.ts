@@ -1749,6 +1749,7 @@ class SaleProcessingService {
           return {
             product_id: item.productId,
             variant_id: item.variantId, // This is guaranteed to exist in lats_product_variants
+            type: 'sale', // ✅ FIX: Required 'type' column (NOT NULL)
             movement_type: 'out',
             quantity: item.quantity,
             previous_quantity: currentQuantity,

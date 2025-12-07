@@ -681,7 +681,16 @@ export default function WhatsAppInboxPage() {
         });
         
         if (!response.ok) {
-          throw new Error('Failed to load settings from database');
+          // Try to parse error response as JSON, but handle non-JSON gracefully
+          let errorMessage = 'Failed to load settings from database';
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorData.message || errorMessage;
+          } catch {
+            // Response is not JSON, use status text
+            errorMessage = response.statusText || errorMessage;
+          }
+          throw new Error(errorMessage);
         }
         
         const settings = await response.json();
@@ -909,6 +918,20 @@ export default function WhatsAppInboxPage() {
     try {
       setLoadingActiveSession(true);
       const response = await fetch(`/api/whatsapp-sessions/get-active?user_id=${currentUser.id}`);
+      
+      if (!response.ok) {
+        // Try to parse error response as JSON, but handle non-JSON gracefully
+        let errorMessage = `Server returned ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch {
+          // Response is not JSON, use status text
+          errorMessage = response.statusText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+      
       const data = await response.json();
       
       if (data.success && data.active_session) {
@@ -935,6 +958,21 @@ export default function WhatsAppInboxPage() {
   async function loadSessionDiagnostic() {
     try {
       const response = await fetch('/api/whatsapp-sessions/check-integration');
+      
+      if (!response.ok) {
+        // Try to parse error response as JSON, but handle non-JSON gracefully
+        let errorMessage = `Server returned ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch {
+          // Response is not JSON, use status text
+          errorMessage = response.statusText || errorMessage;
+        }
+        console.warn('⚠️ Failed to load session diagnostic:', errorMessage);
+        return;
+      }
+      
       const data = await response.json();
       
       if (data.success) {

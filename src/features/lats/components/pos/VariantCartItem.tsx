@@ -266,27 +266,40 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
 
       // Otherwise, fetch from database
       try {
+        // First try to get image from product_images table (preferred)
+        const { data: productImages, error: imagesError } = await supabase
+          .from('product_images')
+          .select('image_url, thumbnail_url, is_primary')
+          .eq('product_id', item.productId)
+          .order('is_primary', { ascending: false })
+          .limit(1);
+
+        if (!imagesError && productImages && productImages.length > 0) {
+          const firstImage = productImages[0];
+          const imageUrl = firstImage.thumbnail_url || firstImage.image_url;
+          if (imageUrl) {
+            setProductImage(imageUrl);
+            return;
+          }
+        }
+
+        // Fallback to image_url from lats_products table
         const { data: product, error } = await supabase
           .from('lats_products')
-          .select('images, thumbnail_url, image, primary_image')
+          .select('image_url, thumbnail_url')
           .eq('id', item.productId)
           .single();
 
         if (error) {
-          console.error('Error fetching product image:', error);
+          // Don't log error if product_images query failed and this also fails
+          if (!imagesError) {
+            console.error('Error fetching product image:', error);
+          }
           return;
         }
 
         if (product) {
-          // Extract image the same way as addToCart does
-          let extractedImage: string | undefined;
-          if (product.images && Array.isArray(product.images) && product.images.length > 0) {
-            const firstImage = product.images[0];
-            extractedImage = typeof firstImage === 'string' ? firstImage : (firstImage?.url || firstImage?.thumbnailUrl);
-          } else {
-            extractedImage = product.thumbnail_url || product.image || product.primary_image;
-          }
-
+          const extractedImage = product.thumbnail_url || product.image_url;
           if (extractedImage) {
             setProductImage(extractedImage);
           }

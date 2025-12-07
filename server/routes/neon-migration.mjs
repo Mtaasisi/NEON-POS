@@ -405,6 +405,21 @@ router.post('/migrate', async (req, res) => {
       sendProgress('Connected to both branches');
 
       for (const tableName of tables) {
+        // FAST MODE: For schema-missing, skip tables that already exist
+        if (migrationType === 'schema-missing') {
+          const tableExists = await targetSql`
+            SELECT EXISTS (
+              SELECT FROM information_schema.tables
+              WHERE table_schema = 'public' AND table_name = ${tableName}
+            ) as exists
+          `;
+          
+          if (tableExists[0].exists) {
+            sendProgress(`⏭️  Skipping ${tableName} (already exists in target)`);
+            continue; // Skip this table entirely for faster migration
+          }
+        }
+
         sendProgress(`Processing table: ${tableName}`);
 
         try {
@@ -426,19 +441,26 @@ router.post('/migrate', async (req, res) => {
               ORDER BY ordinal_position
             `;
 
-            // Check if table exists in target
-            const tableExists = await targetSql`
-              SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = ${tableName}
-              ) as exists
-            `;
+            // Check if table exists in target (only if not already checked above)
+            let tableExists;
+            if (migrationType !== 'schema-missing') {
+              tableExists = await targetSql`
+                SELECT EXISTS (
+                  SELECT FROM information_schema.tables
+                  WHERE table_schema = 'public' AND table_name = ${tableName}
+                ) as exists
+              `;
+            } else {
+              // For schema-missing, we already checked above, so table doesn't exist
+              tableExists = [{ exists: false }];
+            }
 
             if (migrationType === 'schema-missing') {
-              // For schema-missing: only add what's missing, don't modify existing
+              // FAST MODE: For schema-missing, only process tables that don't exist
+              // Skip tables that already exist to make migration faster
               if (!tableExists[0].exists) {
                 // Create table in target (only if it doesn't exist)
-                sendProgress(`Creating missing table ${tableName} in target...`);
+                sendProgress(`⚡ Creating missing table ${tableName} in target...`);
 
                 const columns = tableSchema.map(col => {
                   let colDef = `"${col.column_name}" ${col.data_type}`;
@@ -631,37 +653,122 @@ router.post('/migrate', async (req, res) => {
               if (dataToMigrate.length > 0) {
                 sendProgress(`Copying ${dataToMigrate.length} rows to ${tableName}...`);
 
-                // Get column names
+                // Get column names (ensure all rows have same columns)
                 const columns = Object.keys(dataToMigrate[0]);
                 const columnList = columns.map(c => `"${c}"`).join(', ');
-                const valuePlaceholders = columns.map((_, i) => `$${i + 1}`).join(', ');
 
-                // Insert data in batches
-                const batchSize = 100;
+                // Check if table has primary key for conflict handling
+                const pkInfo = await targetSql`
+                  SELECT a.attname
+                  FROM pg_index i
+                  JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+                  WHERE i.indrelid = (
+                    SELECT oid FROM pg_class WHERE relname = ${tableName}
+                  )
+                  AND i.indisprimary = true
+                  ORDER BY a.attnum
+                `;
+
+                const primaryKeyColumns = pkInfo.map(pk => pk.attname);
+                const hasPrimaryKey = primaryKeyColumns.length > 0;
+                const conflictClause = hasPrimaryKey 
+                  ? `ON CONFLICT (${primaryKeyColumns.map(c => `"${c}"`).join(', ')}) DO NOTHING`
+                  : '';
+
+                // Insert data in batches for better performance
+                const batchSize = 100; // Optimal batch size for neon serverless
                 let migratedCount = 0;
+                let errorCount = 0;
+                let skippedCount = 0;
+
+                // Helper function to escape SQL values safely
+                const escapeValue = (value) => {
+                  if (value === null || value === undefined) {
+                    return 'NULL';
+                  }
+                  if (typeof value === 'string') {
+                    // Escape single quotes and wrap in quotes
+                    return `'${value.replace(/'/g, "''")}'`;
+                  }
+                  if (typeof value === 'boolean') {
+                    return value ? 'TRUE' : 'FALSE';
+                  }
+                  if (value instanceof Date) {
+                    return `'${value.toISOString()}'`;
+                  }
+                  if (typeof value === 'object') {
+                    // Handle JSON objects
+                    return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+                  }
+                  return String(value);
+                };
 
                 for (let i = 0; i < dataToMigrate.length; i += batchSize) {
                   const batch = dataToMigrate.slice(i, i + batchSize);
+                  
+                  try {
+                    // Build batch insert query with multiple VALUES (using safe escaping)
+                    const valuesList = batch.map(row => {
+                      const rowValues = columns.map(col => escapeValue(row[col]));
+                      return `(${rowValues.join(', ')})`;
+                    });
+
+                    const batchQuery = `
+                      INSERT INTO "${tableName}" (${columnList}) 
+                      VALUES ${valuesList.join(', ')}
+                      ${conflictClause}
+                    `;
+
+                    // Execute batch insert
+                    await targetSql.unsafe(batchQuery);
+                    migratedCount += batch.length;
+                    
+                    sendProgress(`Migrated ${Math.min(i + batchSize, dataToMigrate.length)}/${dataToMigrate.length} rows`);
+                  } catch (batchError) {
+                    // If batch insert fails, fall back to individual inserts
+                    console.warn(`Batch insert failed for ${tableName}, trying individual inserts:`, batchError.message);
+                    sendProgress(`⚠️ Batch insert failed, using individual inserts...`);
 
                   for (const row of batch) {
-                    const values = columns.map(col => row[col]);
                     try {
+                        const values = columns.map(col => row[col]);
+                        const singleValuePlaceholders = columns.map((_, idx) => `$${idx + 1}`).join(', ');
+                        
                       await targetSql.unsafe(
-                        `INSERT INTO "${tableName}" (${columnList}) VALUES (${valuePlaceholders}) ON CONFLICT DO NOTHING`,
+                          `INSERT INTO "${tableName}" (${columnList}) VALUES (${singleValuePlaceholders}) ${conflictClause}`,
                         values
                       );
                       migratedCount++;
-                    } catch (err) {
-                      // Log but continue on conflict
-                      console.error(`Error inserting row into ${tableName}:`, err.message);
+                      } catch (rowError) {
+                        // Check if it's a conflict error (which is expected with ON CONFLICT DO NOTHING)
+                        if (rowError.message && (
+                          rowError.message.includes('duplicate key') || 
+                          rowError.message.includes('unique constraint') ||
+                          rowError.message.includes('violates unique constraint')
+                        )) {
+                          skippedCount++;
+                        } else {
+                          errorCount++;
+                          // Log but continue
+                          if (errorCount <= 5) { // Only log first 5 errors to avoid spam
+                            console.error(`Error inserting row into ${tableName}:`, rowError.message);
                     }
                   }
-
-                  sendProgress(`Migrated ${Math.min(i + batchSize, dataToMigrate.length)}/${dataToMigrate.length} rows`);
+                      }
+                    }
+                  }
                 }
 
                 const migrationTypeText = (migrationType === 'selective-data' || migrationType === 'schema-selective') ? 'selective data' : 'data';
-                sendProgress(`✓ ${migrationTypeText} migration complete for ${tableName} (${migratedCount} rows migrated)`);
+                let statusMsg = `✓ ${migrationTypeText} migration complete for ${tableName} (${migratedCount} rows migrated`;
+                if (skippedCount > 0) {
+                  statusMsg += `, ${skippedCount} skipped (duplicates)`;
+                }
+                if (errorCount > 0) {
+                  statusMsg += `, ${errorCount} errors`;
+                }
+                statusMsg += ')';
+                sendProgress(statusMsg);
               } else {
                 sendProgress(`✓ No new data to migrate for ${tableName}`);
               }
@@ -743,6 +850,95 @@ router.delete('/branches/:branchId', async (req, res) => {
     console.error('Error deleting branch:', error);
     res.status(500).json({
       error: 'Failed to delete branch',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/neon/verify-table
+ * Verify table exists and get row count in target database
+ */
+router.post('/verify-table', async (req, res) => {
+  try {
+    const { tableName, branchId, apiKey, projectId, connectionString, useDirectConnection } = req.body;
+
+    if (!tableName) {
+      return res.status(400).json({ error: 'Missing table name' });
+    }
+
+    let sql;
+
+    if (useDirectConnection) {
+      if (!connectionString) {
+        return res.status(400).json({ error: 'Missing connection string' });
+      }
+      
+      let cleanConnectionString = connectionString.trim();
+      if (cleanConnectionString.startsWith('psql ')) {
+        cleanConnectionString = cleanConnectionString.substring(5).trim();
+      }
+      if (cleanConnectionString.startsWith("'") || cleanConnectionString.startsWith('"')) {
+        cleanConnectionString = cleanConnectionString.slice(1, -1);
+      }
+      
+      sql = neon(cleanConnectionString);
+    } else {
+      if (!apiKey || !projectId || !branchId) {
+        return res.status(400).json({ error: 'Missing required parameters' });
+      }
+
+      const branchData = await neonApiRequest(
+        `/projects/${projectId}/branches/${branchId}`,
+        apiKey
+      );
+
+      if (!branchData.branch?.connection_uri) {
+        throw new Error('Could not get connection URI for branch');
+      }
+
+      sql = neon(branchData.branch.connection_uri);
+    }
+
+    // Check if table exists
+    const tableExists = await sql`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = ${tableName}
+      ) as exists
+    `;
+
+    if (!tableExists[0].exists) {
+      return res.json({
+        success: true,
+        exists: false,
+        rowCount: 0
+      });
+    }
+
+    // Get row count
+    try {
+      const result = await sql.unsafe(`SELECT COUNT(*) as row_count FROM "${tableName}"`);
+      const rowCount = result && result[0] ? parseInt(result[0].row_count) : 0;
+      
+      res.json({
+        success: true,
+        exists: true,
+        rowCount
+      });
+    } catch (err) {
+      console.error(`Error counting rows for ${tableName}:`, err.message);
+      res.json({
+        success: true,
+        exists: true,
+        rowCount: 0,
+        error: err.message
+      });
+    }
+  } catch (error) {
+    console.error('Error verifying table:', error);
+    res.status(500).json({
+      error: 'Failed to verify table',
       message: error.message
     });
   }

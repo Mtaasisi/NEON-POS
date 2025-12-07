@@ -12,13 +12,13 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Correct database configuration
+// Correct database configuration - PRODUCTION SUPABASE DATABASE
 const CORRECT_DB_CONFIG = {
-  host: 'ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech',
-  user: 'neondb_owner',
-  password: 'npg_vABqUKk73tEW',
-  database: 'neondb',
-  connectionString: 'postgresql://neondb_owner:npg_vABqUKk73tEW@ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+  host: 'aws-0-eu-north-1.pooler.supabase.com',
+  user: 'postgres.jxhzveborezjhsmzsgbc',
+  password: '%40SMASIKA1010',
+  database: 'postgres',
+  connectionString: 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres'
 };
 
 function verifyEnvFile(filePath, isProduction = false) {
@@ -68,11 +68,15 @@ function fixProductionEnv() {
 NODE_ENV=production
 VITE_APP_ENV=production
 
-# Production Database URL (using same database as development)
+# Production Supabase Database
 VITE_DATABASE_URL=${CORRECT_DB_CONFIG.connectionString}
-
-# Backend Database URL (for server)
 DATABASE_URL=${CORRECT_DB_CONFIG.connectionString}
+
+# Supabase Configuration
+VITE_SUPABASE_URL=https://jxhzveborezjhsmzsgbc.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4aHp2ZWJvcmV6amhzbXpzZ2JjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI3MTE1MjQsImV4cCI6MjA2ODI4NzUyNH0.pIug4PlJ3Q14GxcYilW-u0blByYoyeOfN3q9RNIjgfw
+SUPABASE_URL=https://jxhzveborezjhsmzsgbc.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4aHp2ZWJvcmV6amhzbXpzZ2JjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI3MTE1MjQsImV4cCI6MjA2ODI4NzUyNH0.pIug4PlJ3Q14GxcYilW-u0blByYoyeOfN3q9RNIjgfw
 `;
 
   writeFileSync(prodEnvPath, prodEnvContent);
