@@ -61,13 +61,18 @@ const CustomerActivityPanel: React.FC<CustomerActivityPanelProps> = ({
         .single();
 
       // Fetch devices from 'devices' table (uses 'customers' table)
-      const { data: devices, error: devicesError } = await supabase
+      let devicesQuery = supabase
         .from('devices')
         .select('*')
         .eq('customer_id', customerId)
         .order('created_at', { ascending: false })
-
         .limit(50);
+      
+      // ✅ Apply branch filtering (devices are typically branch-specific)
+      const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+      devicesQuery = await addBranchFilter(devicesQuery, 'devices');
+      
+      const { data: devices, error: devicesError } = await devicesQuery;
 
       if (devicesError) {
         console.error('Error fetching devices:', devicesError);

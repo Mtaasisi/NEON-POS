@@ -62,12 +62,17 @@ const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
       const startOfDay = new Date(today + 'T00:00:00.000Z').toISOString();
       const endOfDay = new Date(today + 'T23:59:59.999Z').toISOString();
 
-      // Get today's sales
-      const { data: sales, error } = await supabase
+      // Get today's sales with branch filtering
+      const { addBranchFilter } = await import('../../../../lib/branchAwareApi');
+      let salesQuery = supabase
         .from('lats_sales')
         .select('*')
         .gte('created_at', startOfDay)
         .lte('created_at', endOfDay);
+      
+      // Sales are always branch-specific
+      salesQuery = await addBranchFilter(salesQuery, 'sales');
+      const { data: sales, error } = await salesQuery;
 
       if (error) {
         console.error('Error loading sales:', error);
@@ -194,6 +199,9 @@ const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
       }
 
       const today = new Date().toISOString().split('T')[0];
+      // Get current branch_id for branch isolation
+      const currentBranchId = localStorage.getItem('current_branch_id') || null;
+      
       const closureData = {
         date: today,
         total_sales: totalSales,
@@ -201,6 +209,7 @@ const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
         closed_at: new Date().toISOString(),
         closed_by: currentUser?.name || currentUser?.email || 'Unknown',
         closed_by_user_id: currentUser?.id,
+        branch_id: currentBranchId, // ✅ Add branch_id for branch isolation
         sales_data: {
           payment_summaries: paymentSummaries,
           confirmed_by: currentUser?.name || currentUser?.email

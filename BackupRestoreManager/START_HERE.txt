@@ -1,0 +1,59 @@
+╔════════════════════════════════════════════════════════╗
+║                                                        ║
+║     🔄  BACKUP & RESTORE MANAGER                      ║
+║     📦  Database Backup, Restore & Schema Merge        ║
+║                                                        ║
+╚════════════════════════════════════════════════════════╝
+
+🚀 QUICK START:
+
+   👉  LOOK FOR THIS FILE AND DOUBLE-CLICK IT:
+   
+       🚀 START HERE - Double Click Me.command
+       
+   ════════════════════════════════════════════════════
+   
+   macOS:    🚀 START HERE - Double Click Me.command
+   Windows:  🚀 START HERE - Double Click Me.bat
+   Linux:    🚀 START HERE - Double Click Me.sh
+
+📦 FIRST TIME SETUP:
+
+   The launcher will automatically install dependencies.
+   Just double-click and wait for it to finish!
+
+📁 PORTABLE:
+
+   ✅ This entire folder can be moved anywhere
+   ✅ All data stays in this folder
+   ✅ No system-wide installation needed
+   ✅ Works from USB drives, cloud folders, etc.
+
+📖 DOCUMENTATION:
+
+   - README.md      - Full documentation
+   - INSTALL.md     - Installation guide
+   - package.json   - Dependencies info
+
+🔧 REQUIREMENTS:
+
+   - Node.js v18+ (download from nodejs.org)
+   - npm (comes with Node.js)
+
+💾 YOUR DATA:
+
+   - Backups:        PROD BACKUP/
+   - Connections:    .db-connections.json
+   - Migrations:     PROD BACKUP/schema-migrations/
+
+✨ FEATURES:
+
+   ✅ Backup databases
+   ✅ Restore from backups
+   ✅ Merge database schemas
+   ✅ Manage connections
+   ✅ Fully portable
+
+═══════════════════════════════════════════════════════════
+
+Just double-click the launcher and you're ready to go! 🎉

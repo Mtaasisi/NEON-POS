@@ -159,23 +159,25 @@ export function validateImageUrl(url: string): boolean {
 
 /**
  * Emergency cleanup for extremely long URLs that might cause HTTP 431 errors
- * Updated to aggressively replace large base64 images
+ * Updated to allow existing base64 images to display while preventing new large uploads
  */
 export function emergencyUrlCleanup(url: string): string {
   if (!url || typeof url !== 'string') {
     return getFallbackImageUrl('product');
   }
 
-  // Replace Base64 images larger than 8KB to prevent HTTP 431 errors
-  // Lowered from 10KB to 8KB to match ImageUrlSanitizer threshold
-  // Base64 images in the database should be compressed or replaced with URLs
+  // Allow base64 images to display (they're already in the database)
+  // Only truncate if they're extremely large (>500KB) to prevent browser crashes
   if (isDataUrl(url)) {
-    const MAX_SAFE_BASE64_SIZE = 8000; // 8KB max for base64 images (matches ImageUrlSanitizer)
+    const MAX_SAFE_BASE64_SIZE = 500 * 1024; // 500KB max for base64 images (prevents browser crashes)
     
     if (url.length > MAX_SAFE_BASE64_SIZE) {
-      console.warn(`🚨 Replacing large base64 image (${Math.round(url.length / 1024)}KB) with placeholder to prevent HTTP 431 errors`);
+      console.warn(`🚨 Base64 image too large (${Math.round(url.length / 1024)}KB), using placeholder to prevent browser crash`);
       return getFallbackImageUrl('product');
     }
+    
+    // Allow base64 images to pass through (they should display fine)
+    return url;
   }
 
   // If URL is extremely long (non-Base64), return fallback

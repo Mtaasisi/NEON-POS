@@ -240,6 +240,48 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
               .from('lats_product_variants')
               .select('id, name, sku, attributes')
               .in('id', variantIds);
+
+            // Fetch product images for all products
+            if (productIds.length > 0) {
+              try {
+                const { data: productImages, error: imagesError } = await supabase
+                  .from('product_images')
+                  .select('id, product_id, image_url, thumbnail_url, is_primary, file_name, file_size, created_at')
+                  .in('product_id', productIds)
+                  .order('is_primary', { ascending: false })
+                  .order('created_at', { ascending: true });
+
+                if (!imagesError && productImages && productsData) {
+                  // Attach images to products
+                  productImages.forEach((image: any) => {
+                    const product = productsData.find((p: any) => p.id === image.product_id);
+                    if (product) {
+                      if (!product.images) {
+                        product.images = [];
+                      }
+                      const imageObj = {
+                        id: image.id,
+                        url: image.image_url || image.url || image.thumbnail_url,
+                        thumbnailUrl: image.thumbnail_url || image.image_url || image.url,
+                        fileName: image.file_name || image.filename,
+                        fileSize: image.file_size || 0,
+                        isPrimary: image.is_primary || false,
+                        uploadedAt: image.created_at || image.uploaded_at
+                      };
+                      // Add primary images first
+                      if (imageObj.isPrimary) {
+                        product.images.unshift(imageObj);
+                      } else {
+                        product.images.push(imageObj);
+                      }
+                    }
+                  });
+                }
+              } catch (error) {
+                console.warn('⚠️ Error fetching product images in CustomerDetailModal:', error);
+                // Continue without images - not critical
+              }
+            }
             
             // Fetch serial numbers for these sales
             const { data: serialLinks } = await supabase

@@ -400,8 +400,55 @@ if (!isSupabaseDatabase) {
   // Create a dummy pool object to prevent errors
   pool = null as any;
   
-  // Keep-alive not needed for Supabase REST API
-  console.log('ℹ️  Keep-alive not needed (Supabase REST API handles connections)');
+  // ✅ ADDED: Supabase REST API keep-alive mechanism
+  // Supabase free tier can also experience cold starts when idle
+  // This lightweight ping keeps the connection warm and prevents slow first queries
+  console.log('🔥 Initializing Supabase REST API keep-alive mechanism...');
+  
+  // Warm up Supabase connection immediately (non-blocking)
+  setTimeout(async () => {
+    try {
+      console.log('🔥 Warming up Supabase REST API connection...');
+      // Perform a lightweight query to warm up the connection
+      const { error } = await supabaseRestClient
+        .from('store_locations')
+        .select('id')
+        .limit(1);
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned (ok for warmup)
+        console.debug('⚠️ Supabase warmup query returned:', error.message);
+      } else {
+        console.log('✅ Supabase REST API connection warmed up successfully');
+      }
+    } catch (warmupError: any) {
+      // Ignore warmup errors - they'll be retried on actual queries
+      console.debug('ℹ️  Supabase warmup deferred:', getErrorMessage(warmupError));
+    }
+  }, 1000); // Start warmup after 1 second
+  
+  // Keep-alive: Ping Supabase REST API every 4 minutes to prevent cold starts
+  // This ensures the first user query after idle period is fast
+  setInterval(async () => {
+    try {
+      // Perform a lightweight query - just check if a system table exists
+      // Using store_locations as it's a core table that should always exist
+      const { error } = await supabaseRestClient
+        .from('store_locations')
+        .select('id')
+        .limit(1);
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned (acceptable)
+        console.debug('⚠️ Supabase keep-alive ping returned:', error.message);
+      } else {
+        console.log('💓 Supabase REST API keep-alive ping successful');
+      }
+    } catch (error) {
+      // Silently fail - the retry mechanism will handle reconnection on actual queries
+      console.debug('⚠️ Supabase keep-alive ping failed (will retry):', getErrorMessage(error));
+    }
+  }, 4 * 60 * 1000); // Ping every 4 minutes (240000ms)
+  
+  console.log('✅ Supabase REST API keep-alive initialized (ping every 4 minutes)');
 }
 
 // Helper function to safely get error message

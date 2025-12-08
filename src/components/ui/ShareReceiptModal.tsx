@@ -857,9 +857,16 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       // Upload to Supabase storage
       const timestamp = Date.now();
       // ✅ FIX: Supabase storage requires a path (with directory), not just filename
-      const filePath = `receipts/${timestamp}-${receiptData.receiptNumber}.pdf`;
+      const receiptNumber = receiptData.receiptNumber || `RECEIPT-${timestamp}`;
+      const filePath = `receipts/${timestamp}-${receiptNumber}.pdf`;
+      
+      // Validate filePath is not empty
+      if (!filePath || filePath.trim() === '') {
+        throw new Error('File path is required for upload');
+      }
       
       console.log('📤 Uploading PDF to storage...');
+      console.log('   File path:', filePath);
       
       // Try whatsapp-media bucket first (most common)
       let uploadError = null;
@@ -902,6 +909,20 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       }
 
       if (error) {
+        // Fallback: Try local upload endpoint if Supabase storage fails
+        console.warn('⚠️ All Supabase buckets failed, trying local upload endpoint...');
+        try {
+          const { uploadMedia } = await import('../../lib/whatsappMediaStorage');
+          const uploadResult = await uploadMedia(pdfFile);
+          
+          if (uploadResult.success && uploadResult.url) {
+            console.log('✅ PDF uploaded via local endpoint:', uploadResult.url);
+            return { blob: pdfBlob, url: uploadResult.url };
+          }
+        } catch (localError: any) {
+          console.error('❌ Local upload also failed:', localError);
+        }
+        
         throw new Error(`Failed to upload PDF to any bucket. Last error: ${error.message}. Please ensure at least one of these buckets exists: whatsapp-media, receipts, or public-files`);
       }
 
@@ -1236,14 +1257,21 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       }
 
       // For upload (WhatsApp), upload to storage and return URL
-      const pngFile = new File([pngBlob], `receipt-${receiptData.receiptNumber}.png`, { type: 'image/png' });
+      const receiptNumber = receiptData.receiptNumber || `RECEIPT-${Date.now()}`;
+      const pngFile = new File([pngBlob], `receipt-${receiptNumber}.png`, { type: 'image/png' });
       
       // Upload to Supabase storage
       const timestamp = Date.now();
       // ✅ FIX: Supabase storage requires a path (with directory), not just filename
-      const filePath = `receipts/${timestamp}-${receiptData.receiptNumber}.png`;
+      const filePath = `receipts/${timestamp}-${receiptNumber}.png`;
+      
+      // Validate filePath is not empty
+      if (!filePath || filePath.trim() === '') {
+        throw new Error('File path is required for upload');
+      }
       
       console.log('📤 Uploading PNG to storage...');
+      console.log('   File path:', filePath);
       
       // Try whatsapp-media bucket first (most common)
       let uploadError = null;
@@ -1286,7 +1314,21 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       }
 
       if (error) {
-        throw new Error(`Failed to upload PNG to any bucket. Last error: ${error.message}`);
+        // Fallback: Try local upload endpoint if Supabase storage fails
+        console.warn('⚠️ All Supabase buckets failed, trying local upload endpoint...');
+        try {
+          const { uploadMedia } = await import('../../lib/whatsappMediaStorage');
+          const uploadResult = await uploadMedia(pngFile);
+          
+          if (uploadResult.success && uploadResult.url) {
+            console.log('✅ PNG uploaded via local endpoint:', uploadResult.url);
+            return { blob: pngBlob, url: uploadResult.url };
+          }
+        } catch (localError: any) {
+          console.error('❌ Local upload also failed:', localError);
+        }
+        
+        throw new Error(`Failed to upload PNG to any bucket. Last error: ${error.message}. Please ensure at least one of these buckets exists: whatsapp-media, receipts, or public-files`);
       }
 
       // Get public URL (use the path that was successfully uploaded)

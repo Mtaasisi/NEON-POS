@@ -871,11 +871,12 @@ export const useInventoryStore = create<InventoryState>()(
             // Update memory cache too
             get().updateCache('products', cachedProducts);
             
-            // Load fresh data in background (non-blocking) if cache is older than 5 minutes
+            // Load fresh data in background (non-blocking) if cache is older than 1 minute
+            // Reduced from 5 minutes to ensure more frequent updates
             try {
               const cacheData = JSON.parse(localStorage.getItem('pos_products_cache') || '{}');
               const cacheAge = Date.now() - (cacheData.timestamp || 0);
-              if (cacheAge > 5 * 60 * 1000) {
+              if (cacheAge > 1 * 60 * 1000) { // 1 minute instead of 5 minutes
                 console.log('🔄 [useInventoryStore] Cache is stale, refreshing in background...');
                 // Refresh in background without blocking UI
                 setTimeout(() => {

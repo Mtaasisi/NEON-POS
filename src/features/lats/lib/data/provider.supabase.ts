@@ -1770,11 +1770,32 @@ const supabaseProvider = {
       const exchangeRate = data.exchangeRate || 1.0;
       const totalAmountBaseCurrency = totalAmount * exchangeRate;
       
-      // 🔒 Get current branch for isolation
+      // 🔒 Get current branch for isolation - ALWAYS set branch_id (purchase orders are always isolated)
       const currentBranchId = getCurrentBranchId();
-      const branchSettings = await getBranchSettings(currentBranchId);
+      
+      // Determine branch_id: use provided, current branch, or default branch
+      let poBranchId = data.branch_id || currentBranchId;
+      
+      // If still no branch_id, get default branch
+      if (!poBranchId) {
+        const { data: defaultBranch } = await supabase
+          .from('store_locations')
+          .select('id')
+          .eq('is_active', true)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .single();
+        
+        if (defaultBranch) {
+          poBranchId = defaultBranch.id;
+          console.log(`📍 Using default branch for purchase order: ${defaultBranch.id}`);
+        } else {
+          console.warn('⚠️ No active branch found. Purchase order will be created without branch_id.');
+        }
+      }
       
       // Create the purchase order - with currency and exchange rate tracking
+      // ✅ ALWAYS set branch_id (purchase orders are always isolated per branch)
       const { data: purchaseOrder, error: poError } = await supabase
         .from('lats_purchase_orders')
         .insert({
@@ -1793,7 +1814,7 @@ const supabaseProvider = {
           order_date: data.orderDate || new Date().toISOString(),
           expected_delivery_date: data.expectedDelivery || null,
           created_by: data.createdBy || null,
-          branch_id: shouldApplyIsolation('purchase_orders', branchSettings) ? currentBranchId : null // 🔒 Add branch isolation based on database settings
+          branch_id: poBranchId // ✅ Always set branch_id for isolation
         })
         .select()
         .single();

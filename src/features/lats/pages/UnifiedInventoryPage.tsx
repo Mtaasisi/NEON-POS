@@ -130,7 +130,7 @@ const UnifiedInventoryPage: React.FC = () => {
   const [showExcelExportModal, setShowExcelExportModal] = useState(false);
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
   const [showFeaturedOnly, setShowFeaturedOnly] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState('created');
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
@@ -849,7 +849,6 @@ const UnifiedInventoryPage: React.FC = () => {
 
   return (
     <PageErrorBoundary pageName="Unified Inventory Management" showDetails={true}>
-      
       {/* Keyboard Shortcuts Help */}
       <div className="fixed bottom-4 right-4 z-40 group">
         <button
@@ -891,269 +890,266 @@ const UnifiedInventoryPage: React.FC = () => {
           </div>
         </div>
       </div>
-      
-      <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-        {/* Clean Header - Matching Admin UI Pattern */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-            <div className="flex items-center gap-4">
-              <BackButton to="/dashboard" />
-              <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
-                <Package className="w-6 h-6 text-white" />
+
+      {/* Combined Container - All sections in one page like PurchaseOrdersPage */}
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+          {/* Fixed Header Section - Matching PurchaseOrdersPage */}
+          <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              {/* Left: Icon + Text */}
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                  <Package className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900 mb-1">Inventory Management</h1>
+                  <p className="text-sm text-gray-600">Manage products and inventory in one place</p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Inventory Management</h1>
-                <p className="text-sm text-gray-600 mt-1">Manage products and inventory in one place</p>
-              </div>
+
+              {/* Right: Back Button */}
+              <BackButton to="/dashboard" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
             </div>
-
-            {/* Removed Action Buttons - Now in Action Bar below */}
           </div>
 
-        {/* Action Bar - Enhanced Design */}
-        <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
-          <div className="flex gap-3 flex-wrap">
-            {/* Manage Categories Button */}
-            <button
-              onClick={() => setShowManageCategoriesModal(true)}
-              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg hover:from-indigo-600 hover:to-purple-700"
-            >
-              <Tag size={18} />
-              <span>Manage Categories</span>
-            </button>
-            
-            {/* Add Product Button */}
-            <button
-              onClick={() => setShowAddProductModal(true)}
-              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700"
-              title="Add a new product (⌘N)"
-            >
-              <Plus size={18} />
-              <span>Add Product</span>
-            </button>
+          {/* Action Bar - Enhanced Design */}
+          <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
+            <div className="flex gap-3 flex-wrap">
+              {/* Manage Categories Button */}
+              <button
+                onClick={() => setShowManageCategoriesModal(true)}
+                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg hover:from-indigo-600 hover:to-purple-700"
+              >
+                <Tag size={18} />
+                <span>Manage Categories</span>
+              </button>
+              
+              {/* Add Product Button */}
+              <button
+                onClick={() => setShowAddProductModal(true)}
+                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700"
+                title="Add a new product (⌘N)"
+              >
+                <Plus size={18} />
+                <span>Add Product</span>
+              </button>
 
-            {/* Create PO Button */}
-            <button
-              onClick={() => navigate('/lats/purchase-order/create')}
-              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg hover:from-orange-600 hover:to-amber-700"
-            >
-              <Truck size={18} />
-              <span>Create PO</span>
-            </button>
+              {/* Create PO Button */}
+              <button
+                onClick={() => navigate('/lats/purchase-order/create')}
+                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg hover:from-orange-600 hover:to-amber-700"
+              >
+                <Truck size={18} />
+                <span>Create PO</span>
+              </button>
 
-            {/* Import Excel Button */}
-            <button
-              onClick={handleImport}
-              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700"
-            >
-              <Upload size={18} />
-              <span>Import Excel</span>
-            </button>
+              {/* Import Excel Button */}
+              <button
+                onClick={handleImport}
+                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700"
+              >
+                <Upload size={18} />
+                <span>Import Excel</span>
+              </button>
 
-            {/* Export Excel Button */}
-            <button
-              onClick={() => setShowExcelExportModal(true)}
-              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow-lg hover:from-cyan-600 hover:to-teal-700"
-            >
-              <Download size={18} />
-              <span>Export Excel</span>
-            </button>
+              {/* Export Excel Button */}
+              <button
+                onClick={() => setShowExcelExportModal(true)}
+                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow-lg hover:from-cyan-600 hover:to-teal-700"
+              >
+                <Download size={18} />
+                <span>Export Excel</span>
+              </button>
 
-            {/* Refresh Data Button */}
-            <button
-              onClick={async () => {
-                setIsDataLoading(true);
-                try {
-                  await Promise.all([
-                    loadLiveMetrics(),
-                    forceRefreshProducts()
-                  ]);
-                  toast.success('Data refreshed successfully!');
-                } catch (error) {
-                  toast.error('Failed to refresh data');
-                } finally {
-                  setIsDataLoading(false);
-                }
-              }}
-              disabled={isLoadingLiveMetrics || isDataLoading}
-              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-gray-500 to-gray-600 text-white shadow-lg hover:from-gray-600 hover:to-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RefreshCw size={18} className={isLoadingLiveMetrics || isDataLoading ? 'animate-spin' : ''} />
-              <span>{isLoadingLiveMetrics || isDataLoading ? 'Refreshing...' : 'Refresh'}</span>
-            </button>
-          </div>
-        </div>
+              {/* Refresh Data Button */}
+              <button
+                onClick={async () => {
+                  setIsDataLoading(true);
+                  try {
+                    await Promise.all([
+                      loadLiveMetrics(),
+                      forceRefreshProducts()
+                    ]);
+                    toast.success('Data refreshed successfully!');
+                  } catch (error) {
+                    toast.error('Failed to refresh data');
+                  } finally {
+                    setIsDataLoading(false);
+                  }
+                }}
+                disabled={isLoadingLiveMetrics || isDataLoading}
+                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-gray-500 to-gray-600 text-white shadow-lg hover:from-gray-600 hover:to-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw size={18} className={isLoadingLiveMetrics || isDataLoading ? 'animate-spin' : ''} />
+                <span>{isLoadingLiveMetrics || isDataLoading ? 'Refreshing...' : 'Refresh'}</span>
+              </button>
 
-        {/* Keep More Actions Dropdown for secondary options */}
-        <div className="px-8 py-2 bg-white flex-shrink-0 border-b border-gray-100">
-          <div className="flex items-center">
-            <div className="relative more-actions-dropdown">
+              {/* More Actions Button */}
+              <div className="relative more-actions-dropdown">
                 <button
                   onClick={() => setShowMoreActions(!showMoreActions)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-sm bg-white shadow-sm hover:shadow-md"
+                  className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-gray-400 to-gray-500 text-white shadow-lg hover:from-gray-500 hover:to-gray-600"
                   title="More actions"
                 >
                   <MoreHorizontal size={18} />
-                  <span className="hidden sm:inline">More</span>
+                  <span>More</span>
                 </button>
               
-              {showMoreActions && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
-                  {/* Header */}
-                  <div className="bg-gradient-to-r from-slate-50 to-gray-50 px-4 py-3 border-b border-gray-100">
-                    <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                      <Settings size={16} className="text-slate-600" />
-                      More Actions
-                    </h3>
-                  </div>
-                  
-                  {/* Actions List - Secondary options only */}
-                  <div className="p-2">
-                    <button
-                      onClick={() => {
-                        setShowOrderManagementModal(true);
-                        setShowMoreActions(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-purple-50 transition-colors text-left group"
-                    >
-                      <div className="w-9 h-9 bg-purple-500/10 rounded-lg flex items-center justify-center">
-                        <ShoppingCart size={16} className="text-purple-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900 text-sm">Manage Orders</div>
-                        <div className="text-xs text-gray-500">View purchase orders</div>
-                      </div>
-                    </button>
+                {showMoreActions && (
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
+                    {/* Header */}
+                    <div className="bg-gradient-to-r from-slate-50 to-gray-50 px-4 py-3 border-b border-gray-100">
+                      <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                        <Settings size={16} className="text-slate-600" />
+                        More Actions
+                      </h3>
+                    </div>
                     
-                    <div className="border-t border-gray-100 my-2"></div>
-                    
-                    {dbStatus === 'error' && (
+                    {/* Actions List */}
+                    <div className="p-2">
                       <button
-                        onClick={async () => {
-                          setDbStatus('connecting');
-                          try {
-                            await Promise.all([
-                              loadProducts({ page: 1, limit: 100 }),
-                              loadCategories(),
-                              loadSuppliers()
-                            ]);
-                            setDbStatus('connected');
-                            toast.success('Reconnected successfully!');
-                          } catch (error) {
-                            setDbStatus('error');
-                            toast.error('Failed to reconnect');
-                          } finally {
-                            setShowMoreActions(false);
-                          }
+                        onClick={() => {
+                          setShowOrderManagementModal(true);
+                          setShowMoreActions(false);
                         }}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-red-50 transition-colors text-left group mt-1"
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-purple-50 transition-colors text-left group"
                       >
-                        <div className="w-9 h-9 bg-red-500/10 rounded-lg flex items-center justify-center">
-                          <RefreshCw size={16} className="text-red-600" />
+                        <div className="w-9 h-9 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                          <ShoppingCart size={16} className="text-purple-600" />
                         </div>
                         <div className="flex-1">
-                          <div className="font-medium text-gray-900 text-sm">Retry Connection</div>
-                          <div className="text-xs text-gray-500">Reconnect to database</div>
+                          <div className="font-medium text-gray-900 text-sm">Manage Orders</div>
+                          <div className="text-xs text-gray-500">View purchase orders</div>
                         </div>
                       </button>
-                    )}
-                    
-                    <div className="border-t border-gray-100 my-2"></div>
-                    
-                    <button
-                      onClick={() => {
-                        setShowCategoryForm(true);
-                        setShowMoreActions(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-blue-50 transition-colors text-left group"
-                    >
-                      <div className="w-9 h-9 bg-blue-500/10 rounded-lg flex items-center justify-center">
-                        <Tag size={16} className="text-blue-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900 text-sm">Add Category</div>
-                        <div className="text-xs text-gray-500">Organize products</div>
-                      </div>
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        setShowSupplierForm(true);
-                        setShowMoreActions(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-purple-50 transition-colors text-left group mt-1"
-                    >
-                      <div className="w-9 h-9 bg-purple-500/10 rounded-lg flex items-center justify-center">
-                        <Truck size={16} className="text-purple-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900 text-sm">Add Supplier</div>
-                        <div className="text-xs text-gray-500">Manage suppliers</div>
-                      </div>
-                    </button>
-                    
-                    <div className="border-t border-gray-100 my-2"></div>
-                    
-                    <button
-                      onClick={() => {
-                        navigate('/excel-templates');
-                        setShowMoreActions(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-50 transition-colors text-left group"
-                    >
-                      <div className="w-9 h-9 bg-indigo-500/10 rounded-lg flex items-center justify-center">
-                        <FileText size={16} className="text-indigo-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900 text-sm">Download Template</div>
-                        <div className="text-xs text-gray-500">Excel templates</div>
-                      </div>
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        handleExport();
-                        setShowMoreActions(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-orange-50 transition-colors text-left group mt-1"
-                    >
-                      <div className="w-9 h-9 bg-orange-500/10 rounded-lg flex items-center justify-center">
-                        <Download size={16} className="text-orange-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900 text-sm">Export CSV</div>
-                        <div className="text-xs text-gray-500">Download CSV data</div>
-                      </div>
-                    </button>
+                      
+                      <div className="border-t border-gray-100 my-2"></div>
+                      
+                      {dbStatus === 'error' && (
+                        <button
+                          onClick={async () => {
+                            setDbStatus('connecting');
+                            try {
+                              await Promise.all([
+                                loadProducts({ page: 1, limit: 100 }),
+                                loadCategories(),
+                                loadSuppliers()
+                              ]);
+                              setDbStatus('connected');
+                              toast.success('Reconnected successfully!');
+                            } catch (error) {
+                              setDbStatus('error');
+                              toast.error('Failed to reconnect');
+                            } finally {
+                              setShowMoreActions(false);
+                            }
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-red-50 transition-colors text-left group mt-1"
+                        >
+                          <div className="w-9 h-9 bg-red-500/10 rounded-lg flex items-center justify-center">
+                            <RefreshCw size={16} className="text-red-600" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900 text-sm">Retry Connection</div>
+                            <div className="text-xs text-gray-500">Reconnect to database</div>
+                          </div>
+                        </button>
+                      )}
+                      
+                      <div className="border-t border-gray-100 my-2"></div>
+                      
+                      <button
+                        onClick={() => {
+                          setShowCategoryForm(true);
+                          setShowMoreActions(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-blue-50 transition-colors text-left group"
+                      >
+                        <div className="w-9 h-9 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                          <Tag size={16} className="text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900 text-sm">Add Category</div>
+                          <div className="text-xs text-gray-500">Organize products</div>
+                        </div>
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setShowSupplierForm(true);
+                          setShowMoreActions(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-purple-50 transition-colors text-left group mt-1"
+                      >
+                        <div className="w-9 h-9 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                          <Truck size={16} className="text-purple-600" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900 text-sm">Add Supplier</div>
+                          <div className="text-xs text-gray-500">Manage suppliers</div>
+                        </div>
+                      </button>
+                      
+                      <div className="border-t border-gray-100 my-2"></div>
+                      
+                      <button
+                        onClick={() => {
+                          navigate('/excel-templates');
+                          setShowMoreActions(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-50 transition-colors text-left group"
+                      >
+                        <div className="w-9 h-9 bg-indigo-500/10 rounded-lg flex items-center justify-center">
+                          <FileText size={16} className="text-indigo-600" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900 text-sm">Download Template</div>
+                          <div className="text-xs text-gray-500">Excel templates</div>
+                        </div>
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          handleExport();
+                          setShowMoreActions(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-orange-50 transition-colors text-left group mt-1"
+                      >
+                        <div className="w-9 h-9 bg-orange-500/10 rounded-lg flex items-center justify-center">
+                          <Download size={16} className="text-orange-600" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900 text-sm">Export CSV</div>
+                          <div className="text-xs text-gray-500">Download CSV data</div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Main Content - Scrollable */}
+          <div className="flex-1 overflow-y-auto">
+            {/* Loading Skeleton */}
+            {showLoadingSkeleton && (
+              <div className="p-6">
+                <div className="animate-pulse space-y-4">
+                  <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="bg-gray-200 rounded-xl p-5 h-24"></div>
+                    ))}
                   </div>
                 </div>
-              )}
               </div>
-            </div>
-          </div>
-        </div>
+            )}
 
-        {/* Loading Skeleton */}
-        {showLoadingSkeleton && (
-          <div className="space-y-6">
-            <div className="animate-pulse">
-              <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[...Array(8)].map((_, i) => (
-                  <div key={i} className="bg-white rounded-lg p-4 shadow-sm">
-                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tab Navigation - Removed, only inventory tab now */}
-
-        {/* Content - Only inventory tab now */}
-        <EnhancedInventoryTab 
+            {/* Content - Only inventory tab now */}
+            {!showLoadingSkeleton && (
+              <EnhancedInventoryTab 
           products={filteredProducts}
           metrics={metrics}
           searchQuery={searchQuery}
@@ -1191,9 +1187,12 @@ const UnifiedInventoryPage: React.FC = () => {
           deleteProduct={deleteProduct}
           onAddProduct={() => setShowAddProductModal(true)}
         />
+            )}
+          </div>
+        </div>
+      </div>
 
-
-        {/* Product Modals */}
+      {/* Product Modals */}
 
         {/* Enhanced Stock Adjustment Modal */}
         {showStockAdjustModal && selectedProductForHistory && (
@@ -1323,7 +1322,6 @@ const UnifiedInventoryPage: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
 
       {/* Excel Import Modal */}
       <ProductExcelImportModal

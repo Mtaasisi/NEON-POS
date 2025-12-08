@@ -12,11 +12,12 @@ export const reminderApi = {
       .order('date', { ascending: true })
       .order('time', { ascending: true });
 
-    if (branchId) {
-      console.log('🔵 [API] Adding branch filter:', branchId);
-      query = query.eq('branch_id', branchId);
+    // ✅ Use addBranchFilter for proper isolation support (only if no explicit branchId)
+    if (!branchId) {
+      const { addBranchFilter } = await import('./branchAwareApi');
+      query = await addBranchFilter(query, 'reminders');
     } else {
-      console.warn('⚠️ [API] No branch ID provided, fetching all reminders');
+      query = query.eq('branch_id', branchId);
     }
 
     const { data, error } = await query;
@@ -61,7 +62,11 @@ export const reminderApi = {
       .order('date', { ascending: true })
       .order('time', { ascending: true });
 
-    if (branchId) {
+    // ✅ Use addBranchFilter for proper isolation support (only if no explicit branchId)
+    if (!branchId) {
+      const { addBranchFilter } = await import('./branchAwareApi');
+      query = await addBranchFilter(query, 'reminders');
+    } else {
       query = query.eq('branch_id', branchId);
     }
 
@@ -99,7 +104,11 @@ export const reminderApi = {
       .eq('status', 'pending')
       .order('time', { ascending: true });
 
-    if (branchId) {
+    // ✅ Use addBranchFilter for proper isolation support (only if no explicit branchId)
+    if (!branchId) {
+      const { addBranchFilter } = await import('./branchAwareApi');
+      query = await addBranchFilter(query, 'reminders');
+    } else {
       query = query.eq('branch_id', branchId);
     }
 
@@ -134,6 +143,11 @@ export const reminderApi = {
       branchId
     });
     
+    // ✅ Get branch isolation settings
+    const { isDataShared } = await import('./branchAwareApi');
+    const shared = await isDataShared('reminders');
+    const finalBranchId = shared ? null : (branchId || null);
+
     // Build reminder object and filter out undefined values
     const reminderData: any = {
       title: input.title,
@@ -146,7 +160,8 @@ export const reminderApi = {
       created_by: userId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      branch_id: branchId,
+      branch_id: finalBranchId, // ✅ Branch isolation
+      is_shared: shared, // ✅ Shared flag
       notify_before: input.notifyBefore,
     };
 
@@ -370,7 +385,11 @@ export const reminderApi = {
       .select('*')
       .eq('status', 'pending');
 
-    if (branchId) {
+    // ✅ Use addBranchFilter for proper isolation support (only if no explicit branchId)
+    if (!branchId) {
+      const { addBranchFilter } = await import('./branchAwareApi');
+      query = await addBranchFilter(query, 'reminders');
+    } else {
       query = query.eq('branch_id', branchId);
     }
 

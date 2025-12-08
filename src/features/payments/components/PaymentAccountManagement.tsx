@@ -252,8 +252,13 @@ const PaymentAccountManagement: React.FC = () => {
           const { data: allTransactions } = await totalsQuery;
 
           // Transaction types that increase balance (money in)
+          // Include: payment_received, transfer_in, and income (for installment payments)
           const totalReceived = allTransactions
-            ?.filter(t => t.transaction_type === 'payment_received' || t.transaction_type === 'transfer_in')
+            ?.filter(t => 
+              t.transaction_type === 'payment_received' || 
+              t.transaction_type === 'transfer_in' || 
+              t.transaction_type === 'income'
+            )
             .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
           // Transaction types that decrease balance (money out)
@@ -400,7 +405,9 @@ const PaymentAccountManagement: React.FC = () => {
           'finance_accounts',
           {
             name: formData.name,
+            account_name: formData.name, // Ensure account_name is set (required by database)
             type: formData.type,
+            account_type: formData.type || formData.account_type || 'cash', // Ensure account_type is set (required by database - NOT NULL)
             balance: formData.balance || 0,
             currency: formData.currency || 'TZS',
             is_active: formData.is_active,
@@ -902,7 +909,7 @@ const PaymentAccountManagement: React.FC = () => {
                     <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Recent Activity</h4>
                     <div className="space-y-2">
                       {account.recentTransactions.slice(0, 2).map((transaction) => {
-                        const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in';
+                        const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in' || transaction.transaction_type === 'income';
                         return (
                           <div key={transaction.id} className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors border border-gray-100">
                             <div className="flex-1 min-w-0">
@@ -1606,7 +1613,7 @@ const PaymentAccountManagement: React.FC = () => {
                           })
                           .map((transaction, index) => {
                             const isIncome = transaction.transaction_type === 'income';
-                            const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in';
+                            const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in' || transaction.transaction_type === 'income';
                             const isOutgoing = transaction.transaction_type === 'expense' || transaction.transaction_type === 'payment_made' || transaction.transaction_type === 'transfer_out';
                             const isReversed = transaction.metadata?.reversed;
                             const isPartial = transaction.metadata?.is_partial || 
@@ -2567,7 +2574,7 @@ const TableView: React.FC<{
             })
             .map((transaction, index) => {
                                 const isIncome = transaction.transaction_type === 'income';
-                                const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in';
+                                const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in' || transaction.transaction_type === 'income';
                                 const isOutgoing = transaction.transaction_type === 'expense' || transaction.transaction_type === 'payment_made' || transaction.transaction_type === 'transfer_out';
                                 const isReversed = transaction.metadata?.reversed;
                                 const isPartial = transaction.metadata?.is_partial || 

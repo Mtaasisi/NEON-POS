@@ -891,7 +891,7 @@ export class POSSettingsAPI {
       const user = await this.getCurrentUser();
       const tableName = SETTINGS_TABLES[tableKey];
 
-      // First, try to get existing records
+      // First, try to get existing records for this user
       const { data: existingData, error: existingError } = await supabase
         .from(tableName)
         .select('*')
@@ -926,7 +926,7 @@ export class POSSettingsAPI {
         return this.getDefaultSettings(tableKey, user.id) as T;
       }
 
-      // Check if we have existing records
+      // Check if we have existing records for this user
       if (existingData && existingData.length > 0) {
         if (existingData.length === 1) {
           return existingData[0] as T;
@@ -934,6 +934,20 @@ export class POSSettingsAPI {
           // Return the first record and let the migration clean up duplicates
           return existingData[0] as T;
         }
+      }
+
+      // If no user-specific settings found, try to get global settings (user_id = NULL)
+      const { data: globalData, error: globalError } = await supabase
+        .from(tableName)
+        .select('*')
+        .is('user_id', null)
+        .limit(1)
+        .single();
+
+      if (!globalError && globalData) {
+        // Found global settings, use them but associate with current user
+        console.log('ℹ️ Using global settings (user_id = NULL) for user:', user.id);
+        return globalData as T;
       }
 
       // No existing records found, create a default one

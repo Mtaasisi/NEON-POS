@@ -41,15 +41,67 @@ const UnifiedBrandingSettings: React.FC = () => {
     try {
       setLoading(true);
       
-      // Fetch basic fields first (social media columns don't exist in database)
-      // @ts-ignore - Neon query builder implements thenable interface
-      let { data: baseData, error: baseError } = await supabase
-        .from('lats_pos_general_settings')
-        .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
-        .limit(1);
+      // Try to get current user first
+      let user = null;
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        user = authUser;
+      } catch (authErr) {
+        // Not authenticated, continue with global settings
+      }
+
+      let baseData = null;
+      let baseError = null;
+
+      // First, try to get user-specific settings
+      if (user) {
+        const { data: userData, error: userError } = await supabase
+          .from('lats_pos_general_settings')
+          .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
+          .eq('user_id', user.id)
+          .limit(1)
+          .maybeSingle();
+
+        if (!userError && userData) {
+          baseData = [userData];
+        } else {
+          baseError = userError;
+        }
+      }
+
+      // If no user-specific settings, try global settings (user_id = NULL)
+      if (!baseData || baseData.length === 0) {
+        const { data: globalData, error: globalError } = await supabase
+          .from('lats_pos_general_settings')
+          .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
+          .is('user_id', null)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!globalError && globalData && globalData.length > 0) {
+          baseData = globalData;
+        } else {
+          baseError = globalError;
+        }
+      }
+
+      // If still no data, try any record (fallback)
+      if (!baseData || baseData.length === 0) {
+        const { data: anyData, error: anyError } = await supabase
+          .from('lats_pos_general_settings')
+          .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!anyError && anyData && anyData.length > 0) {
+          baseData = anyData;
+        } else {
+          baseError = anyError;
+        }
+      }
 
       // Handle case where no record exists
-      if (baseError) {
+      if (baseError && !baseData) {
         // If table doesn't exist or other error, try to continue with defaults
         console.warn('Error fetching settings:', baseError);
         baseData = null;

@@ -385,6 +385,39 @@ class PurchaseOrderPaymentService {
         paymentNotes = paymentNotes ? `${paymentNotes}\n${conversionNote}` : conversionNote;
       }
 
+      // ✅ Get branch_id from purchase order, payment account, or default branch
+      let branchId = null;
+      
+      // First, try to get from purchase order
+      const { data: poData } = await supabase
+        .from('lats_purchase_orders')
+        .select('branch_id')
+        .eq('id', data.purchaseOrderId)
+        .single();
+      
+      branchId = poData?.branch_id || null;
+      
+      // If no branch_id from PO, try from payment account
+      if (!branchId) {
+        branchId = paymentAccount.branch_id || null;
+      }
+      
+      // If still no branch_id, get default branch
+      if (!branchId) {
+        const { data: defaultBranch } = await supabase
+          .from('store_locations')
+          .select('id')
+          .eq('is_active', true)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .single();
+        
+        if (defaultBranch) {
+          branchId = defaultBranch.id;
+          console.log(`📍 Using default branch for purchase order payment: ${defaultBranch.id}`);
+        }
+      }
+
       const { data: paymentRecord, error: paymentError } = await supabase
         .from('purchase_order_payments')
         .insert({
@@ -398,7 +431,8 @@ class PurchaseOrderPaymentService {
           notes: paymentNotes,
           status: 'completed',
           payment_date: new Date().toISOString(),
-          created_by: validUser?.id || '00000000-0000-0000-0000-000000000001' // Use a valid user ID from auth_users table
+          created_by: validUser?.id || '00000000-0000-0000-0000-000000000001', // Use a valid user ID from auth_users table
+          branch_id: branchId // ✅ Always set branch_id for isolation
         })
         .select()
         .single();

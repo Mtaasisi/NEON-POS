@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { addBranchFilter } from './branchAwareApi';
 
 export interface FinancialSummary {
   // Revenue & Payments
@@ -202,19 +203,13 @@ class FinancialService {
         return [];
       }
       
-      // 🔒 Get current branch for isolation
-      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
-      
+      // Apply branch filter to customer payments
       let query = supabase
         .from('customer_payments')
         .select('*')
         .order('payment_date', { ascending: false });
       
-      // 🔒 Apply branch filter if branch is selected
-      if (currentBranchId) {
-        console.log(`🏪 Applying branch filter to customer payments: ${currentBranchId}`);
-        query = query.eq('branch_id', currentBranchId);
-      }
+      query = await addBranchFilter(query, 'payments');
       
       const { data, error } = await query;
 

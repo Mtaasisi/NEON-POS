@@ -58,12 +58,16 @@ class CategoryService {
 
     try {
       // Ensure we use proper Supabase syntax - no custom parameters
-      const query = supabase
+      let query = supabase
         .from('lats_categories')
         .select('*')
         .order('name');
 
-      console.log('🔍 [CategoryService] Executing categories query with proper syntax');
+      // Apply branch filtering based on isolation settings
+      const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+      query = await addBranchFilter(query, 'categories');
+
+      console.log('🔍 [CategoryService] Executing categories query with proper syntax and branch filtering');
       
       const { data, error } = await query;
 

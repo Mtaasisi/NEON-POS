@@ -205,13 +205,20 @@ export const loadChildIMEIs = async (parent_variant_id: string): Promise<any[]> 
 
     // ✅ FIX: Load legacy inventory_items for this product
     // IMEI and serial_number are synced in database (same value), so just query once
-    const { data: inventoryItems, error: inventoryError } = await supabase
+    // Apply branch filtering for proper isolation
+    let inventoryItemsQuery = supabase
       .from('inventory_items')
       .select('*')
       .eq('product_id', productId)
       .not('serial_number', 'is', null) // serial_number and imei are synced, so this gets all items
       .order('created_at', { ascending: false })
       .limit(100);
+    
+    // Apply branch filter for inventory items
+    const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+    inventoryItemsQuery = await addBranchFilter(inventoryItemsQuery, 'inventory');
+    
+    const { data: inventoryItems, error: inventoryError } = await inventoryItemsQuery;
 
     if (inventoryError) {
       console.error('Error loading inventory items:', inventoryError);

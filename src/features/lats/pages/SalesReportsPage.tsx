@@ -579,6 +579,9 @@ const SalesReportsPage: React.FC = () => {
       
       // Create daily closure record
       const today = new Date().toISOString().split('T')[0];
+      // Get current branch_id for branch isolation
+      const currentBranchId = localStorage.getItem('current_branch_id') || null;
+      
       const closureData = {
         date: today,
         total_sales: summaryMetrics.totalSales,
@@ -586,6 +589,7 @@ const SalesReportsPage: React.FC = () => {
         closed_at: new Date().toISOString(),
         closed_by: currentUser?.role || 'customer_care',
         closed_by_user_id: currentUser?.id,
+        branch_id: currentBranchId, // ✅ Add branch_id for branch isolation
         sales_data: sales
       };
 

@@ -29,14 +29,68 @@ class BusinessInfoService {
     }
 
     try {
-      // @ts-ignore - Neon query builder implements thenable interface
-      const { data, error } = await supabase
-        .from('lats_pos_general_settings')
-        .select('business_name, business_address, business_phone, business_email, business_website, business_logo')
-        .limit(1)
-        .single();
+      // Try to get current user first
+      let user = null;
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        user = authUser;
+      } catch (authErr) {
+        // Not authenticated, continue with global settings
+      }
 
-      if (!error && data) {
+      let data = null;
+      let error = null;
+
+      // First, try to get user-specific settings
+      if (user) {
+        const { data: userData, error: userError } = await supabase
+          .from('lats_pos_general_settings')
+          .select('business_name, business_address, business_phone, business_email, business_website, business_logo')
+          .eq('user_id', user.id)
+          .limit(1)
+          .maybeSingle();
+
+        if (!userError && userData) {
+          data = userData;
+        } else {
+          error = userError;
+        }
+      }
+
+      // If no user-specific settings, try global settings (user_id = NULL)
+      if (!data) {
+        const { data: globalData, error: globalError } = await supabase
+          .from('lats_pos_general_settings')
+          .select('business_name, business_address, business_phone, business_email, business_website, business_logo')
+          .is('user_id', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!globalError && globalData) {
+          data = globalData;
+        } else {
+          error = globalError;
+        }
+      }
+
+      // If still no data, try any record (fallback)
+      if (!data) {
+        const { data: anyData, error: anyError } = await supabase
+          .from('lats_pos_general_settings')
+          .select('business_name, business_address, business_phone, business_email, business_website, business_logo')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!anyError && anyData) {
+          data = anyData;
+        } else {
+          error = anyError;
+        }
+      }
+
+      if (data) {
         this.cachedInfo = {
           name: data.business_name || 'inauzwa',
           address: data.business_address || 'Dar es Salaam, Tanzania',
@@ -105,20 +159,68 @@ class BusinessInfoService {
         business_logo: info.logo
       };
 
-      // @ts-ignore - Neon query builder implements thenable interface
-      // Get the first record from lats_pos_general_settings
-      const { data: existing } = await supabase
-        .from('lats_pos_general_settings')
-        .select('id')
-        .limit(1)
-        .single();
-      
-      if (!existing) {
-        console.error('No settings record found in lats_pos_general_settings');
-        return false;
+      // Try to get current user first
+      let user = null;
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        user = authUser;
+      } catch (authErr) {
+        // Not authenticated, continue with global settings
       }
 
-      // @ts-ignore - Neon query builder implements thenable interface
+      let existing = null;
+
+      // First, try to get user-specific settings
+      if (user) {
+        const { data: userData } = await supabase
+          .from('lats_pos_general_settings')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(1)
+          .maybeSingle();
+        
+        if (userData) {
+          existing = userData;
+        }
+      }
+
+      // If no user-specific settings, try global settings (user_id = NULL)
+      if (!existing) {
+        const { data: globalData } = await supabase
+          .from('lats_pos_general_settings')
+          .select('id')
+          .is('user_id', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (globalData) {
+          existing = globalData;
+        }
+      }
+
+      // If still no record, create one
+      if (!existing) {
+        const { data: newRecord, error: insertError } = await supabase
+          .from('lats_pos_general_settings')
+          .insert({
+            ...updateData,
+            user_id: user?.id || null
+          })
+          .select('id')
+          .single();
+
+        if (insertError) {
+          console.error('Error creating business info record:', insertError);
+          return false;
+        }
+
+        // Clear cache to force refresh
+        this.clearCache();
+        return true;
+      }
+
+      // Update existing record
       const { error } = await supabase
         .from('lats_pos_general_settings')
         .update(updateData)

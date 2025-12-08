@@ -482,22 +482,14 @@ class PaymentTrackingService {
       try {
         console.log('🔍 PaymentTrackingService: Fetching POS sales...');
         
-        // 🔒 Get current branch for isolation
-        const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
-        
-        let query = supabase
+        // Apply branch filter to POS sales
+        const posSalesBase = supabase
           .from('lats_sales')
           .select('*')
           .order('created_at', { ascending: false })
           .limit(1000); // Add reasonable limit
-        
-        // 🔒 COMPLETE ISOLATION: Only show sales from current branch
-        if (currentBranchId) {
-          console.log('🔒 [PaymentTracking] Filtering POS sales by branch:', currentBranchId);
-          query = query.eq('branch_id', currentBranchId);
-        }
-        
-        const { data: posSales, error: posSalesError } = await query;
+        const posSalesQuery = await addBranchFilter(posSalesBase, 'sales');
+        const { data: posSales, error: posSalesError } = await posSalesQuery;
 
         if (!posSalesError && posSales && posSales.length > 0) {
           console.log(`📊 PaymentTrackingService: Found ${posSales.length} POS sales`);

@@ -121,13 +121,9 @@ const PaymentTransactions: React.FC<PaymentTransactionsProps> = ({
       const repairPaymentsQuery = supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500);
       const filteredRepairPaymentsQuery = await addBranchFilter(repairPaymentsQuery, 'payments');
 
-      // Filter payment_transactions by branch via metadata.branch_id if available
-      const branchId = getCurrentBranchId();
-      let paymentTransactionsQuery = supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }).limit(1000);
-      if (branchId) {
-        // Prefer server-side filter when possible
-        paymentTransactionsQuery = paymentTransactionsQuery.contains('metadata', { branch_id: branchId });
-      }
+      // Filter payment_transactions by branch using addBranchFilter
+      const paymentTransactionsBase = supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }).limit(1000);
+      const paymentTransactionsQuery = await addBranchFilter(paymentTransactionsBase, 'payments');
 
       const customersQuery = supabase.from('customers').select('*').order('created_at', { ascending: false }).limit(1000);
       const filteredCustomersQuery = await addBranchFilter(customersQuery, 'customers');

@@ -1385,6 +1385,9 @@ const POSPageOptimized: React.FC = () => {
             let createError = null;
             
             try {
+              // Get current branch_id for branch isolation
+              const currentBranchId = localStorage.getItem('current_branch_id') || null;
+              
               // Use UPSERT to handle duplicate key errors gracefully
               const result = await supabase
                 .from('daily_opening_sessions')
@@ -1393,6 +1396,7 @@ const POSPageOptimized: React.FC = () => {
                   opened_at: new Date().toISOString(),
                   opened_by: currentUser?.role || 'system',
                   opened_by_user_id: currentUser?.id,
+                  branch_id: currentBranchId, // ✅ Add branch_id for branch isolation
                   is_active: true
                 }], {
                   onConflict: 'date,is_active'
@@ -4900,6 +4904,9 @@ const POSPageOptimized: React.FC = () => {
             }
             
             // Create a new session
+            // Get current branch_id for branch isolation
+            const currentBranchId = localStorage.getItem('current_branch_id') || null;
+            
             const { data: newSession, error: sessionError } = await supabase
               .from('daily_opening_sessions')
               .insert([{
@@ -4907,6 +4914,7 @@ const POSPageOptimized: React.FC = () => {
                 opened_at: now,
                 opened_by: currentUser?.role || 'system',
                 opened_by_user_id: currentUser?.id,
+                branch_id: currentBranchId, // ✅ Add branch_id for branch isolation
                 is_active: true,
                 notes: 'Day opened after closure'
               }])

@@ -269,6 +269,49 @@ const SaleDetailsModal: React.FC<SaleDetailsModalProps> = ({ isOpen, onClose, sa
         }
       }
 
+      // Fetch product images for all products
+      if (productIds.length > 0) {
+        try {
+          const { data: productImages, error: imagesError } = await supabase
+            .from('product_images')
+            .select('id, product_id, image_url, thumbnail_url, is_primary, file_name, file_size, created_at')
+            .in('product_id', productIds)
+            .order('is_primary', { ascending: false })
+            .order('created_at', { ascending: true });
+
+          if (!imagesError && productImages) {
+            // Attach images to products
+            productImages.forEach((image: any) => {
+              const product = productsData[image.product_id];
+              if (product) {
+                if (!product.images) {
+                  product.images = [];
+                }
+                const imageObj = {
+                  id: image.id,
+                  url: image.image_url || image.url || image.thumbnail_url,
+                  thumbnailUrl: image.thumbnail_url || image.image_url || image.url,
+                  fileName: image.file_name || image.filename,
+                  fileSize: image.file_size || 0,
+                  isPrimary: image.is_primary || false,
+                  uploadedAt: image.created_at || image.uploaded_at
+                };
+                // Add primary images first
+                if (imageObj.isPrimary) {
+                  product.images.unshift(imageObj);
+                } else {
+                  product.images.push(imageObj);
+                }
+              }
+            });
+            console.log('✅ Product images loaded');
+          }
+        } catch (error) {
+          console.warn('⚠️ Error fetching product images:', error);
+          // Continue without images - not critical
+        }
+      }
+
       // Step 4.5: Fetch serial numbers for this sale
       const { data: serialNumberLinks, error: serialError } = await supabase
         .from('sale_inventory_items')

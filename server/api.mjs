@@ -689,20 +689,45 @@ app.post('/api/whatsapp-sessions/sync-from-wasender', async (req, res) => {
 
 // Configure multer for in-memory storage
 const storage = multer.memoryStorage();
-const upload = multer({ storage });
+// Set file size limit to 10MB for images
+const upload = multer({ 
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB
+  }
+});
 
 // WhatsApp media upload proxy endpoint (fixes CORS issues)
-app.post('/api/whatsapp/upload-media', upload.single('file'), async (req, res) => {
+// Add error handler for multer errors
+app.post('/api/whatsapp/upload-media', (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      console.error('❌ [MULTER ERROR]', err.message);
+      return res.status(400).json({ 
+        success: false, 
+        error: `File upload error: ${err.message}` 
+      });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     console.log('\n╔═══════════════════════════════════════════════╗');
     console.log('║  📤 WHATSAPP MEDIA UPLOAD - SERVER PROXY     ║');
     console.log('╚═══════════════════════════════════════════════╝');
     console.log('📥 [REQUEST] Received upload request');
-    console.log('   Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('   Method:', req.method);
+    console.log('   Content-Type:', req.headers['content-type']);
+    console.log('   Content-Length:', req.headers['content-length']);
     
     if (!req.file) {
       console.error('❌ [ERROR] No file uploaded in request');
-      return res.status(400).json({ success: false, error: 'No file uploaded' });
+      console.error('   Request body keys:', Object.keys(req.body || {}));
+      console.error('   Request files:', Object.keys(req.files || {}));
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No file uploaded. Make sure the form field is named "file".' 
+      });
     }
     
     console.log('📋 [FILE INFO] Parsed file details:');
@@ -840,10 +865,18 @@ app.post('/api/whatsapp/upload-media', upload.single('file'), async (req, res) =
     console.error('   Stack trace:', error.stack);
     console.log('───────────────────────────────────────────────\n');
     
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
+    // Provide more detailed error information
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorDetails = {
+      success: false,
+      error: errorMessage,
+      type: error.name || 'UnknownError',
+      ...(process.env.NODE_ENV === 'development' && {
+        stack: error.stack
+      })
+    };
+    
+    res.status(500).json(errorDetails);
   }
 });
 
@@ -920,38 +953,101 @@ app.get('/api/whatsapp/proxy-media', async (req, res) => {
   }
 });
 
-// Image upload endpoint for media library
-app.post('/api/upload-image', upload.single('image'), async (req, res) => {
+// Image upload endpoint for media library AND product images
+// Add error handler for multer errors
+app.post('/api/upload-image', (req, res, next) => {
+  upload.single('image')(req, res, (err) => {
+    if (err) {
+      console.error('❌ [MULTER ERROR] Image upload:', err.message);
+      return res.status(400).json({ 
+        success: false, 
+        error: `File upload error: ${err.message}` 
+      });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     console.log('\n📤 [IMAGE UPLOAD] Received image upload request');
+    console.log('   Method:', req.method);
+    console.log('   Content-Type:', req.headers['content-type']);
+    console.log('   Content-Length:', req.headers['content-length']);
+    console.log('   Body keys:', Object.keys(req.body || {}));
     
     if (!req.file) {
-      return res.status(400).json({ success: false, error: 'No image file uploaded' });
+      console.error('❌ [ERROR] No image file uploaded');
+      console.error('   Request body keys:', Object.keys(req.body || {}));
+      console.error('   Request files:', Object.keys(req.files || {}));
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No image file uploaded. Make sure the form field is named "image".' 
+      });
     }
 
-    const filename = req.body.filename || `image-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${req.file.originalname.split('.').pop()}`;
+    console.log('📋 [FILE INFO] Parsed image details:');
+    console.log('   • Original Name:', req.file.originalname);
+    console.log('   • Field Name:', req.file.fieldname);
+    console.log('   • MIME Type:', req.file.mimetype);
+    console.log('   • Size:', req.file.size, 'bytes', `(${(req.file.size / 1024 / 1024).toFixed(2)}MB)`);
+
+    // Validate file type
+    const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedMimeTypes.includes(req.file.mimetype)) {
+      console.error('❌ [ERROR] Invalid file type:', req.file.mimetype);
+      return res.status(400).json({ 
+        success: false, 
+        error: `Invalid file type: ${req.file.mimetype}. Allowed types: ${allowedMimeTypes.join(', ')}` 
+      });
+    }
+
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (req.file.size > maxSize) {
+      console.error('❌ [ERROR] File too large:', req.file.size, 'bytes');
+      return res.status(400).json({ 
+        success: false, 
+        error: `File too large: ${(req.file.size / 1024 / 1024).toFixed(2)}MB. Maximum size: 10MB` 
+      });
+    }
+
+    // Check if this is a product image
+    const isProductImage = req.body.type === 'product' || req.body.productId;
+    const subfolder = isProductImage ? 'products' : '';
     
-    // Save to public/images directory
-    const imagesDir = path.join(__dirname, '../public/images');
+    // Generate safe filename
+    const extension = req.file.originalname.split('.').pop() || 'jpg';
+    const baseName = req.file.originalname.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filename = req.body.filename || `${baseName}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${extension}`;
+    
+    // Save to appropriate directory
+    const imagesDir = path.join(__dirname, '../public/images', subfolder);
     mkdirSync(imagesDir, { recursive: true });
     
     const filePath = path.join(imagesDir, filename);
     writeFileSync(filePath, req.file.buffer);
     
+    const relativePath = subfolder ? `images/${subfolder}/${filename}` : `images/${filename}`;
+    const fullUrl = `/${relativePath}`;
+    
     console.log('✅ [SUCCESS] Image saved to:', filePath);
     console.log('   Filename:', filename);
+    console.log('   Path:', relativePath);
+    console.log('   URL:', fullUrl);
     console.log('   Size:', req.file.size, 'bytes');
     
     res.json({
       success: true,
       filename: filename,
-      path: `images/${filename}`
+      path: relativePath,
+      url: fullUrl
     });
   } catch (error) {
-    console.error('❌ [ERROR] Image upload error:', error.message);
+    console.error('\n❌ [EXCEPTION] Image upload error:', error.message);
+    console.error('   Error details:', error);
+    console.error('   Stack trace:', error.stack);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message || 'Internal server error'
     });
   }
 });
@@ -959,13 +1055,15 @@ app.post('/api/upload-image', upload.single('image'), async (req, res) => {
 // Image delete endpoint
 app.delete('/api/delete-image', async (req, res) => {
   try {
-    const { filename } = req.body;
+    const { filename, type } = req.body;
     
     if (!filename) {
       return res.status(400).json({ success: false, error: 'Filename required' });
     }
 
-    const imagesDir = path.join(__dirname, '../public/images');
+    // Determine subfolder
+    const subfolder = type === 'product' ? 'products' : '';
+    const imagesDir = path.join(__dirname, '../public/images', subfolder);
     const filePath = path.join(imagesDir, filename);
     
     if (existsSync(filePath)) {
@@ -973,7 +1071,7 @@ app.delete('/api/delete-image', async (req, res) => {
       console.log('✅ [SUCCESS] Image deleted:', filename);
       res.json({ success: true });
     } else {
-      console.warn('⚠️ [WARNING] Image not found:', filename);
+      console.warn('⚠️ [WARNING] Image not found:', filePath);
       res.json({ success: true, message: 'File not found, but deletion considered successful' });
     }
   } catch (error) {

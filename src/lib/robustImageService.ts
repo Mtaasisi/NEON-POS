@@ -113,7 +113,7 @@ export class RobustImageService {
         throw new Error('Storage returned empty URLs - falling back to base64');
       }
       
-      console.log('✅ Uploaded to Supabase Storage:', {
+      console.log('✅ Uploaded to local storage:', {
         imageUrl: imageUrl?.substring(0, 100),
         thumbnailUrl: thumbnailUrl?.substring(0, 100)
       });
@@ -225,18 +225,19 @@ export class RobustImageService {
         console.warn('product_images table not accessible, trying lats_products.image_url column');
         const productResult = await supabase
           .from('lats_products')
-          .select('image_url, thumbnail_url')
+          .select('image_url')
           .eq('id', productId)
           .single();
         
-        if (productResult.data && (productResult.data.image_url || productResult.data.thumbnail_url)) {
+        if (productResult.data && productResult.data.image_url) {
           // Convert single image_url to ProductImage format
-          const imageUrl = productResult.data.thumbnail_url || productResult.data.image_url;
+          // Note: lats_products table only has image_url, not thumbnail_url
+          const imageUrl = productResult.data.image_url;
           if (imageUrl) {
             data = [{
               id: `fallback-0`,
               image_url: imageUrl,
-              thumbnail_url: productResult.data.thumbnail_url || imageUrl,
+              thumbnail_url: imageUrl, // Use same image_url as thumbnail since lats_products doesn't have thumbnail_url
               file_name: `product-image`,
               file_size: 0,
               is_primary: true,
@@ -315,11 +316,16 @@ export class RobustImageService {
         return { success: true };
       }
 
-      // Check authentication
-      const { data: { user }, error: authError } = await neonClient.auth.getUser();
-      if (authError || !user) {
-        console.error('❌ Authentication failed for delete:', authError);
-        return { success: false, error: 'User not authenticated' };
+      // Check authentication (optional for local storage)
+      // Authentication is not required for local storage, but we check if available
+      try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
+          console.log('⚠️ No authentication, continuing with local storage delete');
+        }
+      } catch (e) {
+        // Continue without auth for local storage
+        console.log('⚠️ Auth check skipped for local storage');
       }
 
       // Get image info
@@ -531,6 +537,12 @@ export class RobustImageService {
       return false;
     }
 
+    // Accept relative paths that start with / and have valid image extensions
+    // This includes paths like /images/products/image.jpg
+    if (cleanUrl.startsWith('/') && cleanUrl.match(/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i)) {
+      return true;
+    }
+
     // Accept any HTTP(S) URL - this includes external images from unsplash, placeholder services, etc.
     if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
       return true;
@@ -624,40 +636,47 @@ export class RobustImageService {
   }
 
   private static async uploadToStorage(file: File, fileName: string): Promise<{ url: string; thumbnailUrl: string }> {
-    console.log('🔍 Uploading to storage:', {
+    console.log('🔍 Uploading to local storage:', {
       fileName,
       fileSize: file.size,
       fileType: file.type,
       fileLastModified: file.lastModified
     });
 
-    // Check authentication first (optional - will use RLS policies)
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      console.warn('⚠️ No authentication, attempting upload with RLS policies');
-    } else {
-      console.log('✅ User authenticated:', user.id);
-    }
+    // Upload main image to local storage via API
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('filename', fileName);
+    formData.append('type', 'product'); // Mark as product image
 
-    // Upload main image
-    const { data, error } = await supabase.storage
-      .from('product-images')
-      .upload(fileName, file);
+    const response = await fetch('/api/upload-image', {
+      method: 'POST',
+      body: formData,
+    });
 
-    if (error) {
-      console.error('❌ Storage upload failed:', {
-        error: error.message,
-        statusCode: error.statusCode,
-        fileName,
-        fileSize: file.size,
-        fileType: file.type
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: errorText || `Upload failed: ${response.statusText}` };
+      }
+      
+      console.error('❌ Upload error details:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData.error || errorData.message,
+        responseText: errorText.substring(0, 200)
       });
-      throw error;
+      
+      throw new Error(errorData.error || errorData.message || `Upload failed: ${response.statusText}`);
     }
 
-    console.log('✅ Main image uploaded successfully:', data);
-
-    const url = supabase.storage.from('product-images').getPublicUrl(fileName).data.publicUrl;
+    const result = await response.json();
+    const url = result.url || `/images/products/${fileName}`;
+    
+    console.log('✅ Main image uploaded successfully:', url);
     
     // Create and upload thumbnail
     console.log('🖼️ Creating and uploading thumbnail...');
@@ -671,24 +690,30 @@ export class RobustImageService {
       thumbnailBlobType: thumbnailBlob.type
     });
 
-    const { data: thumbData, error: thumbError } = await supabase.storage
-      .from('product-images')
-      .upload(thumbnailFileName, thumbnailBlob);
+    // Upload thumbnail
+    const thumbFormData = new FormData();
+    thumbFormData.append('image', thumbnailBlob, thumbnailFileName);
+    thumbFormData.append('filename', thumbnailFileName);
+    thumbFormData.append('type', 'product');
 
-    if (thumbError) {
-      console.error('❌ Thumbnail upload failed:', {
-        error: thumbError.message,
-        statusCode: thumbError.statusCode,
-        thumbnailFileName,
-        thumbnailBlobSize: thumbnailBlob.size
-      });
-      // Don't throw error for thumbnail failure, just log it
-      console.warn('⚠️ Continuing without thumbnail');
+    const thumbResponse = await fetch('/api/upload-image', {
+      method: 'POST',
+      body: thumbFormData,
+    });
+
+    let thumbnailUrl = url; // Fallback to main image if thumbnail fails
+
+    if (thumbResponse.ok) {
+      const thumbResult = await thumbResponse.json();
+      thumbnailUrl = thumbResult.url || `/images/products/${thumbnailFileName}`;
+      console.log('✅ Thumbnail uploaded successfully:', thumbnailUrl);
     } else {
-      console.log('✅ Thumbnail uploaded successfully:', thumbData);
+      const thumbErrorText = await thumbResponse.text().catch(() => 'Unknown error');
+      console.warn('⚠️ Thumbnail upload failed, using main image as thumbnail:', {
+        status: thumbResponse.status,
+        error: thumbErrorText.substring(0, 100)
+      });
     }
-
-    const thumbnailUrl = supabase.storage.from('product-images').getPublicUrl(thumbnailFileName).data.publicUrl;
 
     return { url, thumbnailUrl };
   }
@@ -700,37 +725,12 @@ export class RobustImageService {
 
   /**
    * Check if the product-images bucket exists and is accessible
+   * Now always returns success since we're using local storage
    */
   private static async checkBucketAccess(): Promise<void> {
-    try {
-      console.log('🔍 Checking bucket access...');
-      
-      // Try to list objects in the bucket (this will fail if bucket doesn't exist or user doesn't have access)
-      const { data, error } = await supabase.storage
-        .from('product-images')
-        .list('', { limit: 1 });
-      
-      if (error) {
-        console.error('❌ Bucket access check failed:', {
-          error: error.message,
-          statusCode: error.statusCode
-        });
-        
-        // Check if it's a bucket not found error
-        if (error.message.includes('not found') || error.statusCode === 404) {
-          throw new Error('product-images bucket does not exist. Please create it in Supabase dashboard.');
-        } else if (error.message.includes('permission') || error.statusCode === 403) {
-          throw new Error('Permission denied. User may not have access to product-images bucket.');
-        } else {
-          throw new Error(`Bucket access failed: ${error.message}`);
-        }
-      }
-      
-      console.log('✅ Bucket access confirmed');
-    } catch (err) {
-      console.error('❌ Bucket check failed:', err);
-      throw err;
-    }
+    // Skip bucket check for local storage
+    console.log('✅ Using local storage - no bucket check needed');
+    return Promise.resolve();
   }
 
   private static async saveImageRecord(data: {
@@ -849,11 +849,44 @@ export class RobustImageService {
 
   private static async deleteFromStorage(imageUrl: string): Promise<void> {
     try {
+      // Extract filename from URL
+      // URL format: /images/products/filename.jpg
       const fileName = imageUrl.split('/').pop();
       if (fileName) {
-        await supabase.storage
-          .from('product-images')
-          .remove([fileName, `thumb_${fileName}`]);
+        // Delete via API endpoint
+        const response = await fetch('/api/delete-image', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            filename: fileName,
+            type: 'product' 
+          }),
+        });
+
+        if (!response.ok) {
+          console.warn('⚠️ Failed to delete image file:', fileName);
+        } else {
+          console.log('✅ Image file deleted:', fileName);
+        }
+
+        // Also try to delete thumbnail if it exists
+        const thumbFileName = `thumb_${fileName}`;
+        const thumbResponse = await fetch('/api/delete-image', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            filename: thumbFileName,
+            type: 'product' 
+          }),
+        });
+
+        if (thumbResponse.ok) {
+          console.log('✅ Thumbnail file deleted:', thumbFileName);
+        }
       }
     } catch (error) {
       console.warn('Failed to delete from storage:', error);

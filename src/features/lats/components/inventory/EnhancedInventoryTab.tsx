@@ -16,7 +16,7 @@ import {
   Package, Grid, List, Star, CheckCircle, XCircle, 
   Download, Edit, Eye, Trash2, DollarSign, TrendingUp,
   AlertTriangle, Calculator, Printer, QrCode, X, MoreVertical, ArrowRightLeft, Copy, Columns,
-  CheckSquare, XSquare, Files, ShoppingCart, Plus
+  CheckSquare, XSquare, Files, ShoppingCart, Plus, Search, ChevronDown, ChevronUp, ChevronRight
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { validateProductsBatch } from '../../lib/productUtils';
@@ -83,6 +83,7 @@ const convertToProductImages = (imageUrls: string[]): ProductImage[] => {
 const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   products,
   metrics,
+  searchQuery,
   setSearchQuery,
   selectedCategory,
   setSelectedCategory,
@@ -110,7 +111,8 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   toggleSelectAll,
   productModals,
   navigate,
-  deleteProduct
+  deleteProduct,
+  onAddProduct
 }) => {
   // 🔍 DEBUG: Log products received
   useEffect(() => {
@@ -154,6 +156,23 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   const [selectedProductForTransfer, setSelectedProductForTransfer] = useState<any>(null);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [isPreLoading, setIsPreLoading] = useState(false);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  
+  // Single expandable filters panel state
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Toggle row expansion
+  const toggleRowExpansion = (productId: string) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(productId)) {
+        newSet.delete(productId);
+      } else {
+        newSet.add(productId);
+      }
+      return newSet;
+    });
+  };
   
   // Column visibility configuration
   const availableColumns = [
@@ -221,30 +240,8 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   }, [products, hasLoggedMissingInfo]);
   
 
-  // Card variant state for grid view
-  const [cardVariant, setCardVariant] = React.useState<'default' | 'detailed'>('detailed');
-  
   // Selection mode state for grid view
   const [isSelectionMode, setIsSelectionMode] = React.useState(false);
-  
-  // Grid columns state for compact view - Load from localStorage
-  const [gridColumns, setGridColumns] = React.useState(() => {
-    try {
-      const saved = localStorage.getItem('inventory-grid-columns');
-      return saved ? parseInt(saved) : 4;
-    } catch {
-      return 4;
-    }
-  });
-
-  // Save grid columns to localStorage whenever it changes
-  React.useEffect(() => {
-    try {
-      localStorage.setItem('inventory-grid-columns', gridColumns.toString());
-    } catch (error) {
-      console.error('Failed to save grid columns preference:', error);
-    }
-  }, [gridColumns]);
 
   // Save visible columns to localStorage
   React.useEffect(() => {
@@ -362,322 +359,429 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
     </div>
   );
   return (
-    <div className="space-y-6">
-      {/* Comprehensive Statistics Dashboard */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-        <GlassCard className="bg-gradient-to-br from-blue-50 to-blue-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-blue-600">Total Products</p>
-              <p className="text-2xl font-bold text-blue-900">{metrics.totalItems} <span className="text-sm font-normal text-gray-600">({metrics.activeProducts} active)</span></p>
-            </div>
-            <div className="p-2 bg-blue-50/20 rounded-full">
-              <Package className="w-5 h-5 text-blue-600" />
-            </div>
-          </div>
-        </GlassCard>
-        
-        <GlassCard className="bg-gradient-to-br from-orange-50 to-orange-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-orange-600">In Stock</p>
-              <p className="text-2xl font-bold text-orange-900">{metrics.totalItems - metrics.lowStockItems - metrics.outOfStockItems} <span className="text-sm font-normal text-gray-600">({metrics.lowStockItems} low, {metrics.outOfStockItems} out)</span></p>
-            </div>
-            <div className="p-2 bg-orange-50/20 rounded-full">
-              <CheckCircle className="w-5 h-5 text-orange-600" />
-            </div>
-          </div>
-        </GlassCard>
-        
-        <GlassCard className="bg-gradient-to-br from-red-50 to-red-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-red-600">Reorder Alerts</p>
-              <p className="text-2xl font-bold text-red-900">{metrics.reorderAlerts} <span className="text-sm font-normal text-gray-600">(Need attention)</span></p>
-            </div>
-            <div className="p-2 bg-red-50/20 rounded-full">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
-            </div>
-          </div>
-        </GlassCard>
-        
-        <GlassCard className="bg-gradient-to-br from-green-50 to-green-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-green-600">Total Value</p>
-              <p className="text-2xl font-bold text-green-900">{formatShortMoney(metrics.totalValue)} <span className="text-sm font-normal text-gray-600">(Cost)</span></p>
-            </div>
-            <div className="p-2 bg-green-50/20 rounded-full">
-              <DollarSign className="w-5 h-5 text-green-600" />
-            </div>
-          </div>
-        </GlassCard>
-        
-        <GlassCard className="bg-gradient-to-br from-purple-50 to-purple-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-purple-600">Retail Value</p>
-              <p className="text-2xl font-bold text-purple-900">{formatShortMoney(metrics.retailValue || 0)} <span className="text-sm font-normal text-gray-600">(Selling)</span></p>
-            </div>
-            <div className="p-2 bg-purple-50/20 rounded-full">
-              <TrendingUp className="w-5 h-5 text-purple-600" />
-            </div>
-          </div>
-        </GlassCard>
-      </div>
-
-      {/* Minimal Search & Filters */}
-      <div className="bg-white/60 backdrop-blur-sm rounded-lg border border-white/20 p-3">
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Search */}
-          <div className="flex-1 min-w-[200px]">
-            <SearchBar
-              onSearch={setSearchQuery}
-              placeholder="Search products, SKU, brand..."
-              className="w-full"
-              suggestions={[
-                ...products.map(p => p.name),
-                ...products.map(p => p.variants?.[0]?.sku || '').filter(Boolean),
-
-                ...products.map(p => categories.find(c => c.id === p.categoryId)?.name || '').filter(Boolean)
-              ]}
-              searchKey="enhanced_inventory_search"
-            />
-          </div>
-          
-          {/* Category */}
-          {renderFilterSelect(
-            categories,
-            selectedCategory,
-            setSelectedCategory,
-            'Category',
-            categories?.length || 0
-          )}
-
-
-
-          {/* Status */}
-          <div className="min-w-[100px]">
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md bg-white/80 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="all">All Status</option>
-              <option value="in-stock">In Stock</option>
-              <option value="low-stock">Low Stock</option>
-              <option value="out-of-stock">Out of Stock</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-
-          {/* Sort */}
-          <div className="min-w-[100px]">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md bg-white/80 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="name">Name</option>
-              <option value="price">Price (High to Low)</option>
-              <option value="stock">Stock Level</option>
-              <option value="created">Recently Added</option>
-              <option value="updated">Recently Updated</option>
-            </select>
-          </div>
-
-          {/* View Toggle */}
-          <button
-            onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-            className="px-2 py-1.5 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
-            title={`Switch to ${viewMode === 'grid' ? 'list' : 'grid'} view`}
-          >
-            {viewMode === 'grid' ? <List size={16} /> : <Grid size={16} />}
-          </button>
-
-          {/* Card Variant Toggle (only show in grid view) */}
-          {viewMode === 'grid' && (
-            <button
-              onClick={() => setCardVariant(cardVariant === 'detailed' ? 'default' : 'detailed')}
-              className="px-2 py-1.5 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
-              title={`Switch to ${cardVariant === 'detailed' ? 'compact' : 'detailed'} cards`}
-            >
-              {cardVariant === 'detailed' ? <Package size={16} /> : <Grid size={16} />}
-            </button>
-          )}
-
-          {/* Column Selector (only show in list view) */}
-          {viewMode === 'list' && (
-            <button
-              onClick={() => setShowColumnSelector(true)}
-              className="px-2 py-1.5 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-1"
-              title="Customize columns"
-            >
-              <Columns size={16} />
-            </button>
-          )}
-
-          {/* Quick Filters */}
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1.5 text-sm">
-              <input
-                type="checkbox"
-                checked={showLowStockOnly}
-                onChange={(e) => setShowLowStockOnly(e.target.checked)}
-                className="w-3 h-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-gray-600">Low Stock</span>
-            </label>
-            <label className="flex items-center gap-1.5 text-sm">
-              <input
-                type="checkbox"
-                checked={showFeaturedOnly}
-                onChange={(e) => setShowFeaturedOnly(e.target.checked)}
-                className="w-3 h-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-gray-600">Featured</span>
-            </label>
-          </div>
-
-          {/* Create PO Quick Action */}
-          <button
-            onClick={() => navigate('/lats/purchase-order/create')}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg text-sm font-medium hover:from-orange-600 hover:to-orange-700 active:scale-95 transition-all shadow-md hover:shadow-lg ml-auto"
-            title="Create new purchase order"
-          >
-            <ShoppingCart size={16} />
-            <span className="hidden sm:inline">Create PO</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Bulk Actions - Flat Design */}
-      {selectedProducts.length > 0 && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-5 shadow-md">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            {/* Selection Info */}
+    <div className="space-y-0">
+      {/* Fixed Statistics Section - Matching PurchaseOrdersPage */}
+      <div className="p-6 pb-0 flex-shrink-0">
+        <div 
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
+            gap: '1rem'
+          }}
+        >
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center gap-3">
-              <div className="bg-blue-600 text-white rounded-full p-2">
-                <CheckCircle className="w-5 h-5" />
+              <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <Package className="w-6 h-6 text-white" />
               </div>
               <div>
-                <div className="text-sm font-bold text-blue-900">
-                  {selectedProducts.length} product{selectedProducts.length !== 1 ? 's' : ''} selected
-                </div>
-                <div className="text-xs text-blue-700">
-                  Choose an action below
-                </div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Total Products</p>
+                <p className="text-2xl font-bold text-gray-900">{metrics.totalItems}</p>
+                <p className="text-xs text-gray-500 mt-1">{metrics.activeProducts} active</p>
               </div>
             </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-2 flex-wrap">
-              {/* Export */}
-              <button
-                onClick={() => handleBulkAction('export')}
-                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
-                title="Export selected products to CSV"
-              >
-                <Download size={16} />
-                <span className="hidden sm:inline">Export</span>
-              </button>
-
-              {/* Feature */}
-              <button
-                onClick={() => handleBulkAction('feature')}
-                className="flex items-center gap-2 px-4 py-2.5 bg-yellow-500 text-white rounded-lg text-sm font-medium hover:bg-yellow-600 active:scale-95 transition-all shadow-md hover:shadow-lg"
-                title="Toggle featured status"
-              >
-                <Star size={16} />
-                <span className="hidden sm:inline">Feature</span>
-              </button>
-
-              {/* Activate */}
-              <button
-                onClick={() => handleBulkAction('activate')}
-                className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
-                title="Activate selected products"
-              >
-                <CheckSquare size={16} />
-                <span className="hidden sm:inline">Activate</span>
-              </button>
-
-              {/* Deactivate */}
-              <button
-                onClick={() => handleBulkAction('deactivate')}
-                className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
-                title="Deactivate selected products"
-              >
-                <XSquare size={16} />
-                <span className="hidden sm:inline">Deactivate</span>
-              </button>
-
-              {/* Print Labels */}
-              <button
-                onClick={() => {
-                  // Open label printing modal for first selected product
-                  const firstProduct = products.find(p => selectedProducts.includes(p.id));
-                  if (firstProduct) {
-                    setSelectedProductForLabel({
-                      id: firstProduct.id,
-                      name: firstProduct.name,
-                      sku: firstProduct.variants?.[0]?.sku || firstProduct.id,
-                      barcode: firstProduct.variants?.[0]?.sku || firstProduct.id,
-                      price: firstProduct.variants?.[0]?.sellingPrice || 0,
-                      size: firstProduct.variants?.[0]?.attributes?.size || '',
-                      color: firstProduct.variants?.[0]?.attributes?.color || '',
-                      brand: firstProduct.brand?.name || '',
-                      category: categories.find(c => c.id === firstProduct.categoryId)?.name || ''
-                    });
-                    setShowLabelModal(true);
-                  } else {
-                    toast.error('Please select at least one product');
-                  }
-                }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
-                title="Print product labels"
-              >
-                <Printer size={16} />
-                <span className="hidden sm:inline">Labels</span>
-              </button>
-
-              {/* Duplicate */}
-              <button
-                onClick={() => handleBulkAction('duplicate')}
-                className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
-                title="Duplicate selected products"
-              >
-                <Files size={16} />
-                <span className="hidden sm:inline">Duplicate</span>
-              </button>
-
-              {/* Delete All */}
-              <button
-                onClick={() => setShowDeleteConfirmation(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
-                title="Delete all selected products"
-              >
-                <Trash2 size={16} />
-                <span className="hidden sm:inline">Delete</span>
-              </button>
-
-              {/* Clear Selection */}
-              <button
-                onClick={() => setSelectedProducts([])}
-                className="flex items-center gap-2 px-4 py-2.5 bg-gray-600 text-white rounded-lg text-sm font-medium hover:bg-gray-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
-                title="Clear selection"
-              >
-                <XCircle size={16} />
-                <span className="hidden sm:inline">Clear</span>
-              </button>
+          </div>
+          
+          <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <CheckCircle className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">In Stock</p>
+                <p className="text-2xl font-bold text-gray-900">{metrics.totalItems - metrics.lowStockItems - metrics.outOfStockItems}</p>
+                <p className="text-xs text-gray-500 mt-1">{metrics.lowStockItems} low, {metrics.outOfStockItems} out</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 hover:bg-red-100 hover:border-red-300 transition-all shadow-sm hover:shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <AlertTriangle className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Reorder Alerts</p>
+                <p className="text-2xl font-bold text-gray-900">{metrics.reorderAlerts}</p>
+                <p className="text-xs text-gray-500 mt-1">Need attention</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <DollarSign className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Total Value</p>
+                <p className="text-2xl font-bold text-gray-900">{formatShortMoney(metrics.totalValue)}</p>
+                <p className="text-xs text-gray-500 mt-1">Cost</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <TrendingUp className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Retail Value</p>
+                <p className="text-2xl font-bold text-gray-900">{formatShortMoney(metrics.retailValue || 0)}</p>
+                <p className="text-xs text-gray-500 mt-1">Selling</p>
+              </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Products Display */}
-      {viewMode === 'list' ? (
+      {/* Fixed Search and Filters Section - Matching PurchaseOrdersPage */}
+      <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
+        <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
+          <div className="flex flex-col gap-4">
+            {/* Search Bar and Buttons Row */}
+            <div className="flex flex-col lg:flex-row gap-3 items-start lg:items-center">
+              {/* Bigger Search Bar - Takes most space */}
+              <div className="flex-1 w-full lg:w-auto">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search products, SKU, brand, category..."
+                    className="w-full py-4 pl-14 pr-12 text-lg border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 bg-white font-medium"
+                  />
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
+                    <Search size={24} />
+                  </span>
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none p-2"
+                      aria-label="Clear search"
+                    >
+                      <X size={20} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Side: Filters Button and View Controls */}
+              <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap">
+                {/* Filters Toggle Button */}
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`flex items-center gap-2 px-4 py-3 rounded-xl border-2 transition-all font-medium whitespace-nowrap ${
+                    showFilters
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                  }`}
+                >
+                  <span>Filters</span>
+                  {showFilters ? (
+                    <ChevronUp size={18} />
+                  ) : (
+                    <ChevronDown size={18} />
+                  )}
+                  {/* Active filters count badge */}
+                  {(selectedCategory !== 'all' || selectedStatus !== 'all' || showLowStockOnly || showFeaturedOnly) && (
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                      showFilters ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
+                    }`}>
+                      {[
+                        selectedCategory !== 'all' && '1',
+                        selectedStatus !== 'all' && '1',
+                        showLowStockOnly && '1',
+                        showFeaturedOnly && '1'
+                      ].filter(Boolean).length}
+                    </span>
+                  )}
+                </button>
+
+                {/* View Toggle */}
+                <button
+                  onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                  className={`px-4 py-3 rounded-xl border-2 transition-all font-medium whitespace-nowrap ${
+                    viewMode === 'list'
+                      ? 'bg-gray-600 text-white border-gray-600 shadow-md'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+                  }`}
+                  title={`Switch to ${viewMode === 'grid' ? 'list' : 'grid'} view`}
+                >
+                  {viewMode === 'grid' ? <List size={18} /> : <Grid size={18} />}
+                </button>
+
+
+                {/* Column Selector (only show in list view) */}
+                {viewMode === 'list' && (
+                  <button
+                    onClick={() => setShowColumnSelector(true)}
+                    className="px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 hover:border-blue-300 transition-all bg-white font-medium flex items-center gap-2 whitespace-nowrap"
+                    title="Customize columns"
+                  >
+                    <Columns size={18} />
+                    <span className="hidden sm:inline">Columns</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Active filters summary (when collapsed) - Below search bar */}
+            {!showFilters && (selectedCategory !== 'all' || selectedStatus !== 'all' || showLowStockOnly || showFeaturedOnly) && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {selectedCategory !== 'all' && (
+                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-xs font-medium">
+                    {selectedCategory.length > 15 ? selectedCategory.substring(0, 15) + '...' : selectedCategory}
+                  </span>
+                )}
+                {selectedStatus !== 'all' && (
+                  <span className="px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs font-medium capitalize">
+                    {selectedStatus.replace('-', ' ')}
+                  </span>
+                )}
+                {showLowStockOnly && (
+                  <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-md text-xs font-medium">
+                    Low
+                  </span>
+                )}
+                {showFeaturedOnly && (
+                  <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-md text-xs font-medium">
+                    ⭐
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Filters Panel */}
+            <div className="w-full">
+
+              {/* Expanded Filters Panel - Compact Inline Layout */}
+              {showFilters && (
+                <div className="mt-3 p-3 bg-gray-50 rounded-xl border-2 border-gray-200">
+                  {/* Compact Inline Layout - All filters in one row when possible */}
+                  <div className="space-y-3">
+                    {/* Row 1: Status, Sort, Quick Filters - Inline */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      {/* Status Filter */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-gray-600 whitespace-nowrap">Status:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {['all', 'in-stock', 'low-stock', 'out-of-stock'].map((status) => (
+                            <button
+                              key={status}
+                              onClick={() => setSelectedStatus(status)}
+                              className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-xs capitalize whitespace-nowrap ${
+                                selectedStatus === status
+                                  ? 'bg-green-600 text-white border-green-600 shadow-sm'
+                                  : 'bg-white text-gray-700 border-gray-300 hover:border-green-300 hover:bg-green-50'
+                              }`}
+                            >
+                              {status.replace('-', ' ')}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Divider */}
+                      <div className="h-6 w-px bg-gray-300"></div>
+
+                      {/* Sort Filter */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-gray-600 whitespace-nowrap">Sort:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { value: 'name', label: 'Name' },
+                            { value: 'price', label: 'Price' },
+                            { value: 'stock', label: 'Stock' },
+                            { value: 'created', label: 'Newest' },
+                            { value: 'updated', label: 'Updated' }
+                          ].map((option) => (
+                            <button
+                              key={option.value}
+                              onClick={() => setSortBy(option.value)}
+                              className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-xs whitespace-nowrap ${
+                                sortBy === option.value
+                                  ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                                  : 'bg-white text-gray-700 border-gray-300 hover:border-purple-300 hover:bg-purple-50'
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Divider */}
+                      <div className="h-6 w-px bg-gray-300"></div>
+
+                      {/* Quick Filters */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-gray-600 whitespace-nowrap">Quick:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            onClick={() => setShowLowStockOnly(!showLowStockOnly)}
+                            className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-xs whitespace-nowrap ${
+                              showLowStockOnly
+                                ? 'bg-orange-600 text-white border-orange-600 shadow-sm'
+                                : 'bg-white text-gray-700 border-gray-300 hover:border-orange-300 hover:bg-orange-50'
+                            }`}
+                          >
+                            Low Stock
+                          </button>
+                          <button
+                            onClick={() => setShowFeaturedOnly(!showFeaturedOnly)}
+                            className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-xs whitespace-nowrap ${
+                              showFeaturedOnly
+                                ? 'bg-yellow-600 text-white border-yellow-600 shadow-sm'
+                                : 'bg-white text-gray-700 border-gray-300 hover:border-yellow-300 hover:bg-yellow-50'
+                            }`}
+                          >
+                            Featured
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Row 2: Category Filter - Compact Inline */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-gray-600 whitespace-nowrap">
+                        Category <span className="text-gray-400 font-normal">({categories.length}):</span>
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-2 flex-1">
+                        <button
+                          onClick={() => setSelectedCategory('all')}
+                          className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-xs flex-shrink-0 whitespace-nowrap ${
+                            selectedCategory === 'all'
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-blue-300 hover:bg-blue-50'
+                          }`}
+                        >
+                          All
+                        </button>
+                        {categories.slice(0, 40).map((category) => (
+                          <button
+                            key={category.id}
+                            onClick={() => setSelectedCategory(category.name)}
+                            className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-xs flex-shrink-0 whitespace-nowrap ${
+                              selectedCategory === category.name
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-300 hover:bg-blue-50'
+                            }`}
+                          >
+                            {category.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      {/* Scrollable Products Display - Matching PurchaseOrdersPage */}
+      <div className="flex-1 overflow-y-auto px-6 py-6 border-t border-gray-100">
+        {/* Bulk Actions - Inside scrollable area */}
+        {selectedProducts.length > 0 && (
+          <div className="mb-4">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-5 shadow-md">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                {/* Selection Info */}
+                <div className="flex items-center gap-3">
+                  <div className="bg-blue-600 text-white rounded-full p-2">
+                    <CheckCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-blue-900">
+                      {selectedProducts.length} product{selectedProducts.length !== 1 ? 's' : ''} selected
+                    </div>
+                    <div className="text-xs text-blue-700">
+                      Choose an action below
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 flex-wrap">
+                  {/* Export */}
+                  <button
+                    onClick={() => handleBulkAction('export')}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
+                    title="Export selected products to CSV"
+                  >
+                    <Download size={16} />
+                    <span className="hidden sm:inline">Export</span>
+                  </button>
+
+                  {/* Feature */}
+                  <button
+                    onClick={() => handleBulkAction('feature')}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-yellow-500 text-white rounded-lg text-sm font-medium hover:bg-yellow-600 active:scale-95 transition-all shadow-md hover:shadow-lg"
+                    title="Toggle featured status"
+                  >
+                    <Star size={16} />
+                    <span className="hidden sm:inline">Feature</span>
+                  </button>
+
+                  {/* Print Labels */}
+                  <button
+                    onClick={() => {
+                      const firstProduct = products.find(p => selectedProducts.includes(p.id));
+                      if (firstProduct) {
+                        setSelectedProductForLabel({
+                          id: firstProduct.id,
+                          name: firstProduct.name,
+                          sku: firstProduct.variants?.[0]?.sku || firstProduct.id,
+                          barcode: firstProduct.variants?.[0]?.sku || firstProduct.id,
+                          price: firstProduct.variants?.[0]?.sellingPrice || 0,
+                          size: firstProduct.variants?.[0]?.attributes?.size || '',
+                          color: firstProduct.variants?.[0]?.attributes?.color || '',
+                          brand: firstProduct.brand?.name || '',
+                          category: categories.find(c => c.id === firstProduct.categoryId)?.name || ''
+                        });
+                        setShowLabelModal(true);
+                      } else {
+                        toast.error('Please select at least one product');
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
+                    title="Print product labels"
+                  >
+                    <Printer size={16} />
+                    <span className="hidden sm:inline">Labels</span>
+                  </button>
+
+                  {/* Delete All */}
+                  <button
+                    onClick={() => setShowDeleteConfirmation(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
+                    title="Delete all selected products"
+                  >
+                    <Trash2 size={16} />
+                    <span className="hidden sm:inline">Delete</span>
+                  </button>
+
+                  {/* Clear Selection */}
+                  <button
+                    onClick={() => setSelectedProducts([])}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-gray-600 text-white rounded-lg text-sm font-medium hover:bg-gray-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
+                    title="Clear selection"
+                  >
+                    <XCircle size={16} />
+                    <span className="hidden sm:inline">Clear</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Products Display */}
+        {viewMode === 'list' ? (
         <GlassCard className="overflow-visible">
           <div className="overflow-x-auto overflow-y-visible">
             <table className="w-full">
@@ -688,7 +792,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                       type="checkbox"
                       checked={selectedProducts.length === products.length && products.length > 0}
                       onChange={toggleSelectAll}
-                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-2"
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </th>
                   {visibleColumns.includes('product') && (
@@ -820,60 +924,46 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                   // This allows shared products to be visible even when inventory is isolated
                   // Products will show with 0 stock if they have no variants in the current branch
                   
+                  const isExpanded = expandedRows.has(product.id);
+                  
                   return (
-                    <tr 
-                      key={product.id} 
-                      className="border-b border-gray-100 hover:bg-blue-50 transition-colors cursor-pointer group"
-                      onClick={async () => {
-                        console.log('🟢 [Table View] Clicking product row:', product.name, product.id);
-                        
-                        // Show immediate loading overlay
-                        setIsPreLoading(true);
-                        
-                        try {
-                          // 🔧 FETCH FRESH PRODUCT DATA with variant_attributes
-                          const freshProduct = await useInventoryStore.getState().getProduct(product.id);
-                          console.log('🟢 [Table View] Fresh product result:', {
-                            ok: freshProduct?.ok,
-                            hasData: !!freshProduct?.data,
-                            variantCount: freshProduct?.data?.variants?.length || 0
-                          });
-                          
-                          if (!freshProduct?.ok || !freshProduct?.data) {
-                            console.error('❌ [Table View] Failed to fetch product:', freshProduct?.message);
-                            setIsPreLoading(false);
-                            alert('Failed to load product details. Please try again.');
-                            return;
-                          }
-                          
-                          // Allow products without variants - they can be added to POs and variants will be created automatically
-                          // No warning needed - this is expected behavior
-                          
-                          setSelectedProductForDetail(freshProduct.data);
-                          setShowProductDetailModal(true);
-                        } finally {
-                          // Hide loading after a short delay to allow modal to appear
-                          setTimeout(() => setIsPreLoading(false), 100);
-                        }
-                      }}
-                      title="Click to view product details"
-                    >
-                      <td className="py-3 px-4" onClick={e => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selectedProducts.includes(product.id)}
-                          onChange={e => { e.stopPropagation(); toggleProductSelection(product.id); }}
-                          className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-2"
-                        />
-                      </td>
-                      {visibleColumns.includes('product') && (
-                        <td className="py-3 px-4">
-                          <div className="flex items-center space-x-3">
-                            {/* Colored Flat Thumbnail */}
+                    <React.Fragment key={product.id}>
+                      <tr 
+                        className="border-b border-gray-200/30 hover:bg-blue-50 cursor-pointer transition-colors"
+                        onClick={() => toggleRowExpansion(product.id)}
+                        title="Click to expand/collapse actions"
+                      >
+                        <td className="py-4 px-4" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedProducts.includes(product.id)}
+                            onChange={e => { e.stopPropagation(); toggleProductSelection(product.id); }}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </td>
+                        {visibleColumns.includes('product') && (
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-3">
+                              {/* Expand/Collapse Icon */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleRowExpansion(product.id);
+                                }}
+                                className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                                title={isExpanded ? "Collapse" : "Expand"}
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown size={18} />
+                                ) : (
+                                  <ChevronRight size={18} />
+                                )}
+                              </button>
+                            {/* Product Image/Icon */}
                             <div className="relative flex-shrink-0">
                               {product.images && product.images.length > 0 ? (
                                 <>
-                                  <div className="w-12 h-12 rounded-lg overflow-hidden border-2 border-blue-200 bg-white">
+                                  <div className="w-10 h-10 rounded-lg overflow-hidden border-2 border-blue-200 bg-white">
                                     <img
                                       src={product.images[0]}
                                       alt={product.name}
@@ -885,8 +975,8 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                                         const parent = target.parentElement;
                                         if (parent) {
                                           parent.innerHTML = `
-                                            <div class="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center border-2 border-blue-200">
-                                              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500">
+                                            <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center border-2 border-blue-200">
+                                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500">
                                                 <path d="M16.5 9.4 7.55 4.24"></path>
                                                 <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                                                 <polyline points="3.29 7 12 12 20.71 7"></polyline>
@@ -898,7 +988,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                                           const grandParent = parent.parentElement;
                                           if (grandParent) {
                                             const badge = document.createElement('div');
-                                            badge.className = 'absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center';
+                                            badge.className = 'absolute -top-2 -right-2 w-5 h-5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center';
                                             badge.innerHTML = '<span class="text-xs font-bold text-white">' + variantCount + '</span>';
                                             grandParent.appendChild(badge);
                                           }
@@ -906,16 +996,16 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                                       }}
                                     />
                                   </div>
-                                  <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-10">
+                                  <div className="absolute -top-2 -right-2 w-5 h-5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-10">
                                     <span className="text-xs font-bold text-white">
                                       {product.variants?.length || 0}
                                     </span>
                                   </div>
                                 </>
                               ) : (
-                                <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center border-2 border-blue-200 relative">
-                                  <Package className="w-6 h-6 text-blue-500" strokeWidth={2} />
-                                  <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
+                                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white relative">
+                                  <Package className="w-5 h-5" strokeWidth={2} />
+                                  <div className="absolute -top-2 -right-2 w-5 h-5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
                                     <span className="text-xs font-bold text-white">
                                       {product.variants?.length || 0}
                                     </span>
@@ -923,22 +1013,22 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                                 </div>
                               )}
                               {product.isFeatured && (
-                                <div className="absolute -top-1 -right-1 w-5 h-5 bg-yellow-400 rounded-full flex items-center justify-center border-2 border-white">
-                                  <Star className="w-3 h-3 text-white fill-current" />
+                                <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center border-2 border-white">
+                                  <Star className="w-2.5 h-2.5 text-white fill-current" />
                                 </div>
                               )}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-gray-900 truncate max-w-[250px]" title={product.name}>{product.name}</p>
+                            <div>
+                              <p className="font-medium text-gray-900">{product.name}</p>
                               {product.description && (
-                                <p className="text-sm text-gray-500 truncate max-w-[300px]">{product.description}</p>
+                                <p className="text-sm text-gray-600">{product.description}</p>
                               )}
                             </div>
                           </div>
                         </td>
                       )}
                       {visibleColumns.includes('sku') && (
-                        <td className="py-3 px-4">
+                        <td className="py-4 px-4">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-mono text-gray-700">
                               {mainVariant?.sku || product.sku || 'N/A'}
@@ -958,14 +1048,14 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                         </td>
                       )}
                       {visibleColumns.includes('category') && (
-                        <td className="py-3 px-4">
+                        <td className="py-4 px-4">
                           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500 text-white shadow-sm inline-block max-w-[150px] truncate" title={category?.name || 'Uncategorized'}>
                             {category?.name || (product.categoryId ? 'Loading...' : 'Uncategorized')}
                           </span>
                         </td>
                       )}
                       {visibleColumns.includes('supplier') && (
-                        <td className="py-3 px-4">
+                        <td className="py-4 px-4">
                           {(() => {
                             // Look up supplier: first try embedded supplier object, then lookup by ID
                             const supplier = product.supplier 
@@ -974,10 +1064,8 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                             if (supplier?.name?.startsWith('Trade-In:')) {
                               return (
                                 <div>
-                                  <span className="text-sm font-medium text-blue-600">
-                                    {supplier.name.replace('Trade-In: ', '')}
-                                  </span>
-                                  <div className="text-xs text-gray-500">Trade-In Customer</div>
+                                  <p className="font-medium text-gray-900">{supplier.name.replace('Trade-In: ', '')}</p>
+                                  <p className="text-sm text-gray-600">Trade-In Customer</p>
                                 </div>
                               );
                             }
@@ -991,32 +1079,28 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                         </td>
                       )}
                       {visibleColumns.includes('shelf') && (
-                        <td className="py-3 px-4">
+                        <td className="py-4 px-4">
                           <span className="text-sm text-gray-600">
                             {product.shelfName || product.shelfCode || 'N/A'}
                           </span>
                         </td>
                       )}
                       {visibleColumns.includes('price') && (
-                        <td className="py-3 px-4">
-                          <div>
-                            <p className="font-medium text-gray-900">
-                              {displayPrice > 0 ? formatMoney(displayPrice) : (
-                                <span className="text-gray-400 italic">No price set</span>
-                              )}
-                            </p>
-                            {(mainVariant?.costPrice || product.costPrice) > 0 && (
-                              <p className="text-xs text-gray-500">
-                                Cost: {formatMoney(mainVariant?.costPrice || product.costPrice || 0)}
-                              </p>
+                        <td className="py-4 px-4 text-right">
+                          <p className="text-gray-900 font-semibold">
+                            {displayPrice > 0 ? formatMoney(displayPrice) : (
+                              <span className="text-gray-400 italic">No price set</span>
                             )}
-                          </div>
+                          </p>
+                          {(mainVariant?.costPrice || product.costPrice) > 0 && (
+                            <p className="text-sm text-gray-600">Cost: {formatMoney(mainVariant?.costPrice || product.costPrice || 0)}</p>
+                          )}
                         </td>
                       )}
                       {visibleColumns.includes('stock') && (
-                        <td className="py-3 px-4">
-                          <div>
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm inline-block max-w-[120px] truncate ${
+                        <td className="py-4 px-4 text-right">
+                          <div className="flex justify-end">
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm inline-block ${
                               stockStatus === 'out-of-stock' 
                                 ? 'bg-red-500 text-white' 
                                 : stockStatus === 'low-stock'
@@ -1025,148 +1109,138 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                             }`} title={`${availableStock} in stock${reservedStock > 0 ? ` (${reservedStock} reserved)` : ''}`}>
                               {availableStock} in stock
                             </span>
-                            {reservedStock > 0 && (
-                              <p className="text-xs text-gray-500 mt-1 truncate max-w-[120px]" title={`${reservedStock} reserved`}>{reservedStock} reserved</p>
-                            )}
                           </div>
+                          {reservedStock > 0 && (
+                            <p className="text-sm text-gray-600 mt-1 text-right">{reservedStock} reserved</p>
+                          )}
                         </td>
                       )}
                       {visibleColumns.includes('actions') && (
-                        <td className="py-3 px-4 text-center">
-                        <div className="relative">
-                          <button
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              setOpenDropdownId(openDropdownId === product.id ? null : product.id);
-                            }}
-                            className="p-2 text-gray-600 hover:text-white hover:bg-blue-500 rounded-lg transition-all duration-200 hover:shadow-md"
-                            title="Actions"
-                          >
-                            <MoreVertical className="w-5 h-5" />
-                          </button>
-                          
-                          {/* Dropdown Menu */}
-                          {openDropdownId === product.id && (
-                            <>
-                              {/* Backdrop to close dropdown */}
-                              <div 
-                                className="fixed inset-0 z-[998]" 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenDropdownId(null);
-                                }}
-                              />
-                              
-                              {/* Dropdown Content */}
-                              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 z-[999] overflow-hidden">
-                                <div className="py-2">
-                                  <button
-                                    onClick={(e) => { 
-                                      e.stopPropagation(); 
-                                      productModals.openEditModal(product.id);
-                                      setOpenDropdownId(null);
-                                    }}
-                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-blue-50 flex items-center gap-3 transition-all duration-200 group"
-                                  >
-                                    <div className="w-8 h-8 rounded-lg bg-blue-100 group-hover:bg-blue-500 flex items-center justify-center transition-colors">
-                                      <Edit className="w-4 h-4 text-blue-600 group-hover:text-white" />
-                                    </div>
-                                    <span className="font-medium group-hover:text-blue-600">Edit Product</span>
-                                  </button>
-                                  <button
-                                    onClick={async (e) => { 
-                                      e.stopPropagation(); 
-                                      // 🔧 FETCH FRESH PRODUCT DATA with variant_attributes
-                                      const freshProduct = await useInventoryStore.getState().getProduct(product.id);
-                                      setSelectedProductForDetail(freshProduct || product);
-                                      setShowProductDetailModal(true);
-                                      setOpenDropdownId(null);
-                                    }}
-                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-green-50 flex items-center gap-3 transition-all duration-200 group"
-                                  >
-                                    <div className="w-8 h-8 rounded-lg bg-green-100 group-hover:bg-green-500 flex items-center justify-center transition-colors">
-                                      <Eye className="w-4 h-4 text-green-600 group-hover:text-white" />
-                                    </div>
-                                    <span className="font-medium group-hover:text-green-600">View Details</span>
-                                  </button>
-                                  
-                                  <div className="my-1 border-t border-gray-100"></div>
-                                  
-                                  <button
-                                    onClick={(e) => { 
-                                      e.stopPropagation(); 
-                                      setSelectedProductForHistory(product.id);
-                                      setShowStockAdjustModal(true);
-                                      setOpenDropdownId(null);
-                                    }}
-                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-orange-50 flex items-center gap-3 transition-all duration-200 group"
-                                  >
-                                    <div className="w-8 h-8 rounded-lg bg-orange-100 group-hover:bg-orange-500 flex items-center justify-center transition-colors">
-                                      <Calculator className="w-4 h-4 text-orange-600 group-hover:text-white" />
-                                    </div>
-                                    <span className="font-medium group-hover:text-orange-600">Adjust Stock</span>
-                                  </button>
-                                  <button
-                                    onClick={(e) => { 
-                                      e.stopPropagation(); 
-                                      setSelectedProductForLabel({
-                                        id: product.id,
-                                        name: product.name,
-                                        sku: product.variants?.[0]?.sku || product.id,
-                                        barcode: product.variants?.[0]?.sku || product.id,
-                                        price: product.variants?.[0]?.sellingPrice || 0,
-                                        size: product.variants?.[0]?.attributes?.size || '',
-                                        color: product.variants?.[0]?.attributes?.color || '',
-                                        brand: product.brand?.name || '',
-                                        category: categories.find(c => c.id === product.categoryId)?.name || ''
-                                      });
-                                      setShowLabelModal(true);
-                                      setOpenDropdownId(null);
-                                    }}
-                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-purple-50 flex items-center gap-3 transition-all duration-200 group"
-                                  >
-                                    <div className="w-8 h-8 rounded-lg bg-purple-100 group-hover:bg-purple-500 flex items-center justify-center transition-colors">
-                                      <Printer className="w-4 h-4 text-purple-600 group-hover:text-white" />
-                                    </div>
-                                    <span className="font-medium group-hover:text-purple-600">Print Label</span>
-                                  </button>
-                                  
-                                  <div className="my-1 border-t border-gray-100"></div>
-                                  
-                                  <button
-                                    onClick={(e) => { 
-                                      e.stopPropagation(); 
-                                      handleStockTransfer(product);
-                                      setOpenDropdownId(null);
-                                    }}
-                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-indigo-50 flex items-center gap-3 transition-all duration-200 group"
-                                  >
-                                    <div className="w-8 h-8 rounded-lg bg-indigo-100 group-hover:bg-indigo-500 flex items-center justify-center transition-colors">
-                                      <ArrowRightLeft className="w-4 h-4 text-indigo-600 group-hover:text-white" />
-                                    </div>
-                                    <span className="font-medium group-hover:text-indigo-600">Stock Transfer</span>
-                                  </button>
-                                  <button
-                                    onClick={(e) => { 
-                                      e.stopPropagation(); 
-                                      handleDuplicateProduct(product);
-                                      setOpenDropdownId(null);
-                                    }}
-                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-teal-50 flex items-center gap-3 transition-all duration-200 group"
-                                  >
-                                    <div className="w-8 h-8 rounded-lg bg-teal-100 group-hover:bg-teal-500 flex items-center justify-center transition-colors">
-                                      <Copy className="w-4 h-4 text-teal-600 group-hover:text-white" />
-                                    </div>
-                                    <span className="font-medium group-hover:text-teal-600">Duplicate</span>
-                                  </button>
-                                </div>
-                              </div>
-                            </>
-                          )}
-                        </div>
+                        <td className="py-4 px-4">
+                          <div className="flex items-center justify-center">
+                            <span className="text-xs text-gray-400 font-medium">
+                              {isExpanded ? 'Expanded' : 'Click to expand'}
+                            </span>
+                          </div>
                         </td>
                       )}
                     </tr>
+                    {/* Expanded Row with Actions */}
+                    {isExpanded && (
+                      <tr key={`${product.id}-expanded`} className="bg-blue-50/50 border-b border-gray-200/30">
+                        <td colSpan={visibleColumns.length + 1} className="py-6 px-4">
+                          <div className="flex flex-wrap items-center gap-3">
+                            {/* Primary Actions */}
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                setIsPreLoading(true);
+                                try {
+                                  const freshProduct = await useInventoryStore.getState().getProduct(product.id);
+                                  if (freshProduct?.ok && freshProduct?.data) {
+                                    setSelectedProductForDetail(freshProduct.data);
+                                    setShowProductDetailModal(true);
+                                  }
+                                } finally {
+                                  setTimeout(() => setIsPreLoading(false), 100);
+                                }
+                              }}
+                              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm shadow-sm"
+                              title="View Details"
+                            >
+                              <Eye size={16} />
+                              <span>View Details</span>
+                            </button>
+                            
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                productModals.openEditModal(product.id);
+                              }}
+                              className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm shadow-sm"
+                              title="Edit Product"
+                            >
+                              <Edit size={16} />
+                              <span>Edit</span>
+                            </button>
+                            
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedProductForHistory(product.id);
+                                setShowStockAdjustModal(true);
+                              }}
+                              className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm shadow-sm"
+                              title="Adjust Stock"
+                            >
+                              <Calculator size={16} />
+                              <span>Adjust Stock</span>
+                            </button>
+                            
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedProductForLabel({
+                                  id: product.id,
+                                  name: product.name,
+                                  sku: product.variants?.[0]?.sku || product.id,
+                                  barcode: product.variants?.[0]?.sku || product.id,
+                                  price: product.variants?.[0]?.sellingPrice || 0,
+                                  size: product.variants?.[0]?.attributes?.size || '',
+                                  color: product.variants?.[0]?.attributes?.color || '',
+                                  brand: product.brand?.name || '',
+                                  category: categories.find(c => c.id === product.categoryId)?.name || ''
+                                });
+                                setShowLabelModal(true);
+                              }}
+                              className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium text-sm shadow-sm"
+                              title="Print Label"
+                            >
+                              <Printer size={16} />
+                              <span>Print Label</span>
+                            </button>
+                            
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStockTransfer(product);
+                              }}
+                              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm shadow-sm"
+                              title="Stock Transfer"
+                            >
+                              <ArrowRightLeft size={16} />
+                              <span>Stock Transfer</span>
+                            </button>
+                            
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDuplicateProduct(product);
+                              }}
+                              className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium text-sm shadow-sm"
+                              title="Duplicate Product"
+                            >
+                              <Copy size={16} />
+                              <span>Duplicate</span>
+                            </button>
+                            
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedSKU(mainVariant?.sku || product.sku || 'N/A');
+                                setShowQRModal(true);
+                              }}
+                              className="flex items-center gap-2 px-4 py-2.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium text-sm shadow-sm"
+                              title="View QR Code"
+                            >
+                              <QrCode size={16} />
+                              <span>QR Code</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -1176,121 +1250,78 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
       ) : (
         /* Grid View */
         <>
-          {/* Grid View Action Bar */}
-          <GlassCard className="mb-4 bg-gradient-to-r from-gray-50 to-blue-50 border-gray-200">
-            <div className="flex items-center justify-between">
-              {/* Left: Product Count */}
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <Package className="w-5 h-5 text-blue-600" />
-                  <span className="text-sm font-semibold text-gray-900">
-                    {products.length} Products
+          {/* Grid View Action Bar - Redesigned */}
+          <div className="mb-4 bg-white rounded-lg border border-gray-200 shadow-sm p-3">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              {/* Left: Product Count & Selection Info */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Package className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm font-medium">
+                    {products.length} {products.length === 1 ? 'Product' : 'Products'}
                   </span>
                 </div>
                 
                 {selectedProducts.length > 0 && (
-                  <>
-                    <div className="w-px h-6 bg-gray-300"></div>
-                    <span className="text-sm font-medium text-blue-600">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 rounded-md border border-blue-200">
+                    <CheckCircle className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm font-semibold text-blue-700">
                       {selectedProducts.length} Selected
                     </span>
-                  </>
+                  </div>
                 )}
               </div>
 
               {/* Right: Action Buttons */}
               <div className="flex items-center gap-2">
-                {/* Enable/Disable Selection Mode */}
+                {/* Selection Mode Toggle */}
                 {!isSelectionMode ? (
                   <button
                     onClick={() => setIsSelectionMode(true)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 border border-blue-600 rounded-lg transition-colors shadow-sm"
+                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300 rounded-lg transition-colors"
                   >
                     <CheckCircle className="w-4 h-4" />
-                    Select
+                    <span className="hidden sm:inline">Select</span>
                   </button>
                 ) : (
-                  <>
-                    {/* Select All Button - Only show in selection mode */}
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={toggleSelectAll}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors"
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors"
                     >
                       {selectedProducts.length === products.length && products.length > 0 ? (
                         <>
                           <XCircle className="w-4 h-4" />
-                          Deselect All
+                          <span className="hidden sm:inline">Deselect All</span>
                         </>
                       ) : (
                         <>
                           <CheckCircle className="w-4 h-4" />
-                          Select All
+                          <span className="hidden sm:inline">Select All</span>
                         </>
                       )}
                     </button>
-
-                    {/* Cancel Selection Mode */}
                     <button
                       onClick={() => {
                         setIsSelectionMode(false);
                         setSelectedProducts([]);
                       }}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white text-red-600 hover:bg-red-50 border border-red-300 rounded-lg transition-colors"
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-white text-red-600 hover:bg-red-50 border border-red-300 rounded-lg transition-colors"
                     >
                       <XCircle className="w-4 h-4" />
-                      Cancel
+                      <span className="hidden sm:inline">Cancel</span>
                     </button>
-                  </>
-                )}
-
-                {/* Grid Columns Input - Only show in compact mode */}
-                {cardVariant === 'default' && (
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium text-gray-700">Per Row:</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="12"
-                      value={gridColumns}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value);
-                        if (value >= 1 && value <= 12) {
-                          setGridColumns(value);
-                        }
-                      }}
-                      className="w-16 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
                   </div>
                 )}
 
-                {/* Card Variant Toggle */}
-                <button
-                  onClick={() => setCardVariant(cardVariant === 'detailed' ? 'default' : 'detailed')}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors"
-                  title={`Switch to ${cardVariant === 'detailed' ? 'compact' : 'detailed'} view`}
-                >
-                  {cardVariant === 'detailed' ? (
-                    <>
-                      <Grid className="w-4 h-4" />
-                      Compact
-                    </>
-                  ) : (
-                    <>
-                      <Package className="w-4 h-4" />
-                      Detailed
-                    </>
-                  )}
-                </button>
               </div>
             </div>
-          </GlassCard>
+          </div>
 
           <div 
             style={{
               display: 'grid',
-              gridTemplateColumns: cardVariant === 'detailed'
-                ? 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))'
-                : `repeat(${gridColumns}, minmax(0, 1fr))`,
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))',
               gap: 'clamp(0.75rem, 2vw, 1rem)',
               gridAutoRows: '1fr'
             }}
@@ -1349,7 +1380,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                   }
                 }}
                 showActions={true}
-                variant={cardVariant}
+                variant="detailed"
                 // Selection props
                 isSelected={selectedProducts.includes(product.id)}
                 onSelect={toggleProductSelection}
@@ -1361,9 +1392,9 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
         </>
       )}
 
-      {/* Empty State */}
-      {products.length === 0 && (
-        <GlassCard className="text-center py-12">
+        {/* Empty State */}
+        {products.length === 0 && (
+          <GlassCard className="text-center py-12">
           <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No products found</h3>
           <p className="text-gray-600 mb-4">Try adjusting your search or filter criteria</p>
@@ -1382,7 +1413,8 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
             </GlassButton>
           </div>
         </GlassCard>
-      )}
+        )}
+      </div>
 
       {/* Label Printing Modal */}
       {selectedProductForLabel && (

@@ -90,9 +90,9 @@ const TransactionReversalModal: React.FC<TransactionReversalModalProps> = ({
       const currentBalance = Number(accountData.balance) || 0;
 
       // Calculate reversal amount and new balance
-      // If it was money in (payment_received, transfer_in), reverse by subtracting
+      // If it was money in (payment_received, transfer_in, income), reverse by subtracting
       // If it was money out (expense, transfer_out), reverse by adding
-      const isMoneyIn = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in';
+      const isMoneyIn = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in' || transaction.transaction_type === 'income';
       const reversalAmount = transaction.amount;
       const newBalance = isMoneyIn ? currentBalance - reversalAmount : currentBalance + reversalAmount;
 

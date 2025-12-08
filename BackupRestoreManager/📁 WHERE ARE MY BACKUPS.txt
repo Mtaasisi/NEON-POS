@@ -1,0 +1,91 @@
+╔════════════════════════════════════════════════════════╗
+║                                                        ║
+║     📁  WHERE ARE MY BACKUP FILES?                    ║
+║                                                        ║
+╚════════════════════════════════════════════════════════╝
+
+📍 BACKUP LOCATION:
+
+   All your backups are stored in:
+   
+   📂 BackupRestoreManager/
+      └── 📂 PROD BACKUP/
+              ├── 📂 backup-2025-12-07/        (your backups)
+              ├── 📂 my-custom-backup/         (custom named backups)
+              └── 📂 schema-migrations/        (schema merge files)
+
+═══════════════════════════════════════════════════════════
+
+📦 WHAT'S IN EACH BACKUP FOLDER:
+
+   Each backup contains:
+   
+   ✅ JSON files    - Human-readable data
+   ✅ SQL files     - Ready to restore
+   ✅ Summary file  - Backup metadata
+
+   Example:
+   📂 backup-2025-12-07/
+      ├── lats_products_2025-12-07_01-43-50.json
+      ├── lats_products_2025-12-07_01-43-50.sql
+      ├── lats_customers_2025-12-07_01-43-50.json
+      ├── lats_customers_2025-12-07_01-43-50.sql
+      └── backup-summary-2025-12-07_01-43-50.json
+
+═══════════════════════════════════════════════════════════
+
+🔍 HOW TO FIND YOUR BACKUPS:
+
+   1. Open the BackupRestoreManager folder
+   2. Look for the "PROD BACKUP" folder
+   3. Inside, you'll see folders with backup names/dates
+   4. Each folder contains all backup files
+
+═══════════════════════════════════════════════════════════
+
+💡 BACKUP NAMING:
+
+   • Default name:  backup-YYYY-MM-DD (today's date)
+   • Custom name:   Whatever you enter when backing up
+   • Example:       "my-database-backup" → PROD BACKUP/my-database-backup/
+
+═══════════════════════════════════════════════════════════
+
+🔄 SCHEMA MIGRATIONS:
+
+   Schema merge files are stored in:
+   
+   📂 PROD BACKUP/
+      └── 📂 schema-migrations/
+              └── schema-merge-2025-12-07_01-43-50.sql
+
+═══════════════════════════════════════════════════════════
+
+✅ IMPORTANT:
+
+   • All backups stay in the BackupRestoreManager folder
+   • You can move the entire folder anywhere
+   • Backups move with the folder (portable!)
+   • No files are stored outside this folder
+
+═══════════════════════════════════════════════════════════
+
+📊 FULL PATH EXAMPLE:
+
+   If BackupRestoreManager is on your Desktop:
+   
+   /Users/YourName/Desktop/BackupRestoreManager/PROD BACKUP/
+
+   If BackupRestoreManager is in Downloads:
+   
+   /Users/YourName/Downloads/BackupRestoreManager/PROD BACKUP/
+
+═══════════════════════════════════════════════════════════
+
+🎯 QUICK ACCESS:
+
+   When you run a backup, the app shows you the exact path:
+   
+   📁 Backup directory: /path/to/BackupRestoreManager/PROD BACKUP/backup-name
+
+═══════════════════════════════════════════════════════════

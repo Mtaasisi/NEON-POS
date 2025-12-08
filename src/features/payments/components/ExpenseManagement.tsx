@@ -456,7 +456,30 @@ const ExpenseManagement: React.FC = () => {
       const isAdmin = currentUser?.role === 'admin';
       const status = isAdmin ? 'approved' : 'pending';
 
-      // Insert into account_transactions (branch isolation enforced by selected account)
+      // Get branch_id from account or use current branch
+      let expenseBranchId = currentBranchId;
+      if (!expenseBranchId && formData.account_id) {
+        const { data: account } = await supabase
+          .from('finance_accounts')
+          .select('branch_id')
+          .eq('id', formData.account_id)
+          .single();
+        expenseBranchId = account?.branch_id || currentBranchId;
+      }
+
+      // If still no branch_id, get default branch
+      if (!expenseBranchId) {
+        const { data: defaultBranch } = await supabase
+          .from('store_locations')
+          .select('id')
+          .eq('is_active', true)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .single();
+        expenseBranchId = defaultBranch?.id || null;
+      }
+
+      // Insert into account_transactions with branch_id (always isolated per branch)
       const { data, error } = await supabase
         .from('account_transactions')
         .insert({
@@ -466,6 +489,7 @@ const ExpenseManagement: React.FC = () => {
           description: `${formData.category ? formData.category + ': ' : ''}${formData.description}`,
           reference_number: formData.reference_number || null,
           status: status,
+          branch_id: expenseBranchId, // ✅ Always set branch_id for isolation
           metadata: {
             category: formData.category || null,
             vendor_name: formData.vendor_name || null,

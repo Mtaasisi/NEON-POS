@@ -409,11 +409,10 @@ class WhatsAppService {
         
         const finalCaption = caption || options.caption || '';
         const payload: any = {
-          session: this.sessionId,
           to: formattedPhone
         };
         
-        // Set media URL based on type
+        // Set media URL based on type (WasenderAPI format)
         switch (mediaType) {
           case 'image':
             payload.imageUrl = options.media_url;
@@ -423,21 +422,49 @@ class WhatsAppService {
             break;
           case 'document':
             payload.documentUrl = options.media_url;
+            // Add fileName if provided or extract from URL
+            if (options.fileName) {
+              payload.fileName = options.fileName;
+            } else if (options.media_url) {
+              // Try to extract filename from URL
+              try {
+                const urlObj = new URL(options.media_url);
+                const pathParts = urlObj.pathname.split('/');
+                const fileName = pathParts[pathParts.length - 1];
+                if (fileName && fileName.includes('.')) {
+                  payload.fileName = fileName;
+                }
+              } catch (e) {
+                // If URL parsing fails, use default
+                payload.fileName = 'document.pdf';
+              }
+            }
             break;
           case 'audio':
             payload.audioUrl = options.media_url;
             break;
         }
         
-        // Add text/caption if provided
+        // Add text/caption if provided (required for some message types)
         if (finalCaption) {
           payload.text = finalCaption;
+        } else if (mediaType === 'document') {
+          // Documents should have at least an empty text or caption
+          payload.text = options.caption || '';
         }
         
         // Add viewOnce option if specified (for image/video)
         if (options.viewOnce && (mediaType === 'image' || mediaType === 'video')) {
           payload.viewOnce = true;
         }
+
+        console.log(`📤 [${mediaType.toUpperCase()}] Sending to WasenderAPI:`, {
+          url,
+          to: formattedPhone,
+          hasMediaUrl: !!options.media_url,
+          hasText: !!payload.text,
+          fileName: payload.fileName || 'N/A'
+        });
 
         const response = await fetch(url, {
           method: 'POST',
@@ -449,12 +476,26 @@ class WhatsAppService {
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          const errorMessage = errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+          const errorText = await response.text();
+          let errorData: any = {};
+          try {
+            errorData = JSON.parse(errorText);
+          } catch (e) {
+            errorData = { message: errorText || `HTTP ${response.status}: ${response.statusText}` };
+          }
+          
+          const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+          console.error(`❌ [${mediaType.toUpperCase()}] WasenderAPI error:`, {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorMessage,
+            payload: JSON.stringify(payload, null, 2)
+          });
           
           const error: any = new Error(errorMessage);
           error.status = response.status;
           error.statusCode = response.status;
+          error.details = errorData;
           throw error;
         }
 

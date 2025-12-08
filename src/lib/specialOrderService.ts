@@ -46,6 +46,11 @@ class SpecialOrderService {
       const orderNumber = await this.generateOrderNumber();
       const balanceDue = input.total_amount - input.deposit_paid;
 
+      // ✅ Get current branch for isolation
+      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+      const { isDataShared } = await import('./branchAwareApi');
+      const shared = await isDataShared('special_orders');
+
       // Sanitize date fields - convert empty strings to null
       const sanitizedInput = {
         order_number: orderNumber,
@@ -65,7 +70,9 @@ class SpecialOrderService {
         notes: input.notes || null,
         internal_notes: input.internal_notes || null,
         status: 'deposit_received',
-        created_by: userId
+        created_by: userId,
+        branch_id: shared ? null : (currentBranchId || null), // ✅ Branch isolation
+        is_shared: shared // ✅ Shared flag
       };
 
       // Start transaction
@@ -210,9 +217,9 @@ class SpecialOrderService {
         `)
         .order('created_at', { ascending: false });
 
-      if (branchId) {
-        query = query.eq('branch_id', branchId);
-      }
+      // ✅ Use addBranchFilter for proper isolation support
+      const { addBranchFilter } = await import('./branchAwareApi');
+      query = await addBranchFilter(query, 'special_orders');
 
       const { data, error} = await query;
 
@@ -248,11 +255,17 @@ class SpecialOrderService {
   // Get customer's special orders
   async getCustomerSpecialOrders(customerId: string): Promise<SpecialOrder[]> {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('customer_special_orders')
         .select('*')
         .eq('customer_id', customerId)
         .order('created_at', { ascending: false });
+
+      // ✅ Apply branch filtering for proper isolation
+      const { addBranchFilter } = await import('./branchAwareApi');
+      query = await addBranchFilter(query, 'special_orders');
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return (data || []) as SpecialOrder[];
@@ -269,9 +282,9 @@ class SpecialOrderService {
         .from('customer_special_orders')
         .select('*');
 
-      if (branchId) {
-        query = query.eq('branch_id', branchId);
-      }
+      // ✅ Use addBranchFilter for proper isolation support
+      const { addBranchFilter } = await import('./branchAwareApi');
+      query = await addBranchFilter(query, 'special_orders');
 
       const { data, error } = await query;
 

@@ -335,15 +335,40 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
         currencyService.getCurrenciesUsedInPayments(),
         currencyService.getCurrencyStatistics(),
         
-        // Additional comprehensive database queries with error handling
-        supabase.from('customer_payments').select('*').order('created_at', { ascending: false }).limit(500).then(r => r.error ? { data: [], error: r.error } : r),
-        supabase.from('purchase_order_payments').select('*').order('created_at', { ascending: false }).limit(500).then(r => r.error ? { data: [], error: r.error } : r),
-        // Use customer_payments as device_payments (filtered for device payments)
-        supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500).then(r => r.error ? { data: [], error: r.error } : r),
-        // Use customer_payments as repair_payments (filtered for repair context)
-        supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500).then(r => r.error ? { data: [], error: r.error } : r),
-        // Additional comprehensive data queries with graceful error handling
-        supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }).limit(1000).then(r => r.error ? { data: [], error: r.error } : r),
+        // Additional comprehensive database queries with error handling - WITH BRANCH FILTERING
+        (async () => {
+          const query = supabase.from('customer_payments').select('*').order('created_at', { ascending: false }).limit(500);
+          const filteredQuery = await addBranchFilter(query, 'payments');
+          const result = await filteredQuery;
+          return result.error ? { data: [], error: result.error } : result;
+        })(),
+        (async () => {
+          const query = supabase.from('purchase_order_payments').select('*').order('created_at', { ascending: false }).limit(500);
+          const filteredQuery = await addBranchFilter(query, 'purchase_orders');
+          const result = await filteredQuery;
+          return result.error ? { data: [], error: result.error } : result;
+        })(),
+        // Use customer_payments as device_payments (filtered for device payments) - WITH BRANCH FILTERING
+        (async () => {
+          const query = supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500);
+          const filteredQuery = await addBranchFilter(query, 'payments');
+          const result = await filteredQuery;
+          return result.error ? { data: [], error: result.error } : result;
+        })(),
+        // Use customer_payments as repair_payments (filtered for repair context) - WITH BRANCH FILTERING
+        (async () => {
+          const query = supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500);
+          const filteredQuery = await addBranchFilter(query, 'payments');
+          const result = await filteredQuery;
+          return result.error ? { data: [], error: result.error } : result;
+        })(),
+        // Additional comprehensive data queries with graceful error handling - WITH BRANCH FILTERING
+        (async () => {
+          const query = supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }).limit(1000);
+          const filteredQuery = await addBranchFilter(query, 'payments');
+          const result = await filteredQuery;
+          return result.error ? { data: [], error: result.error } : result;
+        })(),
         (async () => {
           const query = supabase.from('finance_accounts').select('*').order('created_at', { ascending: false });
           const filteredQuery = await addBranchFilter(query, 'accounts');

@@ -1,0 +1,63 @@
+╔════════════════════════════════════════════════════════╗
+║                                                        ║
+║     🔄  BACKUP & RESTORE MANAGER                      ║
+║     📦  Database Backup, Restore & Schema Merge        ║
+║                                                        ║
+╚════════════════════════════════════════════════════════╝
+
+🚀 HOW TO START:
+
+   ════════════════════════════════════════════════════
+   
+   👉  DOUBLE-CLICK THIS FILE:
+   
+       🚀 START HERE - Double Click Me.command
+       
+   ════════════════════════════════════════════════════
+
+   (On Windows, use: 🚀 START HERE - Double Click Me.bat)
+   (On Linux, use:   🚀 START HERE - Double Click Me.sh)
+
+═══════════════════════════════════════════════════════════
+
+✨ WHAT THIS APP DOES:
+
+   ✅ Backup your databases
+   ✅ Restore from backups
+   ✅ Merge database schemas
+   ✅ Manage connections
+   ✅ Auto-start PostgreSQL servers
+
+═══════════════════════════════════════════════════════════
+
+📋 REQUIREMENTS:
+
+   • Node.js v18+ (download from nodejs.org)
+   • npm (comes with Node.js)
+
+═══════════════════════════════════════════════════════════
+
+💡 FIRST TIME:
+
+   The app will automatically install dependencies.
+   Just double-click and wait!
+
+═══════════════════════════════════════════════════════════
+
+📁 YOUR DATA:
+
+   • Backups:        PROD BACKUP/
+   • Connections:   .db-connections.json
+   • Migrations:    PROD BACKUP/schema-migrations/
+
+═══════════════════════════════════════════════════════════
+
+📖 MORE INFO:
+
+   • README.md           - Full documentation
+   • INSTALL.md          - Installation guide
+   • SERVER_AUTO_START.md - Auto-start feature info
+
+═══════════════════════════════════════════════════════════
+
+🎯 JUST DOUBLE-CLICK THE FILE WITH 🚀 TO START!

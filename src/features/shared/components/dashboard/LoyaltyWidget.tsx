@@ -53,20 +53,19 @@ export const LoyaltyWidget: React.FC<LoyaltyWidgetProps> = ({ className }) => {
         .from('loyalty_points')
         .select('id, points, points_type, created_at');
 
-      if (currentBranchId) {
-        pointsQuery = pointsQuery.eq('branch_id', currentBranchId);
-      }
+      // ✅ Use addBranchFilter for proper isolation support
+      const { addBranchFilter } = await import('../../../../lib/branchAwareApi');
+      pointsQuery = await addBranchFilter(pointsQuery, 'loyalty_points');
 
       const { data: points, error: pointsError } = await pointsQuery;
 
-      // Query loyalty members (customers with points)
+      // Query loyalty members (customers with points) - customers already use branch filtering
       let membersQuery = supabase
         .from('lats_customers')
         .select('id, loyalty_points');
 
-      if (currentBranchId) {
-        membersQuery = membersQuery.eq('branch_id', currentBranchId);
-      }
+      // ✅ Customers already have branch filtering in customerApi, but apply here too for consistency
+      membersQuery = await addBranchFilter(membersQuery, 'customers');
 
       const { data: members, error: membersError } = await membersQuery;
 

@@ -17,6 +17,11 @@ export class QualityCheckService {
     try {
       console.log('🔄 Creating quality check using fallback method:', params);
       
+      // ✅ Get current branch for isolation
+      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+      const { isDataShared } = await import('../../../lib/branchAwareApi');
+      const shared = await isDataShared('quality_checks');
+      
       // Create quality check record directly
       const { data: qualityCheck, error: qcError } = await supabase
         .from('purchase_order_quality_checks')
@@ -24,7 +29,9 @@ export class QualityCheckService {
           purchase_order_id: params.purchaseOrderId,
           template_id: params.templateId,
           checked_by: params.checkedBy,
-          status: 'in_progress'
+          status: 'in_progress',
+          branch_id: shared ? null : (currentBranchId || null), // ✅ Branch isolation
+          is_shared: shared // ✅ Shared flag
         })
         .select('id')
         .single();
@@ -240,11 +247,16 @@ export class QualityCheckService {
       }
 
       // Fixed: Removed problematic PostgREST relationship syntax
-      const { data, error } = await supabase
+      let query = supabase
         .from('purchase_order_quality_checks')
         .select('*')
-        .eq('id', id)
-        .single();
+        .eq('id', id);
+      
+      // ✅ Apply branch filtering
+      const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+      query = await addBranchFilter(query, 'quality_checks');
+      
+      const { data, error } = await query.single();
 
       if (error) throw error;
 
@@ -296,11 +308,17 @@ export class QualityCheckService {
   static async getQualityChecksByPO(purchaseOrderId: string): Promise<{ success: boolean; data?: PurchaseOrderQualityCheck[]; message?: string }> {
     try {
       // Fixed: Removed problematic PostgREST relationship syntax
-      const { data, error } = await supabase
+      let query = supabase
         .from('purchase_order_quality_checks')
         .select('*')
         .eq('purchase_order_id', purchaseOrderId)
         .order('created_at', { ascending: false });
+      
+      // ✅ Apply branch filtering
+      const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+      query = await addBranchFilter(query, 'quality_checks');
+      
+      const { data, error } = await query;
 
       if (error) throw error;
 

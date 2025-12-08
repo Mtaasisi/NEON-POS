@@ -126,6 +126,59 @@ const TransactionDetailsModal: React.FC<TransactionDetailsModalProps> = ({ isOpe
           setCashierName(cashierData.full_name || cashierData.email || 'Unknown');
         }
       }
+
+      // Fetch product images for all products in sale items
+      if (saleData.lats_sale_items && saleData.lats_sale_items.length > 0) {
+        try {
+          const productIds = saleData.lats_sale_items
+            .map((item: any) => item.product_id || item.lats_products?.id)
+            .filter(Boolean);
+          
+          const uniqueProductIds = [...new Set(productIds)];
+
+          if (uniqueProductIds.length > 0) {
+            const { data: productImages, error: imagesError } = await supabase
+              .from('product_images')
+              .select('id, product_id, image_url, thumbnail_url, is_primary, file_name, file_size, created_at')
+              .in('product_id', uniqueProductIds)
+              .order('is_primary', { ascending: false })
+              .order('created_at', { ascending: true });
+
+            if (!imagesError && productImages) {
+              // Attach images to products in sale items
+              productImages.forEach((image: any) => {
+                saleData.lats_sale_items.forEach((item: any) => {
+                  const product = item.lats_products;
+                  if (product && product.id === image.product_id) {
+                    if (!product.images) {
+                      product.images = [];
+                    }
+                    const imageObj = {
+                      id: image.id,
+                      url: image.image_url || image.url || image.thumbnail_url,
+                      thumbnailUrl: image.thumbnail_url || image.image_url || image.url,
+                      fileName: image.file_name || image.filename,
+                      fileSize: image.file_size || 0,
+                      isPrimary: image.is_primary || false,
+                      uploadedAt: image.created_at || image.uploaded_at
+                    };
+                    // Add primary images first
+                    if (imageObj.isPrimary) {
+                      product.images.unshift(imageObj);
+                    } else {
+                      product.images.push(imageObj);
+                    }
+                  }
+                });
+              });
+              setSale({ ...saleData }); // Update state with images
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️ Error fetching product images:', error);
+          // Continue without images - not critical
+        }
+      }
     } catch (err: any) {
       console.error('Error fetching sale details:', err);
       setError(err.message || 'Failed to fetch sale details');
@@ -333,7 +386,7 @@ const TransactionDetailsModal: React.FC<TransactionDetailsModalProps> = ({ isOpe
 
   if (!isOpen || !transaction) return null;
 
-  const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in';
+  const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in' || transaction.transaction_type === 'income';
   const isOutgoing = transaction.transaction_type === 'expense' || transaction.transaction_type === 'payment_made' || transaction.transaction_type === 'transfer_out';
 
   return createPortal(

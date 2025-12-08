@@ -61,6 +61,10 @@ const RecentlyOrderedWidget: React.FC<RecentlyOrderedWidgetProps> = ({
         poQuery = poQuery.eq('supplier_id', selectedSupplierId);
       }
 
+      // Apply branch filtering
+      const { addBranchFilter } = await import('../../../../lib/branchAwareApi');
+      poQuery = await addBranchFilter(poQuery, 'purchase_orders');
+
       const { data: purchaseOrders, error: poError } = await poQuery;
       
       if (poError) throw poError;
@@ -100,12 +104,14 @@ const RecentlyOrderedWidget: React.FC<RecentlyOrderedWidgetProps> = ({
         // Create a map of purchase orders for quick lookup
         const poMap = new Map(purchaseOrders.map(po => [po.id, po]));
 
-        // Fetch supplier data for the purchase orders
+        // Fetch supplier data for the purchase orders with branch filtering
         const supplierIds = [...new Set(purchaseOrders.map(po => po.supplier_id).filter(Boolean))];
-        const { data: suppliers } = await supabase
+        let suppliersQuery = supabase
           .from('lats_suppliers')
           .select('id, name')
           .in('id', supplierIds);
+        suppliersQuery = await addBranchFilter(suppliersQuery, 'suppliers');
+        const { data: suppliers } = await suppliersQuery;
         
         const supplierMap = new Map(suppliers?.map(s => [s.id, s]) || []);
 

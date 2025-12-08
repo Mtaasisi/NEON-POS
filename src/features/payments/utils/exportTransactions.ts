@@ -128,7 +128,7 @@ export const exportToCSV = (
 
   // Add summary
   const totalReceived = transactions
-    .filter(t => t.transaction_type === 'payment_received' || t.transaction_type === 'transfer_in')
+    .filter(t => t.transaction_type === 'payment_received' || t.transaction_type === 'transfer_in' || t.transaction_type === 'income')
     .reduce((sum, t) => sum + t.amount, 0);
   
   const totalSpent = transactions
@@ -170,7 +170,7 @@ export const exportToPDF = (
   }
 
   const totalReceived = transactions
-    .filter(t => t.transaction_type === 'payment_received' || t.transaction_type === 'transfer_in')
+    .filter(t => t.transaction_type === 'payment_received' || t.transaction_type === 'transfer_in' || t.transaction_type === 'income')
     .reduce((sum, t) => sum + t.amount, 0);
   
   const totalSpent = transactions
@@ -288,7 +288,7 @@ export const exportToPDF = (
         </thead>
         <tbody>
           ${transactions.map(t => {
-            const isIncoming = t.transaction_type === 'payment_received' || t.transaction_type === 'transfer_in';
+            const isIncoming = t.transaction_type === 'payment_received' || t.transaction_type === 'transfer_in' || t.transaction_type === 'income';
             const isOutgoing = t.transaction_type === 'expense' || t.transaction_type === 'transfer_out';
             return `
               <tr>

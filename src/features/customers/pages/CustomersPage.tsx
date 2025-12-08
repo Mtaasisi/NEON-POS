@@ -410,10 +410,16 @@ const CustomersPage = () => {
   useEffect(() => {
     const fetchDeviceStats = async () => {
       try {
-        // Get total devices count
-        const { count: totalCount, error: totalError } = await supabase
+        // Get total devices count with branch filtering
+        let devicesCountQuery = supabase
           .from('devices')
           .select('id', { count: 'exact', head: true });
+        
+        // ✅ Apply branch filtering
+        const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+        devicesCountQuery = await addBranchFilter(devicesCountQuery, 'devices');
+        
+        const { count: totalCount, error: totalError } = await devicesCountQuery;
 
         if (totalError) {
           console.error('Error fetching total devices count:', totalError);
@@ -421,11 +427,16 @@ const CustomersPage = () => {
           setTotalDevices(totalCount || 0);
         }
 
-        // Get devices in repair count
-        const { count: repairCount, error: repairError } = await supabase
+        // Get devices in repair count with branch filtering
+        let devicesRepairQuery = supabase
           .from('devices')
           .select('id', { count: 'exact', head: true })
           .in('status', ['in-repair', 'diagnosis-started']);
+        
+        // ✅ Apply branch filtering
+        devicesRepairQuery = await addBranchFilter(devicesRepairQuery, 'devices');
+        
+        const { count: repairCount, error: repairError } = await devicesRepairQuery;
 
         if (repairError) {
           console.error('Error fetching devices in repair count:', repairError);

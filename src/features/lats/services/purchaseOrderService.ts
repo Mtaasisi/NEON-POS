@@ -880,7 +880,8 @@ export class PurchaseOrderService {
         product: {
           id: item.product_id,
           name: item.product_name,
-          sku: item.product_sku
+          sku: item.product_sku,
+          images: [] // Will be populated below
         },
         variant: {
           id: item.variant_id,
@@ -889,8 +890,52 @@ export class PurchaseOrderService {
         }
       }));
 
+      // Fetch product images for all unique product IDs
+      const uniqueProductIds = [...new Set(formattedItems.map(item => item.productId))];
+      if (uniqueProductIds.length > 0) {
+        try {
+          const { data: productImages, error: imagesError } = await supabase
+            .from('product_images')
+            .select('*')
+            .in('product_id', uniqueProductIds)
+            .order('is_primary', { ascending: false })
+            .order('created_at', { ascending: true });
+
+          if (!imagesError && productImages) {
+            // Attach images to products
+            productImages.forEach((image: any) => {
+              const productItem = formattedItems.find(item => item.productId === image.product_id);
+              if (productItem) {
+                if (!productItem.product.images) {
+                  productItem.product.images = [];
+                }
+                const imageObj = {
+                  id: image.id,
+                  url: image.image_url || image.url || image.thumbnail_url,
+                  thumbnailUrl: image.thumbnail_url || image.image_url || image.url,
+                  fileName: image.file_name || image.filename,
+                  fileSize: image.file_size || 0,
+                  isPrimary: image.is_primary || false,
+                  uploadedAt: image.created_at || image.uploaded_at
+                };
+                // Add primary images first
+                if (imageObj.isPrimary) {
+                  productItem.product.images.unshift(imageObj);
+                } else {
+                  productItem.product.images.push(imageObj);
+                }
+              }
+            });
+          }
+        } catch (error) {
+          console.warn('⚠️ [PurchaseOrderService] Error fetching product images:', error);
+          // Continue without images - not critical
+        }
+      }
+
       console.log('✅ [PurchaseOrderService] Purchase order items fetched:', {
-        total: formattedItems.length
+        total: formattedItems.length,
+        itemsWithImages: formattedItems.filter(item => item.product?.images?.length > 0).length
       });
 
       return {
@@ -1692,6 +1737,9 @@ export class PurchaseOrderService {
         }
 
         // Create audit log
+        // Get current branch_id for branch isolation
+        const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+        
         const { error: auditError } = await supabase
           .from('lats_purchase_order_audit_log')
           .insert({
@@ -1700,6 +1748,7 @@ export class PurchaseOrderService {
             old_status: poData.status,
             new_status: finalStatus,
             user_id: userId,
+            branch_id: currentBranchId, // ✅ Add branch_id for branch isolation
             notes: receiveNotes || `Finalized ${isPartialReceive ? 'partial' : 'complete'} receive`,
             created_at: new Date().toISOString()
           });

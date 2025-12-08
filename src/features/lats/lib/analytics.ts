@@ -123,7 +123,8 @@ class LatsAnalyticsService {
 
   async getTopCustomers(limit: number = 5): Promise<any[]> {
     try {
-      const { data, error } = await supabase
+      const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+      let query = supabase
         .from('lats_sales')
         .select(`
           total_amount,
@@ -132,6 +133,10 @@ class LatsAnalyticsService {
         .eq('status', 'completed')
         .order('total_amount', { ascending: false })
         .limit(limit);
+      
+      // Sales are always branch-specific, but use addBranchFilter for consistency
+      query = await addBranchFilter(query, 'sales');
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching top customers:', error);
@@ -186,12 +191,17 @@ class LatsAnalyticsService {
 
   async getMonthlyRevenueTrend(months: number = 6): Promise<any[]> {
     try {
-      const { data, error } = await supabase
+      const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+      let query = supabase
         .from('lats_sales')
         .select('total_amount, created_at')
         .eq('status', 'completed')
         .gte('created_at', new Date(Date.now() - months * 30 * 24 * 60 * 60 * 1000).toISOString())
         .order('created_at');
+      
+      // Sales are always branch-specific
+      query = await addBranchFilter(query, 'sales');
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching monthly revenue trend:', error);
@@ -221,10 +231,15 @@ class LatsAnalyticsService {
 
   async getCustomerSegments(): Promise<any[]> {
     try {
-      const { data, error } = await supabase
+      const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+      let query = supabase
         .from('lats_sales')
         .select('total_amount, customer_id')
         .eq('status', 'completed');
+      
+      // Sales are always branch-specific
+      query = await addBranchFilter(query, 'sales');
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching customer segments:', error);
@@ -376,12 +391,17 @@ class LatsAnalyticsService {
       previousPeriodEnd.setMonth(previousPeriodEnd.getMonth() - 1);
       previousPeriodEnd.setDate(previousPeriodEnd.getDate() + 30);
       
-      const { data: previousSales } = await supabase
+      const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+      let previousSalesQuery = supabase
         .from('lats_sales')
         .select('total_amount')
         .gte('created_at', previousPeriodStart.toISOString())
         .lt('created_at', previousPeriodEnd.toISOString())
         .eq('status', 'completed');
+      
+      // Sales are always branch-specific
+      previousSalesQuery = await addBranchFilter(previousSalesQuery, 'sales');
+      const { data: previousSales } = await previousSalesQuery;
       
       const previousRevenue = previousSales?.reduce((sum, sale) => {
         const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
@@ -391,11 +411,15 @@ class LatsAnalyticsService {
 
       // Calculate real profit margins from sales data
       // Fetch sales first
-      const { data: salesForProfit } = await supabase
+      let salesForProfitQuery = supabase
         .from('lats_sales')
         .select('id, total_amount')
         .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
         .eq('status', 'completed');
+      
+      // Sales are always branch-specific
+      salesForProfitQuery = await addBranchFilter(salesForProfitQuery, 'sales');
+      const { data: salesForProfit } = await salesForProfitQuery;
       
       let currentProfit = 0;
       

@@ -1,0 +1,15 @@
+#!/bin/bash
+# macOS App Launcher for Backup & Restore Manager
+
+# Get the app bundle directory and navigate to project root
+APP_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$APP_DIR"
+
+# Check if we're in the right directory, if not, try parent
+if [ ! -f "backup-restore-manager.mjs" ]; then
+    # Try going up one level (in case app is in a subfolder)
+    cd "$(dirname "$APP_DIR")"
+fi
+
+# Run the Node.js script
+exec node backup-restore-manager.mjs

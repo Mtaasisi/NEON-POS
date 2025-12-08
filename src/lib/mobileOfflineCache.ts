@@ -386,10 +386,16 @@ class MobileOfflineCacheService {
     console.log('🔄 [MobileCache] Syncing categories...');
     const db = await this.init();
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('lats_categories')
       .select('*')
       .eq('is_active', true);
+
+    // Apply branch filtering
+    const { addBranchFilter } = await import('./branchAwareApi');
+    query = await addBranchFilter(query, 'categories');
+
+    const { data, error } = await query;
 
     if (error) {
       throw new Error(`Failed to sync categories: ${error.message}`);

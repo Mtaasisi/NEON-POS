@@ -44,7 +44,11 @@ export const getTradeInPrices = async (filters?: TradeInPriceFilters) => {
       query = query.or(`device_name.ilike.%${filters.search}%,device_model.ilike.%${filters.search}%`);
     }
 
-    if (filters?.branch_id) {
+    // ✅ Use addBranchFilter for proper isolation support (only if no explicit branch_id filter)
+    if (!filters?.branch_id) {
+      const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+      query = await addBranchFilter(query, 'trade_ins');
+    } else {
       query = query.eq('branch_id', filters.branch_id);
     }
 
@@ -352,7 +356,11 @@ export const getTradeInTransactions = async (filters?: TradeInFilters) => {
       query = query.eq('condition_rating', filters.condition_rating);
     }
 
-    if (filters?.branch_id) {
+    // ✅ Use addBranchFilter for proper isolation support (only if no explicit branch_id filter)
+    if (!filters?.branch_id) {
+      const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+      query = await addBranchFilter(query, 'trade_ins');
+    } else {
       query = query.eq('branch_id', filters.branch_id);
     }
 
@@ -428,8 +436,10 @@ export const createTradeInTransaction = async (formData: TradeInTransactionFormD
   try {
     const { data: userData, error: authError } = await supabase.auth.getUser();
     
-    // Get active branch (you may need to adjust this based on your branch context)
-    const activeBranchId = localStorage.getItem('activeBranchId') || '00000000-0000-0000-0000-000000000001';
+    // ✅ Get current branch for isolation
+    const activeBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+    const { isDataShared } = await import('../../../lib/branchAwareApi');
+    const shared = await isDataShared('trade_ins');
     
     // Verify the user exists in the auth_users table to satisfy the foreign key constraint
     // The foreign key lats_trade_in_transactions_created_by_fkey references auth_users(id)
@@ -487,7 +497,8 @@ export const createTradeInTransaction = async (formData: TradeInTransactionFormD
       .from('lats_trade_in_transactions')
       .insert({
         customer_id: formData.customer_id,
-        branch_id: activeBranchId,
+        branch_id: shared ? null : (activeBranchId || null), // ✅ Branch isolation
+        is_shared: shared, // ✅ Shared flag
         device_name: formData.device_name,
         device_model: formData.device_model,
         device_imei: formData.device_imei,

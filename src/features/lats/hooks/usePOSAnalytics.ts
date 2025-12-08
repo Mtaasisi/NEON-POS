@@ -139,10 +139,15 @@ export const usePOSAnalytics = () => {
                        timeRange === '7d' ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() :
                        new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-      const { data: salesData, error: salesError } = await supabase
+      const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+      let salesQuery = supabase
         .from('lats_sales')
         .select('id, total_amount, created_at')
         .gte('created_at', startDate);
+      
+      // Sales are always branch-specific
+      salesQuery = await addBranchFilter(salesQuery, 'sales');
+      const { data: salesData, error: salesError } = await salesQuery;
 
       if (salesError) throw salesError;
 

@@ -10,6 +10,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabaseClient';
 import { financeAccountService, FinanceAccount } from '../lib/financeAccountService';
+import { getCurrentBranchId } from '../lib/branchAwareApi';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 interface QuickExpenseModalProps {
@@ -235,7 +236,32 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
         ? formData.customCategory.trim() 
         : formData.category;
 
-      // Insert expense
+      // Get branch_id from account or use current branch
+      const currentBranchId = getCurrentBranchId();
+      let expenseBranchId = currentBranchId;
+      
+      if (!expenseBranchId && formData.account_id) {
+        const { data: account } = await supabase
+          .from('finance_accounts')
+          .select('branch_id')
+          .eq('id', formData.account_id)
+          .single();
+        expenseBranchId = account?.branch_id || currentBranchId;
+      }
+
+      // If still no branch_id, get default branch
+      if (!expenseBranchId) {
+        const { data: defaultBranch } = await supabase
+          .from('store_locations')
+          .select('id')
+          .eq('is_active', true)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .single();
+        expenseBranchId = defaultBranch?.id || null;
+      }
+
+      // Insert expense with branch_id (always isolated per branch)
       const { error } = await supabase
         .from('account_transactions')
         .insert({
@@ -247,6 +273,7 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
             : formData.description,
           reference_number: reference,
           status: status,
+          branch_id: expenseBranchId, // ✅ Always set branch_id for isolation
           metadata: {
             category: finalCategory || 'Other',
             vendor_name: formData.vendor_name || null,

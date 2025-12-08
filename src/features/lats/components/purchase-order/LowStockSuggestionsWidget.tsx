@@ -83,12 +83,23 @@ const LowStockSuggestionsWidget: React.FC<LowStockSuggestionsWidgetProps> = ({
       // Get supplier IDs for fetching supplier and category data
       const supplierIds = products?.map(p => p.supplier_id).filter(Boolean) || [];
 
-      // Fetch suppliers and categories
+      // Fetch suppliers and categories with branch filtering
+      const { addBranchFilter } = await import('../../../../lib/branchAwareApi');
+      let suppliersQuery = supplierIds.length > 0
+        ? supabase.from('lats_suppliers').select('id, name').in('id', supplierIds)
+        : Promise.resolve({ data: [], error: null });
+      
+      let categoriesQuery = supabase.from('lats_categories').select('id, name');
+      categoriesQuery = await addBranchFilter(categoriesQuery, 'categories');
+      
+      // Apply branch filter to suppliers if it's a query object
+      if (supplierIds.length > 0 && typeof suppliersQuery.then === 'function') {
+        suppliersQuery = await addBranchFilter(suppliersQuery, 'suppliers');
+      }
+      
       const [suppliersResult, categoriesResult] = await Promise.all([
-        supplierIds.length > 0
-          ? supabase.from('lats_suppliers').select('id, name').in('id', supplierIds)
-          : Promise.resolve({ data: [], error: null }),
-        supabase.from('lats_categories').select('id, name')
+        suppliersQuery,
+        categoriesQuery
       ]);
 
       // Create lookup maps

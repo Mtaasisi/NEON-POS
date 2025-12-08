@@ -167,10 +167,16 @@ class EmployeeService {
   async getAllEmployees(): Promise<Employee[]> {
     try {
       // FIXED: Fetch without PostgREST relationship syntax
-      const { data: employees, error } = await supabase
+      let query = supabase
         .from('employees')
         .select('*')
         .order('created_at', { ascending: false});
+
+      // ✅ Apply branch filtering
+      const { addBranchFilter } = await import('../lib/branchAwareApi');
+      query = await addBranchFilter(query, 'employees');
+      
+      const { data: employees, error } = await query;
 
       if (error) throw error;
       if (!employees || employees.length === 0) return [];
@@ -254,11 +260,17 @@ class EmployeeService {
   async getActiveEmployees(): Promise<Employee[]> {
     try {
       // FIXED: Fetch without PostgREST relationship syntax
-      const { data: employees, error } = await supabase
+      let query = supabase
         .from('employees')
         .select('*')
         .eq('status', 'active')
         .order('full_name', { ascending: true });
+
+      // ✅ Apply branch filtering
+      const { addBranchFilter } = await import('../lib/branchAwareApi');
+      query = await addBranchFilter(query, 'employees');
+      
+      const { data: employees, error } = await query;
 
       if (error) throw error;
       if (!employees || employees.length === 0) return [];
@@ -520,10 +532,16 @@ class EmployeeService {
    */
   async getAllAttendanceRecords(): Promise<AttendanceRecord[]> {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('attendance_records')
         .select('*')
         .order('attendance_date', { ascending: false });
+
+      // ✅ Apply branch filtering
+      const { addBranchFilter } = await import('../lib/branchAwareApi');
+      query = await addBranchFilter(query, 'attendance');
+      
+      const { data, error } = await query;
 
       if (error) throw error;
       return toCamelCase(data || []);

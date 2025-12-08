@@ -773,14 +773,6 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [tempSelection, setTempSelection] = useState({ entity_id: '', quantity: 1 });
 
-  // Debug state for showing product availability info
-  const [debugInfo, setDebugInfo] = useState<{
-    totalVariants: number;
-    variantsWithStock: number;
-    variantsWithAvailableStock: number;
-    currentBranchId: string;
-  } | null>(null);
-
   useEffect(() => {
     loadBranches();
     loadVariants();
@@ -968,20 +960,6 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
 
       console.log('✅ [CreateTransferModal] Final variants loaded:', data?.length || 0);
       setVariants(data || []);
-
-      // Store debug information
-      if (allVariants) {
-        const totalVariants = allVariants.length;
-        const variantsWithStock = allVariants.filter(v => (v.quantity || 0) > 0).length;
-        const variantsWithAvailableStock = allVariants.filter(v => ((v.quantity || 0) - (v.reserved_quantity || 0)) > 0).length;
-
-        setDebugInfo({
-          totalVariants,
-          variantsWithStock,
-          variantsWithAvailableStock,
-          currentBranchId: currentBranchId || 'undefined'
-        });
-      }
 
       if (data && data.length > 0) {
         toast.success(`${data.length} products available for transfer`);
@@ -1291,51 +1269,6 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                     )}
                   </label>
 
-                  {/* Debug Information */}
-                  {debugInfo && !loadingProducts && (
-                    <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <div className="text-xs text-blue-800">
-                        <div className="font-medium mb-1">📊 Stock Transfer Debug Info:</div>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div>Branch ID: <span className="font-mono">{debugInfo.currentBranchId}</span></div>
-                          <div>Total Variants: {debugInfo.totalVariants}</div>
-                          <div>With Stock: {debugInfo.variantsWithStock}</div>
-                          <div>Available: {debugInfo.variantsWithAvailableStock}</div>
-                        </div>
-                        {debugInfo.variantsWithStock === 0 && (
-                          <div className="mt-2 p-2 bg-yellow-100 border border-yellow-300 rounded text-yellow-800">
-                            ⚠️ No products with stock found for this branch. Check:
-                            <ul className="mt-1 ml-4 list-disc text-xs">
-                              <li>Products exist in inventory</li>
-                              <li>Products have quantity &gt; 0</li>
-                              <li>Branch ID is correct (current: {debugInfo.currentBranchId})</li>
-                              <li>Database connection</li>
-                              <li>Check browser console for detailed logs</li>
-                            </ul>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                console.log('🔍 [Stock Transfer Debug] Reloading variants...');
-                                loadVariants();
-                                toast.success('🔄 Reloading products... Check console for details', {
-                                  duration: 3000
-                                });
-                              }}
-                              className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-                            >
-                              <RefreshCw className="w-3 h-3 inline mr-1" />
-                              Reload Products
-                            </button>
-                          </div>
-                        )}
-                        {debugInfo.variantsWithStock > 0 && filteredProducts.length === 0 && (
-                          <div className="mt-2 p-2 bg-orange-100 border border-orange-300 rounded text-orange-800">
-                            ⚠️ Products exist but none match search/filter criteria
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
                   <div className="border-2 border-gray-200 rounded-lg h-96 overflow-y-auto bg-gray-50 p-3">
                     {loadingProducts ? (
                       <div className="flex items-center justify-center h-full">

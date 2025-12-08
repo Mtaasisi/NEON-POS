@@ -350,6 +350,10 @@ class MobileMoneyService {
           .lte('created_at', dateRange.to.toISOString());
       }
 
+      // Apply branch filtering (mobile money transactions are typically branch-specific)
+      const { addBranchFilter } = await import('../lib/branchAwareApi');
+      query = await addBranchFilter(query, 'payments');
+
       const { data, error } = await query;
 
       if (error || !data) {

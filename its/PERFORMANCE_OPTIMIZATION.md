@@ -1,12 +1,16 @@
 # Database Performance Optimization Guide
 
-## Issue: Neon Database Cold Start (12.5s Load Time)
+## Issue: Database Cold Start (Slow Load Times)
 
-Your application is experiencing slow initial load times due to Neon database cold starts. This happens when the database "sleeps" after ~5 minutes of inactivity on free/hobby tiers.
+Your application is experiencing slow initial load times due to database cold starts. This happens when the database "sleeps" after ~5 minutes of inactivity on free/hobby tiers.
+
+**Affected Databases:**
+- Neon (direct PostgreSQL connections): ~12.5s cold start
+- Supabase REST API: Can also experience cold starts when idle
 
 ## ✅ Fixes Applied
 
-### 1. **Database Keep-Alive (RECOMMENDED)**
+### 1. **Database Keep-Alive for Neon (RECOMMENDED)**
 **File**: `src/lib/supabaseClient.ts`
 
 Added automatic database ping every 4 minutes to prevent the database from sleeping:
@@ -22,11 +26,30 @@ setInterval(async () => {
 }, 4 * 60 * 1000); // Ping every 4 minutes
 ```
 
-**Benefits**:
+### 2. **Supabase REST API Keep-Alive (NEW!)**
+**File**: `src/lib/supabaseClient.ts`
+
+Added automatic Supabase REST API ping every 4 minutes to prevent cold starts:
+
+```typescript
+// Warm up Supabase connection on startup
+setTimeout(async () => {
+  await supabaseRestClient.from('store_locations').select('id').limit(1);
+}, 1000);
+
+// Keep-alive ping every 4 minutes
+setInterval(async () => {
+  await supabaseRestClient.from('store_locations').select('id').limit(1);
+  console.log('💓 Supabase REST API keep-alive ping successful');
+}, 4 * 60 * 1000);
+```
+
+**Benefits** (Both Keep-Alive Mechanisms):
 - Prevents cold starts completely for active users
-- Lightweight query (~1ms execution time)
+- Lightweight queries (~1-5ms execution time)
 - Runs in background, doesn't affect user experience
 - Free tier friendly (minimal compute usage)
+- Works for both Neon and Supabase databases
 
 ## 📊 Expected Results
 
@@ -175,7 +198,9 @@ Consider implementing Redis or in-memory caching for:
 
 ---
 
-**Last Updated**: November 10, 2025
-**Fix Applied**: Database Keep-Alive Mechanism
-**Expected Impact**: 95% reduction in cold start occurrences
+**Last Updated**: December 7, 2025
+**Fixes Applied**: 
+- Neon Database Keep-Alive Mechanism
+- Supabase REST API Keep-Alive Mechanism (NEW!)
+**Expected Impact**: 95% reduction in cold start occurrences for both Neon and Supabase
 

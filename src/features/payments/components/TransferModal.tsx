@@ -242,6 +242,9 @@ const TransferModal: React.FC<TransferModalProps> = ({
     const startDate = new Date(scheduleData.startDate);
     const nextExecutionDate = scheduleData.startDate;
 
+    // Get current branch_id for branch isolation
+    const currentBranchId = localStorage.getItem('current_branch_id') || null;
+    
     const { data, error } = await supabase
       .from('scheduled_transfers')
       .insert({
@@ -259,6 +262,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
         notification_days_before: scheduleData.notificationDaysBefore,
         is_active: true,
         execution_count: 0,
+        branch_id: currentBranchId, // ✅ Add branch_id for branch isolation
         created_by: currentUser?.id,
         metadata: {
           source_account_name: sourceAccount?.name,

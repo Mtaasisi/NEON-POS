@@ -1,0 +1,9420 @@
+-- =====================================================
+-- CONVERTED FROM POSTGRESQL TO MYSQL
+-- =====================================================
+-- Converted on: 2025-12-06T10:15:27.696Z
+-- =====================================================
+
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+SET sql_mode = 'NO_AUTO_VALUE_ON_ZERO';
+
+--
+--
+
+--
+-- TOC entry 7755 (class 1262 OID 16389)
+-- Name: neondb; Type: DATABASE; Schema: -; Owner: neondb_owner
+--
+
+--
+-- TOC entry 14 (class 2615 OID 1187950)
+-- Name: public; Type: SCHEMA; Schema: -; Owner: neondb_owner
+--
+
+-- *not* creating schema, since initdb creates it
+
+--
+-- TOC entry 7757 (class 0 OID 0)
+-- Dependencies: 14
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: neondb_owner
+--
+
+--
+-- TOC entry 2 (class 3079 OID 1204229)
+-- Name: pg_session_jwt; Type: EXTENSION; Schema: -; Owner: -
+--
+
+--
+-- TOC entry 7759 (class 0 OID 0)
+-- Dependencies: 2
+-- Name: EXTENSION pg_session_jwt; Type: COMMENT; Schema: -; Owner: 
+--
+
+--
+-- TOC entry 17 (class 2615 OID 1204237)
+-- Name: neon_auth; Type: SCHEMA; Schema: -; Owner: neondb_owner
+--
+
+--
+-- TOC entry 15 (class 2615 OID 24604)
+-- Name: pgrst; Type: SCHEMA; Schema: -; Owner: neon_service
+--
+
+--
+-- TOC entry 3 (class 3079 OID 1204238)
+-- Name: pgcrypto; Type: EXTENSION; Schema: -; Owner: -
+--
+
+--
+-- TOC entry 7761 (class 0 OID 0)
+-- Dependencies: 3
+-- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: 
+--
+
+--
+-- TOC entry 4 (class 3079 OID 1204275)
+-- Name: CHAR(36)-ossp; Type: EXTENSION; Schema: -; Owner: -
+--
+
+--
+-- TOC entry 7762 (class 0 OID 0)
+-- Dependencies: 4
+-- Name: EXTENSION "CHAR(36)-ossp"; Type: COMMENT; Schema: -; Owner: 
+--
+
+--
+-- TOC entry 690 (class 1255 OID 24605)
+-- TOC entry 488 (class 1255 OID 1204286)
+-- TOC entry 491 (class 1255 OID 1204287)
+-- TOC entry 663 (class 1255 OID 1204288)
+-- TOC entry 637 (class 1255 OID 1204289)
+-- TOC entry 472 (class 1255 OID 1204291)
+-- TOC entry 7764 (class 0 OID 0)
+-- Dependencies: 472
+-- Name: FUNCTION add_inventory_items_without_tracking(p_variant_id CHAR(36), p_quantity integer, p_cost_price numeric, p_selling_price numeric, p_notes text, p_branch_id CHAR(36), p_user_id CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 662 (class 1255 OID 1204292)
+-- TOC entry 7765 (class 0 OID 0)
+-- Dependencies: 662
+-- Name: FUNCTION add_quality_items_to_inventory_v2(p_quality_check_id CHAR(36), p_purchase_order_id CHAR(36), p_user_id CHAR(36), p_profit_margin_percentage numeric, p_default_location text); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 692 (class 1255 OID 1204293)
+-- TOC entry 652 (class 1255 OID 1204294)
+-- TOC entry 563 (class 1255 OID 1204295)
+-- TOC entry 7766 (class 0 OID 0)
+-- Dependencies: 563
+-- Name: FUNCTION auto_convert_po_currency(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 483 (class 1255 OID 1204296)
+-- TOC entry 7767 (class 0 OID 0)
+-- Dependencies: 483
+-- Name: FUNCTION auto_create_default_variant(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 533 (class 1255 OID 1204297)
+-- TOC entry 605 (class 1255 OID 1204298)
+-- TOC entry 700 (class 1255 OID 1204299)
+-- TOC entry 532 (class 1255 OID 1204300)
+-- TOC entry 479 (class 1255 OID 1204301)
+-- TOC entry 646 (class 1255 OID 1204302)
+-- TOC entry 461 (class 1255 OID 1204303)
+-- TOC entry 615 (class 1255 OID 1204304)
+-- TOC entry 7768 (class 0 OID 0)
+-- Dependencies: 615
+-- Name: FUNCTION calculate_parent_variant_stock(parent_variant_id_param CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 576 (class 1255 OID 1204305)
+-- TOC entry 604 (class 1255 OID 1204306)
+-- TOC entry 7769 (class 0 OID 0)
+-- Dependencies: 604
+-- Name: FUNCTION can_delete_store_location(store_id CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 680 (class 1255 OID 1204307)
+-- TOC entry 565 (class 1255 OID 1204308)
+-- TOC entry 699 (class 1255 OID 1204309)
+-- TOC entry 449 (class 1255 OID 1204310)
+-- TOC entry 594 (class 1255 OID 1204311)
+-- TOC entry 613 (class 1255 OID 1204312)
+-- TOC entry 585 (class 1255 OID 1204313)
+-- TOC entry 477 (class 1255 OID 1204318)
+-- TOC entry 459 (class 1255 OID 1204319)
+-- TOC entry 7770 (class 0 OID 0)
+-- Dependencies: 459
+-- Name: FUNCTION check_variant_exists(p_variant_id CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 586 (class 1255 OID 1204320)
+-- TOC entry 651 (class 1255 OID 1204321)
+-- TOC entry 480 (class 1255 OID 1204322)
+-- TOC entry 657 (class 1255 OID 1204323)
+-- TOC entry 485 (class 1255 OID 1204324)
+-- TOC entry 597 (class 1255 OID 1204326)
+-- TOC entry 7771 (class 0 OID 0)
+-- Dependencies: 597
+-- Name: FUNCTION complete_purchase_order_receive(purchase_order_id_param CHAR(36), user_id_param CHAR(36), receive_notes text); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 444 (class 1255 OID 1204328)
+-- TOC entry 626 (class 1255 OID 1204330)
+-- TOC entry 7772 (class 0 OID 0)
+-- Dependencies: 626
+-- Name: FUNCTION complete_quality_check(p_quality_check_id CHAR(36), p_notes text, p_signature text); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 665 (class 1255 OID 1204331)
+-- TOC entry 7773 (class 0 OID 0)
+-- Dependencies: 665
+-- Name: FUNCTION complete_stock_transfer_transaction(p_transfer_id CHAR(36), p_completed_by CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 543 (class 1255 OID 1204332)
+-- TOC entry 7774 (class 0 OID 0)
+-- Dependencies: 543
+-- Name: FUNCTION create_account_transaction(p_account_id CHAR(36), p_transaction_type text, p_amount numeric, p_reference_number text, p_description text, p_metadata JSON, p_created_by CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 446 (class 1255 OID 1204333)
+-- TOC entry 572 (class 1255 OID 1204334)
+-- TOC entry 645 (class 1255 OID 1204335)
+-- TOC entry 453 (class 1255 OID 1204336)
+-- TOC entry 530 (class 1255 OID 1204337)
+-- TOC entry 476 (class 1255 OID 1204338)
+-- TOC entry 7775 (class 0 OID 0)
+-- Dependencies: 476
+-- Name: FUNCTION create_quality_check_from_template(p_purchase_order_id CHAR(36), p_template_id text, p_checked_by CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 622 (class 1255 OID 1204339)
+-- TOC entry 601 (class 1255 OID 1204340)
+-- TOC entry 502 (class 1255 OID 1204341)
+-- TOC entry 654 (class 1255 OID 1204342)
+-- TOC entry 644 (class 1255 OID 1204343)
+-- TOC entry 470 (class 1255 OID 1204344)
+-- TOC entry 582 (class 1255 OID 1204345)
+-- TOC entry 7776 (class 0 OID 0)
+-- Dependencies: 582
+-- Name: FUNCTION execute_scheduled_transfer(p_scheduled_transfer_id CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 469 (class 1255 OID 1204346)
+-- TOC entry 443 (class 1255 OID 1204347)
+-- TOC entry 539 (class 1255 OID 1204348)
+-- TOC entry 7777 (class 0 OID 0)
+-- Dependencies: 539
+-- Name: FUNCTION fix_existing_currency_issues(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 560 (class 1255 OID 1204349)
+-- TOC entry 683 (class 1255 OID 1204350)
+-- TOC entry 559 (class 1255 OID 1204351)
+-- TOC entry 675 (class 1255 OID 1204352)
+-- TOC entry 7778 (class 0 OID 0)
+-- Dependencies: 675
+-- Name: FUNCTION get_available_imeis_for_parent(parent_variant_id_param CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 523 (class 1255 OID 1204353)
+-- TOC entry 7779 (class 0 OID 0)
+-- Dependencies: 523
+-- Name: FUNCTION get_available_imeis_for_pos(parent_variant_id_param CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 474 (class 1255 OID 1204354)
+-- TOC entry 7780 (class 0 OID 0)
+-- Dependencies: 474
+-- Name: FUNCTION get_child_imeis(parent_variant_id_param CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 580 (class 1255 OID 1204355)
+-- TOC entry 569 (class 1255 OID 1204356)
+-- TOC entry 7781 (class 0 OID 0)
+-- Dependencies: 569
+-- Name: FUNCTION get_default_branch_id(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 640 (class 1255 OID 1204357)
+-- TOC entry 7782 (class 0 OID 0)
+-- Dependencies: 640
+-- Name: FUNCTION get_due_scheduled_transfers(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 668 (class 1255 OID 1204358)
+-- TOC entry 703 (class 1255 OID 1204359)
+-- TOC entry 457 (class 1255 OID 1204360)
+-- TOC entry 634 (class 1255 OID 1204361)
+-- TOC entry 641 (class 1255 OID 1204362)
+-- TOC entry 538 (class 1255 OID 1204363)
+-- TOC entry 7783 (class 0 OID 0)
+-- Dependencies: 538
+-- Name: FUNCTION get_parent_variants(product_id_param CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 649 (class 1255 OID 1204364)
+-- TOC entry 463 (class 1255 OID 1204365)
+-- TOC entry 547 (class 1255 OID 1204366)
+-- TOC entry 501 (class 1255 OID 1204367)
+-- TOC entry 468 (class 1255 OID 1204368)
+-- TOC entry 7784 (class 0 OID 0)
+-- Dependencies: 468
+-- Name: FUNCTION get_purchase_order_payment_summary(purchase_order_id_param CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 596 (class 1255 OID 1204369)
+-- TOC entry 500 (class 1255 OID 1204370)
+-- TOC entry 624 (class 1255 OID 1204371)
+-- TOC entry 7785 (class 0 OID 0)
+-- Dependencies: 624
+-- Name: FUNCTION get_quality_check_summary(p_purchase_order_id CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 555 (class 1255 OID 1204372)
+-- TOC entry 496 (class 1255 OID 1204373)
+-- TOC entry 614 (class 1255 OID 1204374)
+-- TOC entry 660 (class 1255 OID 1204375)
+-- TOC entry 546 (class 1255 OID 1204376)
+-- TOC entry 7786 (class 0 OID 0)
+-- Dependencies: 546
+-- Name: FUNCTION get_variant_by_imei(search_imei text); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 587 (class 1255 OID 1204377)
+-- TOC entry 629 (class 1255 OID 1204378)
+-- TOC entry 520 (class 1255 OID 1204379)
+-- TOC entry 621 (class 1255 OID 1204380)
+-- TOC entry 7787 (class 0 OID 0)
+-- Dependencies: 621
+-- Name: FUNCTION imei_exists(check_imei text); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 537 (class 1255 OID 1204381)
+-- TOC entry 697 (class 1255 OID 1204382)
+-- TOC entry 493 (class 1255 OID 1204383)
+-- TOC entry 618 (class 1255 OID 1204384)
+-- TOC entry 478 (class 1255 OID 1204385)
+-- TOC entry 642 (class 1255 OID 1204386)
+-- TOC entry 599 (class 1255 OID 1204387)
+-- TOC entry 666 (class 1255 OID 1204388)
+-- TOC entry 471 (class 1255 OID 1204389)
+-- TOC entry 584 (class 1255 OID 1204390)
+-- TOC entry 567 (class 1255 OID 1204391)
+-- TOC entry 635 (class 1255 OID 1204392)
+-- TOC entry 593 (class 1255 OID 1204393)
+-- TOC entry 542 (class 1255 OID 1204394)
+-- TOC entry 7788 (class 0 OID 0)
+-- Dependencies: 542
+-- Name: FUNCTION partial_purchase_order_receive(purchase_order_id_param CHAR(36), received_items JSON, user_id_param CHAR(36), receive_notes text); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 558 (class 1255 OID 1204396)
+-- TOC entry 573 (class 1255 OID 1204397)
+-- TOC entry 673 (class 1255 OID 1204398)
+-- TOC entry 7789 (class 0 OID 0)
+-- Dependencies: 673
+-- Name: FUNCTION process_purchase_order_payment(purchase_order_id_param CHAR(36), payment_account_id_param CHAR(36), amount_param numeric, currency_param character varying, payment_method_param character varying, payment_method_id_param CHAR(36), user_id_param CHAR(36), reference_param text, notes_param text); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 574 (class 1255 OID 1204400)
+-- TOC entry 7790 (class 0 OID 0)
+-- Dependencies: 574
+-- Name: FUNCTION process_purchase_order_payments_batch(payment_data json[]); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 549 (class 1255 OID 1204401)
+-- TOC entry 653 (class 1255 OID 1204402)
+-- TOC entry 708 (class 1255 OID 1204403)
+-- TOC entry 526 (class 1255 OID 1204404)
+-- TOC entry 7791 (class 0 OID 0)
+-- Dependencies: 526
+-- Name: FUNCTION quick_add_stock(p_variant_id CHAR(36), p_quantity integer); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 535 (class 1255 OID 1204405)
+-- TOC entry 553 (class 1255 OID 1204406)
+-- TOC entry 7792 (class 0 OID 0)
+-- Dependencies: 553
+-- Name: FUNCTION recalculate_all_parent_stocks(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 592 (class 1255 OID 1204407)
+-- TOC entry 706 (class 1255 OID 1204408)
+-- TOC entry 7793 (class 0 OID 0)
+-- Dependencies: 706
+-- Name: FUNCTION receive_quality_checked_items(p_quality_check_id CHAR(36), p_purchase_order_id CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 607 (class 1255 OID 1204409)
+-- TOC entry 710 (class 1255 OID 1204410)
+-- TOC entry 475 (class 1255 OID 1204411)
+-- TOC entry 610 (class 1255 OID 1204412)
+-- TOC entry 650 (class 1255 OID 1204413)
+-- TOC entry 548 (class 1255 OID 1204414)
+-- TOC entry 579 (class 1255 OID 1188138)
+-- TOC entry 7794 (class 0 OID 0)
+-- Dependencies: 579
+-- Name: FUNCTION reverse_purchase_order_payment(payment_id_param CHAR(36), user_id_param CHAR(36)); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 571 (class 1255 OID 1204415)
+-- TOC entry 671 (class 1255 OID 1204416)
+-- TOC entry 625 (class 1255 OID 1204417)
+-- TOC entry 600 (class 1255 OID 1204418)
+-- TOC entry 525 (class 1255 OID 1204419)
+-- TOC entry 460 (class 1255 OID 1204420)
+-- TOC entry 611 (class 1255 OID 1204421)
+-- TOC entry 489 (class 1255 OID 1204422)
+-- TOC entry 566 (class 1255 OID 1204423)
+-- TOC entry 536 (class 1255 OID 1204424)
+-- TOC entry 561 (class 1255 OID 1204425)
+-- TOC entry 578 (class 1255 OID 1204426)
+-- TOC entry 664 (class 1255 OID 1204427)
+-- TOC entry 518 (class 1255 OID 1204428)
+-- TOC entry 568 (class 1255 OID 1204429)
+-- TOC entry 609 (class 1255 OID 1204430)
+-- TOC entry 630 (class 1255 OID 1204431)
+-- TOC entry 698 (class 1255 OID 1204432)
+-- TOC entry 628 (class 1255 OID 1204433)
+-- TOC entry 540 (class 1255 OID 1204434)
+-- TOC entry 554 (class 1255 OID 1204435)
+-- TOC entry 709 (class 1255 OID 1204436)
+-- TOC entry 504 (class 1255 OID 1204437)
+-- TOC entry 577 (class 1255 OID 1204438)
+-- TOC entry 507 (class 1255 OID 1204439)
+-- TOC entry 7795 (class 0 OID 0)
+-- Dependencies: 507
+-- Name: FUNCTION sync_variant_quantity_from_inventory(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 694 (class 1255 OID 1204440)
+-- TOC entry 678 (class 1255 OID 1204441)
+-- TOC entry 681 (class 1255 OID 1204442)
+-- TOC entry 499 (class 1255 OID 1204443)
+-- TOC entry 583 (class 1255 OID 1204444)
+-- TOC entry 7796 (class 0 OID 0)
+-- Dependencies: 583
+-- Name: FUNCTION track_variant_data_source(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 464 (class 1255 OID 1204445)
+-- TOC entry 455 (class 1255 OID 1204446)
+-- TOC entry 541 (class 1255 OID 1204447)
+-- TOC entry 619 (class 1255 OID 1204448)
+-- TOC entry 602 (class 1255 OID 1204449)
+-- TOC entry 631 (class 1255 OID 1204450)
+-- TOC entry 494 (class 1255 OID 1204451)
+-- TOC entry 486 (class 1255 OID 1204452)
+-- TOC entry 551 (class 1255 OID 1204453)
+-- TOC entry 528 (class 1255 OID 1204454)
+-- TOC entry 517 (class 1255 OID 1204455)
+-- TOC entry 7797 (class 0 OID 0)
+-- Dependencies: 517
+-- Name: FUNCTION update_installment_plan_balance(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 702 (class 1255 OID 1204456)
+-- TOC entry 545 (class 1255 OID 1204457)
+-- TOC entry 704 (class 1255 OID 1204458)
+-- TOC entry 591 (class 1255 OID 1204459)
+-- TOC entry 445 (class 1255 OID 1204460)
+-- TOC entry 508 (class 1255 OID 1204461)
+-- TOC entry 7798 (class 0 OID 0)
+-- Dependencies: 508
+-- Name: FUNCTION update_parent_stock_from_children(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 514 (class 1255 OID 1204462)
+-- TOC entry 632 (class 1255 OID 1204463)
+-- TOC entry 529 (class 1255 OID 1204464)
+-- TOC entry 608 (class 1255 OID 1204465)
+-- TOC entry 7799 (class 0 OID 0)
+-- Dependencies: 608
+-- Name: FUNCTION update_product_totals(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 550 (class 1255 OID 1204466)
+-- TOC entry 707 (class 1255 OID 1204467)
+-- TOC entry 603 (class 1255 OID 1204468)
+-- TOC entry 691 (class 1255 OID 1204469)
+-- TOC entry 693 (class 1255 OID 1204470)
+-- TOC entry 701 (class 1255 OID 1204471)
+-- TOC entry 656 (class 1255 OID 1204472)
+-- TOC entry 473 (class 1255 OID 1204473)
+-- TOC entry 495 (class 1255 OID 1204474)
+-- TOC entry 454 (class 1255 OID 1204475)
+-- TOC entry 682 (class 1255 OID 1204476)
+-- TOC entry 458 (class 1255 OID 1204477)
+-- TOC entry 617 (class 1255 OID 1204478)
+-- TOC entry 570 (class 1255 OID 1204479)
+-- TOC entry 677 (class 1255 OID 1204480)
+-- TOC entry 527 (class 1255 OID 1204481)
+-- TOC entry 7800 (class 0 OID 0)
+-- Dependencies: 527
+-- Name: FUNCTION update_supplier_on_time_delivery(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 519 (class 1255 OID 1204482)
+-- TOC entry 7801 (class 0 OID 0)
+-- Dependencies: 519
+-- Name: FUNCTION update_supplier_order_value(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 595 (class 1255 OID 1204483)
+-- TOC entry 7802 (class 0 OID 0)
+-- Dependencies: 595
+-- Name: FUNCTION update_supplier_response_time(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 627 (class 1255 OID 1204484)
+-- TOC entry 7803 (class 0 OID 0)
+-- Dependencies: 627
+-- Name: FUNCTION update_supplier_total_orders(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 669 (class 1255 OID 1204485)
+-- TOC entry 512 (class 1255 OID 1204486)
+-- TOC entry 636 (class 1255 OID 1204487)
+-- TOC entry 497 (class 1255 OID 1204488)
+-- TOC entry 705 (class 1255 OID 1204489)
+-- TOC entry 524 (class 1255 OID 1204490)
+-- TOC entry 612 (class 1255 OID 1204491)
+-- TOC entry 676 (class 1255 OID 1204492)
+-- TOC entry 616 (class 1255 OID 1204493)
+-- TOC entry 450 (class 1255 OID 1204494)
+-- TOC entry 581 (class 1255 OID 1204495)
+-- TOC entry 462 (class 1255 OID 1204496)
+-- TOC entry 667 (class 1255 OID 1204497)
+-- TOC entry 562 (class 1255 OID 1204498)
+-- TOC entry 7804 (class 0 OID 0)
+-- Dependencies: 562
+-- Name: FUNCTION validate_variant_prices(); Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 229 (class 1259 OID 1204499)
+-- Name: users_sync; Type: TABLE; Schema: neon_auth; Owner: neondb_owner
+--
+--
+-- TOC entry 230 (class 1259 OID 1204508)
+-- Name: account_transactions; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7805 (class 0 OID 0)
+-- Dependencies: 230
+-- Name: COLUMN account_transactions.related_entity_type; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7806 (class 0 OID 0)
+-- Dependencies: 230
+-- Name: COLUMN account_transactions.related_entity_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7807 (class 0 OID 0)
+-- Dependencies: 230
+-- Name: COLUMN account_transactions.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7808 (class 0 OID 0)
+-- Dependencies: 230
+-- Name: COLUMN account_transactions.status; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 231 (class 1259 OID 1204522)
+-- Name: admin_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 232 (class 1259 OID 1204532)
+-- Name: admin_settings_log; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 233 (class 1259 OID 1204539)
+-- Name: api_keys; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 234 (class 1259 OID 1204549)
+-- Name: api_request_logs; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 235 (class 1259 OID 1204556)
+-- Name: appointments; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 236 (class 1259 OID 1204568)
+-- Name: attendance_records; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 237 (class 1259 OID 1204580)
+-- Name: audit_logs; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 238 (class 1259 OID 1204587)
+-- Name: auth_users; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7809 (class 0 OID 0)
+-- Dependencies: 238
+-- Name: COLUMN auth_users.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 239 (class 1259 OID 1204602)
+-- Name: auto_reorder_log; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 240 (class 1259 OID 1204610)
+-- Name: lats_product_variants; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7810 (class 0 OID 0)
+-- Dependencies: 240
+-- Name: TABLE lats_product_variants; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7811 (class 0 OID 0)
+-- Dependencies: 240
+-- Name: COLUMN lats_product_variants.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7812 (class 0 OID 0)
+-- Dependencies: 240
+-- Name: COLUMN lats_product_variants.is_shared; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7813 (class 0 OID 0)
+-- Dependencies: 240
+-- Name: COLUMN lats_product_variants.visible_to_branches; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7814 (class 0 OID 0)
+-- Dependencies: 240
+-- Name: COLUMN lats_product_variants.sharing_mode; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7815 (class 0 OID 0)
+-- Dependencies: 240
+-- Name: COLUMN lats_product_variants.parent_variant_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7816 (class 0 OID 0)
+-- Dependencies: 240
+-- Name: COLUMN lats_product_variants.is_parent; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7817 (class 0 OID 0)
+-- Dependencies: 240
+-- Name: COLUMN lats_product_variants.variant_type; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 241 (class 1259 OID 1204640)
+-- Name: lats_products; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7818 (class 0 OID 0)
+-- Dependencies: 241
+-- Name: COLUMN lats_products.storage_room_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7819 (class 0 OID 0)
+-- Dependencies: 241
+-- Name: COLUMN lats_products.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7820 (class 0 OID 0)
+-- Dependencies: 241
+-- Name: COLUMN lats_products.is_shared; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7821 (class 0 OID 0)
+-- Dependencies: 241
+-- Name: COLUMN lats_products.visible_to_branches; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7822 (class 0 OID 0)
+-- Dependencies: 241
+-- Name: COLUMN lats_products.sharing_mode; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7823 (class 0 OID 0)
+-- Dependencies: 241
+-- Name: COLUMN lats_products.shelf_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 242 (class 1259 OID 1204665)
+-- Name: lats_purchase_orders; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7824 (class 0 OID 0)
+-- Dependencies: 242
+-- Name: COLUMN lats_purchase_orders.po_number; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7825 (class 0 OID 0)
+-- Dependencies: 242
+-- Name: COLUMN lats_purchase_orders.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7826 (class 0 OID 0)
+-- Dependencies: 242
+-- Name: COLUMN lats_purchase_orders.payment_terms; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7827 (class 0 OID 0)
+-- Dependencies: 242
+-- Name: COLUMN lats_purchase_orders.exchange_rate; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7828 (class 0 OID 0)
+-- Dependencies: 242
+-- Name: COLUMN lats_purchase_orders.base_currency; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7829 (class 0 OID 0)
+-- Dependencies: 242
+-- Name: COLUMN lats_purchase_orders.exchange_rate_source; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7830 (class 0 OID 0)
+-- Dependencies: 242
+-- Name: COLUMN lats_purchase_orders.exchange_rate_date; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7831 (class 0 OID 0)
+-- Dependencies: 242
+-- Name: COLUMN lats_purchase_orders.total_amount_base_currency; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 243 (class 1259 OID 1204689)
+-- Name: lats_suppliers; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7832 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.name; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7833 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.contact_person; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7834 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.email; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7835 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.phone; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7836 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.address; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7837 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.city; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7838 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.country; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7839 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.is_active; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7840 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.notes; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7841 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.is_shared; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7842 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.is_trade_in_customer; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7843 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.company_name; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7844 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.description; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7845 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.whatsapp; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7846 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.tax_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7847 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.payment_terms; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7848 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.preferred_currency; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7849 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.exchange_rate; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7850 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.wechat; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7851 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.credit_limit; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7852 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.current_balance; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7853 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.is_favorite; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7854 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.priority_level; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7855 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.wechat_qr_code; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7856 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.alipay_qr_code; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7857 (class 0 OID 0)
+-- Dependencies: 243
+-- Name: COLUMN lats_suppliers.bank_account_details; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 244 (class 1259 OID 1204715)
+-- Name: auto_reorder_status; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 245 (class 1259 OID 1204720)
+-- Name: backup_logs; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7858 (class 0 OID 0)
+-- Dependencies: 245
+-- Name: TABLE backup_logs; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 246 (class 1259 OID 1204732)
+-- Name: branch_activity_log; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 247 (class 1259 OID 1204740)
+-- Name: branch_transfers; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7859 (class 0 OID 0)
+-- Dependencies: 247
+-- Name: TABLE branch_transfers; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7860 (class 0 OID 0)
+-- Dependencies: 247
+-- Name: COLUMN branch_transfers.from_branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7861 (class 0 OID 0)
+-- Dependencies: 247
+-- Name: COLUMN branch_transfers.to_branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7862 (class 0 OID 0)
+-- Dependencies: 247
+-- Name: COLUMN branch_transfers.transfer_type; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7863 (class 0 OID 0)
+-- Dependencies: 247
+-- Name: COLUMN branch_transfers.entity_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7864 (class 0 OID 0)
+-- Dependencies: 247
+-- Name: COLUMN branch_transfers.status; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 248 (class 1259 OID 1204754)
+-- Name: buyer_details; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 249 (class 1259 OID 1204763)
+-- Name: buyer_details_buyer_id_seq; Type: SEQUENCE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7865 (class 0 OID 0)
+-- Dependencies: 249
+-- Name: buyer_details_buyer_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 250 (class 1259 OID 1204764)
+-- Name: categories; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 251 (class 1259 OID 1204774)
+-- Name: chat_messages; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 252 (class 1259 OID 1204783)
+-- Name: communication_log; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 253 (class 1259 OID 1204790)
+-- Name: communication_log_log_id_seq; Type: SEQUENCE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7866 (class 0 OID 0)
+-- Dependencies: 253
+-- Name: communication_log_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 254 (class 1259 OID 1204791)
+-- Name: communication_templates; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 255 (class 1259 OID 1204800)
+-- Name: contact_history; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 256 (class 1259 OID 1204808)
+-- Name: contact_methods; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 257 (class 1259 OID 1204818)
+-- Name: contact_preferences; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 258 (class 1259 OID 1204826)
+-- Name: customer_checkins; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 259 (class 1259 OID 1204834)
+-- Name: customer_communications; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7867 (class 0 OID 0)
+-- Dependencies: 259
+-- Name: TABLE customer_communications; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 260 (class 1259 OID 1204841)
+-- Name: customer_fix_backup; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 261 (class 1259 OID 1204847)
+-- Name: customer_fix_backup_backup_id_seq; Type: SEQUENCE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7868 (class 0 OID 0)
+-- Dependencies: 261
+-- Name: customer_fix_backup_backup_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 262 (class 1259 OID 1204848)
+-- Name: customer_installment_plan_payments; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7869 (class 0 OID 0)
+-- Dependencies: 262
+-- Name: TABLE customer_installment_plan_payments; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 263 (class 1259 OID 1204861)
+-- Name: customer_installment_plans; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7870 (class 0 OID 0)
+-- Dependencies: 263
+-- Name: TABLE customer_installment_plans; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 264 (class 1259 OID 1204883)
+-- Name: customer_messages; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7871 (class 0 OID 0)
+-- Dependencies: 264
+-- Name: TABLE customer_messages; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 265 (class 1259 OID 1204897)
+-- Name: customer_notes; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 266 (class 1259 OID 1204905)
+-- Name: customer_payments; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7872 (class 0 OID 0)
+-- Dependencies: 266
+-- Name: COLUMN customer_payments.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7873 (class 0 OID 0)
+-- Dependencies: 266
+-- Name: COLUMN customer_payments.currency; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 267 (class 1259 OID 1204919)
+-- Name: customer_points_history; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 268 (class 1259 OID 1204927)
+-- Name: customer_preferences; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 269 (class 1259 OID 1204941)
+-- Name: customer_revenue; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 270 (class 1259 OID 1204949)
+-- Name: customer_special_orders; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7874 (class 0 OID 0)
+-- Dependencies: 270
+-- Name: TABLE customer_special_orders; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 271 (class 1259 OID 1204967)
+-- Name: lats_customers; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 272 (class 1259 OID 1204999)
+-- Name: customers; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 273 (class 1259 OID 1205004)
+-- Name: whatsapp_customers; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 274 (class 1259 OID 1205016)
+-- Name: customers_customer_id_seq; Type: SEQUENCE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7875 (class 0 OID 0)
+-- Dependencies: 274
+-- Name: customers_customer_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 275 (class 1259 OID 1205017)
+-- Name: customers_duplicates_backup; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 276 (class 1259 OID 1205022)
+-- Name: daily_opening_sessions; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7876 (class 0 OID 0)
+-- Dependencies: 276
+-- Name: TABLE daily_opening_sessions; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 277 (class 1259 OID 1205031)
+-- Name: daily_reports; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7877 (class 0 OID 0)
+-- Dependencies: 277
+-- Name: COLUMN daily_reports.report_date; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7878 (class 0 OID 0)
+-- Dependencies: 277
+-- Name: COLUMN daily_reports.status; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 278 (class 1259 OID 1205054)
+-- Name: daily_sales_closures; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7879 (class 0 OID 0)
+-- Dependencies: 278
+-- Name: TABLE daily_sales_closures; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7880 (class 0 OID 0)
+-- Dependencies: 278
+-- Name: COLUMN daily_sales_closures.date; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7881 (class 0 OID 0)
+-- Dependencies: 278
+-- Name: COLUMN daily_sales_closures.sales_data; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 279 (class 1259 OID 1205066)
+-- Name: lats_purchase_order_items; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7882 (class 0 OID 0)
+-- Dependencies: 279
+-- Name: COLUMN lats_purchase_order_items.quantity_ordered; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7883 (class 0 OID 0)
+-- Dependencies: 279
+-- Name: COLUMN lats_purchase_order_items.quantity_received; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 280 (class 1259 OID 1205075)
+-- Name: data_quality_issues; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7884 (class 0 OID 0)
+-- Dependencies: 280
+-- Name: VIEW data_quality_issues; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 281 (class 1259 OID 1205080)
+-- Name: device_attachments; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 282 (class 1259 OID 1205087)
+-- Name: device_checklists; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 283 (class 1259 OID 1205095)
+-- Name: device_ratings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 284 (class 1259 OID 1205103)
+-- Name: device_remarks; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 285 (class 1259 OID 1205111)
+-- Name: device_transitions; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 286 (class 1259 OID 1205119)
+-- Name: devices; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7885 (class 0 OID 0)
+-- Dependencies: 286
+-- Name: COLUMN devices.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 287 (class 1259 OID 1205139)
+-- Name: diagnostic_checklist_results; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 288 (class 1259 OID 1205147)
+-- Name: diagnostic_checks; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 289 (class 1259 OID 1205154)
+-- Name: diagnostic_devices; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 290 (class 1259 OID 1205162)
+-- Name: diagnostic_problem_templates; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 291 (class 1259 OID 1205172)
+-- Name: diagnostic_requests; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 292 (class 1259 OID 1205181)
+-- Name: diagnostic_templates; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 293 (class 1259 OID 1205190)
+-- Name: document_templates; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 294 (class 1259 OID 1205211)
+-- Name: email_logs; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 295 (class 1259 OID 1205219)
+-- Name: employees; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7886 (class 0 OID 0)
+-- Dependencies: 295
+-- Name: COLUMN employees."position"; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7887 (class 0 OID 0)
+-- Dependencies: 295
+-- Name: COLUMN employees.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7888 (class 0 OID 0)
+-- Dependencies: 295
+-- Name: COLUMN employees.is_shared; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7889 (class 0 OID 0)
+-- Dependencies: 295
+-- Name: COLUMN employees.full_name; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7890 (class 0 OID 0)
+-- Dependencies: 295
+-- Name: COLUMN employees.is_active; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 296 (class 1259 OID 1205239)
+-- Name: employee_attendance_summary; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 297 (class 1259 OID 1205244)
+-- Name: employee_shifts; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 298 (class 1259 OID 1205254)
+-- Name: employees_backup_migration; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 299 (class 1259 OID 1205259)
+-- Name: expense_categories; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 300 (class 1259 OID 1205267)
+-- Name: expenses; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7891 (class 0 OID 0)
+-- Dependencies: 300
+-- Name: TABLE expenses; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7892 (class 0 OID 0)
+-- Dependencies: 300
+-- Name: COLUMN expenses.purchase_order_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7893 (class 0 OID 0)
+-- Dependencies: 300
+-- Name: COLUMN expenses.product_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7894 (class 0 OID 0)
+-- Dependencies: 300
+-- Name: COLUMN expenses.created_by; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 301 (class 1259 OID 1205279)
+-- Name: finance_accounts; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 302 (class 1259 OID 1205295)
+-- Name: store_locations; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7895 (class 0 OID 0)
+-- Dependencies: 302
+-- Name: COLUMN store_locations.data_isolation_mode; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7896 (class 0 OID 0)
+-- Dependencies: 302
+-- Name: COLUMN store_locations.share_products; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7897 (class 0 OID 0)
+-- Dependencies: 302
+-- Name: COLUMN store_locations.share_customers; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7898 (class 0 OID 0)
+-- Dependencies: 302
+-- Name: COLUMN store_locations.share_inventory; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7899 (class 0 OID 0)
+-- Dependencies: 302
+-- Name: COLUMN store_locations.share_suppliers; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7900 (class 0 OID 0)
+-- Dependencies: 302
+-- Name: COLUMN store_locations.share_accounts; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 303 (class 1259 OID 1205343)
+-- Name: finance_accounts_with_branches; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7901 (class 0 OID 0)
+-- Dependencies: 303
+-- Name: VIEW finance_accounts_with_branches; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 304 (class 1259 OID 1205348)
+-- Name: finance_expense_categories; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 305 (class 1259 OID 1205357)
+-- Name: finance_expenses; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 306 (class 1259 OID 1205368)
+-- Name: finance_transfers; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 307 (class 1259 OID 1205377)
+-- Name: gift_card_transactions; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7902 (class 0 OID 0)
+-- Dependencies: 307
+-- Name: COLUMN gift_card_transactions.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 308 (class 1259 OID 1205384)
+-- Name: gift_cards; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 309 (class 1259 OID 1205395)
+-- Name: imei_validation; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 310 (class 1259 OID 1205404)
+-- Name: installment_payments; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7903 (class 0 OID 0)
+-- Dependencies: 310
+-- Name: TABLE installment_payments; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7904 (class 0 OID 0)
+-- Dependencies: 310
+-- Name: COLUMN installment_payments.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 311 (class 1259 OID 1205426)
+-- Name: installment_plans; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 312 (class 1259 OID 1205431)
+-- Name: integrations; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 313 (class 1259 OID 1205440)
+-- Name: inventory; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 314 (class 1259 OID 1205449)
+-- Name: inventory_items; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7905 (class 0 OID 0)
+-- Dependencies: 314
+-- Name: TABLE inventory_items; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7906 (class 0 OID 0)
+-- Dependencies: 314
+-- Name: COLUMN inventory_items.serial_number; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7907 (class 0 OID 0)
+-- Dependencies: 314
+-- Name: COLUMN inventory_items.imei; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7908 (class 0 OID 0)
+-- Dependencies: 314
+-- Name: COLUMN inventory_items.metadata; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7909 (class 0 OID 0)
+-- Dependencies: 314
+-- Name: COLUMN inventory_items.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7910 (class 0 OID 0)
+-- Dependencies: 314
+-- Name: COLUMN inventory_items.is_shared; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 315 (class 1259 OID 1205463)
+-- Name: inventory_settings_view; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 316 (class 1259 OID 1205467)
+-- Name: lats_branches; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 317 (class 1259 OID 1205476)
+-- Name: lats_brands; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 318 (class 1259 OID 1205485)
+-- Name: lats_categories; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7911 (class 0 OID 0)
+-- Dependencies: 318
+-- Name: COLUMN lats_categories.is_shared; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 319 (class 1259 OID 1205497)
+-- Name: lats_data_audit_log; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7912 (class 0 OID 0)
+-- Dependencies: 319
+-- Name: TABLE lats_data_audit_log; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 320 (class 1259 OID 1205504)
+-- Name: lats_employees; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 321 (class 1259 OID 1205516)
+-- Name: lats_inventory_adjustments; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 322 (class 1259 OID 1205524)
+-- Name: lats_inventory_items; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7913 (class 0 OID 0)
+-- Dependencies: 322
+-- Name: TABLE lats_inventory_items; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7914 (class 0 OID 0)
+-- Dependencies: 322
+-- Name: COLUMN lats_inventory_items.serial_number; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7915 (class 0 OID 0)
+-- Dependencies: 322
+-- Name: COLUMN lats_inventory_items.imei; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7916 (class 0 OID 0)
+-- Dependencies: 322
+-- Name: COLUMN lats_inventory_items.mac_address; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7917 (class 0 OID 0)
+-- Dependencies: 322
+-- Name: COLUMN lats_inventory_items.barcode; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7918 (class 0 OID 0)
+-- Dependencies: 322
+-- Name: COLUMN lats_inventory_items.status; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7919 (class 0 OID 0)
+-- Dependencies: 322
+-- Name: COLUMN lats_inventory_items.quality_check_status; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7920 (class 0 OID 0)
+-- Dependencies: 322
+-- Name: COLUMN lats_inventory_items.quantity; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7921 (class 0 OID 0)
+-- Dependencies: 322
+-- Name: COLUMN lats_inventory_items.storage_room_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 323 (class 1259 OID 1205539)
+-- Name: lats_pos_advanced_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7922 (class 0 OID 0)
+-- Dependencies: 323
+-- Name: TABLE lats_pos_advanced_settings; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 324 (class 1259 OID 1205577)
+-- Name: lats_pos_analytics_reporting_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7923 (class 0 OID 0)
+-- Dependencies: 324
+-- Name: TABLE lats_pos_analytics_reporting_settings; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 325 (class 1259 OID 1205614)
+-- Name: lats_pos_barcode_scanner_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7924 (class 0 OID 0)
+-- Dependencies: 325
+-- Name: TABLE lats_pos_barcode_scanner_settings; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 326 (class 1259 OID 1205650)
+-- Name: lats_pos_delivery_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7925 (class 0 OID 0)
+-- Dependencies: 326
+-- Name: TABLE lats_pos_delivery_settings; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 327 (class 1259 OID 1205684)
+-- Name: lats_pos_dynamic_pricing_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7926 (class 0 OID 0)
+-- Dependencies: 327
+-- Name: TABLE lats_pos_dynamic_pricing_settings; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7927 (class 0 OID 0)
+-- Dependencies: 327
+-- Name: COLUMN lats_pos_dynamic_pricing_settings.enable_dynamic_pricing; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7928 (class 0 OID 0)
+-- Dependencies: 327
+-- Name: COLUMN lats_pos_dynamic_pricing_settings.enable_loyalty_pricing; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7929 (class 0 OID 0)
+-- Dependencies: 327
+-- Name: COLUMN lats_pos_dynamic_pricing_settings.enable_bulk_pricing; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7930 (class 0 OID 0)
+-- Dependencies: 327
+-- Name: COLUMN lats_pos_dynamic_pricing_settings.enable_time_based_pricing; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7931 (class 0 OID 0)
+-- Dependencies: 327
+-- Name: COLUMN lats_pos_dynamic_pricing_settings.loyalty_discount_percent; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7932 (class 0 OID 0)
+-- Dependencies: 327
+-- Name: COLUMN lats_pos_dynamic_pricing_settings.bulk_discount_threshold; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7933 (class 0 OID 0)
+-- Dependencies: 327
+-- Name: COLUMN lats_pos_dynamic_pricing_settings.bulk_discount_percent; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7934 (class 0 OID 0)
+-- Dependencies: 327
+-- Name: COLUMN lats_pos_dynamic_pricing_settings.time_based_start_time; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7935 (class 0 OID 0)
+-- Dependencies: 327
+-- Name: COLUMN lats_pos_dynamic_pricing_settings.time_based_end_time; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7936 (class 0 OID 0)
+-- Dependencies: 327
+-- Name: COLUMN lats_pos_dynamic_pricing_settings.time_based_discount_percent; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 328 (class 1259 OID 1205717)
+-- Name: lats_pos_general_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7937 (class 0 OID 0)
+-- Dependencies: 328
+-- Name: TABLE lats_pos_general_settings; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7938 (class 0 OID 0)
+-- Dependencies: 328
+-- Name: COLUMN lats_pos_general_settings.products_per_row; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 329 (class 1259 OID 1205778)
+-- Name: lats_pos_integrations_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 330 (class 1259 OID 1205797)
+-- Name: lats_pos_loyalty_customer_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7939 (class 0 OID 0)
+-- Dependencies: 330
+-- Name: TABLE lats_pos_loyalty_customer_settings; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 331 (class 1259 OID 1205832)
+-- Name: lats_pos_notification_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7940 (class 0 OID 0)
+-- Dependencies: 331
+-- Name: TABLE lats_pos_notification_settings; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 332 (class 1259 OID 1205872)
+-- Name: lats_pos_receipt_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7941 (class 0 OID 0)
+-- Dependencies: 332
+-- Name: TABLE lats_pos_receipt_settings; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7942 (class 0 OID 0)
+-- Dependencies: 332
+-- Name: COLUMN lats_pos_receipt_settings.sms_header_message; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7943 (class 0 OID 0)
+-- Dependencies: 332
+-- Name: COLUMN lats_pos_receipt_settings.sms_footer_message; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 333 (class 1259 OID 1205936)
+-- Name: lats_pos_search_filter_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7944 (class 0 OID 0)
+-- Dependencies: 333
+-- Name: TABLE lats_pos_search_filter_settings; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 334 (class 1259 OID 1205963)
+-- Name: lats_pos_user_permissions_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7945 (class 0 OID 0)
+-- Dependencies: 334
+-- Name: TABLE lats_pos_user_permissions_settings; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 335 (class 1259 OID 1206002)
+-- Name: lats_product_units; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 336 (class 1259 OID 1206010)
+-- Name: lats_product_validation; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 337 (class 1259 OID 1206019)
+-- Name: lats_purchase_order_audit_log; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7946 (class 0 OID 0)
+-- Dependencies: 337
+-- Name: TABLE lats_purchase_order_audit_log; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 338 (class 1259 OID 1206026)
+-- Name: lats_purchase_order_payments; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7947 (class 0 OID 0)
+-- Dependencies: 338
+-- Name: TABLE lats_purchase_order_payments; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7948 (class 0 OID 0)
+-- Dependencies: 338
+-- Name: COLUMN lats_purchase_order_payments.amount; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7949 (class 0 OID 0)
+-- Dependencies: 338
+-- Name: COLUMN lats_purchase_order_payments.payment_method; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7950 (class 0 OID 0)
+-- Dependencies: 338
+-- Name: COLUMN lats_purchase_order_payments.reference_number; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7951 (class 0 OID 0)
+-- Dependencies: 338
+-- Name: COLUMN lats_purchase_order_payments.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 339 (class 1259 OID 1206035)
+-- Name: lats_purchase_order_shipping; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7952 (class 0 OID 0)
+-- Dependencies: 339
+-- Name: TABLE lats_purchase_order_shipping; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7953 (class 0 OID 0)
+-- Dependencies: 339
+-- Name: COLUMN lats_purchase_order_shipping.use_same_address; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7954 (class 0 OID 0)
+-- Dependencies: 339
+-- Name: COLUMN lats_purchase_order_shipping.shipping_status; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 340 (class 1259 OID 1206055)
+-- Name: lats_receipts; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7955 (class 0 OID 0)
+-- Dependencies: 340
+-- Name: TABLE lats_receipts; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 341 (class 1259 OID 1206063)
+-- Name: lats_sale_items; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 342 (class 1259 OID 1206077)
+-- Name: lats_sales; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7956 (class 0 OID 0)
+-- Dependencies: 342
+-- Name: COLUMN lats_sales.user_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7957 (class 0 OID 0)
+-- Dependencies: 342
+-- Name: COLUMN lats_sales.sold_by; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7958 (class 0 OID 0)
+-- Dependencies: 342
+-- Name: COLUMN lats_sales.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 343 (class 1259 OID 1206095)
+-- Name: lats_shipping; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 344 (class 1259 OID 1206104)
+-- Name: lats_shipping_agents; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7959 (class 0 OID 0)
+-- Dependencies: 344
+-- Name: TABLE lats_shipping_agents; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7960 (class 0 OID 0)
+-- Dependencies: 344
+-- Name: COLUMN lats_shipping_agents.shipping_methods; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7961 (class 0 OID 0)
+-- Dependencies: 344
+-- Name: COLUMN lats_shipping_agents.rating; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 345 (class 1259 OID 1206122)
+-- Name: lats_shipping_cargo_items; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 346 (class 1259 OID 1206131)
+-- Name: lats_shipping_methods; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7962 (class 0 OID 0)
+-- Dependencies: 346
+-- Name: TABLE lats_shipping_methods; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 347 (class 1259 OID 1206142)
+-- Name: lats_shipping_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7963 (class 0 OID 0)
+-- Dependencies: 347
+-- Name: TABLE lats_shipping_settings; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 348 (class 1259 OID 1206158)
+-- Name: lats_spare_part_usage; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 349 (class 1259 OID 1206166)
+-- Name: lats_spare_part_variants; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 350 (class 1259 OID 1206180)
+-- Name: lats_spare_parts; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7964 (class 0 OID 0)
+-- Dependencies: 350
+-- Name: COLUMN lats_spare_parts.unit_price; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 351 (class 1259 OID 1206194)
+-- Name: lats_stock_movements; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7965 (class 0 OID 0)
+-- Dependencies: 351
+-- Name: TABLE lats_stock_movements; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7966 (class 0 OID 0)
+-- Dependencies: 351
+-- Name: COLUMN lats_stock_movements.previous_quantity; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7967 (class 0 OID 0)
+-- Dependencies: 351
+-- Name: COLUMN lats_stock_movements.new_quantity; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7968 (class 0 OID 0)
+-- Dependencies: 351
+-- Name: COLUMN lats_stock_movements.reason; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7969 (class 0 OID 0)
+-- Dependencies: 351
+-- Name: COLUMN lats_stock_movements.reference; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 352 (class 1259 OID 1206201)
+-- Name: lats_stock_transfers; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7970 (class 0 OID 0)
+-- Dependencies: 352
+-- Name: TABLE lats_stock_transfers; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 353 (class 1259 OID 1206213)
+-- Name: lats_store_rooms; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7971 (class 0 OID 0)
+-- Dependencies: 353
+-- Name: TABLE lats_store_rooms; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 354 (class 1259 OID 1206226)
+-- Name: lats_storage_rooms; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 355 (class 1259 OID 1206230)
+-- Name: lats_store_locations; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 356 (class 1259 OID 1206249)
+-- Name: lats_store_shelves; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7972 (class 0 OID 0)
+-- Dependencies: 356
+-- Name: TABLE lats_store_shelves; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 357 (class 1259 OID 1206266)
+-- Name: lats_supplier_categories; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7973 (class 0 OID 0)
+-- Dependencies: 357
+-- Name: TABLE lats_supplier_categories; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 358 (class 1259 OID 1206275)
+-- Name: lats_supplier_category_mapping; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7974 (class 0 OID 0)
+-- Dependencies: 358
+-- Name: TABLE lats_supplier_category_mapping; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 359 (class 1259 OID 1206279)
+-- Name: lats_supplier_communications; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7975 (class 0 OID 0)
+-- Dependencies: 359
+-- Name: TABLE lats_supplier_communications; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 360 (class 1259 OID 1206289)
+-- Name: lats_supplier_contracts; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7976 (class 0 OID 0)
+-- Dependencies: 360
+-- Name: TABLE lats_supplier_contracts; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 361 (class 1259 OID 1206301)
+-- Name: lats_supplier_documents; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7977 (class 0 OID 0)
+-- Dependencies: 361
+-- Name: TABLE lats_supplier_documents; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 362 (class 1259 OID 1206309)
+-- Name: lats_supplier_ratings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7978 (class 0 OID 0)
+-- Dependencies: 362
+-- Name: TABLE lats_supplier_ratings; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 363 (class 1259 OID 1206323)
+-- Name: lats_supplier_tag_mapping; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 364 (class 1259 OID 1206327)
+-- Name: lats_supplier_tags; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7979 (class 0 OID 0)
+-- Dependencies: 364
+-- Name: TABLE lats_supplier_tags; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 365 (class 1259 OID 1206334)
+-- Name: lats_trade_in_contracts; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7980 (class 0 OID 0)
+-- Dependencies: 365
+-- Name: TABLE lats_trade_in_contracts; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 366 (class 1259 OID 1206344)
+-- Name: lats_trade_in_damage_assessments; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7981 (class 0 OID 0)
+-- Dependencies: 366
+-- Name: TABLE lats_trade_in_damage_assessments; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 367 (class 1259 OID 1206352)
+-- Name: lats_trade_in_prices; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7982 (class 0 OID 0)
+-- Dependencies: 367
+-- Name: TABLE lats_trade_in_prices; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 368 (class 1259 OID 1206366)
+-- Name: lats_trade_in_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7983 (class 0 OID 0)
+-- Dependencies: 368
+-- Name: TABLE lats_trade_in_settings; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 369 (class 1259 OID 1206374)
+-- Name: lats_trade_in_transactions; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7984 (class 0 OID 0)
+-- Dependencies: 369
+-- Name: TABLE lats_trade_in_transactions; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 370 (class 1259 OID 1206393)
+-- Name: leave_requests; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 371 (class 1259 OID 1206402)
+-- Name: loyalty_points; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7985 (class 0 OID 0)
+-- Dependencies: 371
+-- Name: TABLE loyalty_points; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 372 (class 1259 OID 1206412)
+-- Name: mobile_money_transactions; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7986 (class 0 OID 0)
+-- Dependencies: 372
+-- Name: TABLE mobile_money_transactions; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7987 (class 0 OID 0)
+-- Dependencies: 372
+-- Name: COLUMN mobile_money_transactions.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 373 (class 1259 OID 1206424)
+-- Name: notes; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 374 (class 1259 OID 1206435)
+-- Name: notification_templates; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 375 (class 1259 OID 1206444)
+-- Name: notifications; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 376 (class 1259 OID 1206456)
+-- Name: paragraphs; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 377 (class 1259 OID 1206463)
+-- Name: payment_methods; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 378 (class 1259 OID 1206472)
+-- Name: payment_transactions; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7988 (class 0 OID 0)
+-- Dependencies: 378
+-- Name: TABLE payment_transactions; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 379 (class 1259 OID 1206485)
+-- Name: points_transactions; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7989 (class 0 OID 0)
+-- Dependencies: 379
+-- Name: COLUMN points_transactions.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 380 (class 1259 OID 1206494)
+-- Name: product_images; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 381 (class 1259 OID 1206504)
+-- Name: product_interests; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 382 (class 1259 OID 1206510)
+-- Name: product_interests_interest_id_seq; Type: SEQUENCE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7990 (class 0 OID 0)
+-- Dependencies: 382
+-- Name: product_interests_interest_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 383 (class 1259 OID 1206511)
+-- Name: product_variants_view; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 384 (class 1259 OID 1206516)
+-- Name: purchase_order_audit; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 385 (class 1259 OID 1206524)
+-- Name: purchase_order_messages; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 386 (class 1259 OID 1206533)
+-- Name: purchase_order_payments; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7991 (class 0 OID 0)
+-- Dependencies: 386
+-- Name: TABLE purchase_order_payments; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7992 (class 0 OID 0)
+-- Dependencies: 386
+-- Name: COLUMN purchase_order_payments.payment_account_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7993 (class 0 OID 0)
+-- Dependencies: 386
+-- Name: COLUMN purchase_order_payments.currency; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7994 (class 0 OID 0)
+-- Dependencies: 386
+-- Name: COLUMN purchase_order_payments.payment_method; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7995 (class 0 OID 0)
+-- Dependencies: 386
+-- Name: COLUMN purchase_order_payments.payment_method_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7996 (class 0 OID 0)
+-- Dependencies: 386
+-- Name: COLUMN purchase_order_payments.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 387 (class 1259 OID 1206545)
+-- Name: purchase_order_quality_check_items; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7997 (class 0 OID 0)
+-- Dependencies: 387
+-- Name: TABLE purchase_order_quality_check_items; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 388 (class 1259 OID 1206560)
+-- Name: purchase_order_quality_checks; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7998 (class 0 OID 0)
+-- Dependencies: 388
+-- Name: TABLE purchase_order_quality_checks; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 389 (class 1259 OID 1206571)
+-- Name: purchase_orders; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 390 (class 1259 OID 1206580)
+-- Name: quality_check_criteria; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7999 (class 0 OID 0)
+-- Dependencies: 390
+-- Name: TABLE quality_check_criteria; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 391 (class 1259 OID 1206589)
+-- Name: quality_check_items; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 392 (class 1259 OID 1206600)
+-- Name: quality_check_results; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 393 (class 1259 OID 1206607)
+-- Name: quality_check_templates; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8000 (class 0 OID 0)
+-- Dependencies: 393
+-- Name: TABLE quality_check_templates; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 394 (class 1259 OID 1206616)
+-- Name: quality_checks; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 395 (class 1259 OID 1206628)
+-- Name: recurring_expense_history; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 396 (class 1259 OID 1206637)
+-- Name: recurring_expenses; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8001 (class 0 OID 0)
+-- Dependencies: 396
+-- Name: TABLE recurring_expenses; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8002 (class 0 OID 0)
+-- Dependencies: 396
+-- Name: COLUMN recurring_expenses.frequency; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8003 (class 0 OID 0)
+-- Dependencies: 396
+-- Name: COLUMN recurring_expenses.next_due_date; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8004 (class 0 OID 0)
+-- Dependencies: 396
+-- Name: COLUMN recurring_expenses.auto_process; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 397 (class 1259 OID 1206651)
+-- Name: reminders; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 398 (class 1259 OID 1206666)
+-- Name: repair_parts; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 399 (class 1259 OID 1206679)
+-- Name: report_attachments; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8005 (class 0 OID 0)
+-- Dependencies: 399
+-- Name: TABLE report_attachments; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 400 (class 1259 OID 1206686)
+-- Name: reports; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8006 (class 0 OID 0)
+-- Dependencies: 400
+-- Name: TABLE reports; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8007 (class 0 OID 0)
+-- Dependencies: 400
+-- Name: COLUMN reports.report_type; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8008 (class 0 OID 0)
+-- Dependencies: 400
+-- Name: COLUMN reports.priority; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8009 (class 0 OID 0)
+-- Dependencies: 400
+-- Name: COLUMN reports.status; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8010 (class 0 OID 0)
+-- Dependencies: 400
+-- Name: COLUMN reports.contact_method; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 401 (class 1259 OID 1206702)
+-- Name: returns; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 402 (class 1259 OID 1206715)
+-- Name: sale_inventory_items; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8011 (class 0 OID 0)
+-- Dependencies: 402
+-- Name: TABLE sale_inventory_items; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 403 (class 1259 OID 1206721)
+-- Name: sales; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 404 (class 1259 OID 1206732)
+-- Name: sales_pipeline; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 405 (class 1259 OID 1206742)
+-- Name: sales_pipeline_sale_id_seq; Type: SEQUENCE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8012 (class 0 OID 0)
+-- Dependencies: 405
+-- Name: sales_pipeline_sale_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 406 (class 1259 OID 1206743)
+-- Name: scheduled_transfer_executions; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8013 (class 0 OID 0)
+-- Dependencies: 406
+-- Name: TABLE scheduled_transfer_executions; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 407 (class 1259 OID 1206753)
+-- Name: scheduled_transfers; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8014 (class 0 OID 0)
+-- Dependencies: 407
+-- Name: TABLE scheduled_transfers; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 408 (class 1259 OID 1206770)
+-- Name: serial_number_movements; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8015 (class 0 OID 0)
+-- Dependencies: 408
+-- Name: TABLE serial_number_movements; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 409 (class 1259 OID 1206778)
+-- Name: settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 410 (class 1259 OID 1206786)
+-- Name: shelves; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8016 (class 0 OID 0)
+-- Dependencies: 410
+-- Name: TABLE shelves; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 411 (class 1259 OID 1206795)
+-- Name: shift_templates; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 412 (class 1259 OID 1206812)
+-- Name: simple_inventory_view; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 413 (class 1259 OID 1206817)
+-- Name: sms_logs; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8017 (class 0 OID 0)
+-- Dependencies: 413
+-- Name: TABLE sms_logs; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 414 (class 1259 OID 1206826)
+-- Name: sms_trigger_logs; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 415 (class 1259 OID 1206833)
+-- Name: sms_triggers; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 416 (class 1259 OID 1206842)
+-- Name: special_order_payments; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8018 (class 0 OID 0)
+-- Dependencies: 416
+-- Name: TABLE special_order_payments; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8019 (class 0 OID 0)
+-- Dependencies: 416
+-- Name: COLUMN special_order_payments.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 417 (class 1259 OID 1206850)
+-- Name: special_orders; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 418 (class 1259 OID 1206855)
+-- Name: storage_rooms; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8020 (class 0 OID 0)
+-- Dependencies: 418
+-- Name: TABLE storage_rooms; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 419 (class 1259 OID 1206866)
+-- Name: supplier_contracts_expiring; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8021 (class 0 OID 0)
+-- Dependencies: 419
+-- Name: VIEW supplier_contracts_expiring; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 420 (class 1259 OID 1206871)
+-- Name: supplier_documents_expiring; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8022 (class 0 OID 0)
+-- Dependencies: 420
+-- Name: VIEW supplier_documents_expiring; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 421 (class 1259 OID 1206876)
+-- Name: supplier_performance_dashboard; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8023 (class 0 OID 0)
+-- Dependencies: 421
+-- Name: VIEW supplier_performance_dashboard; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 422 (class 1259 OID 1206881)
+-- Name: supplier_performance_summary; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8024 (class 0 OID 0)
+-- Dependencies: 422
+-- Name: VIEW supplier_performance_summary; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 423 (class 1259 OID 1206886)
+-- Name: suppliers; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 424 (class 1259 OID 1206898)
+-- Name: system_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 425 (class 1259 OID 1206907)
+-- Name: todays_attendance; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 426 (class 1259 OID 1206912)
+-- Name: user_branch_assignments; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 427 (class 1259 OID 1206922)
+-- Name: user_daily_goals; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 428 (class 1259 OID 1206937)
+-- Name: user_settings; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 429 (class 1259 OID 1206946)
+-- Name: users; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8025 (class 0 OID 0)
+-- Dependencies: 429
+-- Name: COLUMN users.branch_id; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 430 (class 1259 OID 1206962)
+-- Name: v_expense_summary_by_category; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 431 (class 1259 OID 1206967)
+-- Name: v_expenses_with_accounts; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 432 (class 1259 OID 1206972)
+-- Name: v_has_payment_method_column; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 433 (class 1259 OID 1206975)
+-- Name: v_monthly_expense_summary; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 434 (class 1259 OID 1206979)
+-- Name: v_parent_child_variants; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8026 (class 0 OID 0)
+-- Dependencies: 434
+-- Name: VIEW v_parent_child_variants; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 435 (class 1259 OID 1206984)
+-- Name: v_parent_variants_with_imei_count; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8027 (class 0 OID 0)
+-- Dependencies: 435
+-- Name: VIEW v_parent_variants_with_imei_count; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 436 (class 1259 OID 1206989)
+-- Name: v_system_health_check; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 437 (class 1259 OID 1206994)
+-- Name: view_trade_in_transactions_full; Type: VIEW; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 438 (class 1259 OID 1207002)
+-- Name: webhook_endpoints; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 439 (class 1259 OID 1207016)
+-- Name: webhook_logs; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 440 (class 1259 OID 1207024)
+-- Name: whatsapp_instances_comprehensive; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 441 (class 1259 OID 1207034)
+-- Name: whatsapp_message_templates; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 442 (class 1259 OID 1207043)
+-- Name: whatsapp_templates; Type: TABLE; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 4428 (class 2604 OID 1207051)
+-- Name: buyer_details buyer_id; Type: DEFAULT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 4442 (class 2604 OID 1207052)
+-- Name: communication_log log_id; Type: DEFAULT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 4465 (class 2604 OID 1207053)
+-- Name: customer_fix_backup backup_id; Type: DEFAULT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5488 (class 2604 OID 1207054)
+-- Name: product_interests interest_id; Type: DEFAULT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5589 (class 2604 OID 1207055)
+-- Name: sales_pipeline sale_id; Type: DEFAULT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 4560 (class 2604 OID 1207056)
+-- Name: whatsapp_customers customer_id; Type: DEFAULT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7559 (class 0 OID 1204499)
+-- Dependencies: 229
+-- Data for Name: users_sync; Type: TABLE DATA; Schema: neon_auth; Owner: neondb_owner
+--
+-- Original: COPY neon_auth.users_sync (raw_json, updated_at, deleted_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7560 (class 0 OID 1204508)
+-- Dependencies: 230
+-- Data for Name: account_transactions; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.account_transactions (id, account_id, transaction_type, amount, balance_before, balance_after, reference_number, description, related_transaction_id, metadata, created_by, created_at, updated_at, related_entity_type, related_entity_id, branch_id, status) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7561 (class 0 OID 1204522)
+-- Dependencies: 231
+-- Data for Name: admin_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.admin_settings (id, category, setting_key, setting_value, setting_type, description, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7562 (class 0 OID 1204532)
+-- Dependencies: 232
+-- Data for Name: admin_settings_log; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.admin_settings_log (id, category, setting_key, old_value, new_value, changed_by, change_reason, changed_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7563 (class 0 OID 1204539)
+-- Dependencies: 233
+-- Data for Name: api_keys; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.api_keys (id, user_id, name, key, scopes, is_active, last_used, expires_at, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7564 (class 0 OID 1204549)
+-- Dependencies: 234
+-- Data for Name: api_request_logs; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.api_request_logs (id, api_key_id, endpoint, method, ip_address, user_agent, response_status, response_time_ms, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7565 (class 0 OID 1204556)
+-- Dependencies: 235
+-- Data for Name: appointments; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.appointments (id, customer_id, device_id, technician_id, appointment_date, duration_minutes, status, notes, created_at, updated_at, service_type, appointment_time, customer_name, customer_phone, technician_name, priority, created_by, branch_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7566 (class 0 OID 1204568)
+-- Dependencies: 236
+-- Data for Name: attendance_records; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.attendance_records (id, employee_id, attendance_date, check_in_time, check_out_time, check_in_location_lat, check_in_location_lng, check_out_location_lat, check_out_location_lng, check_in_network_ssid, check_out_network_ssid, check_in_photo_url, check_out_photo_url, total_hours, break_hours, overtime_hours, status, notes, approved_by, approved_at, created_at, updated_at, branch_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7567 (class 0 OID 1204580)
+-- Dependencies: 237
+-- Data for Name: audit_logs; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.audit_logs (id, user_id, action, table_name, record_id, old_data, new_data, ip_address, user_agent, created_at, details, entity_type, entity_id, user_role, "timestamp") FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7568 (class 0 OID 1204587)
+-- Dependencies: 238
+-- Data for Name: auth_users; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.auth_users (id, email, username, name, role, is_active, created_at, updated_at, permissions, max_devices_allowed, require_approval, failed_login_attempts, two_factor_enabled, two_factor_secret, last_login, branch_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7569 (class 0 OID 1204602)
+-- Dependencies: 239
+-- Data for Name: auto_reorder_log; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.auto_reorder_log (id, product_id, variant_id, supplier_id, triggered_quantity, reorder_point, suggested_quantity, purchase_order_id, po_created, error_message, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7574 (class 0 OID 1204720)
+-- Dependencies: 245
+-- Data for Name: backup_logs; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.backup_logs (id, backup_type, status, file_path, file_size, record_count, started_at, completed_at, error_message, created_by, metadata, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7575 (class 0 OID 1204732)
+-- Dependencies: 246
+-- Data for Name: branch_activity_log; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.branch_activity_log (id, branch_id, user_id, action_type, entity_type, entity_id, description, metadata, ip_address, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7576 (class 0 OID 1204740)
+-- Dependencies: 247
+-- Data for Name: branch_transfers; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.branch_transfers (id, from_branch_id, to_branch_id, transfer_type, entity_type, entity_id, quantity, status, requested_by, approved_by, notes, metadata, requested_at, approved_at, completed_at, created_at, updated_at, rejection_reason) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7577 (class 0 OID 1204754)
+-- Dependencies: 248
+-- Data for Name: buyer_details; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.buyer_details (buyer_id, customer_id, buying_messages, unique_keywords, keywords_found, first_inquiry_date, last_inquiry_date, buying_score, buyer_tier, sample_message, conversion_status, last_contacted, notes) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7579 (class 0 OID 1204764)
+-- Dependencies: 250
+-- Data for Name: categories; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.categories (id, name, description, parent_id, branch_id, is_shared, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7580 (class 0 OID 1204774)
+-- Dependencies: 251
+-- Data for Name: chat_messages; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.chat_messages (id, conversation_id, sender_id, sender_type, recipient_id, recipient_type, message_text, message_type, is_read, read_at, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7581 (class 0 OID 1204783)
+-- Dependencies: 252
+-- Data for Name: communication_log; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.communication_log (log_id, customer_id, communication_type, direction, subject, notes, contacted_by, contact_date, follow_up_required, follow_up_date) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7583 (class 0 OID 1204791)
+-- Dependencies: 254
+-- Data for Name: communication_templates; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.communication_templates (id, template_name, template_type, subject, body, variables, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7584 (class 0 OID 1204800)
+-- Dependencies: 255
+-- Data for Name: contact_history; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.contact_history (id, customer_id, contact_type, contact_method, contact_subject, contact_notes, contacted_by, contacted_at, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7585 (class 0 OID 1204808)
+-- Dependencies: 256
+-- Data for Name: contact_methods; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.contact_methods (id, customer_id, method_type, contact_value, is_primary, is_verified, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7586 (class 0 OID 1204818)
+-- Dependencies: 257
+-- Data for Name: contact_preferences; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.contact_preferences (id, customer_id, preference_type, preference_value, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7587 (class 0 OID 1204826)
+-- Dependencies: 258
+-- Data for Name: customer_checkins; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.customer_checkins (id, customer_id, checkin_date, checkout_date, purpose, notes, created_by, created_at, staff_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7588 (class 0 OID 1204834)
+-- Dependencies: 259
+-- Data for Name: customer_communications; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.customer_communications (id, customer_id, type, message, status, phone_number, sent_by, sent_at, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7589 (class 0 OID 1204841)
+-- Dependencies: 260
+-- Data for Name: customer_fix_backup; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.customer_fix_backup (backup_id, backup_timestamp, customer_id, customer_name, customer_phone, old_total_spent, new_total_spent, old_points, new_points, old_loyalty_level, new_loyalty_level, sale_number, fix_reason) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7591 (class 0 OID 1204848)
+-- Dependencies: 262
+-- Data for Name: customer_installment_plan_payments; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.customer_installment_plan_payments (id, installment_plan_id, customer_id, installment_number, amount, payment_method, payment_date, due_date, status, days_late, late_fee, account_id, reference_number, notification_sent, notification_sent_at, notes, created_by, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7592 (class 0 OID 1204861)
+-- Dependencies: 263
+-- Data for Name: customer_installment_plans; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.customer_installment_plans (id, plan_number, customer_id, sale_id, branch_id, total_amount, down_payment, amount_financed, total_paid, balance_due, installment_amount, number_of_installments, installments_paid, payment_frequency, start_date, next_payment_date, end_date, completion_date, status, late_fee_amount, late_fee_applied, days_overdue, last_reminder_sent, reminder_count, terms_accepted, terms_accepted_date, notes, created_by, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7593 (class 0 OID 1204883)
+-- Dependencies: 264
+-- Data for Name: customer_messages; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.customer_messages (id, customer_id, message, direction, channel, status, sender_id, sender_name, device_id, appointment_id, metadata, created_at, read_at, delivered_at, branch_id, is_shared) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7594 (class 0 OID 1204897)
+-- Dependencies: 265
+-- Data for Name: customer_notes; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.customer_notes (id, customer_id, note, created_by, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7595 (class 0 OID 1204905)
+-- Dependencies: 266
+-- Data for Name: customer_payments; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.customer_payments (id, customer_id, device_id, amount, method, payment_type, status, reference_number, notes, payment_date, created_by, created_at, updated_at, sale_id, branch_id, currency, is_shared) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7596 (class 0 OID 1204919)
+-- Dependencies: 267
+-- Data for Name: customer_points_history; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.customer_points_history (id, customer_id, points_change, reason, transaction_type, created_by, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7597 (class 0 OID 1204927)
+-- Dependencies: 268
+-- Data for Name: customer_preferences; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.customer_preferences (id, customer_id, preferred_contact_method, communication_frequency, marketing_opt_in, sms_opt_in, email_opt_in, whatsapp_opt_in, preferred_language, notification_preferences, preferred_branch, preferred_payment_method, notes, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7598 (class 0 OID 1204941)
+-- Dependencies: 269
+-- Data for Name: customer_revenue; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.customer_revenue (id, customer_id, revenue_date, revenue_amount, revenue_source, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7599 (class 0 OID 1204949)
+-- Dependencies: 270
+-- Data for Name: customer_special_orders; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.customer_special_orders (id, order_number, customer_id, branch_id, product_name, product_description, quantity, unit_price, total_amount, deposit_paid, balance_due, status, order_date, expected_arrival_date, actual_arrival_date, delivery_date, supplier_name, supplier_reference, country_of_origin, tracking_number, notes, internal_notes, customer_notified_arrival, created_by, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7603 (class 0 OID 1205017)
+-- Dependencies: 275
+-- Data for Name: customers_duplicates_backup; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.customers_duplicates_backup (id, name, email, phone, address, city, location, branch_id, loyalty_points, total_spent, status, is_active, created_at, updated_at, whatsapp, gender, country, color_tag, loyalty_level, points, last_visit, referral_source, birth_month, birth_day, birthday, initial_notes, notes, customer_tag, location_description, national_id, joined_date, profile_image, whatsapp_opt_out, referred_by, created_by, last_purchase_date, total_purchases, total_returns, total_calls, total_call_duration_minutes, incoming_calls, outgoing_calls, missed_calls, avg_call_duration_minutes, first_call_date, last_call_date, call_loyalty_level, last_activity_date, referrals, is_shared, preferred_branch_id, visible_to_branches, sharing_mode, created_by_branch_id, created_by_branch_name, backup_date, backup_reason) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7604 (class 0 OID 1205022)
+-- Dependencies: 276
+-- Data for Name: daily_opening_sessions; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.daily_opening_sessions (id, date, opened_at, opened_by, opened_by_user_id, is_active, notes, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7605 (class 0 OID 1205031)
+-- Dependencies: 277
+-- Data for Name: daily_reports; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.daily_reports (id, user_id, report_date, branch_id, hours_worked, tasks_completed, tasks_in_progress, projects_worked, sales_achieved, customers_served, issues_resolved, achievements, challenges, learnings, goals_for_tomorrow, feedback, mood_rating, energy_level, status, reviewed_by, reviewed_at, review_notes, created_at, updated_at, report_type, report_month, title, customer_interactions, pending_work, recommendations, additional_notes, sales_made, pending_tasks, submitted_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7606 (class 0 OID 1205054)
+-- Dependencies: 278
+-- Data for Name: daily_sales_closures; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.daily_sales_closures (id, date, total_sales, total_transactions, closed_at, closed_by, closed_by_user_id, sales_data, created_at, updated_at, session_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7608 (class 0 OID 1205080)
+-- Dependencies: 281
+-- Data for Name: device_attachments; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.device_attachments (id, device_id, file_name, file_url, file_type, file_size, uploaded_by, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7609 (class 0 OID 1205087)
+-- Dependencies: 282
+-- Data for Name: device_checklists; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.device_checklists (id, device_id, checklist_item, is_checked, checked_by, checked_at, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7610 (class 0 OID 1205095)
+-- Dependencies: 283
+-- Data for Name: device_ratings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.device_ratings (id, device_id, customer_id, rating, review_text, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7611 (class 0 OID 1205103)
+-- Dependencies: 284
+-- Data for Name: device_remarks; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.device_remarks (id, device_id, remark, remark_type, created_by, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7612 (class 0 OID 1205111)
+-- Dependencies: 285
+-- Data for Name: device_transitions; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.device_transitions (id, device_id, from_status, to_status, transitioned_by, transition_notes, transitioned_at, performed_by, created_at, signature) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7613 (class 0 OID 1205119)
+-- Dependencies: 286
+-- Data for Name: devices; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.devices (id, customer_id, device_name, brand, model, serial_number, imei, problem_description, diagnostic_notes, repair_notes, status, estimated_cost, actual_cost, deposit_amount, balance_amount, technician_id, intake_date, estimated_completion_date, actual_completion_date, pickup_date, warranty_expiry_date, created_at, updated_at, priority, password, accessories, issue_description, assigned_to, expected_return_date, estimated_hours, diagnosis_required, device_notes, device_cost, repair_cost, repair_price, unlock_code, device_condition, diagnostic_checklist, branch_id, is_shared) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7614 (class 0 OID 1205139)
+-- Dependencies: 287
+-- Data for Name: diagnostic_checklist_results; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.diagnostic_checklist_results (id, device_id, problem_template_id, checklist_items, overall_status, technician_notes, created_at, updated_at, completed_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7615 (class 0 OID 1205147)
+-- Dependencies: 288
+-- Data for Name: diagnostic_checks; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.diagnostic_checks (id, request_id, check_name, check_result, is_passed, checked_by, checked_at, created_at, diagnostic_device_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7616 (class 0 OID 1205154)
+-- Dependencies: 289
+-- Data for Name: diagnostic_devices; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.diagnostic_devices (id, device_id, diagnostic_data, diagnostic_date, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7617 (class 0 OID 1205162)
+-- Dependencies: 290
+-- Data for Name: diagnostic_problem_templates; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.diagnostic_problem_templates (id, problem_name, problem_description, suggested_solutions, is_active, created_at, updated_at, checklist_items) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7618 (class 0 OID 1205172)
+-- Dependencies: 291
+-- Data for Name: diagnostic_requests; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.diagnostic_requests (id, device_id, template_id, requested_by, status, requested_at, completed_at, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7619 (class 0 OID 1205181)
+-- Dependencies: 292
+-- Data for Name: diagnostic_templates; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.diagnostic_templates (id, template_name, device_type, checklist_items, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7620 (class 0 OID 1205190)
+-- Dependencies: 293
+-- Data for Name: document_templates; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.document_templates (id, user_id, type, name, content, is_default, variables, paper_size, orientation, header_html, footer_html, css_styles, logo_url, show_logo, show_business_info, show_customer_info, show_payment_info, show_terms, terms_text, show_signature, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7621 (class 0 OID 1205211)
+-- Dependencies: 294
+-- Data for Name: email_logs; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.email_logs (id, recipient_email, subject, body, status, sent_at, error_message, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7623 (class 0 OID 1205244)
+-- Dependencies: 297
+-- Data for Name: employee_shifts; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.employee_shifts (id, employee_id, shift_template_id, shift_date, start_time, end_time, break_duration_minutes, status, notes, created_at, updated_at, created_by) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7622 (class 0 OID 1205219)
+-- Dependencies: 295
+-- Data for Name: employees; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.employees (id, user_id, first_name, last_name, email, phone, date_of_birth, gender, "position", department, hire_date, termination_date, employment_type, salary, currency, status, performance_rating, skills, manager_id, location, emergency_contact_name, emergency_contact_phone, address_line1, address_line2, city, state, postal_code, country, photo_url, bio, created_at, updated_at, created_by, updated_by, branch_id, can_work_at_all_branches, assigned_branches, is_shared, full_name, is_active) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7624 (class 0 OID 1205254)
+-- Dependencies: 298
+-- Data for Name: employees_backup_migration; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.employees_backup_migration (id, user_id, first_name, last_name, email, phone, date_of_birth, gender, "position", department, hire_date, termination_date, employment_type, salary, currency, status, performance_rating, skills, manager_id, location, emergency_contact_name, emergency_contact_phone, address_line1, address_line2, city, state, postal_code, country, photo_url, bio, created_at, updated_at, created_by, updated_by) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7625 (class 0 OID 1205259)
+-- Dependencies: 299
+-- Data for Name: expense_categories; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.expense_categories (id, name, description, icon, color, is_active, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7626 (class 0 OID 1205267)
+-- Dependencies: 300
+-- Data for Name: expenses; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.expenses (id, branch_id, category, description, amount, date, reference_number, vendor_name, notes, payment_method, status, created_at, updated_at, purchase_order_id, product_id, created_by) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7627 (class 0 OID 1205279)
+-- Dependencies: 301
+-- Data for Name: finance_accounts; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.finance_accounts (id, account_name, account_type, account_number, bank_name, current_balance, currency, is_active, created_at, updated_at, is_payment_method, name, type, balance, requires_reference, requires_account_number, description, icon, color, branch_id, is_shared, notes) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7629 (class 0 OID 1205348)
+-- Dependencies: 304
+-- Data for Name: finance_expense_categories; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.finance_expense_categories (id, category_name, description, is_active, created_at, is_shared) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7630 (class 0 OID 1205357)
+-- Dependencies: 305
+-- Data for Name: finance_expenses; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.finance_expenses (id, expense_category_id, account_id, expense_date, amount, description, receipt_number, vendor, payment_method, created_by, approved_by, created_at, updated_at, branch_id, title, status, receipt_url) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7631 (class 0 OID 1205368)
+-- Dependencies: 306
+-- Data for Name: finance_transfers; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.finance_transfers (id, from_account_id, to_account_id, transfer_date, amount, description, reference_number, created_by, created_at, branch_id, is_shared) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7632 (class 0 OID 1205377)
+-- Dependencies: 307
+-- Data for Name: gift_card_transactions; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.gift_card_transactions (id, gift_card_id, transaction_type, amount, balance_after, sale_id, notes, created_at, branch_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7633 (class 0 OID 1205384)
+-- Dependencies: 308
+-- Data for Name: gift_cards; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.gift_cards (id, card_number, initial_balance, current_balance, customer_id, status, issued_by, issued_date, expiry_date, created_at, updated_at, branch_id, is_shared) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7634 (class 0 OID 1205395)
+-- Dependencies: 309
+-- Data for Name: imei_validation; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.imei_validation (id, imei, imei_status, validation_reason, source_table, source_id, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7635 (class 0 OID 1205404)
+-- Dependencies: 310
+-- Data for Name: installment_payments; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.installment_payments (id, device_id, customer_id, total_amount, paid_amount, remaining_amount, installment_count, installment_amount, next_due_date, status, created_at, updated_at, installment_plan_id, installment_number, amount, payment_method, due_date, account_id, reference_number, payment_date, days_late, late_fee, notification_sent, notification_sent_at, notes, created_by, branch_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7636 (class 0 OID 1205431)
+-- Dependencies: 312
+-- Data for Name: integrations; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.integrations (id, integration_name, integration_type, api_key, api_secret, config, is_active, last_sync, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7637 (class 0 OID 1205440)
+-- Dependencies: 313
+-- Data for Name: inventory; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.inventory (id, product_id, variant_id, branch_id, quantity, reserved_quantity, min_stock_level, max_stock_level, last_updated, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7638 (class 0 OID 1205449)
+-- Dependencies: 314
+-- Data for Name: inventory_items; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.inventory_items (id, product_id, variant_id, serial_number, imei, mac_address, barcode, status, location, shelf, bin, purchase_date, warranty_start, warranty_end, cost_price, selling_price, metadata, notes, created_at, updated_at, created_by, updated_by, purchase_order_id, purchase_order_item_id, branch_id, is_shared, visible_to_branches, sharing_mode) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7639 (class 0 OID 1205467)
+-- Dependencies: 316
+-- Data for Name: lats_branches; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_branches (id, name, location, phone, email, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7640 (class 0 OID 1205476)
+-- Dependencies: 317
+-- Data for Name: lats_brands; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_brands (id, name, description, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7641 (class 0 OID 1205485)
+-- Dependencies: 318
+-- Data for Name: lats_categories; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_categories (id, name, description, icon, color, is_active, created_at, updated_at, parent_id, sort_order, metadata, branch_id, is_shared) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7600 (class 0 OID 1204967)
+-- Dependencies: 271
+-- Data for Name: lats_customers; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_customers (id, name, email, phone, address, city, location, branch_id, loyalty_points, total_spent, status, is_active, created_at, updated_at, whatsapp, gender, country, color_tag, loyalty_level, points, last_visit, referral_source, birth_month, birth_day, birthday, initial_notes, notes, customer_tag, location_description, national_id, joined_date, profile_image, whatsapp_opt_out, referred_by, created_by, last_purchase_date, total_purchases, total_returns, total_calls, total_call_duration_minutes, incoming_calls, outgoing_calls, missed_calls, avg_call_duration_minutes, first_call_date, last_call_date, call_loyalty_level, last_activity_date, referrals, is_shared, preferred_branch_id, visible_to_branches, sharing_mode, created_by_branch_id, created_by_branch_name) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7642 (class 0 OID 1205497)
+-- Dependencies: 319
+-- Data for Name: lats_data_audit_log; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_data_audit_log (id, table_name, record_id, field_name, old_value, new_value, change_reason, change_source, changed_by, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7643 (class 0 OID 1205504)
+-- Dependencies: 320
+-- Data for Name: lats_employees; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_employees (id, name, email, phone, "position", branch_id, salary, hire_date, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7644 (class 0 OID 1205516)
+-- Dependencies: 321
+-- Data for Name: lats_inventory_adjustments; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_inventory_adjustments (id, product_id, variant_id, quantity, type, reason, notes, reference_id, created_by, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7645 (class 0 OID 1205524)
+-- Dependencies: 322
+-- Data for Name: lats_inventory_items; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_inventory_items (id, purchase_order_id, purchase_order_item_id, product_id, variant_id, serial_number, imei, mac_address, barcode, status, location, shelf, bin, purchase_date, warranty_start, warranty_end, cost_price, selling_price, quality_check_status, quality_check_notes, quality_checked_at, quality_checked_by, created_at, updated_at, created_by, updated_by, branch_id, quantity, storage_room_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7646 (class 0 OID 1205539)
+-- Dependencies: 323
+-- Data for Name: lats_pos_advanced_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_pos_advanced_settings (id, user_id, business_id, enable_performance_mode, enable_caching, cache_size, enable_lazy_loading, max_concurrent_requests, enable_database_optimization, enable_auto_backup, backup_frequency, enable_data_compression, enable_query_optimization, enable_two_factor_auth, enable_session_timeout, session_timeout_minutes, enable_audit_logging, enable_encryption, enable_api_access, enable_webhooks, enable_third_party_integrations, enable_data_sync, sync_interval, enable_debug_mode, enable_error_reporting, enable_performance_monitoring, enable_logging, log_level, enable_experimental_features, enable_beta_features, enable_custom_scripts, enable_plugin_system, enable_auto_updates, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7647 (class 0 OID 1205577)
+-- Dependencies: 324
+-- Data for Name: lats_pos_analytics_reporting_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_pos_analytics_reporting_settings (id, user_id, business_id, enable_analytics, enable_real_time_analytics, analytics_refresh_interval, enable_data_export, enable_sales_analytics, enable_sales_trends, enable_product_performance, enable_customer_analytics, enable_revenue_tracking, enable_inventory_analytics, enable_stock_alerts, enable_low_stock_reports, enable_inventory_turnover, enable_supplier_analytics, enable_automated_reports, report_generation_time, enable_email_reports, enable_pdf_reports, enable_excel_reports, enable_custom_dashboard, enable_kpi_widgets, enable_chart_animations, enable_data_drill_down, enable_comparative_analysis, enable_predictive_analytics, enable_data_retention, data_retention_days, enable_data_backup, enable_api_export, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7648 (class 0 OID 1205614)
+-- Dependencies: 325
+-- Data for Name: lats_pos_barcode_scanner_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_pos_barcode_scanner_settings (id, user_id, business_id, enable_barcode_scanner, enable_camera_scanner, enable_keyboard_input, enable_manual_entry, auto_add_to_cart, auto_focus_search, play_sound_on_scan, vibrate_on_scan, show_scan_feedback, show_invalid_barcode_alert, allow_unknown_products, prompt_for_unknown_products, retry_on_error, max_retry_attempts, scanner_device_name, scanner_connection_type, scanner_timeout, support_ean13, support_ean8, support_upc_a, support_upc_e, support_code128, support_code39, support_qr_code, support_data_matrix, enable_continuous_scanning, scan_delay, enable_scan_history, max_scan_history, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7649 (class 0 OID 1205650)
+-- Dependencies: 326
+-- Data for Name: lats_pos_delivery_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_pos_delivery_settings (id, user_id, business_id, enable_delivery, default_delivery_fee, free_delivery_threshold, max_delivery_distance, enable_delivery_areas, delivery_areas, area_delivery_fees, area_delivery_times, enable_delivery_hours, delivery_start_time, delivery_end_time, enable_same_day_delivery, enable_next_day_delivery, delivery_time_slots, notify_customer_on_delivery, notify_driver_on_assignment, enable_sms_notifications, enable_email_notifications, enable_driver_assignment, driver_commission, require_signature, enable_driver_tracking, enable_scheduled_delivery, enable_partial_delivery, require_advance_payment, advance_payment_percent, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7650 (class 0 OID 1205684)
+-- Dependencies: 327
+-- Data for Name: lats_pos_dynamic_pricing_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_pos_dynamic_pricing_settings (id, user_id, business_id, enable_dynamic_pricing, enable_loyalty_pricing, enable_bulk_pricing, created_at, updated_at, enable_time_based_pricing, enable_customer_pricing, enable_special_events, loyalty_discount_percent, loyalty_points_threshold, loyalty_max_discount, bulk_discount_enabled, bulk_discount_threshold, bulk_discount_percent, time_based_discount_enabled, time_based_start_time, time_based_end_time, time_based_discount_percent, customer_pricing_enabled, vip_customer_discount, regular_customer_discount, special_events_enabled, special_event_discount_percent) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7651 (class 0 OID 1205717)
+-- Dependencies: 328
+-- Data for Name: lats_pos_general_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_pos_general_settings (id, user_id, business_id, theme, language, currency, timezone, date_format, time_format, show_product_images, show_stock_levels, show_prices, show_barcodes, products_per_page, auto_complete_search, confirm_delete, show_confirmations, enable_sound_effects, sound_volume, enable_click_sounds, enable_cart_sounds, enable_payment_sounds, enable_delete_sounds, enable_animations, enable_caching, cache_duration, enable_lazy_loading, max_search_results, enable_tax, tax_rate, created_at, updated_at, day_closing_passcode, business_name, business_address, business_phone, business_email, business_website, business_logo, app_logo, logo_size, logo_position, company_name, primary_color, secondary_color, accent_color, tagline, tax_id, registration_number, auto_backup_enabled, auto_backup_frequency, auto_backup_time, auto_backup_type, last_auto_backup, font_size, products_per_row) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7652 (class 0 OID 1205778)
+-- Dependencies: 329
+-- Data for Name: lats_pos_integrations_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_pos_integrations_settings (id, user_id, business_id, integration_name, integration_type, provider_name, is_enabled, is_active, is_test_mode, credentials, config, description, webhook_url, callback_url, environment, last_used_at, total_requests, successful_requests, failed_requests, notes, metadata, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7653 (class 0 OID 1205797)
+-- Dependencies: 330
+-- Data for Name: lats_pos_loyalty_customer_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_pos_loyalty_customer_settings (id, user_id, business_id, enable_loyalty, points_per_dollar, created_at, updated_at, enable_loyalty_program, loyalty_program_name, points_per_currency, points_redemption_rate, minimum_points_redemption, points_expiry_days, enable_customer_registration, require_customer_info, enable_customer_categories, enable_customer_tags, enable_customer_notes, enable_automatic_rewards, enable_manual_rewards, enable_birthday_rewards, enable_anniversary_rewards, enable_referral_rewards, enable_email_communication, enable_sms_communication, enable_push_notifications, enable_marketing_emails, enable_customer_analytics, enable_purchase_history, enable_spending_patterns, enable_customer_segmentation, enable_customer_insights) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7654 (class 0 OID 1205832)
+-- Dependencies: 331
+-- Data for Name: lats_pos_notification_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_pos_notification_settings (id, user_id, business_id, enable_notifications, enable_sound_notifications, enable_visual_notifications, enable_push_notifications, notification_timeout, enable_sales_notifications, notify_on_sale_completion, notify_on_refund, notify_on_void, notify_on_discount, enable_inventory_notifications, notify_on_low_stock, low_stock_threshold, notify_on_out_of_stock, notify_on_stock_adjustment, enable_customer_notifications, notify_on_customer_registration, notify_on_loyalty_points, notify_on_customer_birthday, notify_on_customer_anniversary, enable_system_notifications, notify_on_system_errors, notify_on_backup_completion, notify_on_sync_completion, notify_on_maintenance, enable_email_notifications, enable_sms_notifications, enable_in_app_notifications, enable_desktop_notifications, created_at, updated_at, whatsapp_closing_message) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7655 (class 0 OID 1205872)
+-- Dependencies: 332
+-- Data for Name: lats_pos_receipt_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_pos_receipt_settings (id, user_id, business_id, receipt_template, receipt_width, receipt_font_size, show_business_logo, show_business_name, show_business_address, show_business_phone, show_business_email, show_business_website, show_transaction_id, show_date_time, show_cashier_name, show_customer_name, show_customer_phone, show_product_names, show_product_skus, show_product_barcodes, show_quantities, show_unit_prices, show_discounts, show_subtotal, show_tax, show_discount_total, show_grand_total, show_payment_method, show_change_amount, auto_print_receipt, print_duplicate_receipt, enable_email_receipt, enable_sms_receipt, enable_receipt_numbering, receipt_number_prefix, receipt_number_start, receipt_number_format, show_footer_message, footer_message, show_return_policy, return_policy_text, created_at, updated_at, enable_whatsapp_pdf, whatsapp_pdf_auto_send, whatsapp_pdf_show_preview, whatsapp_pdf_format, whatsapp_pdf_quality, whatsapp_pdf_include_logo, whatsapp_pdf_include_images, whatsapp_pdf_include_qr, whatsapp_pdf_include_barcode, whatsapp_pdf_message, enable_email_pdf, enable_print_pdf, enable_download_pdf, show_share_button, sms_header_message, sms_footer_message) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7656 (class 0 OID 1205936)
+-- Dependencies: 333
+-- Data for Name: lats_pos_search_filter_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_pos_search_filter_settings (id, user_id, business_id, enable_product_search, enable_customer_search, enable_sales_search, search_by_name, search_by_barcode, search_by_sku, search_by_category, search_by_supplier, search_by_description, search_by_tags, enable_fuzzy_search, enable_autocomplete, min_search_length, max_search_results, search_timeout, search_debounce_time, enable_search_history, max_search_history, enable_recent_searches, enable_popular_searches, enable_search_suggestions, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7657 (class 0 OID 1205963)
+-- Dependencies: 334
+-- Data for Name: lats_pos_user_permissions_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_pos_user_permissions_settings (id, user_id, business_id, permissions, created_at, updated_at, enable_pos_access, enable_sales_access, enable_refunds_access, enable_void_access, enable_discount_access, enable_inventory_view, enable_inventory_edit, enable_stock_adjustments, enable_product_creation, enable_product_deletion, enable_customer_view, enable_customer_creation, enable_customer_edit, enable_customer_deletion, enable_customer_history, enable_payment_processing, enable_cash_management, enable_daily_reports, enable_financial_reports, enable_tax_management, enable_settings_access, enable_user_management, enable_backup_restore, enable_system_maintenance, enable_api_access, enable_audit_logs, enable_security_settings, enable_password_reset, enable_session_management, enable_data_export) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7658 (class 0 OID 1206002)
+-- Dependencies: 335
+-- Data for Name: lats_product_units; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_product_units (id, parent_variant_id, imei, status, sale_id, created_at, product_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7659 (class 0 OID 1206010)
+-- Dependencies: 336
+-- Data for Name: lats_product_validation; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_product_validation (id, product_id, shipping_id, is_validated, validation_errors, validated_by, validated_at, updated_cost_price, updated_selling_price, updated_supplier_id, updated_category_id, updated_product_name, updated_product_description, updated_notes, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7570 (class 0 OID 1204610)
+-- Dependencies: 240
+-- Data for Name: lats_product_variants; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_product_variants (id, product_id, sku, barcode, quantity, min_quantity, unit_price, cost_price, is_active, created_at, updated_at, name, selling_price, attributes, weight, dimensions, variant_name, variant_attributes, branch_id, stock_per_branch, is_shared, visible_to_branches, sharing_mode, reserved_quantity, reorder_point, parent_variant_id, is_parent, variant_type, status) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7571 (class 0 OID 1204640)
+-- Dependencies: 241
+-- Data for Name: lats_products; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_products (id, name, description, sku, barcode, category_id, unit_price, cost_price, stock_quantity, min_stock_level, max_stock_level, is_active, image_url, supplier_id, brand, model, warranty_period, created_at, updated_at, specification, condition, selling_price, tags, total_quantity, total_value, storage_room_id, store_shelf_id, attributes, metadata, branch_id, is_shared, visible_to_branches, sharing_mode, shelf_id, category) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7660 (class 0 OID 1206019)
+-- Dependencies: 337
+-- Data for Name: lats_purchase_order_audit_log; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_purchase_order_audit_log (id, purchase_order_id, action, old_status, new_status, user_id, notes, metadata, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7607 (class 0 OID 1205066)
+-- Dependencies: 279
+-- Data for Name: lats_purchase_order_items; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_purchase_order_items (id, purchase_order_id, product_id, variant_id, quantity_ordered, quantity_received, unit_cost, subtotal, created_at, notes, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7661 (class 0 OID 1206026)
+-- Dependencies: 338
+-- Data for Name: lats_purchase_order_payments; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_purchase_order_payments (id, purchase_order_id, amount, payment_method, payment_date, reference_number, notes, created_at, updated_at, created_by, updated_by, branch_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7662 (class 0 OID 1206035)
+-- Dependencies: 339
+-- Data for Name: lats_purchase_order_shipping; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_purchase_order_shipping (id, purchase_order_id, shipping_method_id, shipping_method_code, shipping_agent_id, agent_name, agent_contact, agent_phone, shipping_address_street, shipping_address_city, shipping_address_region, shipping_address_country, shipping_address_postal_code, billing_address_street, billing_address_city, billing_address_region, billing_address_country, billing_address_postal_code, use_same_address, expected_departure_date, expected_arrival_date, actual_departure_date, actual_arrival_date, tracking_number, container_number, bill_of_lading, airway_bill, shipping_cost, insurance_cost, customs_duty, other_charges, total_shipping_cost, currency, port_of_loading, port_of_discharge, container_type, container_count, shipping_status, shipping_notes, customs_notes, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7572 (class 0 OID 1204665)
+-- Dependencies: 242
+-- Data for Name: lats_purchase_orders; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_purchase_orders (id, po_number, supplier_id, status, total_amount, notes, order_date, expected_delivery_date, received_date, created_by, created_at, updated_at, tax_amount, shipping_cost, discount_amount, final_amount, approved_by, currency, total_paid, payment_status, expected_delivery, branch_id, payment_terms, exchange_rate, base_currency, exchange_rate_source, exchange_rate_date, total_amount_base_currency) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7663 (class 0 OID 1206055)
+-- Dependencies: 340
+-- Data for Name: lats_receipts; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_receipts (id, sale_id, receipt_number, customer_name, customer_phone, total_amount, payment_method, items_count, generated_by, receipt_content, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7664 (class 0 OID 1206063)
+-- Dependencies: 341
+-- Data for Name: lats_sale_items; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_sale_items (id, sale_id, product_id, product_name, quantity, unit_price, discount, subtotal, created_at, variant_id, variant_name, sku, total_price, cost_price, profit, branch_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7665 (class 0 OID 1206077)
+-- Dependencies: 342
+-- Data for Name: lats_sales; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_sales (id, sale_number, customer_id, user_id, total_amount, discount_amount, tax_amount, final_amount, payment_status, status, notes, created_at, updated_at, subtotal, tax, sold_by, customer_email, customer_name, customer_phone, discount, branch_id, payment_method) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7666 (class 0 OID 1206095)
+-- Dependencies: 343
+-- Data for Name: lats_shipping; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_shipping (id, purchase_order_id, shipping_method, tracking_number, carrier, estimated_arrival_date, actual_arrival_date, status, shipping_cost, shipping_address, notes, created_by, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7667 (class 0 OID 1206104)
+-- Dependencies: 344
+-- Data for Name: lats_shipping_agents; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_shipping_agents (id, name, company_name, contact_person, phone, email, whatsapp, shipping_methods, address, city, country, license_number, website, notes, base_rate_sea, base_rate_air, currency, rating, total_shipments, successful_shipments, is_active, is_preferred, created_at, updated_at, created_by) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7668 (class 0 OID 1206122)
+-- Dependencies: 345
+-- Data for Name: lats_shipping_cargo_items; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_shipping_cargo_items (id, shipping_id, product_id, purchase_order_item_id, quantity, cost_price, description, notes, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7669 (class 0 OID 1206131)
+-- Dependencies: 346
+-- Data for Name: lats_shipping_methods; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_shipping_methods (id, name, code, description, estimated_days_min, estimated_days_max, cost_multiplier, display_order, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7670 (class 0 OID 1206142)
+-- Dependencies: 347
+-- Data for Name: lats_shipping_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_shipping_settings (id, default_shipping_address_street, default_shipping_address_city, default_shipping_address_region, default_shipping_address_country, default_shipping_address_postal_code, default_billing_address_street, default_billing_address_city, default_billing_address_region, default_billing_address_country, default_billing_address_postal_code, default_shipping_method_id, default_agent_id, notify_on_shipment, notify_on_arrival, notification_email, notification_phone, auto_calculate_shipping, include_insurance, insurance_percentage, user_id, branch_id, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7671 (class 0 OID 1206158)
+-- Dependencies: 348
+-- Data for Name: lats_spare_part_usage; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_spare_part_usage (id, spare_part_id, device_id, quantity, reason, notes, used_by, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7672 (class 0 OID 1206166)
+-- Dependencies: 349
+-- Data for Name: lats_spare_part_variants; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_spare_part_variants (id, spare_part_id, name, sku, cost_price, selling_price, quantity, min_quantity, attributes, image_url, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7673 (class 0 OID 1206180)
+-- Dependencies: 350
+-- Data for Name: lats_spare_parts; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_spare_parts (id, name, part_number, quantity, selling_price, cost_price, category_id, brand, description, condition, location, min_quantity, compatible_devices, is_active, created_at, updated_at, supplier_id, unit_price) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7674 (class 0 OID 1206194)
+-- Dependencies: 351
+-- Data for Name: lats_stock_movements; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_stock_movements (id, product_id, variant_id, movement_type, quantity, reference_type, reference_id, notes, created_by, created_at, from_branch_id, to_branch_id, branch_id, previous_quantity, new_quantity, reason, reference) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7675 (class 0 OID 1206201)
+-- Dependencies: 352
+-- Data for Name: lats_stock_transfers; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_stock_transfers (id, transfer_number, from_branch_id, to_branch_id, product_id, variant_id, quantity, status, requested_by, approved_by, notes, created_at, updated_at, completed_at, metadata) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7677 (class 0 OID 1206230)
+-- Dependencies: 355
+-- Data for Name: lats_store_locations; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_store_locations (id, name, code, description, address, city, region, country, postal_code, phone, email, manager_name, manager_phone, is_active, is_main_branch, has_repair_service, has_sales_service, has_delivery_service, store_size_sqm, current_staff_count, monthly_target, opening_hours, priority_order, latitude, longitude, timezone, notes, metadata, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7676 (class 0 OID 1206213)
+-- Dependencies: 353
+-- Data for Name: lats_store_rooms; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_store_rooms (id, name, description, location, capacity, is_active, created_at, updated_at, store_location_id, code, floor_level, area_sqm, max_capacity, current_capacity, is_secure, requires_access_card, color_code, notes) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7678 (class 0 OID 1206249)
+-- Dependencies: 356
+-- Data for Name: lats_store_shelves; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_store_shelves (id, room_id, name, "position", capacity, is_active, created_at, updated_at, store_location_id, storage_room_id, code, description, shelf_type, section, aisle, row_number, column_number, max_capacity, current_capacity, floor_level, zone, is_accessible, requires_ladder, is_refrigerated, priority_order, color_code, barcode, notes, images, created_by, updated_by) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7679 (class 0 OID 1206266)
+-- Dependencies: 357
+-- Data for Name: lats_supplier_categories; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_supplier_categories (id, name, description, icon, color, parent_id, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7680 (class 0 OID 1206275)
+-- Dependencies: 358
+-- Data for Name: lats_supplier_category_mapping; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_supplier_category_mapping (supplier_id, category_id, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7681 (class 0 OID 1206279)
+-- Dependencies: 359
+-- Data for Name: lats_supplier_communications; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_supplier_communications (id, supplier_id, communication_type, direction, subject, message, notes, contact_person, response_time_hours, follow_up_required, follow_up_date, user_id, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7682 (class 0 OID 1206289)
+-- Dependencies: 360
+-- Data for Name: lats_supplier_contracts; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_supplier_contracts (id, supplier_id, contract_number, contract_name, start_date, end_date, contract_value, currency, auto_renew, renewal_notice_days, payment_terms, terms_and_conditions, document_url, status, notes, created_by, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7683 (class 0 OID 1206301)
+-- Dependencies: 361
+-- Data for Name: lats_supplier_documents; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_supplier_documents (id, supplier_id, document_type, file_url, file_name, file_size, mime_type, expiry_date, notes, uploaded_by, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7684 (class 0 OID 1206309)
+-- Dependencies: 362
+-- Data for Name: lats_supplier_ratings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_supplier_ratings (id, supplier_id, purchase_order_id, overall_rating, quality_rating, delivery_rating, communication_rating, price_rating, review_text, pros, cons, would_recommend, rated_by, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7685 (class 0 OID 1206323)
+-- Dependencies: 363
+-- Data for Name: lats_supplier_tag_mapping; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_supplier_tag_mapping (supplier_id, tag_id, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7686 (class 0 OID 1206327)
+-- Dependencies: 364
+-- Data for Name: lats_supplier_tags; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_supplier_tags (id, name, color, description, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7573 (class 0 OID 1204689)
+-- Dependencies: 243
+-- Data for Name: lats_suppliers; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_suppliers (id, name, contact_person, email, phone, address, city, country, is_active, notes, created_at, updated_at, branch_id, is_shared, is_trade_in_customer, company_name, description, whatsapp, tax_id, payment_terms, rating, preferred_currency, exchange_rate, wechat, credit_limit, current_balance, payment_days, discount_percentage, website_url, logo_url, business_registration, business_type, year_established, employee_count, linkedin_url, facebook_url, instagram_url, minimum_order_quantity, lead_time_days, warehouse_location, shipping_methods, delivery_zones, certifications, quality_standards, return_policy, warranty_terms, total_orders, total_order_value, average_rating, on_time_delivery_rate, quality_score, response_time_hours, business_hours, language_preferences, time_zone, last_contact_date, next_follow_up_date, is_favorite, internal_notes, priority_level, wechat_qr_code, alipay_qr_code, bank_account_details) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7687 (class 0 OID 1206334)
+-- Dependencies: 365
+-- Data for Name: lats_trade_in_contracts; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_trade_in_contracts (id, contract_number, transaction_id, customer_id, customer_name, customer_phone, customer_email, customer_address, customer_id_number, customer_id_type, customer_id_photo_url, device_name, device_model, device_imei, device_serial_number, device_condition, agreed_value, terms_and_conditions, ownership_declaration, customer_agreed_terms, customer_signature_data, staff_signature_data, customer_signed_at, staff_signed_at, witness_name, witness_signature_data, witness_signed_at, status, created_by, created_at, updated_at, voided_at, voided_by, void_reason) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7688 (class 0 OID 1206344)
+-- Dependencies: 366
+-- Data for Name: lats_trade_in_damage_assessments; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_trade_in_damage_assessments (id, transaction_id, damage_type, damage_description, spare_part_id, spare_part_name, deduction_amount, assessed_by, assessed_at, damage_photos) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7689 (class 0 OID 1206352)
+-- Dependencies: 367
+-- Data for Name: lats_trade_in_prices; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_trade_in_prices (id, product_id, variant_id, device_name, device_model, base_trade_in_price, branch_id, excellent_multiplier, good_multiplier, fair_multiplier, poor_multiplier, notes, is_active, created_by, updated_by, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7690 (class 0 OID 1206366)
+-- Dependencies: 368
+-- Data for Name: lats_trade_in_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_trade_in_settings (id, key, value, description, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7691 (class 0 OID 1206374)
+-- Dependencies: 369
+-- Data for Name: lats_trade_in_transactions; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.lats_trade_in_transactions (id, transaction_number, customer_id, branch_id, device_name, device_model, device_imei, device_serial_number, base_trade_in_price, condition_rating, condition_multiplier, condition_description, total_damage_deductions, damage_items, final_trade_in_value, new_product_id, new_variant_id, new_device_price, customer_payment_amount, contract_id, contract_signed, contract_signed_at, customer_signature_data, staff_signature_data, customer_id_number, customer_id_type, customer_id_photo_url, device_photos, status, inventory_item_id, needs_repair, repair_status, repair_cost, ready_for_resale, resale_price, sale_id, created_by, approved_by, created_at, updated_at, approved_at, completed_at, staff_notes, internal_notes) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7692 (class 0 OID 1206393)
+-- Dependencies: 370
+-- Data for Name: leave_requests; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.leave_requests (id, employee_id, leave_type, start_date, end_date, total_days, reason, status, reviewed_by, reviewed_at, review_notes, attachment_url, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7693 (class 0 OID 1206402)
+-- Dependencies: 371
+-- Data for Name: loyalty_points; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.loyalty_points (id, customer_id, branch_id, points, points_type, reason, reference_id, reference_type, expires_at, created_at, created_by, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7694 (class 0 OID 1206412)
+-- Dependencies: 372
+-- Data for Name: mobile_money_transactions; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.mobile_money_transactions (id, provider, transaction_type, amount, currency, sender_phone, sender_name, receiver_phone, receiver_name, bank_name, bank_account, reference_number, balance_after, fees, tax, message_body, message_date, customer_id, payment_transaction_id, is_processed, created_at, updated_at, metadata, branch_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7695 (class 0 OID 1206424)
+-- Dependencies: 373
+-- Data for Name: notes; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.notes (id, owner_id, title, created_at, updated_at, shared) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7696 (class 0 OID 1206435)
+-- Dependencies: 374
+-- Data for Name: notification_templates; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.notification_templates (id, template_name, notification_type, title, message, variables, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7697 (class 0 OID 1206444)
+-- Dependencies: 375
+-- Data for Name: notifications; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.notifications (id, user_id, title, message, type, category, priority, status, created_at, read_at, actioned_at, dismissed_at, actioned_by, dismissed_by, device_id, customer_id, appointment_id, diagnostic_id, icon, color, action_url, action_text, metadata, group_id, is_grouped, group_count, branch_id, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7698 (class 0 OID 1206456)
+-- Dependencies: 376
+-- Data for Name: paragraphs; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.paragraphs (id, note_id, content, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7699 (class 0 OID 1206463)
+-- Dependencies: 377
+-- Data for Name: payment_methods; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.payment_methods (id, code, name, type, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7700 (class 0 OID 1206472)
+-- Dependencies: 378
+-- Data for Name: payment_transactions; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.payment_transactions (id, order_id, provider, amount, currency, status, customer_id, customer_name, customer_email, customer_phone, reference, metadata, sale_id, pos_session_id, created_at, updated_at, completed_at, is_shared, branch_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7701 (class 0 OID 1206485)
+-- Dependencies: 379
+-- Data for Name: points_transactions; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.points_transactions (id, customer_id, transaction_type, points_change, reason, created_at, created_by, device_id, metadata, branch_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7702 (class 0 OID 1206494)
+-- Dependencies: 380
+-- Data for Name: product_images; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.product_images (id, product_id, image_url, thumbnail_url, file_name, file_size, is_primary, uploaded_by, created_at, updated_at, mime_type) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7703 (class 0 OID 1206504)
+-- Dependencies: 381
+-- Data for Name: product_interests; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.product_interests (interest_id, customer_id, product_category, product_name, interest_level, first_mentioned, last_mentioned, mention_count) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7705 (class 0 OID 1206516)
+-- Dependencies: 384
+-- Data for Name: purchase_order_audit; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.purchase_order_audit (id, purchase_order_id, action, user_id, created_by, details, "timestamp", created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7706 (class 0 OID 1206524)
+-- Dependencies: 385
+-- Data for Name: purchase_order_messages; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.purchase_order_messages (id, purchase_order_id, sender, content, type, "timestamp", created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7707 (class 0 OID 1206533)
+-- Dependencies: 386
+-- Data for Name: purchase_order_payments; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.purchase_order_payments (id, purchase_order_id, payment_account_id, amount, currency, payment_method, payment_method_id, reference, notes, status, payment_date, created_by, created_at, updated_at, branch_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7708 (class 0 OID 1206545)
+-- Dependencies: 387
+-- Data for Name: purchase_order_quality_check_items; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.purchase_order_quality_check_items (id, quality_check_id, purchase_order_item_id, criteria_id, criteria_name, result, quantity_checked, quantity_passed, quantity_failed, defect_type, defect_description, action_taken, notes, images, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7709 (class 0 OID 1206560)
+-- Dependencies: 388
+-- Data for Name: purchase_order_quality_checks; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.purchase_order_quality_checks (id, purchase_order_id, template_id, status, overall_result, checked_by, checked_at, notes, signature, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7710 (class 0 OID 1206571)
+-- Dependencies: 389
+-- Data for Name: purchase_orders; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.purchase_orders (id, supplier_id, branch_id, order_number, total_amount, status, expected_delivery_date, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7711 (class 0 OID 1206580)
+-- Dependencies: 390
+-- Data for Name: quality_check_criteria; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.quality_check_criteria (id, template_id, name, description, is_required, sort_order, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7712 (class 0 OID 1206589)
+-- Dependencies: 391
+-- Data for Name: quality_check_items; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.quality_check_items (id, template_id, check_name, check_description, check_type, is_required, sort_order, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7713 (class 0 OID 1206600)
+-- Dependencies: 392
+-- Data for Name: quality_check_results; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.quality_check_results (id, quality_check_id, check_item_id, result, numeric_value, text_value, notes, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7714 (class 0 OID 1206607)
+-- Dependencies: 393
+-- Data for Name: quality_check_templates; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.quality_check_templates (id, name, description, category, is_active, created_at, updated_at, created_by) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7715 (class 0 OID 1206616)
+-- Dependencies: 394
+-- Data for Name: quality_checks; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.quality_checks (id, purchase_order_id, template_id, status, checked_by, started_at, completed_at, notes, created_at, updated_at, branch_id, is_shared) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7716 (class 0 OID 1206628)
+-- Dependencies: 395
+-- Data for Name: recurring_expense_history; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.recurring_expense_history (id, recurring_expense_id, transaction_id, processed_date, amount, status, failure_reason, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7717 (class 0 OID 1206637)
+-- Dependencies: 396
+-- Data for Name: recurring_expenses; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.recurring_expenses (id, name, description, account_id, category, amount, frequency, start_date, end_date, next_due_date, last_processed_date, vendor_name, reference_prefix, auto_process, is_active, notification_days_before, metadata, created_at, updated_at, created_by, branch_id, is_shared) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7718 (class 0 OID 1206651)
+-- Dependencies: 397
+-- Data for Name: reminders; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.reminders (id, title, description, date, "time", priority, category, status, notify_before, related_to, assigned_to, created_by, created_at, updated_at, completed_at, branch_id, recurring) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7719 (class 0 OID 1206666)
+-- Dependencies: 398
+-- Data for Name: repair_parts; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.repair_parts (id, device_id, spare_part_id, quantity_needed, quantity_received, cost_per_unit, total_cost, status, notes, estimated_arrival, created_at, updated_at, created_by, updated_by, branch_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7720 (class 0 OID 1206679)
+-- Dependencies: 399
+-- Data for Name: report_attachments; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.report_attachments (id, report_id, file_name, file_path, file_size, uploaded_by, uploaded_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7721 (class 0 OID 1206686)
+-- Dependencies: 400
+-- Data for Name: reports; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.reports (id, title, description, report_type, priority, status, created_by, branch_id, assigned_to, customer_name, customer_phone, contact_method, device_info, issue_category, resolution_status, transaction_amount, transaction_type, payment_method, product_info, quantity_affected, stock_level, location, occurred_at, tags, follow_up_required, follow_up_date, internal_notes, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7722 (class 0 OID 1206702)
+-- Dependencies: 401
+-- Data for Name: returns; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.returns (id, device_id, manual_device_brand, manual_device_model, manual_device_serial, customer_id, reason, intake_checklist, status, attachments, resolution, staff_signature, customer_signature, created_at, updated_at, purchase_date, return_type, branch, staff_name, contact_confirmed, accessories, condition_description, customer_reported_issue, staff_observed_issue, customer_satisfaction, preferred_contact, return_auth_number, return_method, return_shipping_fee, expected_pickup_date, geo_location, policy_acknowledged, device_locked, privacy_wiped, internal_notes, escalation_required, additional_docs, refund_amount, exchange_device_id, restocking_fee, refund_method, user_ip, user_location) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7723 (class 0 OID 1206715)
+-- Dependencies: 402
+-- Data for Name: sale_inventory_items; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.sale_inventory_items (id, sale_id, inventory_item_id, customer_id, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7724 (class 0 OID 1206721)
+-- Dependencies: 403
+-- Data for Name: sales; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.sales (id, customer_id, branch_id, total_amount, discount_amount, tax_amount, payment_method, status, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7725 (class 0 OID 1206732)
+-- Dependencies: 404
+-- Data for Name: sales_pipeline; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.sales_pipeline (sale_id, customer_id, product, quoted_price, stage, probability, expected_close_date, actual_close_date, sale_amount, status, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7727 (class 0 OID 1206743)
+-- Dependencies: 406
+-- Data for Name: scheduled_transfer_executions; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.scheduled_transfer_executions (id, scheduled_transfer_id, execution_date, amount, status, source_transaction_id, destination_transaction_id, error_message, metadata, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7728 (class 0 OID 1206753)
+-- Dependencies: 407
+-- Data for Name: scheduled_transfers; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.scheduled_transfers (id, source_account_id, destination_account_id, amount, description, reference_prefix, frequency, start_date, end_date, next_execution_date, last_executed_date, auto_execute, notification_enabled, notification_days_before, is_active, execution_count, created_by, created_at, updated_at, metadata) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7729 (class 0 OID 1206770)
+-- Dependencies: 408
+-- Data for Name: serial_number_movements; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.serial_number_movements (id, inventory_item_id, movement_type, from_status, to_status, reference_id, reference_type, notes, created_at, created_by) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7730 (class 0 OID 1206778)
+-- Dependencies: 409
+-- Data for Name: settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.settings (id, key, value, created_at, updated_at, description) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7731 (class 0 OID 1206786)
+-- Dependencies: 410
+-- Data for Name: shelves; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.shelves (id, storage_room_id, name, code, row_number, column_number, capacity, is_refrigerated, requires_ladder, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7732 (class 0 OID 1206795)
+-- Dependencies: 411
+-- Data for Name: shift_templates; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.shift_templates (id, name, description, start_time, end_time, break_duration_minutes, monday, tuesday, wednesday, thursday, friday, saturday, sunday, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7733 (class 0 OID 1206817)
+-- Dependencies: 413
+-- Data for Name: sms_logs; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.sms_logs (id, recipient_phone, message, status, provider, message_id, cost, sent_at, error_message, created_at, phone_number, sent_by, device_id, branch_id, is_shared) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7734 (class 0 OID 1206826)
+-- Dependencies: 414
+-- Data for Name: sms_trigger_logs; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.sms_trigger_logs (id, trigger_id, recipient, result, status, error, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7735 (class 0 OID 1206833)
+-- Dependencies: 415
+-- Data for Name: sms_triggers; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.sms_triggers (id, trigger_name, trigger_event, template_id, is_active, created_at, updated_at, name, trigger_type, message_template, created_by) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7736 (class 0 OID 1206842)
+-- Dependencies: 416
+-- Data for Name: special_order_payments; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.special_order_payments (id, special_order_id, customer_id, amount, payment_method, payment_date, reference_number, account_id, notes, created_by, created_at, branch_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7737 (class 0 OID 1206855)
+-- Dependencies: 418
+-- Data for Name: storage_rooms; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.storage_rooms (id, name, code, description, store_location_id, floor_level, area_sqm, is_secure, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7628 (class 0 OID 1205295)
+-- Dependencies: 302
+-- Data for Name: store_locations; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.store_locations (id, name, code, address, city, state, zip_code, country, phone, email, manager_name, is_main, is_active, opening_time, closing_time, inventory_sync_enabled, pricing_model, tax_rate_override, created_at, updated_at, data_isolation_mode, share_products, share_customers, share_inventory, share_suppliers, share_categories, share_employees, allow_stock_transfer, auto_sync_products, auto_sync_prices, require_approval_for_transfers, can_view_other_branches, can_transfer_to_branches, share_sales, share_purchase_orders, share_devices, share_payments, share_appointments, share_reminders, share_expenses, share_trade_ins, share_special_orders, share_attendance, share_loyalty_points, share_accounts, share_gift_cards, share_quality_checks, share_recurring_expenses, share_communications, share_reports, share_finance_transfers) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7738 (class 0 OID 1206886)
+-- Dependencies: 423
+-- Data for Name: suppliers; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.suppliers (id, name, company_name, phone, email, address, city, country, tax_id, payment_terms, credit_limit, current_balance, is_active, rating, notes, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7739 (class 0 OID 1206898)
+-- Dependencies: 424
+-- Data for Name: system_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.system_settings (id, setting_key, setting_value, setting_type, description, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7740 (class 0 OID 1206912)
+-- Dependencies: 426
+-- Data for Name: user_branch_assignments; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.user_branch_assignments (id, user_id, branch_id, is_primary, can_manage, can_view_reports, can_manage_inventory, can_manage_staff, assigned_at, assigned_by) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7741 (class 0 OID 1206922)
+-- Dependencies: 427
+-- Data for Name: user_daily_goals; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.user_daily_goals (id, user_id, date, goal_amount, achieved_amount, is_achieved, created_at, updated_at, goal_type, is_active, goal_value) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7742 (class 0 OID 1206937)
+-- Dependencies: 428
+-- Data for Name: user_settings; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.user_settings (id, user_id, settings, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7743 (class 0 OID 1206946)
+-- Dependencies: 429
+-- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.users (id, email, password, full_name, role, is_active, created_at, updated_at, username, permissions, max_devices_allowed, require_approval, failed_login_attempts, two_factor_enabled, two_factor_secret, last_login, phone, department, branch_id) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7744 (class 0 OID 1206972)
+-- Dependencies: 432
+-- Data for Name: v_has_payment_method_column; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.v_has_payment_method_column ("exists") FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7745 (class 0 OID 1207002)
+-- Dependencies: 438
+-- Data for Name: webhook_endpoints; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.webhook_endpoints (id, user_id, name, url, events, is_active, secret, retry_attempts, timeout_seconds, last_triggered, success_count, failure_count, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7746 (class 0 OID 1207016)
+-- Dependencies: 439
+-- Data for Name: webhook_logs; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.webhook_logs (id, webhook_id, event_type, payload, response_status, response_body, error_message, attempt_number, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7601 (class 0 OID 1205004)
+-- Dependencies: 273
+-- Data for Name: whatsapp_customers; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.whatsapp_customers (customer_id, chat_session_name, phone_number, contact_name, total_messages, messages_from_customer, messages_to_customer, first_contact_date, last_contact_date, status, engagement_level, is_buyer, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7747 (class 0 OID 1207024)
+-- Dependencies: 440
+-- Data for Name: whatsapp_instances_comprehensive; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.whatsapp_instances_comprehensive (id, user_id, instance_name, instance_id, phone_number, api_key, api_url, status, qr_code, is_active, last_connected, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7748 (class 0 OID 1207034)
+-- Dependencies: 441
+-- Data for Name: whatsapp_message_templates; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.whatsapp_message_templates (id, template_name, template_content, variables, is_active, created_at, updated_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 7749 (class 0 OID 1207043)
+-- Dependencies: 442
+-- Data for Name: whatsapp_templates; Type: TABLE DATA; Schema: public; Owner: neondb_owner
+--
+-- Original: COPY public.whatsapp_templates (id, template_id, template_name, language, category, status, body_text, created_at) FROM stdin;
+-- Converting to INSERT statements...
+-- End of data
+--
+-- TOC entry 8028 (class 0 OID 0)
+-- Dependencies: 249
+-- Name: buyer_details_buyer_id_seq; Type: SEQUENCE SET; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8029 (class 0 OID 0)
+-- Dependencies: 253
+-- Name: communication_log_log_id_seq; Type: SEQUENCE SET; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8030 (class 0 OID 0)
+-- Dependencies: 261
+-- Name: customer_fix_backup_backup_id_seq; Type: SEQUENCE SET; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8031 (class 0 OID 0)
+-- Dependencies: 274
+-- Name: customers_customer_id_seq; Type: SEQUENCE SET; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8032 (class 0 OID 0)
+-- Dependencies: 382
+-- Name: product_interests_interest_id_seq; Type: SEQUENCE SET; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8033 (class 0 OID 0)
+-- Dependencies: 405
+-- Name: sales_pipeline_sale_id_seq; Type: SEQUENCE SET; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5813 (class 2606 OID 1207097)
+-- Name: users_sync users_sync_pkey; Type: CONSTRAINT; Schema: neon_auth; Owner: neondb_owner
+--
+--
+-- TOC entry 5815 (class 2606 OID 1207099)
+-- Name: account_transactions account_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5832 (class 2606 OID 1207101)
+-- Name: admin_settings admin_settings_category_setting_key_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5839 (class 2606 OID 1207103)
+-- Name: admin_settings_log admin_settings_log_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5834 (class 2606 OID 1207105)
+-- Name: admin_settings admin_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5843 (class 2606 OID 1207107)
+-- Name: api_keys api_keys_key_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5845 (class 2606 OID 1207109)
+-- Name: api_keys api_keys_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5850 (class 2606 OID 1207111)
+-- Name: api_request_logs api_request_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5855 (class 2606 OID 1207113)
+-- Name: appointments appointments_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5858 (class 2606 OID 1207115)
+-- Name: attendance_records attendance_records_employee_id_attendance_date_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5860 (class 2606 OID 1207117)
+-- Name: attendance_records attendance_records_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5867 (class 2606 OID 1207119)
+-- Name: audit_logs audit_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5869 (class 2606 OID 1207121)
+-- Name: auth_users auth_users_email_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5871 (class 2606 OID 1207123)
+-- Name: auth_users auth_users_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5874 (class 2606 OID 1207125)
+-- Name: auto_reorder_log auto_reorder_log_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5974 (class 2606 OID 1207127)
+-- Name: backup_logs backup_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5979 (class 2606 OID 1207129)
+-- Name: branch_activity_log branch_activity_log_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5985 (class 2606 OID 1207131)
+-- Name: branch_transfers branch_transfers_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5993 (class 2606 OID 1207133)
+-- Name: buyer_details buyer_details_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5997 (class 2606 OID 1207135)
+-- Name: categories categories_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5999 (class 2606 OID 1207137)
+-- Name: chat_messages chat_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6001 (class 2606 OID 1207139)
+-- Name: communication_log communication_log_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6004 (class 2606 OID 1207141)
+-- Name: communication_templates communication_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6006 (class 2606 OID 1207143)
+-- Name: contact_history contact_history_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6008 (class 2606 OID 1207145)
+-- Name: contact_methods contact_methods_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6010 (class 2606 OID 1207147)
+-- Name: contact_preferences contact_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6012 (class 2606 OID 1207149)
+-- Name: customer_checkins customer_checkins_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6016 (class 2606 OID 1207151)
+-- Name: customer_communications customer_communications_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6022 (class 2606 OID 1207153)
+-- Name: customer_fix_backup customer_fix_backup_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6024 (class 2606 OID 1207155)
+-- Name: customer_installment_plan_payments customer_installment_plan_payments_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6028 (class 2606 OID 1207157)
+-- Name: customer_installment_plans customer_installment_plans_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6030 (class 2606 OID 1207159)
+-- Name: customer_installment_plans customer_installment_plans_plan_number_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6037 (class 2606 OID 1207161)
+-- Name: customer_messages customer_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6046 (class 2606 OID 1207163)
+-- Name: customer_notes customer_notes_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6048 (class 2606 OID 1207165)
+-- Name: customer_payments customer_payments_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6061 (class 2606 OID 1207167)
+-- Name: customer_points_history customer_points_history_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6064 (class 2606 OID 1207169)
+-- Name: customer_preferences customer_preferences_customer_id_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6066 (class 2606 OID 1207171)
+-- Name: customer_preferences customer_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6069 (class 2606 OID 1207173)
+-- Name: customer_revenue customer_revenue_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6071 (class 2606 OID 1207175)
+-- Name: customer_special_orders customer_special_orders_order_number_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6073 (class 2606 OID 1207177)
+-- Name: customer_special_orders customer_special_orders_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6098 (class 2606 OID 1207179)
+-- Name: whatsapp_customers customers_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6104 (class 2606 OID 1207181)
+-- Name: daily_opening_sessions daily_opening_sessions_date_is_active_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6106 (class 2606 OID 1207183)
+-- Name: daily_opening_sessions daily_opening_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6112 (class 2606 OID 1207185)
+-- Name: daily_reports daily_reports_employee_id_report_date_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6114 (class 2606 OID 1207187)
+-- Name: daily_reports daily_reports_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6121 (class 2606 OID 1207189)
+-- Name: daily_sales_closures daily_sales_closures_date_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6123 (class 2606 OID 1207191)
+-- Name: daily_sales_closures daily_sales_closures_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6133 (class 2606 OID 1207193)
+-- Name: device_attachments device_attachments_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6135 (class 2606 OID 1207195)
+-- Name: device_checklists device_checklists_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6137 (class 2606 OID 1207197)
+-- Name: device_ratings device_ratings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6139 (class 2606 OID 1207199)
+-- Name: device_remarks device_remarks_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6141 (class 2606 OID 1207201)
+-- Name: device_transitions device_transitions_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6143 (class 2606 OID 1207203)
+-- Name: devices devices_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6150 (class 2606 OID 1207205)
+-- Name: diagnostic_checklist_results diagnostic_checklist_results_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6152 (class 2606 OID 1207207)
+-- Name: diagnostic_checks diagnostic_checks_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6154 (class 2606 OID 1207209)
+-- Name: diagnostic_devices diagnostic_devices_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6156 (class 2606 OID 1207211)
+-- Name: diagnostic_problem_templates diagnostic_problem_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6158 (class 2606 OID 1207213)
+-- Name: diagnostic_requests diagnostic_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6160 (class 2606 OID 1207215)
+-- Name: diagnostic_templates diagnostic_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6162 (class 2606 OID 1207217)
+-- Name: document_templates document_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6167 (class 2606 OID 1207219)
+-- Name: email_logs email_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6181 (class 2606 OID 1207221)
+-- Name: employee_shifts employee_shifts_employee_id_shift_date_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6183 (class 2606 OID 1207223)
+-- Name: employee_shifts employee_shifts_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6169 (class 2606 OID 1207225)
+-- Name: employees employees_email_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6171 (class 2606 OID 1207227)
+-- Name: employees employees_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6188 (class 2606 OID 1207229)
+-- Name: expense_categories expense_categories_name_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6190 (class 2606 OID 1207231)
+-- Name: expense_categories expense_categories_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6192 (class 2606 OID 1207233)
+-- Name: expenses expenses_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6201 (class 2606 OID 1207235)
+-- Name: finance_accounts finance_accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6218 (class 2606 OID 1207237)
+-- Name: finance_expense_categories finance_expense_categories_category_name_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6220 (class 2606 OID 1207239)
+-- Name: finance_expense_categories finance_expense_categories_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6222 (class 2606 OID 1207241)
+-- Name: finance_expenses finance_expenses_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6230 (class 2606 OID 1207243)
+-- Name: finance_transfers finance_transfers_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6234 (class 2606 OID 1207245)
+-- Name: gift_card_transactions gift_card_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6237 (class 2606 OID 1207247)
+-- Name: gift_cards gift_cards_card_number_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6239 (class 2606 OID 1207249)
+-- Name: gift_cards gift_cards_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6245 (class 2606 OID 1207251)
+-- Name: imei_validation imei_validation_imei_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6247 (class 2606 OID 1207253)
+-- Name: imei_validation imei_validation_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6253 (class 2606 OID 1207255)
+-- Name: installment_payments installment_payments_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6255 (class 2606 OID 1207257)
+-- Name: integrations integrations_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6265 (class 2606 OID 1207259)
+-- Name: inventory_items inventory_items_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6267 (class 2606 OID 1207261)
+-- Name: inventory_items inventory_items_serial_number_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6257 (class 2606 OID 1207263)
+-- Name: inventory inventory_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6269 (class 2606 OID 1207265)
+-- Name: lats_branches lats_branches_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6271 (class 2606 OID 1207267)
+-- Name: lats_brands lats_brands_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6277 (class 2606 OID 1207269)
+-- Name: lats_categories lats_categories_name_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6279 (class 2606 OID 1207271)
+-- Name: lats_categories lats_categories_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6096 (class 2606 OID 1207273)
+-- Name: lats_customers lats_customers_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6283 (class 2606 OID 1207275)
+-- Name: lats_data_audit_log lats_data_audit_log_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6285 (class 2606 OID 1207277)
+-- Name: lats_employees lats_employees_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6291 (class 2606 OID 1207279)
+-- Name: lats_inventory_adjustments lats_inventory_adjustments_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6302 (class 2606 OID 1207281)
+-- Name: lats_inventory_items lats_inventory_items_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6305 (class 2606 OID 1207283)
+-- Name: lats_pos_advanced_settings lats_pos_advanced_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6307 (class 2606 OID 1207285)
+-- Name: lats_pos_advanced_settings lats_pos_advanced_settings_user_id_business_id_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6311 (class 2606 OID 1207287)
+-- Name: lats_pos_analytics_reporting_settings lats_pos_analytics_reporting_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6313 (class 2606 OID 1207289)
+-- Name: lats_pos_analytics_reporting_settings lats_pos_analytics_reporting_settings_user_id_business_id_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6317 (class 2606 OID 1207291)
+-- Name: lats_pos_barcode_scanner_settings lats_pos_barcode_scanner_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6319 (class 2606 OID 1207293)
+-- Name: lats_pos_barcode_scanner_settings lats_pos_barcode_scanner_settings_user_id_business_id_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6323 (class 2606 OID 1207295)
+-- Name: lats_pos_delivery_settings lats_pos_delivery_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6325 (class 2606 OID 1207297)
+-- Name: lats_pos_delivery_settings lats_pos_delivery_settings_user_id_business_id_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6333 (class 2606 OID 1207299)
+-- Name: lats_pos_dynamic_pricing_settings lats_pos_dynamic_pricing_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6335 (class 2606 OID 1207301)
+-- Name: lats_pos_dynamic_pricing_settings lats_pos_dynamic_pricing_settings_user_id_unique; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6342 (class 2606 OID 1207303)
+-- Name: lats_pos_general_settings lats_pos_general_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6344 (class 2606 OID 1207305)
+-- Name: lats_pos_general_settings lats_pos_general_settings_user_id_unique; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6350 (class 2606 OID 1207307)
+-- Name: lats_pos_integrations_settings lats_pos_integrations_setting_user_id_business_id_integrati_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6352 (class 2606 OID 1207309)
+-- Name: lats_pos_integrations_settings lats_pos_integrations_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6358 (class 2606 OID 1207311)
+-- Name: lats_pos_loyalty_customer_settings lats_pos_loyalty_customer_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6360 (class 2606 OID 1207313)
+-- Name: lats_pos_loyalty_customer_settings lats_pos_loyalty_customer_settings_user_id_unique; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6364 (class 2606 OID 1207315)
+-- Name: lats_pos_notification_settings lats_pos_notification_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6366 (class 2606 OID 1207317)
+-- Name: lats_pos_notification_settings lats_pos_notification_settings_user_id_business_id_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6371 (class 2606 OID 1207319)
+-- Name: lats_pos_receipt_settings lats_pos_receipt_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6373 (class 2606 OID 1207321)
+-- Name: lats_pos_receipt_settings lats_pos_receipt_settings_user_id_unique; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6377 (class 2606 OID 1207323)
+-- Name: lats_pos_search_filter_settings lats_pos_search_filter_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6379 (class 2606 OID 1207325)
+-- Name: lats_pos_search_filter_settings lats_pos_search_filter_settings_user_id_business_id_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6385 (class 2606 OID 1207327)
+-- Name: lats_pos_user_permissions_settings lats_pos_user_permissions_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6387 (class 2606 OID 1207329)
+-- Name: lats_pos_user_permissions_settings lats_pos_user_permissions_settings_user_id_unique; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6389 (class 2606 OID 1207331)
+-- Name: lats_product_units lats_product_units_imei_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6391 (class 2606 OID 1207333)
+-- Name: lats_product_units lats_product_units_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6396 (class 2606 OID 1207335)
+-- Name: lats_product_validation lats_product_validation_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6398 (class 2606 OID 1207337)
+-- Name: lats_product_validation lats_product_validation_product_id_shipping_id_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5904 (class 2606 OID 1207339)
+-- Name: lats_product_variants lats_product_variants_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5906 (class 2606 OID 1207341)
+-- Name: lats_product_variants lats_product_variants_sku_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5941 (class 2606 OID 1207343)
+-- Name: lats_products lats_products_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5943 (class 2606 OID 1207345)
+-- Name: lats_products lats_products_sku_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6403 (class 2606 OID 1207347)
+-- Name: lats_purchase_order_audit_log lats_purchase_order_audit_log_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6131 (class 2606 OID 1207349)
+-- Name: lats_purchase_order_items lats_purchase_order_items_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6408 (class 2606 OID 1207351)
+-- Name: lats_purchase_order_payments lats_purchase_order_payments_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6415 (class 2606 OID 1207353)
+-- Name: lats_purchase_order_shipping lats_purchase_order_shipping_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5950 (class 2606 OID 1207355)
+-- Name: lats_purchase_orders lats_purchase_orders_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5952 (class 2606 OID 1207357)
+-- Name: lats_purchase_orders lats_purchase_orders_po_number_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6421 (class 2606 OID 1207359)
+-- Name: lats_receipts lats_receipts_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6428 (class 2606 OID 1207361)
+-- Name: lats_sale_items lats_sale_items_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6439 (class 2606 OID 1207363)
+-- Name: lats_sales lats_sales_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6441 (class 2606 OID 1207365)
+-- Name: lats_sales lats_sales_sale_number_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6450 (class 2606 OID 1207367)
+-- Name: lats_shipping_agents lats_shipping_agents_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6454 (class 2606 OID 1207369)
+-- Name: lats_shipping_cargo_items lats_shipping_cargo_items_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6458 (class 2606 OID 1207371)
+-- Name: lats_shipping_methods lats_shipping_methods_code_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6460 (class 2606 OID 1207373)
+-- Name: lats_shipping_methods lats_shipping_methods_name_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6462 (class 2606 OID 1207375)
+-- Name: lats_shipping_methods lats_shipping_methods_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6445 (class 2606 OID 1207377)
+-- Name: lats_shipping lats_shipping_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6464 (class 2606 OID 1207379)
+-- Name: lats_shipping_settings lats_shipping_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6468 (class 2606 OID 1207381)
+-- Name: lats_spare_part_usage lats_spare_part_usage_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6472 (class 2606 OID 1207383)
+-- Name: lats_spare_part_variants lats_spare_part_variants_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6474 (class 2606 OID 1207385)
+-- Name: lats_spare_part_variants lats_spare_part_variants_sku_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6476 (class 2606 OID 1207387)
+-- Name: lats_spare_parts lats_spare_parts_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6490 (class 2606 OID 1207389)
+-- Name: lats_stock_movements lats_stock_movements_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6497 (class 2606 OID 1207391)
+-- Name: lats_stock_transfers lats_stock_transfers_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6499 (class 2606 OID 1207393)
+-- Name: lats_stock_transfers lats_stock_transfers_transfer_number_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6512 (class 2606 OID 1207395)
+-- Name: lats_store_locations lats_store_locations_code_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6514 (class 2606 OID 1207397)
+-- Name: lats_store_locations lats_store_locations_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6505 (class 2606 OID 1207399)
+-- Name: lats_store_rooms lats_store_rooms_name_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6507 (class 2606 OID 1207401)
+-- Name: lats_store_rooms lats_store_rooms_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6522 (class 2606 OID 1207403)
+-- Name: lats_store_shelves lats_store_shelves_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6524 (class 2606 OID 1207405)
+-- Name: lats_store_shelves lats_store_shelves_room_id_name_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6527 (class 2606 OID 1207407)
+-- Name: lats_supplier_categories lats_supplier_categories_name_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6529 (class 2606 OID 1207409)
+-- Name: lats_supplier_categories lats_supplier_categories_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6533 (class 2606 OID 1207411)
+-- Name: lats_supplier_category_mapping lats_supplier_category_mapping_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6538 (class 2606 OID 1207413)
+-- Name: lats_supplier_communications lats_supplier_communications_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6543 (class 2606 OID 1207415)
+-- Name: lats_supplier_contracts lats_supplier_contracts_contract_number_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6545 (class 2606 OID 1207417)
+-- Name: lats_supplier_contracts lats_supplier_contracts_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6550 (class 2606 OID 1207419)
+-- Name: lats_supplier_documents lats_supplier_documents_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6555 (class 2606 OID 1207421)
+-- Name: lats_supplier_ratings lats_supplier_ratings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6559 (class 2606 OID 1207423)
+-- Name: lats_supplier_tag_mapping lats_supplier_tag_mapping_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6561 (class 2606 OID 1207425)
+-- Name: lats_supplier_tags lats_supplier_tags_name_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6563 (class 2606 OID 1207427)
+-- Name: lats_supplier_tags lats_supplier_tags_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5972 (class 2606 OID 1207429)
+-- Name: lats_suppliers lats_suppliers_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6568 (class 2606 OID 1207431)
+-- Name: lats_trade_in_contracts lats_trade_in_contracts_contract_number_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6570 (class 2606 OID 1207433)
+-- Name: lats_trade_in_contracts lats_trade_in_contracts_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6574 (class 2606 OID 1207436)
+-- Name: lats_trade_in_damage_assessments lats_trade_in_damage_assessments_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6580 (class 2606 OID 1207438)
+-- Name: lats_trade_in_prices lats_trade_in_prices_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6582 (class 2606 OID 1207440)
+-- Name: lats_trade_in_settings lats_trade_in_settings_key_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6584 (class 2606 OID 1207442)
+-- Name: lats_trade_in_settings lats_trade_in_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6593 (class 2606 OID 1207444)
+-- Name: lats_trade_in_transactions lats_trade_in_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6595 (class 2606 OID 1207446)
+-- Name: lats_trade_in_transactions lats_trade_in_transactions_transaction_number_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6600 (class 2606 OID 1207448)
+-- Name: leave_requests leave_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6606 (class 2606 OID 1207450)
+-- Name: loyalty_points loyalty_points_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6617 (class 2606 OID 1207452)
+-- Name: mobile_money_transactions mobile_money_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6619 (class 2606 OID 1207454)
+-- Name: notes notes_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6622 (class 2606 OID 1207456)
+-- Name: notification_templates notification_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6637 (class 2606 OID 1207458)
+-- Name: notifications notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6639 (class 2606 OID 1207460)
+-- Name: paragraphs paragraphs_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6642 (class 2606 OID 1207462)
+-- Name: payment_methods payment_methods_code_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6644 (class 2606 OID 1207464)
+-- Name: payment_methods payment_methods_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6654 (class 2606 OID 1207466)
+-- Name: payment_transactions payment_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6660 (class 2606 OID 1207468)
+-- Name: points_transactions points_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6665 (class 2606 OID 1207470)
+-- Name: product_images product_images_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6668 (class 2606 OID 1207472)
+-- Name: product_interests product_interests_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6672 (class 2606 OID 1207474)
+-- Name: purchase_order_audit purchase_order_audit_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6674 (class 2606 OID 1207476)
+-- Name: purchase_order_messages purchase_order_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6681 (class 2606 OID 1207478)
+-- Name: purchase_order_payments purchase_order_payments_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6685 (class 2606 OID 1207480)
+-- Name: purchase_order_quality_check_items purchase_order_quality_check_items_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6689 (class 2606 OID 1207482)
+-- Name: purchase_order_quality_checks purchase_order_quality_checks_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6691 (class 2606 OID 1207484)
+-- Name: purchase_orders purchase_orders_order_number_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6693 (class 2606 OID 1207486)
+-- Name: purchase_orders purchase_orders_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6696 (class 2606 OID 1207488)
+-- Name: quality_check_criteria quality_check_criteria_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6698 (class 2606 OID 1207490)
+-- Name: quality_check_items quality_check_items_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6700 (class 2606 OID 1207492)
+-- Name: quality_check_results quality_check_results_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6702 (class 2606 OID 1207494)
+-- Name: quality_check_templates quality_check_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6706 (class 2606 OID 1207496)
+-- Name: quality_checks quality_checks_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6711 (class 2606 OID 1207498)
+-- Name: recurring_expense_history recurring_expense_history_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6720 (class 2606 OID 1207500)
+-- Name: recurring_expenses recurring_expenses_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6730 (class 2606 OID 1207502)
+-- Name: reminders reminders_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6733 (class 2606 OID 1207504)
+-- Name: repair_parts repair_parts_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6736 (class 2606 OID 1207506)
+-- Name: report_attachments report_attachments_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6745 (class 2606 OID 1207508)
+-- Name: reports reports_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6750 (class 2606 OID 1207510)
+-- Name: returns returns_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6755 (class 2606 OID 1207512)
+-- Name: sale_inventory_items sale_inventory_items_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6760 (class 2606 OID 1207514)
+-- Name: sales_pipeline sales_pipeline_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6757 (class 2606 OID 1207516)
+-- Name: sales sales_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6765 (class 2606 OID 1207518)
+-- Name: scheduled_transfer_executions scheduled_transfer_executions_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6772 (class 2606 OID 1207520)
+-- Name: scheduled_transfers scheduled_transfers_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6777 (class 2606 OID 1207522)
+-- Name: serial_number_movements serial_number_movements_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6780 (class 2606 OID 1207524)
+-- Name: settings settings_key_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6782 (class 2606 OID 1207526)
+-- Name: settings settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6786 (class 2606 OID 1207528)
+-- Name: shelves shelves_code_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6788 (class 2606 OID 1207530)
+-- Name: shelves shelves_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6790 (class 2606 OID 1207532)
+-- Name: shift_templates shift_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6799 (class 2606 OID 1207534)
+-- Name: sms_logs sms_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6801 (class 2606 OID 1207536)
+-- Name: sms_trigger_logs sms_trigger_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6804 (class 2606 OID 1207538)
+-- Name: sms_triggers sms_triggers_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6808 (class 2606 OID 1207540)
+-- Name: special_order_payments special_order_payments_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6811 (class 2606 OID 1207542)
+-- Name: storage_rooms storage_rooms_code_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6813 (class 2606 OID 1207544)
+-- Name: storage_rooms storage_rooms_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6214 (class 2606 OID 1207546)
+-- Name: store_locations store_locations_code_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6216 (class 2606 OID 1207548)
+-- Name: store_locations store_locations_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6815 (class 2606 OID 1207550)
+-- Name: suppliers suppliers_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6817 (class 2606 OID 1207552)
+-- Name: system_settings system_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6819 (class 2606 OID 1207554)
+-- Name: system_settings system_settings_setting_key_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6824 (class 2606 OID 1207556)
+-- Name: user_branch_assignments user_branch_assignments_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6826 (class 2606 OID 1207558)
+-- Name: user_branch_assignments user_branch_assignments_user_id_branch_id_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6829 (class 2606 OID 1207560)
+-- Name: user_daily_goals user_daily_goals_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6831 (class 2606 OID 1207562)
+-- Name: user_daily_goals user_daily_goals_user_id_date_goal_type_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6835 (class 2606 OID 1207564)
+-- Name: user_settings user_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6837 (class 2606 OID 1207566)
+-- Name: user_settings user_settings_user_id_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6844 (class 2606 OID 1207568)
+-- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6846 (class 2606 OID 1207570)
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6850 (class 2606 OID 1207572)
+-- Name: webhook_endpoints webhook_endpoints_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6854 (class 2606 OID 1207574)
+-- Name: webhook_logs webhook_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6857 (class 2606 OID 1207576)
+-- Name: whatsapp_instances_comprehensive whatsapp_instances_comprehensive_instance_id_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6859 (class 2606 OID 1207578)
+-- Name: whatsapp_instances_comprehensive whatsapp_instances_comprehensive_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6861 (class 2606 OID 1207580)
+-- Name: whatsapp_message_templates whatsapp_message_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6863 (class 2606 OID 1207582)
+-- Name: whatsapp_templates whatsapp_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6865 (class 2606 OID 1207584)
+-- Name: whatsapp_templates whatsapp_templates_template_id_key; Type: CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5811 (class 1259 OID 1207585)
+-- Name: users_sync_deleted_at_idx; Type: INDEX; Schema: neon_auth; Owner: neondb_owner
+--
+--
+-- TOC entry 5816 (class 1259 OID 1207586)
+-- Name: idx_account_trans_account; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5817 (class 1259 OID 1207587)
+-- Name: idx_account_trans_created; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5818 (class 1259 OID 1207588)
+-- Name: idx_account_trans_reference; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5819 (class 1259 OID 1207589)
+-- Name: idx_account_trans_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5820 (class 1259 OID 1207590)
+-- Name: idx_account_transactions_account_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5821 (class 1259 OID 1207591)
+-- Name: idx_account_transactions_account_type_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5822 (class 1259 OID 1207592)
+-- Name: idx_account_transactions_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5823 (class 1259 OID 1207593)
+-- Name: idx_account_transactions_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5824 (class 1259 OID 1207594)
+-- Name: idx_account_transactions_entity_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5825 (class 1259 OID 1207595)
+-- Name: idx_account_transactions_entity_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5826 (class 1259 OID 1207596)
+-- Name: idx_account_transactions_entity_type_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5827 (class 1259 OID 1207597)
+-- Name: idx_account_transactions_reference_number; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5828 (class 1259 OID 1207598)
+-- Name: idx_account_transactions_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5829 (class 1259 OID 1207599)
+-- Name: idx_account_transactions_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5830 (class 1259 OID 1207600)
+-- Name: idx_account_transactions_validation; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5835 (class 1259 OID 1207601)
+-- Name: idx_admin_settings_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5836 (class 1259 OID 1207602)
+-- Name: idx_admin_settings_category; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5837 (class 1259 OID 1207603)
+-- Name: idx_admin_settings_category_key; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5840 (class 1259 OID 1207604)
+-- Name: idx_admin_settings_log_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5841 (class 1259 OID 1207605)
+-- Name: idx_admin_settings_log_key; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6303 (class 1259 OID 1207606)
+-- Name: idx_advanced_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6308 (class 1259 OID 1207607)
+-- Name: idx_analytics_reporting_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6309 (class 1259 OID 1207608)
+-- Name: idx_analytics_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5846 (class 1259 OID 1207609)
+-- Name: idx_api_keys_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5847 (class 1259 OID 1207610)
+-- Name: idx_api_keys_key; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5848 (class 1259 OID 1207611)
+-- Name: idx_api_keys_user; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5851 (class 1259 OID 1207612)
+-- Name: idx_api_logs_created; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5852 (class 1259 OID 1207613)
+-- Name: idx_api_logs_ip; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5853 (class 1259 OID 1207614)
+-- Name: idx_api_logs_key; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5856 (class 1259 OID 1207615)
+-- Name: idx_appointments_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5861 (class 1259 OID 1207616)
+-- Name: idx_attendance_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5862 (class 1259 OID 1207617)
+-- Name: idx_attendance_employee_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5863 (class 1259 OID 1207618)
+-- Name: idx_attendance_employee_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5864 (class 1259 OID 1207619)
+-- Name: idx_attendance_records_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5865 (class 1259 OID 1207620)
+-- Name: idx_attendance_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6280 (class 1259 OID 1207621)
+-- Name: idx_audit_log_created; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6399 (class 1259 OID 1207622)
+-- Name: idx_audit_log_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6400 (class 1259 OID 1207623)
+-- Name: idx_audit_log_po_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6281 (class 1259 OID 1207624)
+-- Name: idx_audit_log_record; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6401 (class 1259 OID 1207625)
+-- Name: idx_audit_log_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5872 (class 1259 OID 1207626)
+-- Name: idx_auth_users_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5875 (class 1259 OID 1207627)
+-- Name: idx_auto_reorder_log_created; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5876 (class 1259 OID 1207628)
+-- Name: idx_auto_reorder_log_po; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5975 (class 1259 OID 1207629)
+-- Name: idx_backup_logs_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5976 (class 1259 OID 1207630)
+-- Name: idx_backup_logs_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5977 (class 1259 OID 1207631)
+-- Name: idx_backup_logs_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6314 (class 1259 OID 1207632)
+-- Name: idx_barcode_scanner_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5980 (class 1259 OID 1207633)
+-- Name: idx_branch_activity_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5981 (class 1259 OID 1207634)
+-- Name: idx_branch_activity_created; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5982 (class 1259 OID 1207635)
+-- Name: idx_branch_activity_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5983 (class 1259 OID 1207636)
+-- Name: idx_branch_activity_user; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5986 (class 1259 OID 1207637)
+-- Name: idx_branch_transfers_created; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5987 (class 1259 OID 1207638)
+-- Name: idx_branch_transfers_entity; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5988 (class 1259 OID 1207639)
+-- Name: idx_branch_transfers_from_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5989 (class 1259 OID 1207640)
+-- Name: idx_branch_transfers_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5990 (class 1259 OID 1207641)
+-- Name: idx_branch_transfers_to_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5991 (class 1259 OID 1207642)
+-- Name: idx_branch_transfers_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5994 (class 1259 OID 1207643)
+-- Name: idx_buyer_score; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5995 (class 1259 OID 1207644)
+-- Name: idx_buyer_tier; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6451 (class 1259 OID 1207645)
+-- Name: idx_cargo_items_product; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6452 (class 1259 OID 1207646)
+-- Name: idx_cargo_items_shipping; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6272 (class 1259 OID 1207647)
+-- Name: idx_categories_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6273 (class 1259 OID 1207648)
+-- Name: idx_categories_is_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6274 (class 1259 OID 1207649)
+-- Name: idx_categories_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6002 (class 1259 OID 1207650)
+-- Name: idx_comm_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6025 (class 1259 OID 1207651)
+-- Name: idx_cust_inst_payments_customer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6026 (class 1259 OID 1207652)
+-- Name: idx_cust_inst_payments_plan; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6099 (class 1259 OID 1207653)
+-- Name: idx_customer_buyer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6013 (class 1259 OID 1207654)
+-- Name: idx_customer_checkins_checkin_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6014 (class 1259 OID 1207655)
+-- Name: idx_customer_checkins_customer_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6017 (class 1259 OID 1207656)
+-- Name: idx_customer_communications_customer_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6018 (class 1259 OID 1207657)
+-- Name: idx_customer_communications_sent_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6019 (class 1259 OID 1207658)
+-- Name: idx_customer_communications_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6020 (class 1259 OID 1207659)
+-- Name: idx_customer_communications_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6100 (class 1259 OID 1207660)
+-- Name: idx_customer_engagement; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6038 (class 1259 OID 1207661)
+-- Name: idx_customer_messages_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6039 (class 1259 OID 1207662)
+-- Name: idx_customer_messages_channel; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6040 (class 1259 OID 1207663)
+-- Name: idx_customer_messages_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6041 (class 1259 OID 1207664)
+-- Name: idx_customer_messages_customer_created; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6042 (class 1259 OID 1207665)
+-- Name: idx_customer_messages_customer_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6043 (class 1259 OID 1207666)
+-- Name: idx_customer_messages_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6044 (class 1259 OID 1207667)
+-- Name: idx_customer_messages_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6049 (class 1259 OID 1207668)
+-- Name: idx_customer_payments_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6050 (class 1259 OID 1207669)
+-- Name: idx_customer_payments_currency; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6051 (class 1259 OID 1207670)
+-- Name: idx_customer_payments_customer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6052 (class 1259 OID 1207671)
+-- Name: idx_customer_payments_customer_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6053 (class 1259 OID 1207672)
+-- Name: idx_customer_payments_customer_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6054 (class 1259 OID 1207673)
+-- Name: idx_customer_payments_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6055 (class 1259 OID 1207674)
+-- Name: idx_customer_payments_payment_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6056 (class 1259 OID 1207675)
+-- Name: idx_customer_payments_reference_number; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6057 (class 1259 OID 1207676)
+-- Name: idx_customer_payments_sale; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6058 (class 1259 OID 1207677)
+-- Name: idx_customer_payments_sale_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6059 (class 1259 OID 1207678)
+-- Name: idx_customer_payments_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6101 (class 1259 OID 1207679)
+-- Name: idx_customer_phone; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6067 (class 1259 OID 1207680)
+-- Name: idx_customer_preferences_customer_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6102 (class 1259 OID 1207681)
+-- Name: idx_customer_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6079 (class 1259 OID 1207682)
+-- Name: idx_customers_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6080 (class 1259 OID 1207683)
+-- Name: idx_customers_email; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6081 (class 1259 OID 1207684)
+-- Name: idx_customers_phone; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6107 (class 1259 OID 1207685)
+-- Name: idx_daily_opening_sessions_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6108 (class 1259 OID 1207686)
+-- Name: idx_daily_opening_sessions_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6109 (class 1259 OID 1207687)
+-- Name: idx_daily_opening_sessions_opened_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6110 (class 1259 OID 1207688)
+-- Name: idx_daily_opening_sessions_opened_by; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6115 (class 1259 OID 1207689)
+-- Name: idx_daily_reports_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6116 (class 1259 OID 1207690)
+-- Name: idx_daily_reports_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6117 (class 1259 OID 1207691)
+-- Name: idx_daily_reports_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6118 (class 1259 OID 1207692)
+-- Name: idx_daily_reports_employee_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6119 (class 1259 OID 1207693)
+-- Name: idx_daily_reports_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6124 (class 1259 OID 1207694)
+-- Name: idx_daily_sales_closures_closed_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6125 (class 1259 OID 1207695)
+-- Name: idx_daily_sales_closures_closed_by; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6126 (class 1259 OID 1207696)
+-- Name: idx_daily_sales_closures_closed_by_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6127 (class 1259 OID 1207697)
+-- Name: idx_daily_sales_closures_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6128 (class 1259 OID 1207698)
+-- Name: idx_daily_sales_closures_session; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6320 (class 1259 OID 1207699)
+-- Name: idx_delivery_settings_business_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6321 (class 1259 OID 1207700)
+-- Name: idx_delivery_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6144 (class 1259 OID 1207701)
+-- Name: idx_devices_assigned_to; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6145 (class 1259 OID 1207702)
+-- Name: idx_devices_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6146 (class 1259 OID 1207703)
+-- Name: idx_devices_customer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6147 (class 1259 OID 1207704)
+-- Name: idx_devices_is_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6148 (class 1259 OID 1207705)
+-- Name: idx_devices_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6163 (class 1259 OID 1207706)
+-- Name: idx_document_templates_default; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6164 (class 1259 OID 1207707)
+-- Name: idx_document_templates_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6165 (class 1259 OID 1207708)
+-- Name: idx_document_templates_user; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6326 (class 1259 OID 1207709)
+-- Name: idx_dynamic_pricing_business_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6327 (class 1259 OID 1207710)
+-- Name: idx_dynamic_pricing_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6328 (class 1259 OID 1207711)
+-- Name: idx_dynamic_pricing_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6172 (class 1259 OID 1207712)
+-- Name: idx_employees_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6173 (class 1259 OID 1207713)
+-- Name: idx_employees_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6174 (class 1259 OID 1207714)
+-- Name: idx_employees_department; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6175 (class 1259 OID 1207715)
+-- Name: idx_employees_email; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6176 (class 1259 OID 1207716)
+-- Name: idx_employees_is_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6177 (class 1259 OID 1207717)
+-- Name: idx_employees_manager_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6178 (class 1259 OID 1207718)
+-- Name: idx_employees_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6179 (class 1259 OID 1207719)
+-- Name: idx_employees_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6193 (class 1259 OID 1207720)
+-- Name: idx_expenses_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6194 (class 1259 OID 1207721)
+-- Name: idx_expenses_category; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6195 (class 1259 OID 1207722)
+-- Name: idx_expenses_created_by; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6196 (class 1259 OID 1207723)
+-- Name: idx_expenses_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6197 (class 1259 OID 1207724)
+-- Name: idx_expenses_product_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6198 (class 1259 OID 1207725)
+-- Name: idx_expenses_purchase_order_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6199 (class 1259 OID 1207726)
+-- Name: idx_expenses_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6202 (class 1259 OID 1207727)
+-- Name: idx_finance_accounts_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6203 (class 1259 OID 1207728)
+-- Name: idx_finance_accounts_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6204 (class 1259 OID 1207729)
+-- Name: idx_finance_accounts_payment_method; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6205 (class 1259 OID 1207730)
+-- Name: idx_finance_accounts_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6223 (class 1259 OID 1207731)
+-- Name: idx_finance_expenses_account; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6224 (class 1259 OID 1207732)
+-- Name: idx_finance_expenses_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6225 (class 1259 OID 1207733)
+-- Name: idx_finance_expenses_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6226 (class 1259 OID 1207734)
+-- Name: idx_finance_expenses_category_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6227 (class 1259 OID 1207735)
+-- Name: idx_finance_expenses_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6228 (class 1259 OID 1207736)
+-- Name: idx_finance_expenses_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6231 (class 1259 OID 1207737)
+-- Name: idx_finance_transfers_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6232 (class 1259 OID 1207738)
+-- Name: idx_finance_transfers_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6336 (class 1259 OID 1207739)
+-- Name: idx_general_settings_business_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6337 (class 1259 OID 1207740)
+-- Name: idx_general_settings_passcode; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6338 (class 1259 OID 1207741)
+-- Name: idx_general_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6235 (class 1259 OID 1207742)
+-- Name: idx_gift_card_transactions_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6240 (class 1259 OID 1207743)
+-- Name: idx_gift_cards_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6241 (class 1259 OID 1207744)
+-- Name: idx_gift_cards_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6242 (class 1259 OID 1207745)
+-- Name: idx_imei_validation_imei; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6243 (class 1259 OID 1207746)
+-- Name: idx_imei_validation_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6248 (class 1259 OID 1207747)
+-- Name: idx_installment_payments_account; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6249 (class 1259 OID 1207748)
+-- Name: idx_installment_payments_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6250 (class 1259 OID 1207749)
+-- Name: idx_installment_payments_customer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6251 (class 1259 OID 1207750)
+-- Name: idx_installment_payments_plan; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6031 (class 1259 OID 1207751)
+-- Name: idx_installment_plans_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6032 (class 1259 OID 1207752)
+-- Name: idx_installment_plans_customer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6033 (class 1259 OID 1207753)
+-- Name: idx_installment_plans_next_payment; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6034 (class 1259 OID 1207754)
+-- Name: idx_installment_plans_sale; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6035 (class 1259 OID 1207755)
+-- Name: idx_installment_plans_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6345 (class 1259 OID 1207756)
+-- Name: idx_integrations_business_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6346 (class 1259 OID 1207757)
+-- Name: idx_integrations_enabled; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6347 (class 1259 OID 1207758)
+-- Name: idx_integrations_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6348 (class 1259 OID 1207759)
+-- Name: idx_integrations_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6286 (class 1259 OID 1207760)
+-- Name: idx_inventory_adjustments_created; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6287 (class 1259 OID 1207761)
+-- Name: idx_inventory_adjustments_product; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6288 (class 1259 OID 1207762)
+-- Name: idx_inventory_adjustments_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6289 (class 1259 OID 1207763)
+-- Name: idx_inventory_adjustments_variant; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6292 (class 1259 OID 1207764)
+-- Name: idx_inventory_items_barcode; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6258 (class 1259 OID 1207765)
+-- Name: idx_inventory_items_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6293 (class 1259 OID 1207766)
+-- Name: idx_inventory_items_imei; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6259 (class 1259 OID 1207767)
+-- Name: idx_inventory_items_is_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6260 (class 1259 OID 1207768)
+-- Name: idx_inventory_items_metadata; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6294 (class 1259 OID 1207769)
+-- Name: idx_inventory_items_po; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6261 (class 1259 OID 1207770)
+-- Name: idx_inventory_items_po_item; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6295 (class 1259 OID 1207771)
+-- Name: idx_inventory_items_product; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6296 (class 1259 OID 1207772)
+-- Name: idx_inventory_items_serial; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6297 (class 1259 OID 1207773)
+-- Name: idx_inventory_items_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6298 (class 1259 OID 1207774)
+-- Name: idx_inventory_items_variant; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6262 (class 1259 OID 1207775)
+-- Name: idx_inventory_items_variant_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6263 (class 1259 OID 1207776)
+-- Name: idx_inventory_visible_branches; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6275 (class 1259 OID 1207777)
+-- Name: idx_lats_categories_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6082 (class 1259 OID 1207778)
+-- Name: idx_lats_customers_birthday; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6083 (class 1259 OID 1207779)
+-- Name: idx_lats_customers_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6084 (class 1259 OID 1207780)
+-- Name: idx_lats_customers_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6085 (class 1259 OID 1207781)
+-- Name: idx_lats_customers_email; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6086 (class 1259 OID 1207782)
+-- Name: idx_lats_customers_is_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6087 (class 1259 OID 1207783)
+-- Name: idx_lats_customers_is_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6088 (class 1259 OID 1207784)
+-- Name: idx_lats_customers_last_visit; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6089 (class 1259 OID 1207785)
+-- Name: idx_lats_customers_loyalty_level; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6090 (class 1259 OID 1207786)
+-- Name: idx_lats_customers_phone; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6091 (class 1259 OID 1207787)
+-- Name: idx_lats_customers_referred_by; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6092 (class 1259 OID 1207788)
+-- Name: idx_lats_customers_sharing_mode; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6093 (class 1259 OID 1207789)
+-- Name: idx_lats_customers_whatsapp; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6299 (class 1259 OID 1207790)
+-- Name: idx_lats_inventory_items_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6300 (class 1259 OID 1207791)
+-- Name: idx_lats_inventory_items_storage_room; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6329 (class 1259 OID 1207792)
+-- Name: idx_lats_pos_dynamic_pricing_settings_business_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6330 (class 1259 OID 1207793)
+-- Name: idx_lats_pos_dynamic_pricing_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6339 (class 1259 OID 1207794)
+-- Name: idx_lats_pos_general_settings_business_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6340 (class 1259 OID 1207795)
+-- Name: idx_lats_pos_general_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6353 (class 1259 OID 1207796)
+-- Name: idx_lats_pos_loyalty_customer_settings_business_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6354 (class 1259 OID 1207797)
+-- Name: idx_lats_pos_loyalty_customer_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6367 (class 1259 OID 1207798)
+-- Name: idx_lats_pos_receipt_settings_business_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6368 (class 1259 OID 1207799)
+-- Name: idx_lats_pos_receipt_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6380 (class 1259 OID 1207800)
+-- Name: idx_lats_pos_user_permissions_settings_business_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6381 (class 1259 OID 1207801)
+-- Name: idx_lats_pos_user_permissions_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5877 (class 1259 OID 1207802)
+-- Name: idx_lats_product_variants_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5878 (class 1259 OID 1207803)
+-- Name: idx_lats_product_variants_imei; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5879 (class 1259 OID 1207804)
+-- Name: idx_lats_product_variants_imei_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5880 (class 1259 OID 1207805)
+-- Name: idx_lats_product_variants_is_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5881 (class 1259 OID 1207806)
+-- Name: idx_lats_product_variants_parent_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5882 (class 1259 OID 1207807)
+-- Name: idx_lats_product_variants_product; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5883 (class 1259 OID 1207808)
+-- Name: idx_lats_product_variants_quantity; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5884 (class 1259 OID 1207809)
+-- Name: idx_lats_product_variants_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5908 (class 1259 OID 1207810)
+-- Name: idx_lats_products_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5909 (class 1259 OID 1207811)
+-- Name: idx_lats_products_attributes_gin; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5910 (class 1259 OID 1207812)
+-- Name: idx_lats_products_barcode; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5911 (class 1259 OID 1207813)
+-- Name: idx_lats_products_branch_created; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5912 (class 1259 OID 1207814)
+-- Name: idx_lats_products_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5913 (class 1259 OID 1207815)
+-- Name: idx_lats_products_category; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5914 (class 1259 OID 1207816)
+-- Name: idx_lats_products_category_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5915 (class 1259 OID 1207817)
+-- Name: idx_lats_products_condition; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5916 (class 1259 OID 1207818)
+-- Name: idx_lats_products_is_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5917 (class 1259 OID 1207819)
+-- Name: idx_lats_products_is_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5918 (class 1259 OID 1207820)
+-- Name: idx_lats_products_metadata_gin; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5919 (class 1259 OID 1207821)
+-- Name: idx_lats_products_name; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5920 (class 1259 OID 1207822)
+-- Name: idx_lats_products_null_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5921 (class 1259 OID 1207823)
+-- Name: idx_lats_products_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5922 (class 1259 OID 1207824)
+-- Name: idx_lats_products_sharing_mode; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5923 (class 1259 OID 1207825)
+-- Name: idx_lats_products_shelf_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5924 (class 1259 OID 1207826)
+-- Name: idx_lats_products_sku; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5925 (class 1259 OID 1207827)
+-- Name: idx_lats_products_storage; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5926 (class 1259 OID 1207828)
+-- Name: idx_lats_products_storage_room_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5927 (class 1259 OID 1207829)
+-- Name: idx_lats_products_store_shelf_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5928 (class 1259 OID 1207830)
+-- Name: idx_lats_products_supplier; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5929 (class 1259 OID 1207831)
+-- Name: idx_lats_products_tags_gin; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6404 (class 1259 OID 1207832)
+-- Name: idx_lats_purchase_order_payments_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5944 (class 1259 OID 1207833)
+-- Name: idx_lats_purchase_orders_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5945 (class 1259 OID 1207834)
+-- Name: idx_lats_purchase_orders_currency; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5946 (class 1259 OID 1207835)
+-- Name: idx_lats_purchase_orders_exchange_rate_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5947 (class 1259 OID 1207836)
+-- Name: idx_lats_purchase_orders_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6416 (class 1259 OID 1207837)
+-- Name: idx_lats_receipts_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6417 (class 1259 OID 1207838)
+-- Name: idx_lats_receipts_customer_phone; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6418 (class 1259 OID 1207839)
+-- Name: idx_lats_receipts_receipt_number; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6419 (class 1259 OID 1207840)
+-- Name: idx_lats_receipts_sale_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6422 (class 1259 OID 1207841)
+-- Name: idx_lats_sale_items_product_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6423 (class 1259 OID 1207842)
+-- Name: idx_lats_sale_items_sale_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6429 (class 1259 OID 1207843)
+-- Name: idx_lats_sales_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6430 (class 1259 OID 1207844)
+-- Name: idx_lats_sales_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6431 (class 1259 OID 1207845)
+-- Name: idx_lats_sales_customer_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6432 (class 1259 OID 1207846)
+-- Name: idx_lats_sales_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6433 (class 1259 OID 1207847)
+-- Name: idx_lats_sales_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6477 (class 1259 OID 1207848)
+-- Name: idx_lats_stock_movements_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6478 (class 1259 OID 1207849)
+-- Name: idx_lats_stock_movements_movement_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6479 (class 1259 OID 1207850)
+-- Name: idx_lats_stock_movements_product_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6480 (class 1259 OID 1207851)
+-- Name: idx_lats_stock_movements_variant_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6491 (class 1259 OID 1207852)
+-- Name: idx_lats_stock_transfers_from_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6492 (class 1259 OID 1207853)
+-- Name: idx_lats_stock_transfers_product; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6493 (class 1259 OID 1207854)
+-- Name: idx_lats_stock_transfers_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6494 (class 1259 OID 1207855)
+-- Name: idx_lats_stock_transfers_to_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6495 (class 1259 OID 1207856)
+-- Name: idx_lats_stock_transfers_variant; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6508 (class 1259 OID 1207857)
+-- Name: idx_lats_store_locations_city; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6509 (class 1259 OID 1207858)
+-- Name: idx_lats_store_locations_code; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6510 (class 1259 OID 1207859)
+-- Name: idx_lats_store_locations_is_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6500 (class 1259 OID 1207860)
+-- Name: idx_lats_store_rooms_code; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6501 (class 1259 OID 1207861)
+-- Name: idx_lats_store_rooms_is_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6502 (class 1259 OID 1207862)
+-- Name: idx_lats_store_rooms_location_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6515 (class 1259 OID 1207863)
+-- Name: idx_lats_store_shelves_code; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6516 (class 1259 OID 1207864)
+-- Name: idx_lats_store_shelves_is_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6517 (class 1259 OID 1207865)
+-- Name: idx_lats_store_shelves_location_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6518 (class 1259 OID 1207866)
+-- Name: idx_lats_store_shelves_storage_room_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5953 (class 1259 OID 1207867)
+-- Name: idx_lats_suppliers_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5954 (class 1259 OID 1207868)
+-- Name: idx_lats_suppliers_city; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5955 (class 1259 OID 1207869)
+-- Name: idx_lats_suppliers_country; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5956 (class 1259 OID 1207870)
+-- Name: idx_lats_suppliers_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5957 (class 1259 OID 1207871)
+-- Name: idx_lats_suppliers_is_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5958 (class 1259 OID 1207872)
+-- Name: idx_lats_suppliers_is_trade_in; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5959 (class 1259 OID 1207873)
+-- Name: idx_lats_suppliers_name; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5960 (class 1259 OID 1207874)
+-- Name: idx_lats_suppliers_preferred_currency; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6596 (class 1259 OID 1207875)
+-- Name: idx_leave_dates; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6597 (class 1259 OID 1207876)
+-- Name: idx_leave_employee_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6598 (class 1259 OID 1207877)
+-- Name: idx_leave_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6355 (class 1259 OID 1207878)
+-- Name: idx_loyalty_customer_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6601 (class 1259 OID 1207879)
+-- Name: idx_loyalty_points_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6602 (class 1259 OID 1207880)
+-- Name: idx_loyalty_points_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6603 (class 1259 OID 1207881)
+-- Name: idx_loyalty_points_customer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6604 (class 1259 OID 1207882)
+-- Name: idx_loyalty_points_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6356 (class 1259 OID 1207883)
+-- Name: idx_loyalty_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6607 (class 1259 OID 1207884)
+-- Name: idx_mobile_money_customer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6608 (class 1259 OID 1207885)
+-- Name: idx_mobile_money_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6609 (class 1259 OID 1207886)
+-- Name: idx_mobile_money_processed; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6610 (class 1259 OID 1207887)
+-- Name: idx_mobile_money_provider; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6611 (class 1259 OID 1207888)
+-- Name: idx_mobile_money_receiver_phone; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6612 (class 1259 OID 1207889)
+-- Name: idx_mobile_money_reference; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6613 (class 1259 OID 1207890)
+-- Name: idx_mobile_money_sender_phone; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6614 (class 1259 OID 1207891)
+-- Name: idx_mobile_money_transactions_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6615 (class 1259 OID 1207892)
+-- Name: idx_mobile_money_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6361 (class 1259 OID 1207893)
+-- Name: idx_notification_settings_business_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6362 (class 1259 OID 1207894)
+-- Name: idx_notification_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6623 (class 1259 OID 1207895)
+-- Name: idx_notifications_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6624 (class 1259 OID 1207896)
+-- Name: idx_notifications_category; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6625 (class 1259 OID 1207897)
+-- Name: idx_notifications_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6626 (class 1259 OID 1207898)
+-- Name: idx_notifications_customer_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6627 (class 1259 OID 1207899)
+-- Name: idx_notifications_device_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6628 (class 1259 OID 1207900)
+-- Name: idx_notifications_group_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6629 (class 1259 OID 1207901)
+-- Name: idx_notifications_priority; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6630 (class 1259 OID 1207902)
+-- Name: idx_notifications_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6631 (class 1259 OID 1207903)
+-- Name: idx_notifications_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6632 (class 1259 OID 1207904)
+-- Name: idx_notifications_user_created; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6633 (class 1259 OID 1207905)
+-- Name: idx_notifications_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6634 (class 1259 OID 1207906)
+-- Name: idx_notifications_user_priority; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6635 (class 1259 OID 1207907)
+-- Name: idx_notifications_user_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6640 (class 1259 OID 1207908)
+-- Name: idx_payment_methods_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6645 (class 1259 OID 1207909)
+-- Name: idx_payment_trans_created; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6646 (class 1259 OID 1207910)
+-- Name: idx_payment_trans_customer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6647 (class 1259 OID 1207911)
+-- Name: idx_payment_trans_order; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6648 (class 1259 OID 1207912)
+-- Name: idx_payment_trans_provider; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6649 (class 1259 OID 1207913)
+-- Name: idx_payment_trans_sale; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6650 (class 1259 OID 1207914)
+-- Name: idx_payment_trans_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6651 (class 1259 OID 1207915)
+-- Name: idx_payment_transactions_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6652 (class 1259 OID 1207916)
+-- Name: idx_payment_transactions_sale_id_unique; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6382 (class 1259 OID 1207917)
+-- Name: idx_permissions_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6129 (class 1259 OID 1207918)
+-- Name: idx_po_items_variant; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6405 (class 1259 OID 1207919)
+-- Name: idx_po_payments_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6675 (class 1259 OID 1207920)
+-- Name: idx_po_payments_payment_account_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6676 (class 1259 OID 1207921)
+-- Name: idx_po_payments_payment_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6406 (class 1259 OID 1207922)
+-- Name: idx_po_payments_po; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6677 (class 1259 OID 1207923)
+-- Name: idx_po_payments_purchase_order_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6678 (class 1259 OID 1207924)
+-- Name: idx_po_payments_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6682 (class 1259 OID 1207925)
+-- Name: idx_po_quality_check_items_po_item; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6683 (class 1259 OID 1207926)
+-- Name: idx_po_quality_check_items_qc; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6686 (class 1259 OID 1207927)
+-- Name: idx_po_quality_checks_po; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6687 (class 1259 OID 1207928)
+-- Name: idx_po_quality_checks_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6409 (class 1259 OID 1207929)
+-- Name: idx_po_shipping_agent; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6410 (class 1259 OID 1207930)
+-- Name: idx_po_shipping_method; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6411 (class 1259 OID 1207931)
+-- Name: idx_po_shipping_order_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6412 (class 1259 OID 1207932)
+-- Name: idx_po_shipping_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6413 (class 1259 OID 1207933)
+-- Name: idx_po_shipping_tracking; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6062 (class 1259 OID 1207934)
+-- Name: idx_points_history_customer_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6655 (class 1259 OID 1207935)
+-- Name: idx_points_transactions_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6656 (class 1259 OID 1207936)
+-- Name: idx_points_transactions_created; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6657 (class 1259 OID 1207937)
+-- Name: idx_points_transactions_customer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6658 (class 1259 OID 1207938)
+-- Name: idx_points_transactions_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6331 (class 1259 OID 1207939)
+-- Name: idx_pricing_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6666 (class 1259 OID 1207940)
+-- Name: idx_product_category; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6661 (class 1259 OID 1207941)
+-- Name: idx_product_images_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6662 (class 1259 OID 1207942)
+-- Name: idx_product_images_is_primary; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6663 (class 1259 OID 1207943)
+-- Name: idx_product_images_product_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5930 (class 1259 OID 1207944)
+-- Name: idx_products_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5931 (class 1259 OID 1207945)
+-- Name: idx_products_barcode; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5932 (class 1259 OID 1207946)
+-- Name: idx_products_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5933 (class 1259 OID 1207947)
+-- Name: idx_products_category; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5934 (class 1259 OID 1207948)
+-- Name: idx_products_category_text; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5935 (class 1259 OID 1207949)
+-- Name: idx_products_is_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5936 (class 1259 OID 1207950)
+-- Name: idx_products_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5937 (class 1259 OID 1207951)
+-- Name: idx_products_sharing_mode; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5938 (class 1259 OID 1207952)
+-- Name: idx_products_sku; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5939 (class 1259 OID 1207953)
+-- Name: idx_products_visible_branches; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6669 (class 1259 OID 1207954)
+-- Name: idx_purchase_order_audit_order_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6670 (class 1259 OID 1207955)
+-- Name: idx_purchase_order_audit_timestamp; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6679 (class 1259 OID 1207956)
+-- Name: idx_purchase_order_payments_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5948 (class 1259 OID 1207957)
+-- Name: idx_purchase_orders_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6694 (class 1259 OID 1207958)
+-- Name: idx_quality_check_criteria_template; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6703 (class 1259 OID 1207959)
+-- Name: idx_quality_checks_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6704 (class 1259 OID 1207960)
+-- Name: idx_quality_checks_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6707 (class 1259 OID 1207961)
+-- Name: idx_rec_exp_history_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6708 (class 1259 OID 1207962)
+-- Name: idx_rec_exp_history_recurring; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6709 (class 1259 OID 1207963)
+-- Name: idx_rec_exp_history_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6369 (class 1259 OID 1207964)
+-- Name: idx_receipt_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6712 (class 1259 OID 1207965)
+-- Name: idx_recurring_exp_account; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6713 (class 1259 OID 1207966)
+-- Name: idx_recurring_exp_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6714 (class 1259 OID 1207967)
+-- Name: idx_recurring_exp_auto_process; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6715 (class 1259 OID 1207968)
+-- Name: idx_recurring_exp_frequency; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6716 (class 1259 OID 1207969)
+-- Name: idx_recurring_exp_next_due; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6717 (class 1259 OID 1207970)
+-- Name: idx_recurring_expenses_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6718 (class 1259 OID 1207971)
+-- Name: idx_recurring_expenses_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6721 (class 1259 OID 1207972)
+-- Name: idx_reminders_assigned_to; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6722 (class 1259 OID 1207973)
+-- Name: idx_reminders_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6723 (class 1259 OID 1207974)
+-- Name: idx_reminders_category; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6724 (class 1259 OID 1207975)
+-- Name: idx_reminders_created_by; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6725 (class 1259 OID 1207976)
+-- Name: idx_reminders_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6726 (class 1259 OID 1207977)
+-- Name: idx_reminders_datetime; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6727 (class 1259 OID 1207978)
+-- Name: idx_reminders_priority; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6728 (class 1259 OID 1207979)
+-- Name: idx_reminders_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6731 (class 1259 OID 1207980)
+-- Name: idx_repair_parts_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6734 (class 1259 OID 1207981)
+-- Name: idx_report_attachments_report_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6737 (class 1259 OID 1207982)
+-- Name: idx_reports_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6738 (class 1259 OID 1207983)
+-- Name: idx_reports_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6739 (class 1259 OID 1207984)
+-- Name: idx_reports_created_by; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6740 (class 1259 OID 1207985)
+-- Name: idx_reports_customer_phone; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6741 (class 1259 OID 1207986)
+-- Name: idx_reports_priority; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6742 (class 1259 OID 1207987)
+-- Name: idx_reports_report_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6743 (class 1259 OID 1207988)
+-- Name: idx_reports_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6746 (class 1259 OID 1207989)
+-- Name: idx_returns_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6747 (class 1259 OID 1207990)
+-- Name: idx_returns_customer_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6748 (class 1259 OID 1207991)
+-- Name: idx_returns_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6751 (class 1259 OID 1207992)
+-- Name: idx_sale_inventory_items_customer_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6752 (class 1259 OID 1207993)
+-- Name: idx_sale_inventory_items_inventory_item_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6753 (class 1259 OID 1207994)
+-- Name: idx_sale_inventory_items_sale_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6424 (class 1259 OID 1207995)
+-- Name: idx_sale_items_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6425 (class 1259 OID 1207996)
+-- Name: idx_sale_items_product; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6426 (class 1259 OID 1207997)
+-- Name: idx_sale_items_sale; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6434 (class 1259 OID 1207998)
+-- Name: idx_sales_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6435 (class 1259 OID 1207999)
+-- Name: idx_sales_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6436 (class 1259 OID 1208000)
+-- Name: idx_sales_customer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6437 (class 1259 OID 1208001)
+-- Name: idx_sales_sale_number; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6758 (class 1259 OID 1208002)
+-- Name: idx_sales_stage; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6315 (class 1259 OID 1208003)
+-- Name: idx_scanner_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6761 (class 1259 OID 1208004)
+-- Name: idx_scheduled_transfer_executions_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6762 (class 1259 OID 1208005)
+-- Name: idx_scheduled_transfer_executions_schedule; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6763 (class 1259 OID 1208006)
+-- Name: idx_scheduled_transfer_executions_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6766 (class 1259 OID 1208007)
+-- Name: idx_scheduled_transfers_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6767 (class 1259 OID 1208008)
+-- Name: idx_scheduled_transfers_destination_account; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6768 (class 1259 OID 1208009)
+-- Name: idx_scheduled_transfers_frequency; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6769 (class 1259 OID 1208010)
+-- Name: idx_scheduled_transfers_next_execution; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6770 (class 1259 OID 1208011)
+-- Name: idx_scheduled_transfers_source_account; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6374 (class 1259 OID 1208012)
+-- Name: idx_search_filter_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6375 (class 1259 OID 1208013)
+-- Name: idx_search_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6773 (class 1259 OID 1208014)
+-- Name: idx_serial_movements_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6774 (class 1259 OID 1208015)
+-- Name: idx_serial_movements_item; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6775 (class 1259 OID 1208016)
+-- Name: idx_serial_movements_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6778 (class 1259 OID 1208017)
+-- Name: idx_settings_key; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6783 (class 1259 OID 1208018)
+-- Name: idx_shelves_code; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6784 (class 1259 OID 1208019)
+-- Name: idx_shelves_room; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6184 (class 1259 OID 1208020)
+-- Name: idx_shifts_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6185 (class 1259 OID 1208021)
+-- Name: idx_shifts_employee_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6186 (class 1259 OID 1208022)
+-- Name: idx_shifts_employee_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6446 (class 1259 OID 1208023)
+-- Name: idx_shipping_agents_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6447 (class 1259 OID 1208024)
+-- Name: idx_shipping_agents_methods; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6448 (class 1259 OID 1208025)
+-- Name: idx_shipping_agents_preferred; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6455 (class 1259 OID 1208026)
+-- Name: idx_shipping_methods_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6456 (class 1259 OID 1208027)
+-- Name: idx_shipping_methods_code; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6442 (class 1259 OID 1208028)
+-- Name: idx_shipping_purchase_order; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6443 (class 1259 OID 1208029)
+-- Name: idx_shipping_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6791 (class 1259 OID 1208030)
+-- Name: idx_sms_logs_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6792 (class 1259 OID 1208031)
+-- Name: idx_sms_logs_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6793 (class 1259 OID 1208032)
+-- Name: idx_sms_logs_device_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6794 (class 1259 OID 1208033)
+-- Name: idx_sms_logs_phone; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6795 (class 1259 OID 1208034)
+-- Name: idx_sms_logs_recipient_phone; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6796 (class 1259 OID 1208035)
+-- Name: idx_sms_logs_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6797 (class 1259 OID 1208036)
+-- Name: idx_sms_logs_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6802 (class 1259 OID 1208037)
+-- Name: idx_sms_triggers_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6465 (class 1259 OID 1208038)
+-- Name: idx_spare_part_usage_device_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6466 (class 1259 OID 1208039)
+-- Name: idx_spare_part_usage_spare_part_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6469 (class 1259 OID 1208040)
+-- Name: idx_spare_part_variants_sku; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6470 (class 1259 OID 1208041)
+-- Name: idx_spare_part_variants_spare_part_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6805 (class 1259 OID 1208042)
+-- Name: idx_special_order_payments_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6806 (class 1259 OID 1208043)
+-- Name: idx_special_order_payments_order; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6074 (class 1259 OID 1208044)
+-- Name: idx_special_orders_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6075 (class 1259 OID 1208045)
+-- Name: idx_special_orders_customer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6076 (class 1259 OID 1208046)
+-- Name: idx_special_orders_expected_arrival; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6077 (class 1259 OID 1208047)
+-- Name: idx_special_orders_order_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6078 (class 1259 OID 1208048)
+-- Name: idx_special_orders_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6481 (class 1259 OID 1208049)
+-- Name: idx_stock_movements_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6482 (class 1259 OID 1208050)
+-- Name: idx_stock_movements_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6483 (class 1259 OID 1208051)
+-- Name: idx_stock_movements_from_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6484 (class 1259 OID 1208052)
+-- Name: idx_stock_movements_product; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6485 (class 1259 OID 1208053)
+-- Name: idx_stock_movements_product_variant; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6486 (class 1259 OID 1208054)
+-- Name: idx_stock_movements_to_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6487 (class 1259 OID 1208055)
+-- Name: idx_stock_movements_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6488 (class 1259 OID 1208056)
+-- Name: idx_stock_movements_variant; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6809 (class 1259 OID 1208057)
+-- Name: idx_storage_rooms_location; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6206 (class 1259 OID 1208058)
+-- Name: idx_store_locations_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6207 (class 1259 OID 1208059)
+-- Name: idx_store_locations_code; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6208 (class 1259 OID 1208060)
+-- Name: idx_store_locations_is_main; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6209 (class 1259 OID 1208061)
+-- Name: idx_store_locations_isolation_mode; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6210 (class 1259 OID 1208062)
+-- Name: idx_store_locations_share_accounts; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6211 (class 1259 OID 1208063)
+-- Name: idx_store_locations_share_inventory; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6212 (class 1259 OID 1208064)
+-- Name: idx_store_locations_share_products; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6503 (class 1259 OID 1208065)
+-- Name: idx_store_rooms_is_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6519 (class 1259 OID 1208066)
+-- Name: idx_store_shelves_is_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6520 (class 1259 OID 1208067)
+-- Name: idx_store_shelves_room_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6525 (class 1259 OID 1208068)
+-- Name: idx_supplier_categories_parent; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6530 (class 1259 OID 1208069)
+-- Name: idx_supplier_category_mapping_category; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6531 (class 1259 OID 1208070)
+-- Name: idx_supplier_category_mapping_supplier; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6534 (class 1259 OID 1208071)
+-- Name: idx_supplier_comms_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6535 (class 1259 OID 1208072)
+-- Name: idx_supplier_comms_follow_up; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6536 (class 1259 OID 1208073)
+-- Name: idx_supplier_comms_supplier_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6539 (class 1259 OID 1208074)
+-- Name: idx_supplier_contracts_end_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6540 (class 1259 OID 1208075)
+-- Name: idx_supplier_contracts_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6541 (class 1259 OID 1208076)
+-- Name: idx_supplier_contracts_supplier_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6546 (class 1259 OID 1208077)
+-- Name: idx_supplier_documents_expiry_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6547 (class 1259 OID 1208078)
+-- Name: idx_supplier_documents_supplier_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6548 (class 1259 OID 1208079)
+-- Name: idx_supplier_documents_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6551 (class 1259 OID 1208080)
+-- Name: idx_supplier_ratings_date; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6552 (class 1259 OID 1208081)
+-- Name: idx_supplier_ratings_overall; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6553 (class 1259 OID 1208082)
+-- Name: idx_supplier_ratings_supplier_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6556 (class 1259 OID 1208083)
+-- Name: idx_supplier_tag_mapping_supplier; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6557 (class 1259 OID 1208084)
+-- Name: idx_supplier_tag_mapping_tag; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5961 (class 1259 OID 1208085)
+-- Name: idx_suppliers_average_rating; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5962 (class 1259 OID 1208086)
+-- Name: idx_suppliers_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5963 (class 1259 OID 1208087)
+-- Name: idx_suppliers_business_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5964 (class 1259 OID 1208088)
+-- Name: idx_suppliers_is_favorite; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5965 (class 1259 OID 1208089)
+-- Name: idx_suppliers_is_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5966 (class 1259 OID 1208090)
+-- Name: idx_suppliers_is_trade_in_customer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5967 (class 1259 OID 1208091)
+-- Name: idx_suppliers_last_contact; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5968 (class 1259 OID 1208092)
+-- Name: idx_suppliers_next_follow_up; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5969 (class 1259 OID 1208093)
+-- Name: idx_suppliers_priority_level; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5970 (class 1259 OID 1208094)
+-- Name: idx_suppliers_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6564 (class 1259 OID 1208095)
+-- Name: idx_trade_in_contracts_customer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6565 (class 1259 OID 1208096)
+-- Name: idx_trade_in_contracts_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6566 (class 1259 OID 1208097)
+-- Name: idx_trade_in_contracts_transaction; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6571 (class 1259 OID 1208098)
+-- Name: idx_trade_in_damage_spare_part; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6572 (class 1259 OID 1208099)
+-- Name: idx_trade_in_damage_transaction; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6575 (class 1259 OID 1208100)
+-- Name: idx_trade_in_prices_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6576 (class 1259 OID 1208101)
+-- Name: idx_trade_in_prices_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6577 (class 1259 OID 1208102)
+-- Name: idx_trade_in_prices_product; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6578 (class 1259 OID 1208103)
+-- Name: idx_trade_in_prices_variant; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6585 (class 1259 OID 1208104)
+-- Name: idx_trade_in_transactions_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6586 (class 1259 OID 1208105)
+-- Name: idx_trade_in_transactions_created_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6587 (class 1259 OID 1208106)
+-- Name: idx_trade_in_transactions_customer; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6588 (class 1259 OID 1208107)
+-- Name: idx_trade_in_transactions_imei; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6589 (class 1259 OID 1208108)
+-- Name: idx_trade_in_transactions_new_product; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6590 (class 1259 OID 1208109)
+-- Name: idx_trade_in_transactions_sale; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6591 (class 1259 OID 1208110)
+-- Name: idx_trade_in_transactions_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6094 (class 1259 OID 1208111)
+-- Name: idx_unique_customer_phone_name; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5885 (class 1259 OID 1208112)
+-- Name: idx_unique_imei; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6820 (class 1259 OID 1208113)
+-- Name: idx_user_branch_assignments_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6821 (class 1259 OID 1208114)
+-- Name: idx_user_branch_assignments_primary; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6822 (class 1259 OID 1208115)
+-- Name: idx_user_branch_assignments_user; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6827 (class 1259 OID 1208116)
+-- Name: idx_user_daily_goals_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6383 (class 1259 OID 1208117)
+-- Name: idx_user_permissions_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6832 (class 1259 OID 1208118)
+-- Name: idx_user_settings_updated_at; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6833 (class 1259 OID 1208119)
+-- Name: idx_user_settings_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6838 (class 1259 OID 1208120)
+-- Name: idx_users_branch_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6839 (class 1259 OID 1208121)
+-- Name: idx_users_email; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6840 (class 1259 OID 1208122)
+-- Name: idx_users_is_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6841 (class 1259 OID 1208123)
+-- Name: idx_users_role; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6842 (class 1259 OID 1208124)
+-- Name: idx_users_username; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6392 (class 1259 OID 1208125)
+-- Name: idx_validation_product; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6393 (class 1259 OID 1208126)
+-- Name: idx_validation_shipping; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6394 (class 1259 OID 1208127)
+-- Name: idx_validation_status; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5886 (class 1259 OID 1208128)
+-- Name: idx_variant_attributes_imei; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5887 (class 1259 OID 1208129)
+-- Name: idx_variant_imei; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5888 (class 1259 OID 1208130)
+-- Name: idx_variant_is_parent; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5889 (class 1259 OID 1208131)
+-- Name: idx_variant_parent_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5890 (class 1259 OID 1208132)
+-- Name: idx_variant_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5891 (class 1259 OID 1208133)
+-- Name: idx_variants_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5892 (class 1259 OID 1208134)
+-- Name: idx_variants_branch; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5893 (class 1259 OID 1208135)
+-- Name: idx_variants_imei_attributes; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5894 (class 1259 OID 1208136)
+-- Name: idx_variants_is_shared; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5895 (class 1259 OID 1208137)
+-- Name: idx_variants_parent_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5896 (class 1259 OID 1208138)
+-- Name: idx_variants_parent_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5897 (class 1259 OID 1208139)
+-- Name: idx_variants_product; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5898 (class 1259 OID 1208140)
+-- Name: idx_variants_product_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5899 (class 1259 OID 1208141)
+-- Name: idx_variants_sharing_mode; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5900 (class 1259 OID 1208142)
+-- Name: idx_variants_sku; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5901 (class 1259 OID 1208143)
+-- Name: idx_variants_type; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5902 (class 1259 OID 1208144)
+-- Name: idx_variants_visible_branches; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6847 (class 1259 OID 1208145)
+-- Name: idx_webhook_endpoints_active; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6848 (class 1259 OID 1208146)
+-- Name: idx_webhook_endpoints_user; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6851 (class 1259 OID 1208147)
+-- Name: idx_webhook_logs_created; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6852 (class 1259 OID 1208148)
+-- Name: idx_webhook_logs_webhook; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6855 (class 1259 OID 1208149)
+-- Name: idx_whatsapp_instances_user_id; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6620 (class 1259 OID 1208150)
+-- Name: owner_idx; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 5907 (class 1259 OID 1208151)
+-- Name: uniq_imei_index; Type: INDEX; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7128 (class 2620 OID 1208152)
+-- Name: attendance_records calculate_hours_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7217 (class 2620 OID 1208153)
+-- Name: leave_requests calculate_leave_days_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7166 (class 2620 OID 1208154)
+-- Name: customers customers_delete_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7167 (class 2620 OID 1208155)
+-- Name: customers customers_insert_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7168 (class 2620 OID 1208156)
+-- Name: customers customers_update_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7130 (class 2620 OID 1208157)
+-- Name: lats_product_variants ensure_imei_has_parent; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7221 (class 2620 OID 1208158)
+-- Name: product_images ensure_single_primary_image_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7177 (class 2620 OID 1208159)
+-- Name: expenses handle_expense_transaction_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7186 (class 2620 OID 1208160)
+-- Name: inventory_items inventory_items_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7193 (class 2620 OID 1208161)
+-- Name: lats_inventory_items inventory_items_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7195 (class 2620 OID 1208162)
+-- Name: lats_purchase_order_payments po_payments_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7131 (class 2620 OID 1208163)
+-- Name: lats_product_variants sync_product_stock_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7236 (class 2620 OID 1208164)
+-- Name: users sync_users_to_auth_users_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7132 (class 2620 OID 1208165)
+-- Name: lats_product_variants sync_variant_prices_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7223 (class 2620 OID 1208166)
+-- Name: purchase_order_payments track_po_payment_expense_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7160 (class 2620 OID 1208167)
+-- Name: branch_transfers trg_update_branch_transfer_timestamp; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7133 (class 2620 OID 1208168)
+-- Name: lats_product_variants trg_update_parent_quantity; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7134 (class 2620 OID 1208169)
+-- Name: lats_product_variants trg_validate_and_set_imei_status; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7135 (class 2620 OID 1208170)
+-- Name: lats_product_variants trg_validate_new_imei; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7187 (class 2620 OID 1208171)
+-- Name: inventory_items trigger_auto_convert_inventory_on_update; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7188 (class 2620 OID 1208172)
+-- Name: inventory_items trigger_auto_convert_inventory_to_imei_child; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7172 (class 2620 OID 1208173)
+-- Name: lats_purchase_order_items trigger_auto_convert_po_currency; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8034 (class 0 OID 0)
+-- Dependencies: 7172
+-- Name: TRIGGER trigger_auto_convert_po_currency ON lats_purchase_order_items; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7151 (class 2620 OID 1208174)
+-- Name: lats_products trigger_auto_create_default_variant; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7136 (class 2620 OID 1208175)
+-- Name: lats_product_variants trigger_auto_reorder; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7179 (class 2620 OID 1208176)
+-- Name: store_locations trigger_auto_sync_sharing; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7170 (class 2620 OID 1208177)
+-- Name: daily_sales_closures trigger_close_session_on_day_close; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7226 (class 2620 OID 1208178)
+-- Name: reminders trigger_create_recurring_reminder; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7181 (class 2620 OID 1208179)
+-- Name: finance_expenses trigger_expense_delete; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7182 (class 2620 OID 1208180)
+-- Name: finance_expenses trigger_expense_update; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7137 (class 2620 OID 1208181)
+-- Name: lats_product_variants trigger_inherit_parent_prices; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7219 (class 2620 OID 1208182)
+-- Name: notifications trigger_notifications_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7196 (class 2620 OID 1208183)
+-- Name: lats_purchase_order_shipping trigger_po_shipping_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7227 (class 2620 OID 1208184)
+-- Name: reminders trigger_reminders_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7138 (class 2620 OID 1208185)
+-- Name: lats_product_variants trigger_set_imei_status; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7192 (class 2620 OID 1208186)
+-- Name: lats_categories trigger_set_is_shared_categories; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7162 (class 2620 OID 1208187)
+-- Name: customer_messages trigger_set_is_shared_customer_messages; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7163 (class 2620 OID 1208188)
+-- Name: customer_payments trigger_set_is_shared_customer_payments; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7174 (class 2620 OID 1208189)
+-- Name: employees trigger_set_is_shared_employees; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7183 (class 2620 OID 1208190)
+-- Name: finance_transfers trigger_set_is_shared_finance_transfers; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7184 (class 2620 OID 1208191)
+-- Name: gift_cards trigger_set_is_shared_gift_cards; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7220 (class 2620 OID 1208192)
+-- Name: payment_transactions trigger_set_is_shared_payment_transactions; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7152 (class 2620 OID 1208193)
+-- Name: lats_products trigger_set_is_shared_products; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7224 (class 2620 OID 1208194)
+-- Name: quality_checks trigger_set_is_shared_quality_checks; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7225 (class 2620 OID 1208195)
+-- Name: recurring_expenses trigger_set_is_shared_recurring_expenses; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7233 (class 2620 OID 1208196)
+-- Name: sms_logs trigger_set_is_shared_sms_logs; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7158 (class 2620 OID 1208197)
+-- Name: lats_suppliers trigger_set_is_shared_suppliers; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7139 (class 2620 OID 1208198)
+-- Name: lats_product_variants trigger_set_is_shared_variants; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7153 (class 2620 OID 1208199)
+-- Name: lats_products trigger_set_product_branch; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7212 (class 2620 OID 1208200)
+-- Name: lats_trade_in_contracts trigger_set_trade_in_contract_number; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7215 (class 2620 OID 1208201)
+-- Name: lats_trade_in_transactions trigger_set_trade_in_transaction_number; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7200 (class 2620 OID 1208202)
+-- Name: lats_shipping_agents trigger_shipping_agents_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7202 (class 2620 OID 1208203)
+-- Name: lats_shipping_methods trigger_shipping_methods_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7203 (class 2620 OID 1208204)
+-- Name: lats_shipping_settings trigger_shipping_settings_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7164 (class 2620 OID 1208205)
+-- Name: customer_payments trigger_sync_customer_payment; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7178 (class 2620 OID 1208206)
+-- Name: finance_accounts trigger_sync_finance_account_columns; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7189 (class 2620 OID 1208207)
+-- Name: inventory_items trigger_sync_imei_serial_number; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7140 (class 2620 OID 1208208)
+-- Name: lats_product_variants trigger_sync_parent_quantity_on_imei_change; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7154 (class 2620 OID 1208209)
+-- Name: lats_products trigger_sync_product_category; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7141 (class 2620 OID 1208210)
+-- Name: lats_product_variants trigger_sync_product_stock_on_variant_delete; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7142 (class 2620 OID 1208211)
+-- Name: lats_product_variants trigger_sync_product_stock_on_variant_insert; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7143 (class 2620 OID 1208212)
+-- Name: lats_product_variants trigger_sync_product_stock_on_variant_update; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7197 (class 2620 OID 1208213)
+-- Name: lats_sales trigger_sync_sale_payment; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8035 (class 0 OID 0)
+-- Dependencies: 7197
+-- Name: TRIGGER trigger_sync_sale_payment ON lats_sales; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7144 (class 2620 OID 1208214)
+-- Name: lats_product_variants trigger_sync_variant_imei_serial_number; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7190 (class 2620 OID 1208215)
+-- Name: inventory_items trigger_sync_variant_quantity_delete; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8036 (class 0 OID 0)
+-- Dependencies: 7190
+-- Name: TRIGGER trigger_sync_variant_quantity_delete ON inventory_items; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7191 (class 2620 OID 1208216)
+-- Name: inventory_items trigger_sync_variant_quantity_insert_update; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8037 (class 0 OID 0)
+-- Dependencies: 7191
+-- Name: TRIGGER trigger_sync_variant_quantity_insert_update ON inventory_items; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7145 (class 2620 OID 1208217)
+-- Name: lats_product_variants trigger_track_variant_source; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7126 (class 2620 OID 1208218)
+-- Name: account_transactions trigger_update_account_balance_secure; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7127 (class 2620 OID 1208219)
+-- Name: api_keys trigger_update_api_keys; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7161 (class 2620 OID 1208220)
+-- Name: customer_installment_plan_payments trigger_update_customer_installment_plan_balance; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7165 (class 2620 OID 1208221)
+-- Name: customer_preferences trigger_update_customer_preferences_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7169 (class 2620 OID 1208222)
+-- Name: daily_reports trigger_update_daily_reports_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7173 (class 2620 OID 1208223)
+-- Name: document_templates trigger_update_document_templates; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7185 (class 2620 OID 1208224)
+-- Name: installment_payments trigger_update_installment_plan_balance; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7205 (class 2620 OID 1208225)
+-- Name: lats_supplier_communications trigger_update_last_contact; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7159 (class 2620 OID 1208226)
+-- Name: lats_suppliers trigger_update_lats_suppliers_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7155 (class 2620 OID 1208227)
+-- Name: lats_purchase_orders trigger_update_on_time_delivery; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7146 (class 2620 OID 1208229)
+-- Name: lats_product_variants trigger_update_parent_stock; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7147 (class 2620 OID 1208230)
+-- Name: lats_product_variants trigger_update_product_totals; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7206 (class 2620 OID 1208231)
+-- Name: lats_supplier_communications trigger_update_response_time; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7229 (class 2620 OID 1208232)
+-- Name: returns trigger_update_returns_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7230 (class 2620 OID 1208233)
+-- Name: scheduled_transfers trigger_update_scheduled_transfers_timestamp; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7231 (class 2620 OID 1208234)
+-- Name: settings trigger_update_settings; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7234 (class 2620 OID 1208235)
+-- Name: special_order_payments trigger_update_special_order_balance; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7204 (class 2620 OID 1208236)
+-- Name: lats_stock_movements trigger_update_stock_on_movement; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8038 (class 0 OID 0)
+-- Dependencies: 7204
+-- Name: TRIGGER trigger_update_stock_on_movement ON lats_stock_movements; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7180 (class 2620 OID 1208237)
+-- Name: store_locations trigger_update_store_locations; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7156 (class 2620 OID 1208238)
+-- Name: lats_purchase_orders trigger_update_supplier_order_value; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7210 (class 2620 OID 1208239)
+-- Name: lats_supplier_ratings trigger_update_supplier_rating; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7157 (class 2620 OID 1208240)
+-- Name: lats_purchase_orders trigger_update_supplier_total_orders; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7213 (class 2620 OID 1208241)
+-- Name: lats_trade_in_contracts trigger_update_trade_in_contracts_timestamp; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7214 (class 2620 OID 1208242)
+-- Name: lats_trade_in_prices trigger_update_trade_in_prices_timestamp; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7216 (class 2620 OID 1208243)
+-- Name: lats_trade_in_transactions trigger_update_trade_in_transactions_timestamp; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7237 (class 2620 OID 1208244)
+-- Name: webhook_endpoints trigger_update_webhook_endpoints; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7235 (class 2620 OID 1208245)
+-- Name: user_settings trigger_user_settings_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7148 (class 2620 OID 1208246)
+-- Name: lats_product_variants trigger_validate_variant_prices; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 8039 (class 0 OID 0)
+-- Dependencies: 7148
+-- Name: TRIGGER trigger_validate_variant_prices ON lats_product_variants; Type: COMMENT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7129 (class 2620 OID 1208247)
+-- Name: attendance_records update_attendance_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7171 (class 2620 OID 1208248)
+-- Name: daily_sales_closures update_daily_sales_closures_updated_at_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7175 (class 2620 OID 1208249)
+-- Name: employees update_employees_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7194 (class 2620 OID 1208250)
+-- Name: lats_product_validation update_lats_product_validation_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7201 (class 2620 OID 1208251)
+-- Name: lats_shipping_cargo_items update_lats_shipping_cargo_items_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7199 (class 2620 OID 1208252)
+-- Name: lats_shipping update_lats_shipping_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7218 (class 2620 OID 1208253)
+-- Name: leave_requests update_leave_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7222 (class 2620 OID 1208254)
+-- Name: product_images update_product_images_updated_at_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7228 (class 2620 OID 1208255)
+-- Name: reports update_reports_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7232 (class 2620 OID 1208256)
+-- Name: shift_templates update_shift_templates_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7176 (class 2620 OID 1208257)
+-- Name: employee_shifts update_shifts_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7207 (class 2620 OID 1208258)
+-- Name: lats_supplier_communications update_supplier_communications_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7208 (class 2620 OID 1208259)
+-- Name: lats_supplier_contracts update_supplier_contracts_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7209 (class 2620 OID 1208260)
+-- Name: lats_supplier_documents update_supplier_documents_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7211 (class 2620 OID 1208261)
+-- Name: lats_supplier_ratings update_supplier_ratings_updated_at; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7149 (class 2620 OID 1208262)
+-- Name: lats_product_variants update_variant_count_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7198 (class 2620 OID 1208263)
+-- Name: lats_sales validate_sale_amount_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7150 (class 2620 OID 1208264)
+-- Name: lats_product_variants validate_variant_price_trigger; Type: TRIGGER; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6866 (class 2606 OID 1208265)
+-- Name: account_transactions account_transactions_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6867 (class 2606 OID 1208270)
+-- Name: account_transactions account_transactions_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6868 (class 2606 OID 1208275)
+-- Name: api_request_logs api_request_logs_api_key_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6869 (class 2606 OID 1208280)
+-- Name: appointments appointments_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6870 (class 2606 OID 1208285)
+-- Name: appointments appointments_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6871 (class 2606 OID 1208290)
+-- Name: attendance_records attendance_records_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6872 (class 2606 OID 1208295)
+-- Name: attendance_records attendance_records_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6873 (class 2606 OID 1208300)
+-- Name: auth_users auth_users_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6874 (class 2606 OID 1208305)
+-- Name: auto_reorder_log auto_reorder_log_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6875 (class 2606 OID 1208310)
+-- Name: auto_reorder_log auto_reorder_log_purchase_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6876 (class 2606 OID 1208315)
+-- Name: auto_reorder_log auto_reorder_log_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6890 (class 2606 OID 1208320)
+-- Name: branch_activity_log branch_activity_log_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6891 (class 2606 OID 1208325)
+-- Name: branch_transfers branch_transfers_entity_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6892 (class 2606 OID 1208330)
+-- Name: branch_transfers branch_transfers_from_branch_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6893 (class 2606 OID 1208335)
+-- Name: branch_transfers branch_transfers_from_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6894 (class 2606 OID 1208340)
+-- Name: branch_transfers branch_transfers_to_branch_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6895 (class 2606 OID 1208345)
+-- Name: branch_transfers branch_transfers_to_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6896 (class 2606 OID 1208350)
+-- Name: buyer_details buyer_details_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6897 (class 2606 OID 1208355)
+-- Name: categories categories_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6898 (class 2606 OID 1208360)
+-- Name: categories categories_parent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6899 (class 2606 OID 1208365)
+-- Name: communication_log communication_log_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6901 (class 2606 OID 1208370)
+-- Name: customer_installment_plan_payments customer_installment_plan_payments_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6902 (class 2606 OID 1208375)
+-- Name: customer_installment_plan_payments customer_installment_plan_payments_installment_plan_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6903 (class 2606 OID 1208380)
+-- Name: customer_installment_plans customer_installment_plans_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6904 (class 2606 OID 1208385)
+-- Name: customer_installment_plans customer_installment_plans_sale_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6905 (class 2606 OID 1208390)
+-- Name: customer_messages customer_messages_appointment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6906 (class 2606 OID 1208395)
+-- Name: customer_messages customer_messages_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6907 (class 2606 OID 1208400)
+-- Name: customer_messages customer_messages_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6908 (class 2606 OID 1208405)
+-- Name: customer_messages customer_messages_sender_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6909 (class 2606 OID 1208410)
+-- Name: customer_payments customer_payments_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6910 (class 2606 OID 1208415)
+-- Name: customer_payments customer_payments_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6911 (class 2606 OID 1208420)
+-- Name: customer_payments customer_payments_sale_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6912 (class 2606 OID 1208425)
+-- Name: customer_special_orders customer_special_orders_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6918 (class 2606 OID 1208430)
+-- Name: daily_reports daily_reports_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6919 (class 2606 OID 1208435)
+-- Name: daily_reports daily_reports_reviewed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6920 (class 2606 OID 1208440)
+-- Name: daily_sales_closures daily_sales_closures_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6924 (class 2606 OID 1208445)
+-- Name: device_attachments device_attachments_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6925 (class 2606 OID 1208450)
+-- Name: device_checklists device_checklists_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6926 (class 2606 OID 1208455)
+-- Name: device_ratings device_ratings_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6927 (class 2606 OID 1208460)
+-- Name: device_remarks device_remarks_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6928 (class 2606 OID 1208465)
+-- Name: device_transitions device_transitions_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6929 (class 2606 OID 1208470)
+-- Name: devices devices_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6930 (class 2606 OID 1208475)
+-- Name: diagnostic_checklist_results diagnostic_checklist_results_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6931 (class 2606 OID 1208480)
+-- Name: diagnostic_checklist_results diagnostic_checklist_results_problem_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6932 (class 2606 OID 1208485)
+-- Name: diagnostic_checks diagnostic_checks_diagnostic_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6933 (class 2606 OID 1208490)
+-- Name: diagnostic_checks diagnostic_checks_request_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6934 (class 2606 OID 1208495)
+-- Name: diagnostic_devices diagnostic_devices_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6935 (class 2606 OID 1208500)
+-- Name: diagnostic_requests diagnostic_requests_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6936 (class 2606 OID 1208505)
+-- Name: diagnostic_requests diagnostic_requests_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6939 (class 2606 OID 1208510)
+-- Name: employee_shifts employee_shifts_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6940 (class 2606 OID 1208515)
+-- Name: employee_shifts employee_shifts_shift_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6937 (class 2606 OID 1208520)
+-- Name: employees employees_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6941 (class 2606 OID 1208525)
+-- Name: expenses expenses_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6942 (class 2606 OID 1208530)
+-- Name: expenses expenses_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6943 (class 2606 OID 1208535)
+-- Name: expenses expenses_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6944 (class 2606 OID 1208540)
+-- Name: expenses expenses_purchase_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6945 (class 2606 OID 1208545)
+-- Name: finance_accounts finance_accounts_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6946 (class 2606 OID 1208550)
+-- Name: finance_expenses finance_expenses_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6947 (class 2606 OID 1208555)
+-- Name: finance_expenses finance_expenses_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6948 (class 2606 OID 1208560)
+-- Name: finance_expenses finance_expenses_expense_category_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6949 (class 2606 OID 1208565)
+-- Name: finance_transfers finance_transfers_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6950 (class 2606 OID 1208570)
+-- Name: finance_transfers finance_transfers_from_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6951 (class 2606 OID 1208575)
+-- Name: finance_transfers finance_transfers_to_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6900 (class 2606 OID 1208580)
+-- Name: customer_checkins fk_customer_checkins_staff_id; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6938 (class 2606 OID 1208585)
+-- Name: employees fk_employees_manager; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6971 (class 2606 OID 1208590)
+-- Name: lats_inventory_items fk_lats_inventory_items_storage_room; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6886 (class 2606 OID 1208595)
+-- Name: lats_purchase_orders fk_purchase_orders_supplier; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7101 (class 2606 OID 1208600)
+-- Name: returns fk_returns_device_id; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6952 (class 2606 OID 1208605)
+-- Name: gift_card_transactions gift_card_transactions_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6953 (class 2606 OID 1208610)
+-- Name: gift_card_transactions gift_card_transactions_gift_card_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6954 (class 2606 OID 1208615)
+-- Name: gift_card_transactions gift_card_transactions_sale_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6955 (class 2606 OID 1208620)
+-- Name: gift_cards gift_cards_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6956 (class 2606 OID 1208625)
+-- Name: installment_payments installment_payments_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6957 (class 2606 OID 1208630)
+-- Name: installment_payments installment_payments_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6958 (class 2606 OID 1208635)
+-- Name: installment_payments installment_payments_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6959 (class 2606 OID 1208640)
+-- Name: installment_payments installment_payments_installment_plan_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6960 (class 2606 OID 1208645)
+-- Name: inventory inventory_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6961 (class 2606 OID 1208650)
+-- Name: inventory_items inventory_items_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6962 (class 2606 OID 1208655)
+-- Name: inventory_items inventory_items_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6963 (class 2606 OID 1208660)
+-- Name: inventory_items inventory_items_purchase_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6964 (class 2606 OID 1208665)
+-- Name: inventory_items inventory_items_purchase_order_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6965 (class 2606 OID 1208670)
+-- Name: inventory_items inventory_items_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6966 (class 2606 OID 1208675)
+-- Name: lats_categories lats_categories_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6967 (class 2606 OID 1208680)
+-- Name: lats_categories lats_categories_parent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6913 (class 2606 OID 1208685)
+-- Name: lats_customers lats_customers_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6914 (class 2606 OID 1208690)
+-- Name: lats_customers lats_customers_created_by_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6915 (class 2606 OID 1208695)
+-- Name: lats_customers lats_customers_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6916 (class 2606 OID 1208700)
+-- Name: lats_customers lats_customers_preferred_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6917 (class 2606 OID 1208705)
+-- Name: lats_customers lats_customers_referred_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6968 (class 2606 OID 1208710)
+-- Name: lats_employees lats_employees_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6969 (class 2606 OID 1208715)
+-- Name: lats_inventory_adjustments lats_inventory_adjustments_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6970 (class 2606 OID 1208720)
+-- Name: lats_inventory_adjustments lats_inventory_adjustments_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6972 (class 2606 OID 1208725)
+-- Name: lats_inventory_items lats_inventory_items_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6973 (class 2606 OID 1208730)
+-- Name: lats_inventory_items lats_inventory_items_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6974 (class 2606 OID 1208735)
+-- Name: lats_inventory_items lats_inventory_items_purchase_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6975 (class 2606 OID 1208740)
+-- Name: lats_inventory_items lats_inventory_items_purchase_order_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6976 (class 2606 OID 1208745)
+-- Name: lats_inventory_items lats_inventory_items_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6977 (class 2606 OID 1208750)
+-- Name: lats_pos_advanced_settings lats_pos_advanced_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6978 (class 2606 OID 1208755)
+-- Name: lats_pos_analytics_reporting_settings lats_pos_analytics_reporting_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6979 (class 2606 OID 1208760)
+-- Name: lats_pos_barcode_scanner_settings lats_pos_barcode_scanner_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6980 (class 2606 OID 1208765)
+-- Name: lats_pos_delivery_settings lats_pos_delivery_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6981 (class 2606 OID 1208770)
+-- Name: lats_pos_dynamic_pricing_settings lats_pos_dynamic_pricing_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6982 (class 2606 OID 1208775)
+-- Name: lats_pos_general_settings lats_pos_general_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6983 (class 2606 OID 1208780)
+-- Name: lats_pos_loyalty_customer_settings lats_pos_loyalty_customer_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6984 (class 2606 OID 1208785)
+-- Name: lats_pos_notification_settings lats_pos_notification_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6985 (class 2606 OID 1208790)
+-- Name: lats_pos_receipt_settings lats_pos_receipt_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6986 (class 2606 OID 1208795)
+-- Name: lats_pos_search_filter_settings lats_pos_search_filter_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6987 (class 2606 OID 1208800)
+-- Name: lats_pos_user_permissions_settings lats_pos_user_permissions_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6988 (class 2606 OID 1208805)
+-- Name: lats_product_units lats_product_units_parent_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6989 (class 2606 OID 1208810)
+-- Name: lats_product_validation lats_product_validation_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6990 (class 2606 OID 1208815)
+-- Name: lats_product_validation lats_product_validation_shipping_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6991 (class 2606 OID 1208820)
+-- Name: lats_product_validation lats_product_validation_updated_category_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6992 (class 2606 OID 1208825)
+-- Name: lats_product_validation lats_product_validation_updated_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6993 (class 2606 OID 1208830)
+-- Name: lats_product_validation lats_product_validation_validated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6877 (class 2606 OID 1208835)
+-- Name: lats_product_variants lats_product_variants_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6878 (class 2606 OID 1208840)
+-- Name: lats_product_variants lats_product_variants_parent_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6879 (class 2606 OID 1208845)
+-- Name: lats_product_variants lats_product_variants_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6880 (class 2606 OID 1208850)
+-- Name: lats_products lats_products_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6881 (class 2606 OID 1208855)
+-- Name: lats_products lats_products_category_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6882 (class 2606 OID 1208860)
+-- Name: lats_products lats_products_shelf_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6883 (class 2606 OID 1208865)
+-- Name: lats_products lats_products_storage_room_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6884 (class 2606 OID 1208870)
+-- Name: lats_products lats_products_store_shelf_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6885 (class 2606 OID 1208875)
+-- Name: lats_products lats_products_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6994 (class 2606 OID 1208880)
+-- Name: lats_purchase_order_audit_log lats_purchase_order_audit_log_purchase_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6995 (class 2606 OID 1208885)
+-- Name: lats_purchase_order_audit_log lats_purchase_order_audit_log_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6921 (class 2606 OID 1208890)
+-- Name: lats_purchase_order_items lats_purchase_order_items_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6922 (class 2606 OID 1208895)
+-- Name: lats_purchase_order_items lats_purchase_order_items_purchase_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6923 (class 2606 OID 1208900)
+-- Name: lats_purchase_order_items lats_purchase_order_items_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6996 (class 2606 OID 1208905)
+-- Name: lats_purchase_order_payments lats_purchase_order_payments_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6997 (class 2606 OID 1208910)
+-- Name: lats_purchase_order_payments lats_purchase_order_payments_purchase_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6998 (class 2606 OID 1208915)
+-- Name: lats_purchase_order_shipping lats_purchase_order_shipping_purchase_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6999 (class 2606 OID 1208920)
+-- Name: lats_purchase_order_shipping lats_purchase_order_shipping_shipping_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7000 (class 2606 OID 1208925)
+-- Name: lats_purchase_order_shipping lats_purchase_order_shipping_shipping_method_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6887 (class 2606 OID 1208930)
+-- Name: lats_purchase_orders lats_purchase_orders_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6888 (class 2606 OID 1208935)
+-- Name: lats_purchase_orders lats_purchase_orders_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7001 (class 2606 OID 1208941)
+-- Name: lats_sale_items lats_sale_items_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7002 (class 2606 OID 1208946)
+-- Name: lats_sale_items lats_sale_items_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7003 (class 2606 OID 1208951)
+-- Name: lats_sale_items lats_sale_items_sale_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7004 (class 2606 OID 1208956)
+-- Name: lats_sales lats_sales_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7007 (class 2606 OID 1208961)
+-- Name: lats_shipping_cargo_items lats_shipping_cargo_items_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7008 (class 2606 OID 1208966)
+-- Name: lats_shipping_cargo_items lats_shipping_cargo_items_purchase_order_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7009 (class 2606 OID 1208971)
+-- Name: lats_shipping_cargo_items lats_shipping_cargo_items_shipping_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7005 (class 2606 OID 1208976)
+-- Name: lats_shipping lats_shipping_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7006 (class 2606 OID 1208981)
+-- Name: lats_shipping lats_shipping_purchase_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7010 (class 2606 OID 1208986)
+-- Name: lats_shipping_settings lats_shipping_settings_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7011 (class 2606 OID 1208991)
+-- Name: lats_shipping_settings lats_shipping_settings_default_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7012 (class 2606 OID 1208996)
+-- Name: lats_shipping_settings lats_shipping_settings_default_shipping_method_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7013 (class 2606 OID 1209001)
+-- Name: lats_spare_part_usage lats_spare_part_usage_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7014 (class 2606 OID 1209006)
+-- Name: lats_spare_part_usage lats_spare_part_usage_spare_part_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7015 (class 2606 OID 1209011)
+-- Name: lats_spare_part_usage lats_spare_part_usage_used_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7016 (class 2606 OID 1209016)
+-- Name: lats_spare_part_variants lats_spare_part_variants_spare_part_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7017 (class 2606 OID 1209021)
+-- Name: lats_stock_movements lats_stock_movements_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7018 (class 2606 OID 1209026)
+-- Name: lats_stock_movements lats_stock_movements_from_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7019 (class 2606 OID 1209031)
+-- Name: lats_stock_movements lats_stock_movements_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7020 (class 2606 OID 1209036)
+-- Name: lats_stock_movements lats_stock_movements_to_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7021 (class 2606 OID 1209041)
+-- Name: lats_stock_movements lats_stock_movements_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7022 (class 2606 OID 1209046)
+-- Name: lats_stock_transfers lats_stock_transfers_from_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7023 (class 2606 OID 1209051)
+-- Name: lats_stock_transfers lats_stock_transfers_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7024 (class 2606 OID 1209056)
+-- Name: lats_stock_transfers lats_stock_transfers_to_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7025 (class 2606 OID 1209061)
+-- Name: lats_stock_transfers lats_stock_transfers_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7026 (class 2606 OID 1209066)
+-- Name: lats_store_rooms lats_store_rooms_store_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7027 (class 2606 OID 1209071)
+-- Name: lats_store_shelves lats_store_shelves_room_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7028 (class 2606 OID 1209076)
+-- Name: lats_store_shelves lats_store_shelves_storage_room_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7029 (class 2606 OID 1209081)
+-- Name: lats_store_shelves lats_store_shelves_store_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7030 (class 2606 OID 1209086)
+-- Name: lats_supplier_categories lats_supplier_categories_parent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7031 (class 2606 OID 1209091)
+-- Name: lats_supplier_category_mapping lats_supplier_category_mapping_category_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7032 (class 2606 OID 1209096)
+-- Name: lats_supplier_category_mapping lats_supplier_category_mapping_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7033 (class 2606 OID 1209101)
+-- Name: lats_supplier_communications lats_supplier_communications_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7034 (class 2606 OID 1209106)
+-- Name: lats_supplier_contracts lats_supplier_contracts_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7035 (class 2606 OID 1209111)
+-- Name: lats_supplier_documents lats_supplier_documents_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7036 (class 2606 OID 1209116)
+-- Name: lats_supplier_ratings lats_supplier_ratings_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7037 (class 2606 OID 1209121)
+-- Name: lats_supplier_tag_mapping lats_supplier_tag_mapping_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7038 (class 2606 OID 1209126)
+-- Name: lats_supplier_tag_mapping lats_supplier_tag_mapping_tag_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 6889 (class 2606 OID 1209131)
+-- Name: lats_suppliers lats_suppliers_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7039 (class 2606 OID 1209136)
+-- Name: lats_trade_in_contracts lats_trade_in_contracts_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7040 (class 2606 OID 1209141)
+-- Name: lats_trade_in_contracts lats_trade_in_contracts_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7041 (class 2606 OID 1209146)
+-- Name: lats_trade_in_contracts lats_trade_in_contracts_voided_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7042 (class 2606 OID 1209151)
+-- Name: lats_trade_in_damage_assessments lats_trade_in_damage_assessments_assessed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7043 (class 2606 OID 1209156)
+-- Name: lats_trade_in_damage_assessments lats_trade_in_damage_assessments_spare_part_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7044 (class 2606 OID 1209161)
+-- Name: lats_trade_in_damage_assessments lats_trade_in_damage_assessments_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7045 (class 2606 OID 1209166)
+-- Name: lats_trade_in_prices lats_trade_in_prices_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7046 (class 2606 OID 1209171)
+-- Name: lats_trade_in_prices lats_trade_in_prices_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7047 (class 2606 OID 1209176)
+-- Name: lats_trade_in_prices lats_trade_in_prices_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7048 (class 2606 OID 1209181)
+-- Name: lats_trade_in_prices lats_trade_in_prices_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7049 (class 2606 OID 1209186)
+-- Name: lats_trade_in_prices lats_trade_in_prices_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7050 (class 2606 OID 1209191)
+-- Name: lats_trade_in_transactions lats_trade_in_transactions_approved_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7051 (class 2606 OID 1209196)
+-- Name: lats_trade_in_transactions lats_trade_in_transactions_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7052 (class 2606 OID 1209201)
+-- Name: lats_trade_in_transactions lats_trade_in_transactions_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7053 (class 2606 OID 1209206)
+-- Name: lats_trade_in_transactions lats_trade_in_transactions_new_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7054 (class 2606 OID 1209211)
+-- Name: lats_trade_in_transactions lats_trade_in_transactions_new_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7055 (class 2606 OID 1209216)
+-- Name: lats_trade_in_transactions lats_trade_in_transactions_sale_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7056 (class 2606 OID 1209221)
+-- Name: leave_requests leave_requests_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7057 (class 2606 OID 1209226)
+-- Name: loyalty_points loyalty_points_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7058 (class 2606 OID 1209231)
+-- Name: mobile_money_transactions mobile_money_transactions_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7059 (class 2606 OID 1209236)
+-- Name: mobile_money_transactions mobile_money_transactions_payment_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7060 (class 2606 OID 1209241)
+-- Name: notifications notifications_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7061 (class 2606 OID 1209246)
+-- Name: paragraphs paragraphs_note_id_notes_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7062 (class 2606 OID 1209251)
+-- Name: payment_transactions payment_transactions_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7063 (class 2606 OID 1209256)
+-- Name: payment_transactions payment_transactions_sale_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7064 (class 2606 OID 1209261)
+-- Name: points_transactions points_transactions_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7065 (class 2606 OID 1209266)
+-- Name: product_images product_images_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7066 (class 2606 OID 1209271)
+-- Name: product_interests product_interests_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7067 (class 2606 OID 1209276)
+-- Name: purchase_order_audit purchase_order_audit_purchase_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7068 (class 2606 OID 1209281)
+-- Name: purchase_order_messages purchase_order_messages_purchase_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7069 (class 2606 OID 1209286)
+-- Name: purchase_order_payments purchase_order_payments_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7070 (class 2606 OID 1209291)
+-- Name: purchase_order_payments purchase_order_payments_payment_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7071 (class 2606 OID 1209296)
+-- Name: purchase_order_payments purchase_order_payments_purchase_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7072 (class 2606 OID 1209301)
+-- Name: purchase_order_quality_check_items purchase_order_quality_check_items_criteria_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7073 (class 2606 OID 1209306)
+-- Name: purchase_order_quality_check_items purchase_order_quality_check_items_purchase_order_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7074 (class 2606 OID 1209311)
+-- Name: purchase_order_quality_check_items purchase_order_quality_check_items_quality_check_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7075 (class 2606 OID 1209316)
+-- Name: purchase_order_quality_checks purchase_order_quality_checks_purchase_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7076 (class 2606 OID 1209321)
+-- Name: purchase_order_quality_checks purchase_order_quality_checks_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7077 (class 2606 OID 1209326)
+-- Name: purchase_orders purchase_orders_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7078 (class 2606 OID 1209331)
+-- Name: quality_check_criteria quality_check_criteria_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7079 (class 2606 OID 1209336)
+-- Name: quality_check_items quality_check_items_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7080 (class 2606 OID 1209341)
+-- Name: quality_check_results quality_check_results_check_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7081 (class 2606 OID 1209346)
+-- Name: quality_check_results quality_check_results_quality_check_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7082 (class 2606 OID 1209351)
+-- Name: quality_checks quality_checks_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7083 (class 2606 OID 1209356)
+-- Name: quality_checks quality_checks_purchase_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7084 (class 2606 OID 1209361)
+-- Name: quality_checks quality_checks_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7085 (class 2606 OID 1209366)
+-- Name: recurring_expense_history recurring_expense_history_recurring_expense_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7086 (class 2606 OID 1209371)
+-- Name: recurring_expense_history recurring_expense_history_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7087 (class 2606 OID 1209376)
+-- Name: recurring_expenses recurring_expenses_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7088 (class 2606 OID 1209381)
+-- Name: recurring_expenses recurring_expenses_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7089 (class 2606 OID 1209386)
+-- Name: reminders reminders_assigned_to_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7090 (class 2606 OID 1209391)
+-- Name: reminders reminders_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7091 (class 2606 OID 1209396)
+-- Name: reminders reminders_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7092 (class 2606 OID 1209401)
+-- Name: repair_parts repair_parts_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7093 (class 2606 OID 1209406)
+-- Name: repair_parts repair_parts_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7094 (class 2606 OID 1209411)
+-- Name: repair_parts repair_parts_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7095 (class 2606 OID 1209416)
+-- Name: repair_parts repair_parts_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7096 (class 2606 OID 1209421)
+-- Name: report_attachments report_attachments_report_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7097 (class 2606 OID 1209426)
+-- Name: report_attachments report_attachments_uploaded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7098 (class 2606 OID 1209431)
+-- Name: reports reports_assigned_to_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7099 (class 2606 OID 1209436)
+-- Name: reports reports_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7100 (class 2606 OID 1209441)
+-- Name: reports reports_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7102 (class 2606 OID 1209446)
+-- Name: sale_inventory_items sale_inventory_items_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7103 (class 2606 OID 1209451)
+-- Name: sale_inventory_items sale_inventory_items_inventory_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7104 (class 2606 OID 1209456)
+-- Name: sale_inventory_items sale_inventory_items_sale_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7105 (class 2606 OID 1209461)
+-- Name: sales sales_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7106 (class 2606 OID 1209466)
+-- Name: sales_pipeline sales_pipeline_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7107 (class 2606 OID 1209471)
+-- Name: scheduled_transfer_executions scheduled_transfer_executions_destination_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7108 (class 2606 OID 1209476)
+-- Name: scheduled_transfer_executions scheduled_transfer_executions_scheduled_transfer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7109 (class 2606 OID 1209481)
+-- Name: scheduled_transfer_executions scheduled_transfer_executions_source_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7110 (class 2606 OID 1209486)
+-- Name: scheduled_transfers scheduled_transfers_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7111 (class 2606 OID 1209491)
+-- Name: scheduled_transfers scheduled_transfers_destination_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7112 (class 2606 OID 1209496)
+-- Name: scheduled_transfers scheduled_transfers_source_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7113 (class 2606 OID 1209501)
+-- Name: serial_number_movements serial_number_movements_inventory_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7114 (class 2606 OID 1209506)
+-- Name: shelves shelves_storage_room_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7115 (class 2606 OID 1209511)
+-- Name: sms_logs sms_logs_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7116 (class 2606 OID 1209516)
+-- Name: sms_trigger_logs sms_trigger_logs_trigger_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7117 (class 2606 OID 1209521)
+-- Name: sms_triggers sms_triggers_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7118 (class 2606 OID 1209526)
+-- Name: special_order_payments special_order_payments_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7119 (class 2606 OID 1209531)
+-- Name: special_order_payments special_order_payments_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7120 (class 2606 OID 1209536)
+-- Name: special_order_payments special_order_payments_special_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7121 (class 2606 OID 1209541)
+-- Name: storage_rooms storage_rooms_store_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7122 (class 2606 OID 1209546)
+-- Name: user_branch_assignments user_branch_assignments_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7123 (class 2606 OID 1209551)
+-- Name: user_settings user_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7124 (class 2606 OID 1209556)
+-- Name: users users_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7125 (class 2606 OID 1209561)
+-- Name: webhook_logs webhook_logs_webhook_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7440 (class 3256 OID 1209566)
+-- Name: user_settings Allow all operations on user_settings; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7441 (class 3256 OID 1209567)
+-- Name: product_images Allow authenticated users to delete product images; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7442 (class 3256 OID 1209568)
+-- Name: product_images Allow authenticated users to insert product images; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7443 (class 3256 OID 1209569)
+-- Name: product_images Allow authenticated users to update product images; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7444 (class 3256 OID 1209570)
+-- Name: product_images Allow authenticated users to view product images; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7445 (class 3256 OID 1209571)
+-- Name: admin_settings Allow read access to all authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7446 (class 3256 OID 1209572)
+-- Name: customer_installment_plans Enable delete for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7447 (class 3256 OID 1209573)
+-- Name: customer_special_orders Enable delete for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7448 (class 3256 OID 1209574)
+-- Name: expenses Enable delete for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7449 (class 3256 OID 1209575)
+-- Name: lats_stock_transfers Enable delete for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7450 (class 3256 OID 1209576)
+-- Name: loyalty_points Enable delete for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7451 (class 3256 OID 1209577)
+-- Name: backup_logs Enable insert for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7452 (class 3256 OID 1209578)
+-- Name: customer_installment_plan_payments Enable insert for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7453 (class 3256 OID 1209579)
+-- Name: customer_installment_plans Enable insert for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7454 (class 3256 OID 1209580)
+-- Name: customer_special_orders Enable insert for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7455 (class 3256 OID 1209581)
+-- Name: expenses Enable insert for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7456 (class 3256 OID 1209582)
+-- Name: installment_payments Enable insert for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7457 (class 3256 OID 1209583)
+-- Name: lats_stock_transfers Enable insert for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7458 (class 3256 OID 1209584)
+-- Name: loyalty_points Enable insert for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7459 (class 3256 OID 1209585)
+-- Name: special_order_payments Enable insert for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7460 (class 3256 OID 1209586)
+-- Name: backup_logs Enable read access for all users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7461 (class 3256 OID 1209587)
+-- Name: customer_installment_plan_payments Enable read access for all users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7462 (class 3256 OID 1209588)
+-- Name: customer_installment_plans Enable read access for all users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7463 (class 3256 OID 1209589)
+-- Name: customer_special_orders Enable read access for all users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7464 (class 3256 OID 1209590)
+-- Name: expenses Enable read access for all users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7465 (class 3256 OID 1209591)
+-- Name: installment_payments Enable read access for all users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7466 (class 3256 OID 1209592)
+-- Name: lats_stock_transfers Enable read access for all users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7467 (class 3256 OID 1209593)
+-- Name: loyalty_points Enable read access for all users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7468 (class 3256 OID 1209594)
+-- Name: special_order_payments Enable read access for all users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7469 (class 3256 OID 1209595)
+-- Name: customer_installment_plan_payments Enable update for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7470 (class 3256 OID 1209596)
+-- Name: customer_installment_plans Enable update for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7471 (class 3256 OID 1209597)
+-- Name: customer_special_orders Enable update for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7472 (class 3256 OID 1209598)
+-- Name: expenses Enable update for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7473 (class 3256 OID 1209599)
+-- Name: installment_payments Enable update for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7474 (class 3256 OID 1209600)
+-- Name: lats_stock_transfers Enable update for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7475 (class 3256 OID 1209601)
+-- Name: loyalty_points Enable update for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7476 (class 3256 OID 1209602)
+-- Name: special_order_payments Enable update for authenticated users; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7477 (class 3256 OID 1209603)
+-- Name: account_transactions Users can delete account transactions; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7478 (class 3256 OID 1209604)
+-- Name: customer_payments Users can delete customer payments; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7479 (class 3256 OID 1209605)
+-- Name: finance_expenses Users can delete expenses; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7480 (class 3256 OID 1209606)
+-- Name: finance_accounts Users can delete finance accounts; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7481 (class 3256 OID 1209607)
+-- Name: payment_transactions Users can delete payment transactions; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7482 (class 3256 OID 1209608)
+-- Name: recurring_expenses Users can delete recurring expenses; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7483 (class 3256 OID 1209609)
+-- Name: account_transactions Users can insert account transactions; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7484 (class 3256 OID 1209610)
+-- Name: customer_payments Users can insert customer payments; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7485 (class 3256 OID 1209611)
+-- Name: finance_expenses Users can insert expenses; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7486 (class 3256 OID 1209612)
+-- Name: finance_accounts Users can insert finance accounts; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7487 (class 3256 OID 1209613)
+-- Name: payment_transactions Users can insert payment transactions; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7488 (class 3256 OID 1209614)
+-- Name: recurring_expenses Users can insert recurring expenses; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7489 (class 3256 OID 1209615)
+-- Name: finance_expense_categories Users can manage expense categories; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7490 (class 3256 OID 1209616)
+-- Name: account_transactions Users can update account transactions; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7491 (class 3256 OID 1209617)
+-- Name: customer_payments Users can update customer payments; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7492 (class 3256 OID 1209618)
+-- Name: finance_expenses Users can update expenses; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7493 (class 3256 OID 1209619)
+-- Name: finance_accounts Users can update finance accounts; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7494 (class 3256 OID 1209620)
+-- Name: payment_transactions Users can update payment transactions; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7495 (class 3256 OID 1209621)
+-- Name: recurring_expenses Users can update recurring expenses; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7496 (class 3256 OID 1209622)
+-- Name: account_transactions Users can view account transactions; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7497 (class 3256 OID 1209623)
+-- Name: customer_payments Users can view customer payments; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7498 (class 3256 OID 1209624)
+-- Name: expense_categories Users can view expense categories; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7499 (class 3256 OID 1209625)
+-- Name: finance_expense_categories Users can view expense categories; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7500 (class 3256 OID 1209626)
+-- Name: finance_expenses Users can view expenses; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7501 (class 3256 OID 1209627)
+-- Name: finance_accounts Users can view finance accounts; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7502 (class 3256 OID 1209628)
+-- Name: payment_transactions Users can view payment transactions; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7503 (class 3256 OID 1209630)
+-- Name: recurring_expense_history Users can view recurring expense history; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7504 (class 3256 OID 1209631)
+-- Name: recurring_expenses Users can view recurring expenses; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7406 (class 0 OID 1204508)
+-- Dependencies: 230
+-- Name: account_transactions; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7407 (class 0 OID 1204522)
+-- Dependencies: 231
+-- Name: admin_settings; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7505 (class 3256 OID 1209632)
+-- Name: daily_sales_closures authenticated_delete_closures; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7506 (class 3256 OID 1209633)
+-- Name: daily_opening_sessions authenticated_delete_sessions; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7507 (class 3256 OID 1209634)
+-- Name: daily_sales_closures authenticated_insert_closures; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7508 (class 3256 OID 1209635)
+-- Name: daily_opening_sessions authenticated_insert_sessions; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7509 (class 3256 OID 1209636)
+-- Name: daily_sales_closures authenticated_select_closures; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7510 (class 3256 OID 1209637)
+-- Name: daily_opening_sessions authenticated_select_sessions; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7511 (class 3256 OID 1209638)
+-- Name: daily_sales_closures authenticated_update_closures; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7512 (class 3256 OID 1209639)
+-- Name: daily_opening_sessions authenticated_update_sessions; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7410 (class 0 OID 1204720)
+-- Dependencies: 245
+-- Name: backup_logs; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7411 (class 0 OID 1204740)
+-- Dependencies: 247
+-- Name: branch_transfers; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7513 (class 3256 OID 1209640)
+-- Name: branch_transfers branch_transfers_delete_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7514 (class 3256 OID 1209641)
+-- Name: branch_transfers branch_transfers_insert_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7515 (class 3256 OID 1209642)
+-- Name: branch_transfers branch_transfers_select_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7516 (class 3256 OID 1209643)
+-- Name: branch_transfers branch_transfers_update_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7412 (class 0 OID 1204764)
+-- Dependencies: 250
+-- Name: categories; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7517 (class 3256 OID 1209644)
+-- Name: categories categories_delete_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7518 (class 3256 OID 1209645)
+-- Name: categories categories_insert_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7519 (class 3256 OID 1209646)
+-- Name: categories categories_select_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7520 (class 3256 OID 1209647)
+-- Name: categories categories_update_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7521 (class 3256 OID 1209648)
+-- Name: notes crud-authenticated-policy-delete; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7522 (class 3256 OID 1209649)
+-- Name: paragraphs crud-authenticated-policy-delete; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7523 (class 3256 OID 1209650)
+-- Name: notes crud-authenticated-policy-insert; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7524 (class 3256 OID 1209651)
+-- Name: paragraphs crud-authenticated-policy-insert; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7528 (class 3256 OID 1209652)
+-- Name: notes crud-authenticated-policy-select; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7529 (class 3256 OID 1209653)
+-- Name: paragraphs crud-authenticated-policy-select; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7530 (class 3256 OID 1209654)
+-- Name: notes crud-authenticated-policy-update; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7531 (class 3256 OID 1209655)
+-- Name: paragraphs crud-authenticated-policy-update; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7413 (class 0 OID 1204848)
+-- Dependencies: 262
+-- Name: customer_installment_plan_payments; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7414 (class 0 OID 1204861)
+-- Dependencies: 263
+-- Name: customer_installment_plans; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7415 (class 0 OID 1204905)
+-- Dependencies: 266
+-- Name: customer_payments; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7416 (class 0 OID 1204949)
+-- Dependencies: 270
+-- Name: customer_special_orders; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7417 (class 0 OID 1205022)
+-- Dependencies: 276
+-- Name: daily_opening_sessions; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7418 (class 0 OID 1205054)
+-- Dependencies: 278
+-- Name: daily_sales_closures; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7419 (class 0 OID 1205259)
+-- Dependencies: 299
+-- Name: expense_categories; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7420 (class 0 OID 1205267)
+-- Dependencies: 300
+-- Name: expenses; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7421 (class 0 OID 1205279)
+-- Dependencies: 301
+-- Name: finance_accounts; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7422 (class 0 OID 1205348)
+-- Dependencies: 304
+-- Name: finance_expense_categories; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7423 (class 0 OID 1205357)
+-- Dependencies: 305
+-- Name: finance_expenses; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7424 (class 0 OID 1205404)
+-- Dependencies: 310
+-- Name: installment_payments; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7425 (class 0 OID 1205440)
+-- Dependencies: 313
+-- Name: inventory; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7532 (class 3256 OID 1209657)
+-- Name: inventory inventory_delete_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7533 (class 3256 OID 1209658)
+-- Name: inventory inventory_insert_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7426 (class 0 OID 1205449)
+-- Dependencies: 314
+-- Name: inventory_items; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7534 (class 3256 OID 1209659)
+-- Name: inventory_items inventory_items_delete_all; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7535 (class 3256 OID 1209660)
+-- Name: inventory_items inventory_items_insert_all; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7536 (class 3256 OID 1209661)
+-- Name: inventory_items inventory_items_select_all; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7537 (class 3256 OID 1209662)
+-- Name: inventory_items inventory_items_update_all; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7525 (class 3256 OID 1209663)
+-- Name: inventory inventory_select_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7526 (class 3256 OID 1209664)
+-- Name: inventory inventory_update_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7408 (class 0 OID 1204610)
+-- Dependencies: 240
+-- Name: lats_product_variants; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7409 (class 0 OID 1204640)
+-- Dependencies: 241
+-- Name: lats_products; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7427 (class 0 OID 1206201)
+-- Dependencies: 352
+-- Name: lats_stock_transfers; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7428 (class 0 OID 1206402)
+-- Dependencies: 371
+-- Name: loyalty_points; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7429 (class 0 OID 1206424)
+-- Dependencies: 373
+-- Name: notes; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7430 (class 0 OID 1206444)
+-- Dependencies: 375
+-- Name: notifications; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7527 (class 3256 OID 1209665)
+-- Name: notifications notifications_delete_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7538 (class 3256 OID 1209666)
+-- Name: notifications notifications_insert_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7539 (class 3256 OID 1209667)
+-- Name: notifications notifications_select_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7540 (class 3256 OID 1209668)
+-- Name: notifications notifications_update_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7431 (class 0 OID 1206456)
+-- Dependencies: 376
+-- Name: paragraphs; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7432 (class 0 OID 1206472)
+-- Dependencies: 378
+-- Name: payment_transactions; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7433 (class 0 OID 1206494)
+-- Dependencies: 380
+-- Name: product_images; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7541 (class 3256 OID 1209669)
+-- Name: lats_products products_delete_all; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7542 (class 3256 OID 1209670)
+-- Name: lats_products products_insert_all; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7543 (class 3256 OID 1209671)
+-- Name: lats_products products_select_all; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7544 (class 3256 OID 1209672)
+-- Name: lats_products products_update_all; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7434 (class 0 OID 1206571)
+-- Dependencies: 389
+-- Name: purchase_orders; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7545 (class 3256 OID 1209673)
+-- Name: purchase_orders purchase_orders_delete_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7546 (class 3256 OID 1209674)
+-- Name: purchase_orders purchase_orders_insert_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7547 (class 3256 OID 1209675)
+-- Name: purchase_orders purchase_orders_select_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7548 (class 3256 OID 1209676)
+-- Name: purchase_orders purchase_orders_update_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7435 (class 0 OID 1206628)
+-- Dependencies: 395
+-- Name: recurring_expense_history; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7436 (class 0 OID 1206637)
+-- Dependencies: 396
+-- Name: recurring_expenses; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7437 (class 0 OID 1206721)
+-- Dependencies: 403
+-- Name: sales; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7549 (class 3256 OID 1209677)
+-- Name: sales sales_delete_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7550 (class 3256 OID 1209678)
+-- Name: sales sales_insert_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7551 (class 3256 OID 1209679)
+-- Name: sales sales_select_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7552 (class 3256 OID 1209680)
+-- Name: sales sales_update_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7553 (class 3256 OID 1209681)
+-- Name: notes shared_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7554 (class 3256 OID 1209682)
+-- Name: paragraphs shared_policy; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7438 (class 0 OID 1206842)
+-- Dependencies: 416
+-- Name: special_order_payments; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7439 (class 0 OID 1206937)
+-- Dependencies: 428
+-- Name: user_settings; Type: ROW SECURITY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7555 (class 3256 OID 1209683)
+-- Name: lats_product_variants variants_delete_all; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7556 (class 3256 OID 1209684)
+-- Name: lats_product_variants variants_insert_all; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7557 (class 3256 OID 1209685)
+-- Name: lats_product_variants variants_select_all; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7558 (class 3256 OID 1209686)
+-- Name: lats_product_variants variants_update_all; Type: POLICY; Schema: public; Owner: neondb_owner
+--
+--
+-- TOC entry 7756 (class 0 OID 0)
+-- Dependencies: 7755
+-- Name: DATABASE neondb; Type: ACL; Schema: -; Owner: neondb_owner
+--
+--
+-- TOC entry 7758 (class 0 OID 0)
+-- Dependencies: 14
+-- Name: SCHEMA public; Type: ACL; Schema: -; Owner: neondb_owner
+--
+--
+-- TOC entry 7760 (class 0 OID 0)
+-- Dependencies: 15
+-- Name: SCHEMA pgrst; Type: ACL; Schema: -; Owner: neon_service
+--
+--
+-- TOC entry 7763 (class 0 OID 0)
+-- Dependencies: 690
+-- Name: FUNCTION pre_config(); Type: ACL; Schema: pgrst; Owner: neon_service
+--
+-- Completed on 2025-12-06 02:14:26 EAT
+--
+--

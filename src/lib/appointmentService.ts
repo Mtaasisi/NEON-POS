@@ -101,6 +101,10 @@ class AppointmentService {
         query = query.eq('priority', filters.priority);
       }
 
+      // ✅ Apply branch filtering
+      const { addBranchFilter } = await import('./branchAwareApi');
+      query = await addBranchFilter(query, 'appointments');
+
       const { data, error } = await query;
 
       if (error) {
@@ -165,6 +169,11 @@ class AppointmentService {
         location_name = location?.name;
       }
 
+      // ✅ Get current branch for isolation
+      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+      const { isDataShared } = await import('./branchAwareApi');
+      const shared = await isDataShared('appointments');
+
       const { data, error } = await supabase
         .from('appointments')
         .insert({
@@ -174,6 +183,8 @@ class AppointmentService {
           status: 'scheduled',
           priority: appointmentData.priority || 'medium',
           duration_minutes: appointmentData.duration_minutes || 60,
+          branch_id: shared ? null : (currentBranchId || null), // ✅ Branch isolation
+          is_shared: shared // ✅ Shared flag
         })
         .select()
         .single();
@@ -320,9 +331,15 @@ class AppointmentService {
     try {
       const today = new Date().toISOString().split('T')[0];
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('appointments')
         .select('status, appointment_date');
+      
+      // ✅ Apply branch filtering
+      const { addBranchFilter } = await import('./branchAwareApi');
+      query = await addBranchFilter(query, 'appointments');
+      
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching appointment stats:', error);
@@ -348,11 +365,17 @@ class AppointmentService {
   async getAvailableTimeSlots(date: string, duration: number = 60): Promise<string[]> {
     try {
       // Get all appointments for the date
-      const { data: appointments } = await supabase
+      let query = supabase
         .from('appointments')
         .select('appointment_time, duration_minutes')
         .eq('appointment_date', date)
         .not('status', 'in', ['cancelled', 'no-show']);
+      
+      // ✅ Apply branch filtering
+      const { addBranchFilter } = await import('./branchAwareApi');
+      query = await addBranchFilter(query, 'appointments');
+      
+      const { data: appointments } = await query;
 
       // Generate time slots from 8 AM to 6 PM
       const timeSlots: string[] = [];

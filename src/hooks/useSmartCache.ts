@@ -198,10 +198,15 @@ export function useSmartCategories(options: UseSmartCacheOptions<any> = {}) {
       const { smartCache } = await import('../lib/enhancedCacheManager');
       return smartCache.smartFetch('categories', async () => {
         const { supabase } = await import('../lib/supabase');
-        const { data, error } = await supabase
+        const { addBranchFilter } = await import('../lib/branchAwareApi');
+        let query = supabase
           .from('lats_categories')
           .select('*')
           .eq('is_active', true);
+        
+        // Apply branch filtering
+        query = await addBranchFilter(query, 'categories');
+        const { data, error } = await query;
 
         if (error) throw error;
         return data || [];
@@ -244,10 +249,15 @@ export function useSmartSuppliers(options: UseSmartCacheOptions<any> = {}) {
       const { smartCache } = await import('../lib/enhancedCacheManager');
       return smartCache.smartFetch('suppliers', async () => {
         const { supabase } = await import('../lib/supabase');
-        const { data, error } = await supabase
+        const { addBranchFilter } = await import('../lib/branchAwareApi');
+        let query = supabase
           .from('lats_suppliers')
           .select('*')
           .eq('is_active', true);
+        
+        // Apply branch filtering
+        query = await addBranchFilter(query, 'suppliers');
+        const { data, error } = await query;
 
         if (error) throw error;
         return data || [];

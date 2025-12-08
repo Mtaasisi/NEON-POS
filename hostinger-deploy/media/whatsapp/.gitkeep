@@ -1,0 +1,3 @@
+# This file ensures the media/whatsapp folder is included in git and build output
+# Media files are stored in browser localStorage, not as physical files in production
+

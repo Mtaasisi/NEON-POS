@@ -284,9 +284,10 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
         }
 
         // Fallback to image_url from lats_products table
+        // Note: lats_products table only has image_url, not thumbnail_url
         const { data: product, error } = await supabase
           .from('lats_products')
-          .select('image_url, thumbnail_url')
+          .select('image_url')
           .eq('id', item.productId)
           .single();
 
@@ -299,7 +300,7 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
         }
 
         if (product) {
-          const extractedImage = product.thumbnail_url || product.image_url;
+          const extractedImage = product.image_url;
           if (extractedImage) {
             setProductImage(extractedImage);
           }

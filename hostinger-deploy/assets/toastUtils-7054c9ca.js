@@ -1,0 +1,1 @@
+import{n as s}from"./ui-28e30067.js";const c={success:o=>s.success(o),error:o=>s.error(o),info:o=>s(o,{icon:"ℹ️",style:{background:"#3B82F6",color:"#fff"}}),warning:o=>s(o,{icon:"⚠️",style:{background:"#F59E0B",color:"#fff"}}),loading:o=>s.loading(o),dismiss:o=>s.dismiss(o)};export{c as t};

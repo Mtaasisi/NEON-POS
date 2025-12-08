@@ -6,6 +6,54 @@ import { deduplicateRequest } from './requestDeduplication';
 import { getCachedQuery, invalidateCachePattern } from './queryCache';
 import { emergencyUrlCleanup } from '../features/lats/lib/imageUtils';
 
+/**
+ * Invalidate all product caches to ensure fresh data after updates
+ * This clears query cache, localStorage cache, memory cache, and enhanced cache
+ */
+async function invalidateAllProductCaches(): Promise<void> {
+  try {
+    console.log('🔄 [ProductCache] Invalidating all product caches...');
+    
+    // 1. Clear query cache (products:* pattern)
+    invalidateCachePattern('^products:');
+    console.log('✅ [ProductCache] Query cache invalidated');
+    
+    // 2. Clear localStorage product cache
+    try {
+      const { productCacheService } = await import('./productCacheService');
+      productCacheService.clearProducts();
+      console.log('✅ [ProductCache] localStorage cache cleared');
+    } catch (error) {
+      console.warn('⚠️ [ProductCache] Failed to clear localStorage cache:', error);
+    }
+    
+    // 3. Clear memory cache in useInventoryStore
+    try {
+      const { useInventoryStore } = await import('../features/lats/stores/useInventoryStore');
+      const store = useInventoryStore.getState();
+      if (store && typeof store.clearCache === 'function') {
+        store.clearCache('products');
+        console.log('✅ [ProductCache] Memory cache cleared');
+      }
+    } catch (error) {
+      console.warn('⚠️ [ProductCache] Failed to clear memory cache:', error);
+    }
+    
+    // 4. Clear enhanced cache manager
+    try {
+      const { smartCache } = await import('./enhancedCacheManager');
+      await smartCache.invalidateCache('products');
+      console.log('✅ [ProductCache] Enhanced cache cleared');
+    } catch (error) {
+      console.warn('⚠️ [ProductCache] Failed to clear enhanced cache:', error);
+    }
+    
+    console.log('✅ [ProductCache] All product caches invalidated');
+  } catch (error) {
+    console.error('❌ [ProductCache] Error invalidating caches:', error);
+  }
+}
+
 // Use the main supabase client instead of creating a separate one
 // This ensures consistent configuration and avoids conflicts
 
@@ -454,6 +502,9 @@ export async function createProduct(
     // Fetch the complete product with variants to return
     const completeProduct = await _getProductImpl(product.id);
     
+    // Invalidate all product caches to ensure fresh data on next load
+    await invalidateAllProductCaches();
+    
     return completeProduct;
   } catch (error) {
     console.error('Error creating product:', error);
@@ -654,12 +705,13 @@ export async function getProduct(productId: string, options?: { forceRefresh?: b
   return deduplicateRequest(
     cacheKey,
     async () => {
-      // Use query cache with 3-minute TTL and stale-while-revalidate
+      // Use query cache with 1-minute TTL and stale-while-revalidate
+      // Reduced TTL to ensure more frequent updates when products change
       return getCachedQuery(
         cacheKey,
         () => _getProductImpl(productId),
         {
-          ttl: 3 * 60 * 1000, // 3 minutes
+          ttl: 1 * 60 * 1000, // 1 minute (reduced from 3 minutes for faster updates)
           staleWhileRevalidate: true, // Return stale data while fetching fresh
         }
       );
@@ -715,13 +767,16 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
         console.log(`📊 [getProducts] SHARED MODE - Showing all products`);
       } else if (branchSettings.data_isolation_mode === 'hybrid') {
         // HYBRID MODE: Check share_products flag
-        if (branchSettings.share_products) {
+        // ✅ FIX: Handle NULL share_products as false (default to not shared)
+        const shareProducts = branchSettings.share_products === true;
+        if (shareProducts) {
           // Products are shared - show all products
           console.log(`⚖️ [getProducts] HYBRID MODE - Products are SHARED - Showing all products`);
         } else {
-          // Products are NOT shared - only show this branch's products
-          query = query.eq('branch_id', currentBranchId);
-          console.log(`⚖️ [getProducts] HYBRID MODE - Products are NOT SHARED - Only showing branch ${currentBranchId}`);
+          // Products are NOT shared - show this branch's products + unassigned (NULL) products
+          // This allows unassigned products to be visible so they can be assigned to the branch
+          query = query.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
+          console.log(`⚖️ [getProducts] HYBRID MODE - Products are NOT SHARED (share_products=${branchSettings.share_products}) - Showing branch ${currentBranchId} + unassigned products`);
         }
       } else {
         // DEFAULT: Show this branch's products + unassigned products
@@ -774,6 +829,54 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
       console.warn('   2. Branch filtering is excluding all products');
       console.warn('   3. No products exist in database');
       console.warn('   💡 Tip: Check database directly to verify products exist');
+      
+      // 🔍 DIAGNOSTIC: Run diagnostic queries to identify the issue
+      try {
+        console.log('🔍 [getProducts] Running diagnostic queries...');
+        
+        // Check total products count
+        const { count: totalCount } = await supabase
+          .from('lats_products')
+          .select('*', { count: 'exact', head: true });
+        console.log(`   📊 Total products in database: ${totalCount || 0}`);
+        
+        // Check active products count
+        const { count: activeCount } = await supabase
+          .from('lats_products')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_active', true);
+        console.log(`   ✅ Active products: ${activeCount || 0}`);
+        
+        // Check products with current branch_id
+        if (currentBranchId) {
+          const { count: branchCount } = await supabase
+            .from('lats_products')
+            .select('*', { count: 'exact', head: true })
+            .eq('branch_id', currentBranchId)
+            .eq('is_active', true);
+          console.log(`   🏪 Active products in branch ${currentBranchId}: ${branchCount || 0}`);
+          
+          // Check products with NULL branch_id
+          const { count: nullBranchCount } = await supabase
+            .from('lats_products')
+            .select('*', { count: 'exact', head: true })
+            .is('branch_id', null)
+            .eq('is_active', true);
+          console.log(`   ❓ Active products with NULL branch_id: ${nullBranchCount || 0}`);
+        }
+        
+        // Check branch settings
+        if (branchSettings) {
+          console.log(`   ⚙️  Branch settings:`, {
+            data_isolation_mode: branchSettings.data_isolation_mode,
+            share_products: branchSettings.share_products
+          });
+        } else {
+          console.log(`   ⚠️  No branch settings found for branch ${currentBranchId || 'none'}`);
+        }
+      } catch (diagError) {
+        console.error('   ❌ Error running diagnostics:', diagError);
+      }
     }
 
     if (error) {
@@ -832,8 +935,11 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
     const categoriesQuery = categoryIds.length > 0 
       ? supabase.from('lats_categories').select('id, name').in('id', categoryIds)
       : Promise.resolve({ data: [] });
-      
-    const suppliersQuery = supabase.from('lats_suppliers').select('id, name').eq('is_active', true).order('name');
+    
+    // Apply branch filtering to suppliers query
+    const { addBranchFilter } = await import('./branchAwareApi');
+    let suppliersQuery = supabase.from('lats_suppliers').select('id, name').eq('is_active', true).order('name');
+    suppliersQuery = await addBranchFilter(suppliersQuery, 'suppliers');
     
     // Build variants query
     // ✅ FIX: Show ALL variants (including 0 stock) for inventory management
@@ -865,14 +971,14 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
           variantQuery = variantQuery.or(`branch_id.eq.${currentBranchIdForVariants},is_shared.eq.true,branch_id.is.null`);
           console.log(`⚖️ [getProducts] HYBRID MODE - Variants are SHARED - Showing branch ${currentBranchIdForVariants} + shared variants`);
         } else {
-          // Inventory is NOT shared - only show this branch's variants
+          // Inventory is NOT shared - only show this branch's variants (strict isolation)
           variantQuery = variantQuery.eq('branch_id', currentBranchIdForVariants);
           console.log(`⚖️ [getProducts] HYBRID MODE - Variants are NOT SHARED - Only showing branch ${currentBranchIdForVariants}`);
         }
       }
     } else if (currentBranchIdForVariants) {
-      // Default: show this branch's variants + unassigned variants
-      variantQuery = variantQuery.or(`branch_id.eq.${currentBranchIdForVariants},branch_id.is.null`);
+      // Default: apply branch filter (safety fallback)
+      variantQuery = variantQuery.eq('branch_id', currentBranchIdForVariants);
     }
     
     // Build images query
@@ -1267,12 +1373,13 @@ export async function getProducts(options?: { forceRefresh?: boolean }): Promise
   return deduplicateRequest(
     cacheKey,
     async () => {
-      // Use query cache with 3-minute TTL and stale-while-revalidate
+      // Use query cache with 1-minute TTL and stale-while-revalidate
+      // Reduced TTL to ensure more frequent updates when products change
       return getCachedQuery(
         cacheKey,
         () => _getProductsImpl(),
         {
-          ttl: 3 * 60 * 1000, // 3 minutes
+          ttl: 1 * 60 * 1000, // 1 minute (reduced from 3 minutes for faster updates)
           staleWhileRevalidate: true, // Return stale data while fetching fresh
         }
       );
@@ -1291,9 +1398,6 @@ export async function updateProduct(
   userId: string
 ): Promise<LatsProduct> {
   try {
-    // Invalidate product cache on update
-    invalidateCachePattern('^products:');
-    
     // First, verify the product exists and get branch_id
     const { data: existingProduct, error: existError } = await supabase
       .from('lats_products')
@@ -1550,6 +1654,9 @@ export async function updateProduct(
       throw new Error('Product update returned null or invalid product');
     }
     
+    // Invalidate all product caches to ensure fresh data on next load
+    await invalidateAllProductCaches();
+    
     return {
       id: product.id,
       name: product.name,
@@ -1685,4 +1792,7 @@ export async function deleteProduct(productId: string): Promise<void> {
     .eq('id', productId);
 
   if (error) throw error;
+  
+  // Invalidate all product caches to ensure fresh data on next load
+  await invalidateAllProductCaches();
 }

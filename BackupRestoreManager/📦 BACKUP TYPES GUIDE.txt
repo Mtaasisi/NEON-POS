@@ -1,0 +1,91 @@
+╔════════════════════════════════════════════════════════╗
+║                                                        ║
+║     📦  BACKUP TYPES GUIDE                              ║
+║                                                        ║
+╚════════════════════════════════════════════════════════╝
+
+When you select "Backup Database", you'll be asked to choose a backup type:
+
+═══════════════════════════════════════════════════════════
+
+1️⃣  FULL BACKUP (Data + Schema)
+   ───────────────────────────────────────────────────────
+   
+   ✅ Backs up everything
+   ✅ Creates separate files for each table
+   ✅ Each table gets its own JSON and SQL file
+   
+   Files created:
+   • table1_timestamp.json
+   • table1_timestamp.sql
+   • table2_timestamp.json
+   • table2_timestamp.sql
+   • ... (one file pair per table)
+   
+   Use when: You want complete backup with separate files
+
+═══════════════════════════════════════════════════════════
+
+2️⃣  DATA ONLY (Single Files)
+   ───────────────────────────────────────────────────────
+   
+   ✅ Backs up only data (no schema)
+   ✅ Creates ONE JSON file with all data
+   ✅ Creates ONE SQL file with all INSERT statements
+   
+   Files created:
+   • all-data_timestamp.json  (all data in one file)
+   • all-data_timestamp.sql   (all INSERTs in one file)
+   
+   Use when: 
+   • You only need data, not table structure
+   • You want everything in single files
+   • You're restoring to existing tables
+
+═══════════════════════════════════════════════════════════
+
+3️⃣  SCHEMA ONLY (Single File)
+   ───────────────────────────────────────────────────────
+   
+   ✅ Backs up only table structure (no data)
+   ✅ Creates ONE SQL file with all CREATE TABLE statements
+   
+   Files created:
+   • schema-only_timestamp.sql  (all CREATE TABLEs in one file)
+   
+   Use when:
+   • You only need table structure
+   • You want to recreate tables without data
+   • You're setting up a new database with same structure
+
+═══════════════════════════════════════════════════════════
+
+📋 QUICK COMPARISON:
+
+   Full Backup:        Many files (one per table)
+   Data Only:         2 files (one JSON, one SQL)
+   Schema Only:       1 file (one SQL)
+
+═══════════════════════════════════════════════════════════
+
+💡 RECOMMENDATIONS:
+
+   • First time backup? → Use FULL BACKUP
+   • Just need data? → Use DATA ONLY
+   • Just need structure? → Use SCHEMA ONLY
+   • Regular backups? → Use FULL BACKUP
+
+═══════════════════════════════════════════════════════════
+
+📁 FILE LOCATIONS:
+
+   All backup files are stored in:
+   PROD BACKUP/[backup-name]/
+
+   Example:
+   PROD BACKUP/my-backup/
+   ├── all-data_2025-12-07_01-43-50.json  (Data Only)
+   ├── all-data_2025-12-07_01-43-50.sql   (Data Only)
+   └── backup-summary-2025-12-07_01-43-50.json
+
+═══════════════════════════════════════════════════════════

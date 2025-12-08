@@ -27,10 +27,15 @@ export const useCostComparison = (variantId: string, currentPrice: number) => {
     setIsLoading(true);
     try {
       // First get valid purchase order IDs with required status
-      const { data: validOrders, error: ordersError } = await supabase
+      const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+      let ordersQuery = supabase
         .from('lats_purchase_orders')
         .select('id, order_date')
         .in('status', ['sent', 'received', 'completed']);
+      
+      // Apply branch filtering
+      ordersQuery = await addBranchFilter(ordersQuery, 'purchase_orders');
+      const { data: validOrders, error: ordersError } = await ordersQuery;
 
       if (ordersError) throw ordersError;
 

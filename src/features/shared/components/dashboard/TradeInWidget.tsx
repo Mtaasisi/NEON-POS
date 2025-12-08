@@ -45,9 +45,9 @@ export const TradeInWidget: React.FC<TradeInWidgetProps> = ({ className }) => {
         .from('lats_trade_in_transactions')
         .select('id, status, final_trade_in_value, created_at');
 
-      if (currentBranchId) {
-        query = query.eq('branch_id', currentBranchId);
-      }
+      // ✅ Use addBranchFilter for proper isolation support
+      const { addBranchFilter } = await import('../../../../lib/branchAwareApi');
+      query = await addBranchFilter(query, 'trade_ins');
 
       const { data: tradeIns, error } = await query;
 

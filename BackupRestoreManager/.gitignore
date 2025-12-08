@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Backup files
+PROD BACKUP/
+
+# Connection strings (sensitive data)
+.db-connections.json
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*

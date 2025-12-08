@@ -1,0 +1,34 @@
+# Database Connection Strings
+
+## ✅ PRODUCTION - Supabase PostgreSQL (CURRENT)
+postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres
+
+## For .env.production files
+DATABASE_URL=postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres
+VITE_DATABASE_URL=postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres
+
+## For psql command line (Supabase)
+PGPASSWORD='@SMASIKA1010' psql -h aws-0-eu-north-1.pooler.supabase.com -p 5432 -d postgres -U postgres.jxhzveborezjhsmzsgbc
+
+## Supabase API Configuration
+VITE_SUPABASE_URL=https://jxhzveborezjhsmzsgbc.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4aHp2ZWJvcmV6amhzbXpzZ2JjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI3MTE1MjQsImV4cCI6MjA2ODI4NzUyNH0.pIug4PlJ3Q14GxcYilW-u0blByYoyeOfN3q9RNIjgfw
+
+## Local Database (Development)
+postgresql://mtaasisi@localhost:5432/neondb
+
+## For psql command line (Local)
+psql -h localhost -p 5432 -U mtaasisi -d neondb
+
+## Remote Database (Development - Backup/Reference)
+postgresql://neondb_owner:npg_dMyv1cG4KSOR@ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+
+## Remote Database (Production - Backup/Reference)
+postgresql://neondb_owner:npg_vABqUKk73tEW@ep-damp-fire-adtxvumr-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+
+## Admin User Credentials (Production)
+Email: care@care.com
+Password: 123456
+Role: admin
+User ID: 94128b38-26db-4307-8f3d-0ba040c64b1b
+Created: 2025-12-06

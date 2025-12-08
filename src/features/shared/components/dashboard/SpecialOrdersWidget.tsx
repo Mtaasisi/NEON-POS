@@ -43,12 +43,12 @@ export const SpecialOrdersWidget: React.FC<SpecialOrdersWidgetProps> = ({ classN
       const currentBranchId = getCurrentBranchId();
       
       let query = supabase
-        .from('special_orders')
+        .from('customer_special_orders')
         .select('id, status, total_amount, created_at');
 
-      if (currentBranchId) {
-        query = query.eq('branch_id', currentBranchId);
-      }
+      // ✅ Use addBranchFilter for proper isolation support
+      const { addBranchFilter } = await import('../../../../lib/branchAwareApi');
+      query = await addBranchFilter(query, 'special_orders');
 
       const { data: orders, error } = await query;
 

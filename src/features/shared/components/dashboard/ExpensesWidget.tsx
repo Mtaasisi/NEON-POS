@@ -108,8 +108,8 @@ export const ExpensesWidget: React.FC<ExpensesWidgetProps> = ({ className }) => 
         .eq('transaction_type', 'expense')
         .order('created_at', { ascending: false });
 
-      // Apply branch filtering for proper isolation
-      const filteredQuery = await addBranchFilter(query, 'payments');
+      // ✅ Apply branch filtering for proper isolation (expenses use 'expenses' entity type)
+      const filteredQuery = await addBranchFilter(query, 'expenses');
 
       const { data: allTransactions, error: fetchError } = await filteredQuery;
 

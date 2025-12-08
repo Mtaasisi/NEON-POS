@@ -46,11 +46,16 @@ const SupplierQuickInfoCard: React.FC<SupplierQuickInfoCardProps> = ({
     try {
       // Get purchase orders for this supplier
       // Use total_amount (original currency) to display amounts in supplier's currency
-      const { data: orders, error } = await supabase
+      let poQuery = supabase
         .from('lats_purchase_orders')
         .select('id, total_amount, total_amount_base_currency, currency, exchange_rate, order_date, status')
         .eq('supplier_id', supplier.id)
         .order('order_date', { ascending: false });
+      
+      // Apply branch filtering
+      const { addBranchFilter } = await import('../../../../lib/branchAwareApi');
+      poQuery = await addBranchFilter(poQuery, 'purchase_orders');
+      const { data: orders, error } = await poQuery;
 
       if (error) throw error;
 

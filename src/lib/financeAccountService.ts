@@ -253,9 +253,29 @@ class FinanceAccountService {
   // Create new finance account
   async createFinanceAccount(financeAccount: Omit<FinanceAccount, 'id' | 'created_at' | 'updated_at'>): Promise<FinanceAccount | null> {
     try {
+      // Get current branch ID
+      const { getCurrentBranchId } = await import('./branchAwareApi');
+      const currentBranchId = getCurrentBranchId();
+      
+      // Ensure account_name is set (required by database constraint)
+      // Sync name and account_name - prioritize name if provided
+      // Ensure account_type is set (required by database constraint)
+      const accountData = {
+        ...financeAccount,
+        account_name: financeAccount.account_name || financeAccount.name || 'Unnamed Account',
+        name: financeAccount.name || financeAccount.account_name || 'Unnamed Account',
+        // Ensure account_type is set (required by database - NOT NULL constraint)
+        account_type: financeAccount.account_type || financeAccount.type || 'cash',
+        // If type is not set, use account_type
+        type: financeAccount.type || financeAccount.account_type || 'cash',
+        // Force isolation: always set is_shared = false and ensure branch_id is set
+        is_shared: false,
+        branch_id: financeAccount.branch_id || currentBranchId || await this.getDefaultBranchId()
+      };
+
       const { data, error } = await supabase
         .from('finance_accounts')
-        .insert([financeAccount])
+        .insert([accountData])
         .select()
         .single();
 
@@ -263,6 +283,24 @@ class FinanceAccountService {
       return data;
     } catch (error) {
       console.error('Error creating finance account:', error);
+      return null;
+    }
+  }
+
+  // Helper method to get default branch ID
+  private async getDefaultBranchId(): Promise<string | null> {
+    try {
+      const { data } = await supabase
+        .from('store_locations')
+        .select('id')
+        .eq('is_active', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single();
+      
+      return data?.id || null;
+    } catch (error) {
+      console.error('Error getting default branch:', error);
       return null;
     }
   }

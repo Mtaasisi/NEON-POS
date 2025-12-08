@@ -1,0 +1,67 @@
+╔════════════════════════════════════════════════════════╗
+║                                                        ║
+║     📅  AUTOMATIC BACKUP - QUICK START                ║
+║                                                        ║
+╚════════════════════════════════════════════════════════╝
+
+🎯 EASIEST WAY - Use the Setup Script:
+
+   macOS/Linux:
+   ./setup-automatic-backup.sh
+   
+   Windows:
+   setup-automatic-backup.bat
+
+═══════════════════════════════════════════════════════════
+
+📋 MANUAL SETUP (macOS/Linux):
+
+1. Open crontab:
+   crontab -e
+
+2. Add this line (adjust paths and connection name):
+   0 2 * * * cd /full/path/to/BackupRestoreManager && /full/path/to/node scheduled-backup.mjs "Your Connection Name" "full" "daily-backup" >> /full/path/to/BackupRestoreManager/backup.log 2>&1
+
+3. Save and exit
+
+═══════════════════════════════════════════════════════════
+
+📋 MANUAL SETUP (Windows):
+
+1. Press Win+R, type: taskschd.msc
+
+2. Create Basic Task:
+   - Name: Database Backup Daily
+   - Trigger: Daily, set time
+   - Action: Start a program
+   - Program: node.exe (or full path)
+   - Arguments: scheduled-backup.mjs "Your Connection Name" "full" "daily-backup"
+   - Start in: C:\path\to\BackupRestoreManager
+
+═══════════════════════════════════════════════════════════
+
+🧪 TEST FIRST:
+
+Before setting up automatic backups, test the script:
+
+   node scheduled-backup.mjs "Your Connection Name" "full" "test-backup"
+
+If this works, your automatic backup will work too!
+
+═══════════════════════════════════════════════════════════
+
+📊 SCHEDULE EXAMPLES:
+
+   Daily at 2 AM:        0 2 * * *
+   Daily at 3 AM:        0 3 * * *
+   Every 6 hours:        0 */6 * * *
+   Weekly (Sunday):      0 1 * * 0
+   Monthly (1st):        0 0 1 * *
+
+═══════════════════════════════════════════════════════════
+
+📖 FULL GUIDE:
+
+   See: 📅 AUTOMATIC BACKUP SETUP.md
+
+═══════════════════════════════════════════════════════════

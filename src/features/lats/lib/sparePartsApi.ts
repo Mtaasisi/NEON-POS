@@ -236,6 +236,10 @@ export const getSpareParts = async (
         variants:lats_spare_part_variants!spare_part_id(*)
       `);
 
+    // ✅ Apply branch filtering (spare parts are typically branch-specific like products)
+    const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+    query = await addBranchFilter(query, 'products'); // Use 'products' entity type as spare parts follow same pattern
+
     // Apply filters
     if (filters.category_id) {
       query = query.eq('category_id', filters.category_id);
@@ -344,7 +348,7 @@ export const getSpareParts = async (
 // Get all spare parts (for Trade-In Calculator and other components)
 export const getAllSpareParts = async (): Promise<{ success: boolean; data: SparePart[] | null; message: string }> => {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('lats_spare_parts')
       .select(`
         *,
@@ -353,6 +357,12 @@ export const getAllSpareParts = async (): Promise<{ success: boolean; data: Spar
       `)
       .eq('is_active', true)
       .order('name', { ascending: true });
+
+    // ✅ Apply branch filtering
+    const { addBranchFilter } = await import('../../../lib/branchAwareApi');
+    query = await addBranchFilter(query, 'products'); // Use 'products' entity type
+
+    const { data, error } = await query;
 
     if (error) {
       throw error;
@@ -468,6 +478,9 @@ export const createSparePart = async (sparePartData: any): Promise<SparePartResp
       totalValue = (databaseData.quantity || 0) * (databaseData.selling_price || 0);
     }
     
+    // Get current branch_id for branch isolation
+    const currentBranchId = localStorage.getItem('current_branch_id') || null;
+    
     const insertData = {
       ...databaseData,
       // When using variants, set main product quantities to 0
@@ -482,6 +495,7 @@ export const createSparePart = async (sparePartData: any): Promise<SparePartResp
         totalQuantity: totalQuantity,
         totalValue: totalValue
       },
+      branch_id: currentBranchId, // ✅ Add branch_id for branch isolation
       created_by: user?.id,
       updated_by: user?.id
     };

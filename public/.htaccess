@@ -66,6 +66,9 @@
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   
+  # Don't rewrite API endpoints - let PHP handle them
+  RewriteCond %{REQUEST_URI} !^/api/
+  
   # Don't rewrite asset files
   RewriteCond %{REQUEST_URI} !\.(js|mjs|css|json|svg|png|jpg|jpeg|gif|webp|woff2|woff|ttf|eot)$
   

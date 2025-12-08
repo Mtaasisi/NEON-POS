@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { addBranchFilter } from './branchAwareApi';
 
 export interface SalesPayment {
   id: string;
@@ -142,9 +143,6 @@ class SalesPaymentTrackingService {
     console.log('🔍 SalesPaymentTrackingService: Fetching sales payments...');
     
     try {
-      // 🔒 Get current branch for isolation
-      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
-      
       // Simplified query - fetch relationships separately
       let query = supabase
         .from('lats_sales')
@@ -167,11 +165,8 @@ class SalesPaymentTrackingService {
         `)
         .order('created_at', { ascending: false });
       
-      // 🔒 COMPLETE ISOLATION: Only show sales from current branch
-      if (currentBranchId) {
-        console.log('🔒 [SalesPaymentTracking] Filtering by branch:', currentBranchId);
-        query = query.eq('branch_id', currentBranchId);
-      }
+      // Apply branch filter for proper isolation
+      query = await addBranchFilter(query, 'sales');
 
       // Apply filters
       if (filter.startDate && filter.endDate) {

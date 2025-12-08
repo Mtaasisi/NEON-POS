@@ -76,9 +76,9 @@ export const isDataShared = async (entityType: ShareableEntityType): Promise<boo
       return true;
     }
 
-    // Isolated mode = nothing shared
+    // Isolated mode = nothing shared (ALL entities isolated, ignore share_* flags)
     if (branch.data_isolation_mode === 'isolated') {
-      return false;
+      return false; // Always return false - all entities are isolated
     }
 
     // Hybrid mode = check specific flag using schema mapping
@@ -118,32 +118,13 @@ export const addBranchFilter = async (
     return query;
   }
 
-  // ISOLATED MODE: Check if this entity type should be shared
-  // Even in isolated mode, some entities like suppliers might be shared
+  // ISOLATED MODE: ALL entities must be isolated (filter by branch_id only)
+  // In isolated mode, ignore all share_* flags - everything is branch-specific
   if (branch?.data_isolation_mode === 'isolated') {
-    // Check if this entity type is configured as shared (via share_suppliers, share_customers, etc.)
-    const shareMapping: Record<string, boolean> = {
-      suppliers: branch.share_suppliers ?? false,
-      customers: branch.share_customers ?? false,
-      products: branch.share_products ?? false,
-      inventory: branch.share_inventory ?? false,
-      categories: branch.share_categories ?? false,
-      employees: branch.share_employees ?? false,
-    };
-    
-    const isSharedInIsolated = shareMapping[entityType] ?? false;
-    
-    if (isSharedInIsolated || shared) {
-      // Entity is shared even in isolated mode - show branch data + shared data
-      console.log(`🔄 ISOLATED MODE BUT SHARED: ${entityType} - branch ${branchId} + shared data`);
-      logQueryDebug(entityType, query, 'isolated_shared', true);
-      return query.or(`branch_id.eq.${branchId},is_shared.eq.true,branch_id.is.null`);
-    } else {
-      // Entity is truly isolated - only show this branch's data
-      console.log(`🔒 ISOLATED MODE: Filtering ${entityType} by branch ${branchId}`);
-      logQueryDebug(entityType, query, 'isolated', true);
-      return query.eq('branch_id', branchId);
-    }
+    // Entity is isolated - only show this branch's data (ignore is_shared flag)
+    console.log(`🔒 ISOLATED MODE: Filtering ${entityType} by branch ${branchId} (all entities isolated)`);
+    logQueryDebug(entityType, query, 'isolated', true);
+    return query.eq('branch_id', branchId);
   }
 
   // HYBRID MODE: Check if this entity type is shared
@@ -154,11 +135,10 @@ export const addBranchFilter = async (
       logQueryDebug(entityType, query, 'hybrid', true);
       return query.or(`branch_id.eq.${branchId},is_shared.eq.true,branch_id.is.null`);
     } else {
-      // Entity is NOT shared - show this branch's data + NULL branch_id (global/shared entities)
-      // NULL branch_id entities are typically global/shared and should be visible to all branches
-      console.log(`⚖️ HYBRID NOT SHARED: ${entityType} - branch ${branchId} + NULL (global)`);
+      // Entity is NOT shared - only show this branch's data (strict isolation)
+      console.log(`⚖️ HYBRID NOT SHARED: ${entityType} - branch ${branchId} only (isolated)`);
       logQueryDebug(entityType, query, 'hybrid', true);
-      return query.or(`branch_id.eq.${branchId},branch_id.is.null`);
+      return query.eq('branch_id', branchId);
     }
   }
 
@@ -175,17 +155,122 @@ export const createWithBranch = async (
   entityType: ShareableEntityType
 ) => {
   const branchId = getCurrentBranchId();
-  const shared = await isDataShared(entityType);
+  
+  // Get branch settings to check isolation mode
+  let shared = false;
+  if (branchId) {
+    const branch = await getBranchSettings(branchId);
+    if (branch) {
+      // In isolated mode, all entities are isolated (not shared)
+      if (branch.data_isolation_mode === 'isolated') {
+        shared = false; // Force isolation
+      } else {
+        // In shared or hybrid mode, check the specific share flag
+        shared = await isDataShared(entityType);
+      }
+    }
+  }
 
-  const entityData = {
+  // Special handling for finance_accounts
+  let entityData: any = {
     ...data,
     branch_id: shared ? null : branchId,
     is_shared: shared
   };
 
+  // For finance_accounts: ALWAYS make them isolated with branch_id
+  // This ensures every account belongs to a specific branch
+  if (tableName === 'finance_accounts') {
+    // Ensure account_name is set (required by database)
+    entityData.account_name = entityData.account_name || entityData.name || 'Unnamed Account';
+    entityData.name = entityData.name || entityData.account_name || 'Unnamed Account';
+    
+    // Ensure account_type is set (required by database - NOT NULL constraint)
+    entityData.account_type = entityData.account_type || entityData.type || 'cash';
+    // If type is not set, use account_type
+    entityData.type = entityData.type || entityData.account_type || 'cash';
+    
+    // Force isolation: always set is_shared = false and ensure branch_id is set
+    entityData.is_shared = false;
+    
+    // If no branch_id provided and no current branch, get default branch
+    if (!entityData.branch_id && !branchId) {
+      // Try to get first active branch as fallback
+      const { data: defaultBranch } = await supabase
+        .from('store_locations')
+        .select('id')
+        .eq('is_active', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single();
+      
+      if (defaultBranch) {
+        entityData.branch_id = defaultBranch.id;
+        console.log(`📍 Using default branch for account: ${defaultBranch.id}`);
+      } else {
+        console.warn('⚠️ No active branch found. Account will be created without branch_id.');
+      }
+    } else {
+      // Use provided branch_id or current branch
+      entityData.branch_id = entityData.branch_id || branchId;
+    }
+  }
+
+  // For expenses and finance_expenses: ALWAYS ensure branch_id is set
+  if (tableName === 'expenses' || tableName === 'finance_expenses') {
+    // Force branch_id to be set (expenses are always isolated per branch)
+    if (!entityData.branch_id && !branchId) {
+      // Try to get first active branch as fallback
+      const { data: defaultBranch } = await supabase
+        .from('store_locations')
+        .select('id')
+        .eq('is_active', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single();
+      
+      if (defaultBranch) {
+        entityData.branch_id = defaultBranch.id;
+        console.log(`📍 Using default branch for expense: ${defaultBranch.id}`);
+      } else {
+        console.warn('⚠️ No active branch found. Expense will be created without branch_id.');
+      }
+    } else {
+      // Use provided branch_id or current branch
+      entityData.branch_id = entityData.branch_id || branchId;
+    }
+  }
+
+  // For lats_purchase_orders: ALWAYS ensure branch_id is set
+  // Purchase orders are always isolated per branch
+  if (tableName === 'lats_purchase_orders') {
+    // Force branch_id to be set
+    if (!entityData.branch_id && !branchId) {
+      // Try to get first active branch as fallback
+      const { data: defaultBranch } = await supabase
+        .from('store_locations')
+        .select('id')
+        .eq('is_active', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single();
+      
+      if (defaultBranch) {
+        entityData.branch_id = defaultBranch.id;
+        console.log(`📍 Using default branch for purchase order: ${defaultBranch.id}`);
+      } else {
+        console.warn('⚠️ No active branch found. Purchase order will be created without branch_id.');
+      }
+    } else {
+      // Use provided branch_id or current branch
+      entityData.branch_id = entityData.branch_id || branchId;
+    }
+  }
+
   console.log(`💾 Creating ${entityType} with branch settings:`, {
     branch_id: entityData.branch_id,
-    is_shared: entityData.is_shared
+    is_shared: entityData.is_shared,
+    isolation_mode: branchId ? (await getBranchSettings(branchId))?.data_isolation_mode : 'none'
   });
 
   // Explicitly select branch_id and is_shared to ensure they're included
@@ -264,13 +349,13 @@ export const getBranchProducts = async () => {
       // Products are shared - show this branch's products + shared products
       query = query.or(`branch_id.eq.${branchId},is_shared.eq.true,branch_id.is.null`);
     } else {
-      // Products are NOT shared - only show this branch's products
+      // Products are NOT shared - only show this branch's products (strict isolation)
       query = query.eq('branch_id', branchId);
     }
   }
-  // Default: show this branch's products + unassigned products
+  // Default: apply branch filter (safety fallback - should not reach here)
   else {
-    query = query.or(`branch_id.eq.${branchId},branch_id.is.null`);
+    query = query.eq('branch_id', branchId);
   }
 
   const { data, error } = await query;
