@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Package, Plus, Edit, Trash2, Save } from 'lucide-react';
 import GlassButton from '../../shared/components/ui/GlassButton';
 import { toast } from 'react-hot-toast';
@@ -112,203 +113,228 @@ const PartsManagementModal: React.FC<PartsManagementModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+  return createPortal(
+    <>
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-black/60 z-[99999]"
+        onClick={onClose}
+        aria-hidden="true"
+      />
       
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center">
-              <Package className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">
-                {editingPart ? 'Edit Part' : 'Add New Part'}
-              </h2>
-              <p className="text-sm text-gray-600">
-                {editingPart ? 'Update part information' : 'Add a new part to the repair order'}
-              </p>
-            </div>
-          </div>
+      {/* Modal Container */}
+      <div 
+        className="fixed inset-0 flex items-center justify-center z-[100000] p-4 pointer-events-none"
+      >
+        <div 
+          className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden relative pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+        >
+          {/* Close Button */}
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5" />
           </button>
-        </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-          {/* Basic Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Part Name *
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => handleInputChange('name', e.target.value)}
-                className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.name ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="e.g., Screen Assembly"
-              />
-              {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Supplier *
-              </label>
-              <input
-                type="text"
-                value={formData.supplier}
-                onChange={(e) => handleInputChange('supplier', e.target.value)}
-                className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.supplier ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="e.g., TechParts Ltd"
-              />
-              {errors.supplier && <p className="text-red-500 text-sm mt-1">{errors.supplier}</p>}
+          {/* Icon Header - Fixed */}
+          <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+            <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <Package className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                  {editingPart ? 'Edit Part' : 'Add New Part'}
+                </h2>
+                <p className="text-sm text-gray-600">
+                  {editingPart ? 'Update part information' : 'Add a new part to the repair order'}
+                </p>
+              </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description *
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => handleInputChange('description', e.target.value)}
-              className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${
-                errors.description ? 'border-red-300' : 'border-gray-300'
-              }`}
-              rows={3}
-              placeholder="Detailed description of the part..."
-            />
-            {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+            <form onSubmit={handleSubmit} className="py-6 space-y-6">
+              {/* Basic Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Part Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => handleInputChange('name', e.target.value)}
+                    className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                      errors.name ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="e.g., Screen Assembly"
+                  />
+                  {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Supplier *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.supplier}
+                    onChange={(e) => handleInputChange('supplier', e.target.value)}
+                    className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                      errors.supplier ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="e.g., TechParts Ltd"
+                  />
+                  {errors.supplier && <p className="text-red-500 text-sm mt-1">{errors.supplier}</p>}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Description *
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none ${
+                    errors.description ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  rows={3}
+                  placeholder="Detailed description of the part..."
+                />
+                {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
+              </div>
+
+              {/* Quantity and Cost */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Quantity *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.quantity}
+                    onChange={(e) => handleInputChange('quantity', parseInt(e.target.value) || 1)}
+                    className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                      errors.quantity ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                  />
+                  {errors.quantity && <p className="text-red-500 text-sm mt-1">{errors.quantity}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Cost (TSH) *
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={formData.cost}
+                    onChange={(e) => handleInputChange('cost', parseInt(e.target.value) || 0)}
+                    className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                      errors.cost ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="0"
+                  />
+                  {errors.cost && <p className="text-red-500 text-sm mt-1">{errors.cost}</p>}
+                </div>
+              </div>
+
+              {/* Status and ETA */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Status
+                  </label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => handleInputChange('status', e.target.value as RepairPart['status'])}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  >
+                    <option value="ordered">Ordered</option>
+                    <option value="shipped">Shipped</option>
+                    <option value="received">Received</option>
+                    <option value="installed">Installed</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Estimated Arrival
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.estimatedArrival}
+                    onChange={(e) => handleInputChange('estimatedArrival', e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Notes
+                </label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => handleInputChange('notes', e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+                  rows={3}
+                  placeholder="Additional notes about this part..."
+                />
+              </div>
+
+              {/* Cost Summary */}
+              <div className="bg-gray-50 rounded-xl p-5 border-2 border-gray-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-700">Total Cost:</span>
+                  <span className="text-xl font-bold text-gray-900">
+                    {(formData.cost * formData.quantity).toLocaleString()} TSH
+                  </span>
+                </div>
+              </div>
+            </form>
           </div>
 
-          {/* Quantity and Cost */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Quantity *
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={formData.quantity}
-                onChange={(e) => handleInputChange('quantity', parseInt(e.target.value) || 1)}
-                className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.quantity ? 'border-red-300' : 'border-gray-300'
-                }`}
-              />
-              {errors.quantity && <p className="text-red-500 text-sm mt-1">{errors.quantity}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cost (TSH) *
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="100"
-                value={formData.cost}
-                onChange={(e) => handleInputChange('cost', parseInt(e.target.value) || 0)}
-                className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.cost ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="0"
-              />
-              {errors.cost && <p className="text-red-500 text-sm mt-1">{errors.cost}</p>}
-            </div>
-          </div>
-
-          {/* Status and ETA */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Status
-              </label>
-              <select
-                value={formData.status}
-                onChange={(e) => handleInputChange('status', e.target.value as RepairPart['status'])}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          {/* Fixed Footer */}
+          <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-semibold"
               >
-                <option value="ordered">Ordered</option>
-                <option value="shipped">Shipped</option>
-                <option value="received">Received</option>
-                <option value="installed">Installed</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Estimated Arrival
-              </label>
-              <input
-                type="date"
-                value={formData.estimatedArrival}
-                onChange={(e) => handleInputChange('estimatedArrival', e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl font-semibold"
+              >
+                <Save className="w-5 h-5" />
+                {editingPart ? 'Update Part' : 'Add Part'}
+              </button>
             </div>
           </div>
-
-          {/* Notes */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Notes
-            </label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => handleInputChange('notes', e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              rows={3}
-              placeholder="Additional notes about this part..."
-            />
-          </div>
-
-          {/* Cost Summary */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-600">Total Cost:</span>
-              <span className="text-lg font-bold text-gray-900">
-                {(formData.cost * formData.quantity).toLocaleString()} TSH
-              </span>
-            </div>
-          </div>
-        </form>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
-          <GlassButton
-            variant="outline"
-            onClick={onClose}
-            size="md"
-          >
-            Cancel
-          </GlassButton>
-          <GlassButton
-            variant="primary"
-            onClick={handleSubmit}
-            size="md"
-            icon={<Save className="w-4 h-4" />}
-          >
-            {editingPart ? 'Update Part' : 'Add Part'}
-          </GlassButton>
         </div>
       </div>
       
       {/* Success Modal */}
       <SuccessModal {...successModal.props} />
-    </div>
+    </>,
+    document.body
   );
 };
 

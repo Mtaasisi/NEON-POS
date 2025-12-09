@@ -115,9 +115,9 @@ export const STORE_LOCATION_DEFAULTS: Partial<StoreLocationSchema> = {
   closing_time: '18:00:00',
   inventory_sync_enabled: true,
   pricing_model: 'centralized',
-  data_isolation_mode: 'shared',
-  share_products: true,
-  share_inventory: false,
+  data_isolation_mode: 'hybrid',
+  share_products: true,   // ✅ Shared catalog (all branches see products)
+  share_inventory: false, // ✅ Isolated stock (each branch has own inventory)
   share_customers: true,
   share_suppliers: true,
   share_categories: true,

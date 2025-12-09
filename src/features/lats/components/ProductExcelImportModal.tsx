@@ -9,6 +9,7 @@ interface ProductExcelImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImportComplete: (products: Product[]) => void;
+  inline?: boolean; // If true, renders without portal/backdrop for use as tab content
 }
 
 interface ImportedVariant {
@@ -87,7 +88,8 @@ interface ImportResult {
 const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
   isOpen,
   onClose,
-  onImportComplete
+  onImportComplete,
+  inline = false
 }) => {
   const [file, setFile] = useState<File | null>(null);
   const [importedData, setImportedData] = useState<ImportedProduct[]>([]);
@@ -1651,34 +1653,30 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
   const failedCount = importResults.filter(r => !r.success).length;
   const totalCount = importResults.length;
 
-  return createPortal(
-    <div 
-      className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]" 
-      style={{ top: 0, left: 0, right: 0, bottom: 0 }}
-      role="dialog" 
-      aria-modal="true" 
-      aria-labelledby="import-modal-title"
-    >
-      <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden relative">
-        {/* Close Button */}
+  const content = (
+    <div className={`${inline ? '' : 'bg-white rounded-2xl shadow-2xl'} max-w-5xl w-full ${inline ? 'h-full' : 'max-h-[90vh]'} flex flex-col overflow-hidden relative`}>
+      {/* Close Button - only show when not inline */}
+      {!inline && (
         <button
           onClick={handleClose}
           className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
         >
           <X className="w-5 h-5" />
         </button>
+      )}
 
-        {/* Icon Header - Fixed */}
-        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
-          <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
-            {/* Icon */}
-            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
-              <FileSpreadsheet className="w-8 h-8 text-white" />
-            </div>
-            
-            {/* Text and Progress */}
-            <div>
-              <h3 id="import-modal-title" className="text-2xl font-bold text-gray-900 mb-3">Import Products from Excel</h3>
+        {/* Icon Header - Fixed - Hidden when inline */}
+        {!inline && (
+          <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+            <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <FileSpreadsheet className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text and Progress */}
+              <div>
+                <h3 id="import-modal-title" className="text-2xl font-bold text-gray-900 mb-3">Import Products from Excel</h3>
               
               {/* Progress Indicator */}
               {currentStep === 'import' && (
@@ -1706,8 +1704,34 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
             </div>
           </div>
         </div>
+        )}
+        {/* Progress Indicator - Show when inline and importing */}
+        {inline && currentStep === 'import' && (
+          <div className="p-4 bg-blue-50 border-b border-blue-200 flex-shrink-0">
+            <div className="flex items-center gap-4">
+              {successfulCount > 0 && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-bold text-green-700">{successfulCount} Success</span>
+                </div>
+              )}
+              {failedCount > 0 && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-lg">
+                  <AlertCircle className="w-4 h-4 text-red-600" />
+                  <span className="text-sm font-bold text-red-700">{failedCount} Failed</span>
+                </div>
+              )}
+              {isImporting && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm font-bold text-blue-700">{Math.round(importProgress)}%</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {/* Scrollable Content Section */}
-        <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+        <div className={`flex-1 overflow-y-auto px-6 ${!inline ? 'border-t border-gray-100' : ''}`}>
           {currentStep === 'upload' && (
             <div className="py-6 space-y-6">
               <div className="text-center">
@@ -2629,7 +2653,22 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
             )}
           </div>
         </div>
-      </div>
+    </div>
+  );
+
+  if (inline) {
+    return content;
+  }
+
+  return createPortal(
+    <div 
+      className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]" 
+      style={{ top: 0, left: 0, right: 0, bottom: 0 }}
+      role="dialog" 
+      aria-modal="true" 
+      aria-labelledby="import-modal-title"
+    >
+      {content}
     </div>,
     document.body
   );

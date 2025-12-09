@@ -442,10 +442,10 @@ export const APP_ROUTES: RouteDefinition[] = [
 
   // Data Import/Export
   {
-    id: 'excel-import',
-    path: '/excel-import',
-    title: 'Excel Import',
-    description: 'Import data from Excel',
+    id: 'customer-import-export',
+    path: '/customers/import',
+    title: 'Customer Import/Export',
+    description: 'Import, update, or export customer data',
     icon: '📥',
     category: 'data',
     allowedRoles: ['admin']
@@ -456,15 +456,6 @@ export const APP_ROUTES: RouteDefinition[] = [
     title: 'Excel Templates',
     description: 'Download Excel templates',
     icon: '📄',
-    category: 'data',
-    allowedRoles: ['admin']
-  },
-  {
-    id: 'customer-import',
-    path: '/customers/import',
-    title: 'Customer Import',
-    description: 'Import customers from Excel',
-    icon: '📥',
     category: 'data',
     allowedRoles: ['admin']
   },

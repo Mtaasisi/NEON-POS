@@ -2,11 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDevices } from '../../../context/DevicesContext';
 import { useAuth } from '../../../context/AuthContext';
-import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassButton from '../../shared/components/ui/GlassButton';
 import GlassSelect from '../../shared/components/ui/GlassSelect';
 import { BackButton } from '../../shared/components/ui/BackButton';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import {
   Users, UserPlus, Calendar, Clock, Wrench, TrendingUp,
   AlertTriangle, CheckCircle, UserCheck, UserX, BarChart3,
@@ -302,89 +301,113 @@ const TechnicianManagementPage: React.FC = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Wrapper Container - Single rounded container */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section */}
+        <div className="p-8 border-b border-gray-200 flex-shrink-0">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <BackButton />
+            <div className="flex items-center gap-6">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <Users className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
           <div>
-            <h1 className="text-2xl font-bold">Technician Management</h1>
-            <p className="text-gray-600">Manage technicians, workloads, and assignments</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Technician Management</h1>
+                <p className="text-sm text-gray-600">
+                  Manage technicians, workloads, and assignments
+                </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <GlassButton
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3">
+              <button
             onClick={() => setWorkloadView('schedule')}
-            variant="outline"
-            icon={<Calendar className="w-4 h-4" />}
+                className="flex items-center gap-2 px-4 py-2.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 rounded-xl font-semibold transition-all"
           >
+                <Calendar className="w-4 h-4" />
             Schedules
-          </GlassButton>
-          <GlassButton
+              </button>
+              <button
             onClick={autoAssignDevices}
             disabled={unassignedDevices.length === 0}
-            icon={<UserCheck className="w-4 h-4" />}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
           >
+              <UserCheck className="w-4 h-4" />
             Auto Assign ({unassignedDevices.length})
-          </GlassButton>
+            </button>
+          </div>
         </div>
       </div>
 
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-6">
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <GlassCard className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Active Technicians</p>
+                  <p className="text-sm font-semibold text-gray-600">Active Technicians</p>
               <p className="text-2xl font-bold text-blue-600">
                 {technicians.filter(t => t.status === 'active').length}
               </p>
             </div>
-            <Users className="w-8 h-8 text-blue-500" />
+                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+                  <Users className="w-6 h-6 text-white" />
+                </div>
+              </div>
           </div>
-        </GlassCard>
 
-        <GlassCard className="p-4">
+            <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Workload</p>
+                  <p className="text-sm font-semibold text-gray-600">Total Workload</p>
               <p className="text-2xl font-bold text-orange-600">
                 {technicians.reduce((sum, t) => sum + t.currentWorkload, 0)}
               </p>
             </div>
-            <Wrench className="w-8 h-8 text-orange-500" />
+                <div className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center">
+                  <Wrench className="w-6 h-6 text-white" />
+                </div>
+              </div>
           </div>
-        </GlassCard>
 
-        <GlassCard className="p-4">
+            <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 hover:bg-red-100 hover:border-red-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Unassigned Devices</p>
+                  <p className="text-sm font-semibold text-gray-600">Unassigned Devices</p>
               <p className="text-2xl font-bold text-red-600">
                 {unassignedDevices.length}
               </p>
             </div>
-            <AlertTriangle className="w-8 h-8 text-red-500" />
+                <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="w-6 h-6 text-white" />
+                </div>
+              </div>
           </div>
-        </GlassCard>
 
-        <GlassCard className="p-4">
+            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Avg Efficiency</p>
+                  <p className="text-sm font-semibold text-gray-600">Avg Efficiency</p>
               <p className="text-2xl font-bold text-green-600">
                 {technicians.length > 0
                   ? Math.round(technicians.reduce((sum, t) => sum + t.efficiency, 0) / technicians.length)
                   : 0}%
               </p>
             </div>
-            <TrendingUp className="w-8 h-8 text-green-500" />
+                <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
+                  <TrendingUp className="w-6 h-6 text-white" />
           </div>
-        </GlassCard>
+              </div>
+            </div>
       </div>
 
       {/* View Toggle */}
-      <GlassCard className="p-2">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-2 mb-6 shadow-sm">
         <div className="flex gap-1">
           {[
             { id: 'overview', label: 'Overview', icon: BarChart3 },
@@ -408,14 +431,14 @@ const TechnicianManagementPage: React.FC = () => {
             );
           })}
         </div>
-      </GlassCard>
+          </div>
 
       {/* Main Content */}
       {workloadView === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Technician Overview */}
-          <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Technician Overview</h3>
+              <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
+                <h3 className="text-lg font-bold mb-4">Technician Overview</h3>
             <div className="space-y-3">
               {technicians.map((tech) => (
                 <div key={tech.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -442,11 +465,11 @@ const TechnicianManagementPage: React.FC = () => {
                 </div>
               ))}
             </div>
-          </GlassCard>
+              </div>
 
           {/* Unassigned Devices */}
-          <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Unassigned Devices</h3>
+              <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
+                <h3 className="text-lg font-bold mb-4">Unassigned Devices</h3>
             {unassignedDevices.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
@@ -480,17 +503,17 @@ const TechnicianManagementPage: React.FC = () => {
                 ))}
               </div>
             )}
-          </GlassCard>
+              </div>
         </div>
       )}
 
       {workloadView === 'detailed' && (
         <div className="space-y-6">
           {technicians.map((tech) => (
-            <GlassCard key={tech.id} className="p-6">
+                <div key={tech.id} className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold">{tech.name}</h3>
+                      <h3 className="text-lg font-bold">{tech.name}</h3>
                   <p className="text-gray-600">{tech.email}</p>
                 </div>
                 <div className="flex items-center gap-4">
@@ -537,23 +560,23 @@ const TechnicianManagementPage: React.FC = () => {
                   </div>
                 )}
               </div>
-            </GlassCard>
+                </div>
           ))}
         </div>
       )}
 
       {workloadView === 'schedule' && (
-        <GlassCard className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Technician Schedules</h3>
+            <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
+              <h3 className="text-lg font-bold mb-4">Technician Schedules</h3>
           <div className="space-y-4">
             {technicians.map((tech) => (
-              <div key={tech.id} className="border rounded-lg p-4">
+                  <div key={tech.id} className="border-2 border-gray-200 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium">{tech.name}</h4>
-                  <GlassButton variant="outline" size="sm">
-                    <Edit className="w-4 h-4 mr-2" />
+                      <h4 className="font-semibold text-gray-900">{tech.name}</h4>
+                      <button className="px-3 py-1.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 rounded-lg font-medium text-sm transition-all flex items-center gap-2">
+                        <Edit className="w-4 h-4" />
                     Edit Schedule
-                  </GlassButton>
+                      </button>
                 </div>
                 <div className="grid grid-cols-7 gap-2 text-sm">
                   {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => {
@@ -574,8 +597,10 @@ const TechnicianManagementPage: React.FC = () => {
               </div>
             ))}
           </div>
-        </GlassCard>
+            </div>
       )}
+        </div>
+      </div>
     </div>
   );
 };

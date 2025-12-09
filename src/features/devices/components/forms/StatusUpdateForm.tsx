@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Device, DeviceStatus, User } from '../../../../types';
 import GlassButton from '../../../shared/components/ui/GlassButton';
-import { CheckCircle, Send, PenTool, ShieldCheck, PackageCheck, UserCheck, Hammer, Wrench, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { CheckCircle, Send, PenTool, ShieldCheck, PackageCheck, UserCheck, Hammer, Wrench, XCircle, AlertTriangle, Loader2, X, FileText, Package } from 'lucide-react';
 import { supabase } from '../../../../lib/supabaseClient';
 import Modal from '../../../shared/components/ui/Modal';
 import { formatCurrency } from '../../../../lib/customerApi';
 import { toast } from 'react-hot-toast';
 import { getRepairParts } from '../../../lats/lib/sparePartsApi';
 import { validateRepairStart, hasNeededParts } from '../../../../utils/repairValidation';
+import { usePaymentMethodsContext } from '../../../../context/PaymentMethodsContext';
 
 interface StatusUpdateFormProps {
   device: Device;
@@ -109,26 +111,19 @@ const StatusUpdateForm: React.FC<StatusUpdateFormProps> = ({
     loadRepairParts();
   }, [device?.id]);
 
-  // Fetch payments for this device on mount and poll every 5 seconds
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout;
-    async function fetchPayments() {
-      if (!device?.id) return;
-      const { data, error } = await supabase
-        .from('customer_payments')
-        .select('id, status, device_id')
-        .eq('device_id', device.id)
-        .eq('status', 'completed');
-      if (!error && data && data.length > 0) {
-        setHasCompletedPayment(true);
-      } else {
-        setHasCompletedPayment(false);
-      }
-    }
-    fetchPayments();
-    intervalId = setInterval(fetchPayments, 5000);
-    return () => clearInterval(intervalId);
-  }, [device?.id]);
+  // REMOVED: Payment functionality - Repair payment functionality removed
+  // const [hasCompletedPayment, setHasCompletedPayment] = useState(false);
+  // const [showPaymentModal, setShowPaymentModal] = useState(false);
+  // const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
+  // const [lastPayment, setLastPayment] = useState<any>(null);
+  // const [paymentAmount, setPaymentAmount] = useState('');
+  // const [paymentError, setPaymentError] = useState<string | null>(null);
+  
+  // const handleRecordPayment = (payment: any) => {
+  //   setLastPayment(payment);
+  //   setShowPaymentModal(false);
+  //   setShowPaymentConfirmation(true);
+  // };
 
   const getAvailableStatusTransitions = () => {
     const { status, assignedTo } = device;
@@ -357,33 +352,94 @@ const StatusUpdateForm: React.FC<StatusUpdateFormProps> = ({
               </GlassButton>
             ))}
           </div>
-          {/* Modal for confirmation and remark */}
-          {showFailActionModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-              <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4 transform transition-all">
-                <h3 className="text-lg font-bold mb-2 text-gray-900">Confirm Action</h3>
-                <div className="mb-2 text-gray-700">Are you sure you want to proceed with this action? Please provide a remark for the record.</div>
-                <textarea
-                  value={failActionRemark}
-                  onChange={e => setFailActionRemark(e.target.value)}
-                  placeholder="Add a remark (required)"
-                  className="w-full py-3 px-4 bg-gray-100 border border-gray-300 rounded-lg mb-4"
-                  rows={3}
-                  autoFocus
-                />
-                <div className="flex gap-3 justify-end mt-2">
-                  <GlassButton type="button" variant="secondary" onClick={() => setShowFailActionModal(false)} disabled={failActionLoading}>Cancel</GlassButton>
-                  <GlassButton
-                    type="button"
-                    variant={pendingFailAction === 'done' ? 'success' : 'primary'}
-                    disabled={failActionLoading || !failActionRemark.trim()}
-                    onClick={submitFailAction}
+          {/* Modal for confirmation and remark - AddProductModal Style */}
+          {showFailActionModal && createPortal(
+            <>
+              {/* Backdrop */}
+              <div 
+                className="fixed inset-0 bg-black/60 z-[99999]"
+                onClick={() => setShowFailActionModal(false)}
+                aria-hidden="true"
+              />
+              
+              {/* Modal Container */}
+              <div 
+                className="fixed inset-0 flex items-center justify-center z-[100000] p-4 pointer-events-none"
+              >
+                <div 
+                  className="bg-white rounded-2xl shadow-2xl max-w-md w-full flex flex-col overflow-hidden relative pointer-events-auto"
+                  onClick={(e) => e.stopPropagation()}
+                  role="dialog"
+                  aria-modal="true"
+                >
+                  {/* Close Button */}
+                  <button
+                    onClick={() => setShowFailActionModal(false)}
+                    className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+                    disabled={failActionLoading}
                   >
-                    {failActionLoading ? 'Processing...' : 'Confirm'}
-                  </GlassButton>
+                    <X className="w-5 h-5" />
+                  </button>
+
+                  {/* Icon Header - Fixed */}
+                  <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                    <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                      {/* Icon */}
+                      <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                        <FileText className="w-8 h-8 text-white" />
+                      </div>
+                      
+                      {/* Text */}
+                      <div>
+                        <h3 className="text-2xl font-bold text-gray-900 mb-2">Confirm Action</h3>
+                        <p className="text-sm text-gray-600">Please provide a remark for the record</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Scrollable Content */}
+                  <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                    <div className="py-6">
+                      <textarea
+                        value={failActionRemark}
+                        onChange={e => setFailActionRemark(e.target.value)}
+                        placeholder="Add a remark (required)"
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+                        rows={4}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fixed Footer */}
+                  <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+                    <div className="flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowFailActionModal(false)}
+                        disabled={failActionLoading}
+                        className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-semibold disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={submitFailAction}
+                        disabled={failActionLoading || !failActionRemark.trim()}
+                        className={`px-6 py-3 rounded-xl text-white transition-all shadow-lg hover:shadow-xl font-semibold disabled:opacity-50 ${
+                          pendingFailAction === 'done' 
+                            ? 'bg-green-600 hover:bg-green-700' 
+                            : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                      >
+                        {failActionLoading ? 'Processing...' : 'Confirm'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            </>,
+            document.body
           )}
           {/* Show last 3 remarks for context */}
           {device.remarks && device.remarks.length > 0 && (
@@ -457,24 +513,7 @@ const StatusUpdateForm: React.FC<StatusUpdateFormProps> = ({
                     */}
                   </React.Fragment>
                 ))}
-                {/* Payment Confirmation Modal */}
-                <Modal isOpen={showPaymentConfirmation} onClose={() => { setShowPaymentConfirmation(false); }} title={<span className="text-lg font-bold text-gray-900">Payment Receipt</span>}>
-                  {lastPayment && (
-                    <div className="p-2" id="payment-receipt-content">
-                      <div className="mb-2 text-green-900 font-semibold">Payment Successful!</div>
-                      <div className="mb-2">Amount: <span className="font-bold">{formatCurrency(lastPayment.amount)}</span></div>
-                      <div className="mb-2">Method: <span className="font-bold">{lastPayment.method}</span></div>
-                      <div className="mb-2">Date: <span className="font-bold">{new Date(lastPayment.payment_date).toLocaleString()}</span></div>
-                      <div className="mb-2">Device: <span className="font-bold">{device.brand} {device.model}</span></div>
-                      <div className="mb-2">Customer ID: <span className="font-bold">{device.customerId}</span></div>
-                      <div className="mb-2">Recorded by: <span className="font-bold">{currentUser?.name || 'Unknown'}</span></div>
-                      <div className="flex gap-3 justify-end mt-4">
-                        <GlassButton variant="secondary" onClick={() => { setShowPaymentConfirmation(false); }}>Close</GlassButton>
-                        <GlassButton variant="primary" onClick={() => { const printContents = document.getElementById('payment-receipt-content')?.innerHTML; const printWindow = window.open('', '', 'height=600,width=400'); if (printWindow && printContents) { printWindow.document.write('<html><head><title>Payment Receipt</title></head><body>' + printContents + '</body></html>'); printWindow.document.close(); printWindow.focus(); printWindow.print(); printWindow.close(); } }}>Print Receipt</GlassButton>
-                      </div>
-                    </div>
-                  )}
-                </Modal>
+                {/* REMOVED: Payment Confirmation Modal - Repair payment functionality removed */}
                 {/* Add Mark as Failed to Repair button for assigned technician only */}
                 {((device.status === 'in-repair' || device.status === 'assigned') &&
                   currentUser?.role === 'technician' && device.assignedTo === currentUser?.id) && (
@@ -493,58 +532,108 @@ const StatusUpdateForm: React.FC<StatusUpdateFormProps> = ({
                       ⚠️ Failed to Repair
                     </GlassButton>
                     {failResult && <div className={`mt-2 text-sm ${failResult.startsWith('Device') ? 'text-green-600' : 'text-red-600'}`}>{failResult}</div>}
-                    {/* Modal for fail remark */}
-                    {showFailModal && (
-                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                        <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4 transform transition-all">
-                          <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2 bg-red-100 rounded-full">
-                              <AlertTriangle className="h-6 w-6 text-red-600" />
-                            </div>
-                            <div>
-                              <h3 className="text-lg font-bold text-gray-900">Mark Device as Failed</h3>
-                              <p className="text-sm text-gray-600">Please provide a reason for the repair failure</p>
-                            </div>
-                          </div>
-                          <textarea
-                            value={failRemark}
-                            onChange={e => setFailRemark(e.target.value)}
-                            placeholder="Please provide a detailed reason why the repair failed..."
-                            className="w-full py-3 px-4 bg-gray-100 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                            rows={4}
-                          />
-                          <div className="flex gap-3 justify-end mt-2">
-                            <GlassButton type="button" variant="secondary" onClick={() => setShowFailModal(false)} disabled={failLoading}>Cancel</GlassButton>
-                            <GlassButton
-                              type="button"
-                              variant="danger"
-                              disabled={failLoading || !failRemark.trim()}
-                              onClick={async () => {
-                                setFailLoading(true);
-                                setFailResult(null);
-                                try {
-                                  // First add the remark
-                                  await onAddRemark(`FAILED TO REPAIR: ${failRemark}`);
-                                  // Then update the status
-                                  await onUpdateStatus('failed', '');
-                                  setFailResult('Device marked as failed to repair successfully.');
-                                  setShowFailModal(false);
-                                  // Show success toast
-                                  toast.success('Device marked as failed to repair');
-                                } catch (e) {
-                                  console.error('Error marking device as failed:', e);
-                                  setFailResult('Error: ' + String(e));
-                                  toast.error('Failed to mark device as failed');
-                                } finally {
-                                  setFailLoading(false);
-                                }
-                              }}
+                    {/* Modal for fail remark - AddProductModal Style */}
+                    {showFailModal && createPortal(
+                      <>
+                        {/* Backdrop */}
+                        <div 
+                          className="fixed inset-0 bg-black/60 z-[99999]"
+                          onClick={() => setShowFailModal(false)}
+                          aria-hidden="true"
+                        />
+                        
+                        {/* Modal Container */}
+                        <div 
+                          className="fixed inset-0 flex items-center justify-center z-[100000] p-4 pointer-events-none"
+                        >
+                          <div 
+                            className="bg-white rounded-2xl shadow-2xl max-w-md w-full flex flex-col overflow-hidden relative pointer-events-auto"
+                            onClick={(e) => e.stopPropagation()}
+                            role="dialog"
+                            aria-modal="true"
+                          >
+                            {/* Close Button */}
+                            <button
+                              onClick={() => setShowFailModal(false)}
+                              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+                              disabled={failLoading}
                             >
-                              {failLoading ? 'Processing...' : 'Mark as Failed'}
-                            </GlassButton>
+                              <X className="w-5 h-5" />
+                            </button>
+
+                            {/* Icon Header - Fixed */}
+                            <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                              <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                                {/* Icon */}
+                                <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center shadow-lg">
+                                  <AlertTriangle className="w-8 h-8 text-white" />
+                                </div>
+                                
+                                {/* Text */}
+                                <div>
+                                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Mark Device as Failed</h3>
+                                  <p className="text-sm text-gray-600">Please provide a reason for the repair failure</p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Scrollable Content */}
+                            <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                              <div className="py-6">
+                                <textarea
+                                  value={failRemark}
+                                  onChange={e => setFailRemark(e.target.value)}
+                                  placeholder="Please provide a detailed reason why the repair failed..."
+                                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all resize-none"
+                                  rows={5}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Fixed Footer */}
+                            <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+                              <div className="flex justify-end gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowFailModal(false)}
+                                  disabled={failLoading}
+                                  className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-semibold disabled:opacity-50"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    setFailLoading(true);
+                                    setFailResult(null);
+                                    try {
+                                      // First add the remark
+                                      await onAddRemark(`FAILED TO REPAIR: ${failRemark}`);
+                                      // Then update the status
+                                      await onUpdateStatus('failed', '');
+                                      setFailResult('Device marked as failed to repair successfully.');
+                                      setShowFailModal(false);
+                                      // Show success toast
+                                      toast.success('Device marked as failed to repair');
+                                    } catch (e) {
+                                      console.error('Error marking device as failed:', e);
+                                      setFailResult('Error: ' + String(e));
+                                      toast.error('Failed to mark device as failed');
+                                    } finally {
+                                      setFailLoading(false);
+                                    }
+                                  }}
+                                  disabled={failLoading || !failRemark.trim()}
+                                  className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all shadow-lg hover:shadow-xl font-semibold disabled:opacity-50"
+                                >
+                                  {failLoading ? 'Processing...' : 'Mark as Failed'}
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      </>,
+                      document.body
                     )}
                   </div>
                 )}
@@ -558,43 +647,94 @@ const StatusUpdateForm: React.FC<StatusUpdateFormProps> = ({
         </>
       )}
 
-      {/* Payment Modal */}
-      <PaymentsPopupModal
-        isOpen={showPaymentModal}
-        onClose={() => {
-          setShowPaymentModal(false);
-          setPaymentAmount('');
-          setPaymentError(null);
-        }}
-        amount={outstanding || 0}
-        customerId={device.customerId}
-        customerName={device.customerName}
-        description={`Payment for device repair - ${device.deviceName}`}
-        onPaymentComplete={handleRecordPayment}
-        title="Record Payment"
-      />
-      {showPartsModal && (
-        <Modal isOpen={showPartsModal} onClose={() => { setShowPartsModal(false); setPartName(''); }} title="Awaiting Parts" maxWidth="400px">
-          <div className="space-y-4">
-            <label className="block text-gray-700 font-medium mb-1">Enter the part you are waiting for:</label>
-            <input
-              type="text"
-              value={partName}
-              onChange={e => setPartName(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 p-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400/30"
-              placeholder="e.g. Charging Port, LCD, Battery"
-              autoFocus
-              onKeyDown={e => { if (e.key === 'Enter' && partName.trim()) { e.preventDefault(); handleAwaitingPartsSubmit(); } }}
-              disabled={awaitingPartsLoading}
-            />
-            <div className="flex gap-3 justify-end">
-              <GlassButton variant="secondary" onClick={() => { setShowPartsModal(false); setPartName(''); }} disabled={awaitingPartsLoading}>Cancel</GlassButton>
-              <GlassButton variant="primary" onClick={handleAwaitingPartsSubmit} disabled={!partName.trim() || awaitingPartsLoading}>
-                {awaitingPartsLoading ? 'Sending...' : 'Send & Update Status'}
-              </GlassButton>
+      {/* REMOVED: Payment Modal - Repair payment functionality removed */}
+      {/* Awaiting Parts Modal - AddProductModal Style */}
+      {showPartsModal && createPortal(
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/60 z-[99999]"
+            onClick={() => { setShowPartsModal(false); setPartName(''); }}
+            aria-hidden="true"
+          />
+          
+          {/* Modal Container */}
+          <div 
+            className="fixed inset-0 flex items-center justify-center z-[100000] p-4 pointer-events-none"
+          >
+            <div 
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full flex flex-col overflow-hidden relative pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => { setShowPartsModal(false); setPartName(''); }}
+                className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+                disabled={awaitingPartsLoading}
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Icon Header - Fixed */}
+              <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                  {/* Icon */}
+                  <div className="w-16 h-16 bg-orange-600 rounded-full flex items-center justify-center shadow-lg">
+                    <Package className="w-8 h-8 text-white" />
+                  </div>
+                  
+                  {/* Text */}
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">Awaiting Parts</h3>
+                    <p className="text-sm text-gray-600">Enter the part you are waiting for</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                <div className="py-6">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Part Name</label>
+                  <input
+                    type="text"
+                    value={partName}
+                    onChange={e => setPartName(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                    placeholder="e.g. Charging Port, LCD, Battery"
+                    autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter' && partName.trim()) { e.preventDefault(); handleAwaitingPartsSubmit(); } }}
+                    disabled={awaitingPartsLoading}
+                  />
+                </div>
+              </div>
+
+              {/* Fixed Footer */}
+              <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { setShowPartsModal(false); setPartName(''); }}
+                    disabled={awaitingPartsLoading}
+                    className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-semibold disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAwaitingPartsSubmit}
+                    disabled={!partName.trim() || awaitingPartsLoading}
+                    className="px-6 py-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-all shadow-lg hover:shadow-xl font-semibold disabled:opacity-50"
+                  >
+                    {awaitingPartsLoading ? 'Sending...' : 'Send & Update Status'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </Modal>
+        </>,
+        document.body
       )}
     </div>
   );

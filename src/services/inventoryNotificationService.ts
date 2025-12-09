@@ -40,7 +40,7 @@ class InventoryNotificationService {
           quantity,
           min_quantity,
           name,
-          products:product_id (
+          products!product_id (
             id,
             name
           )

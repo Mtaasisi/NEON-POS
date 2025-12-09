@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { useBranch } from '../../../context/BranchContext';
 import { BackButton } from '../../shared/components/ui/BackButton';
-import GlassCard from '../../shared/components/ui/GlassCard';
 import EmployeeAttendanceCard from '../components/EmployeeAttendanceCard';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { 
   Clock, Calendar, TrendingUp, CheckCircle, XCircle,
   Award, Target, Activity, AlertCircle, CalendarDays,
@@ -164,10 +164,12 @@ const MyAttendancePage: React.FC = () => {
 
   if (!employee) {
     return (
-      <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
+      <div className="p-4 sm:p-6 max-w-6xl mx-auto">
         <BackButton to="/dashboard" />
-        <GlassCard className="p-12 text-center max-w-2xl mx-auto">
-          <AlertCircle className="w-16 h-16 text-orange-500 mx-auto mb-4" />
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-12 text-center max-w-2xl mx-auto">
+          <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8 text-orange-600" />
+          </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Employee Record Not Found</h2>
           <p className="text-gray-600 mb-6">
             Your user account is not linked to an employee record in the system.
@@ -220,23 +222,31 @@ const MyAttendancePage: React.FC = () => {
               Your account email: <span className="font-mono font-medium">{currentUser?.email}</span>
             </p>
           </div>
-        </GlassCard>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
-      {/* Header with Greeting */}
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+      {/* Wrapper Container - Single rounded container */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section */}
+        <div className="p-8 border-b border-gray-200 flex-shrink-0">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <BackButton to="/dashboard" />
+            <div className="flex items-center gap-6">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <Clock className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
           <div>
             <div className="flex items-center gap-2 mb-1">
               <GreetingIcon className="w-6 h-6 text-yellow-500" />
-              <h1 className="text-3xl font-bold text-gray-900">{greeting.text}!</h1>
+                  <h1 className="text-2xl font-bold text-gray-900">{greeting.text}!</h1>
             </div>
-            <p className="text-gray-600">
+                <p className="text-sm text-gray-600">
               {employee.firstName} {employee.lastName} - <span className="font-medium">{employee.position}</span>
             </p>
           </div>
@@ -244,19 +254,23 @@ const MyAttendancePage: React.FC = () => {
 
         {/* Quick Stats Badge */}
         <div className="flex gap-3">
-          <div className="px-4 py-2 bg-green-50 rounded-lg">
-            <div className="text-xs text-green-600 font-medium">Attendance</div>
+              <div className="px-4 py-2 bg-green-50 border-2 border-green-200 rounded-xl">
+                <div className="text-xs text-green-600 font-semibold">Attendance</div>
             <div className="text-2xl font-bold text-green-700">{stats.attendanceRate}%</div>
           </div>
-          <div className="px-4 py-2 bg-purple-50 rounded-lg">
-            <div className="text-xs text-purple-600 font-medium">Performance</div>
+              <div className="px-4 py-2 bg-purple-50 border-2 border-purple-200 rounded-xl">
+                <div className="text-xs text-purple-600 font-semibold">Performance</div>
             <div className="text-2xl font-bold text-purple-700">{stats.performance.toFixed(1)}/5</div>
+              </div>
           </div>
         </div>
       </div>
 
+        {/* Main Container - Scrollable Content */}
+        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto px-6 py-6">
       {/* Main Check-in/out Card */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Left: Attendance Card (Takes 2 columns) */}
         <div className="lg:col-span-2">
           <EmployeeAttendanceCard
@@ -271,7 +285,7 @@ const MyAttendancePage: React.FC = () => {
 
         {/* Right: Today's Summary */}
         <div>
-          <GlassCard className="p-6">
+              <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-blue-600" />
               Today's Summary
@@ -330,50 +344,58 @@ const MyAttendancePage: React.FC = () => {
                 </div>
               )}
             </div>
-          </GlassCard>
+              </div>
         </div>
       </div>
 
       {/* Monthly Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-blue-50 rounded-lg p-5 hover:bg-blue-100 transition-colors">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <Calendar className="w-7 h-7 text-blue-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+                  <Calendar className="w-6 h-6 text-white" />
+                </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">This Month</p>
+                  <p className="text-xs font-semibold text-gray-600 mb-1">This Month</p>
               <p className="text-2xl font-bold text-gray-900">{stats.thisMonthDays}</p>
               <p className="text-xs text-gray-500 mt-1">{stats.presentDays} present</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-green-50 rounded-lg p-5 hover:bg-green-100 transition-colors">
+            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <CheckCircle className="w-7 h-7 text-green-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-white" />
+                </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">Attendance Rate</p>
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Attendance Rate</p>
               <p className="text-2xl font-bold text-gray-900">{stats.attendanceRate}%</p>
               <p className="text-xs text-gray-500 mt-1">overall</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-purple-50 rounded-lg p-5 hover:bg-purple-100 transition-colors">
+            <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <Clock className="w-7 h-7 text-purple-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
+                  <Clock className="w-6 h-6 text-white" />
+                </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">Total Hours</p>
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Total Hours</p>
               <p className="text-2xl font-bold text-gray-900">{stats.totalHours.toFixed(0)}</p>
               <p className="text-xs text-gray-500 mt-1">{stats.avgHours.toFixed(1)}h avg/day</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-orange-50 rounded-lg p-5 hover:bg-orange-100 transition-colors">
+            <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <Award className="w-7 h-7 text-orange-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center">
+                  <Award className="w-6 h-6 text-white" />
+                </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">Performance</p>
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Performance</p>
               <p className="text-2xl font-bold text-gray-900">{stats.performance.toFixed(1)}</p>
               <p className="text-xs text-gray-500 mt-1">out of 5.0</p>
             </div>
@@ -382,10 +404,12 @@ const MyAttendancePage: React.FC = () => {
       </div>
 
       {/* Recent Attendance History */}
-      <GlassCard>
+          <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm mb-6">
         <div className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
             <Activity className="w-5 h-5 text-blue-600" />
+                </div>
             Recent Attendance History
           </h3>
           
@@ -466,11 +490,11 @@ const MyAttendancePage: React.FC = () => {
             </div>
           )}
         </div>
-      </GlassCard>
+          </div>
 
       {/* Performance Insights */}
       {stats.attendanceRate >= 95 && stats.performance >= 4 && (
-        <GlassCard className="bg-gradient-to-br from-yellow-50 to-orange-50 border-yellow-200">
+            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-200 rounded-2xl shadow-sm">
           <div className="p-6 flex items-center gap-4">
             <div className="bg-yellow-500 rounded-full p-3">
               <Trophy className="w-8 h-8 text-white" />
@@ -483,8 +507,10 @@ const MyAttendancePage: React.FC = () => {
               </p>
             </div>
           </div>
-        </GlassCard>
+            </div>
       )}
+        </div>
+      </div>
     </div>
   );
 };

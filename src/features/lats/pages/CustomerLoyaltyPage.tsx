@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassButton from '../../shared/components/ui/GlassButton';
 import PriceInput from '../../../shared/components/ui/PriceInput';
-import PageHeader from '../components/ui/PageHeader';
+import { BackButton } from '../../shared/components/ui/BackButton';
 import { 
   customerLoyaltyService, 
   LoyaltyCustomer, 
@@ -13,18 +14,22 @@ import {
 } from '../../../lib/customerLoyaltyService';
 
 import { smsService } from '../../../services/smsService';
-import { MessageCircle, Phone, Mail, Send, BarChart3, TrendingUp, Users, DollarSign, ShoppingBag, Clock, Gift, Award, CheckCircle, AlertCircle, Megaphone, Filter, Download, Upload, Target, Calendar, Star, Crown, Zap, Settings, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { MessageCircle, Phone, Mail, Send, BarChart3, TrendingUp, Users, DollarSign, ShoppingBag, Clock, Gift, Award, CheckCircle, AlertCircle, Megaphone, Filter, Download, Upload, Target, Calendar, Star, Crown, Zap, Settings, RefreshCw, Eye, EyeOff, Search, Plus, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 
 const CustomerLoyaltyPage: React.FC = () => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTier, setSelectedTier] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [showPointsHistory, setShowPointsHistory] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [customers, setCustomers] = useState<LoyaltyCustomer[]>([]);
   const [metrics, setMetrics] = useState<LoyaltyMetrics>({
     totalCustomers: 0,
@@ -166,6 +171,7 @@ const CustomerLoyaltyPage: React.FC = () => {
         setTiers(tiersData);
         setRewards(rewardsData);
         setPointHistory(historyData);
+        setLastUpdated(new Date());
       }
     } catch (error) {
       console.error('Error fetching loyalty data:', error);
@@ -876,18 +882,32 @@ const CustomerLoyaltyPage: React.FC = () => {
     }
   };
 
+  // Format date helper
+  const formatDate = (date: string | Date) => {
+    const d = new Date(date);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
   if (loading && currentPage === 1) {
     return (
-      <div className="min-h-screen p-6" style={{ backgroundColor: 'transparent' }}>
-        <PageHeader
-          title="Customer Loyalty"
-          subtitle="Manage loyalty points, rewards, and customer tiers"
-          className="mb-6"
-        />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading loyalty data...</p>
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+          <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                  <Award className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900 mb-1">Customer Loyalty</h1>
+                  <p className="text-sm text-gray-600">Manage loyalty points, rewards, and customer tiers</p>
+                </div>
+              </div>
+              <BackButton to="/lats" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto flex items-center justify-center py-12">
+            <LoadingSpinner size="sm" color="purple" />
           </div>
         </div>
       </div>
@@ -895,223 +915,250 @@ const CustomerLoyaltyPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen p-6" style={{ backgroundColor: 'transparent' }}>
-      <PageHeader
-        title="Customer Loyalty"
-        subtitle="Manage loyalty points, rewards, and customer tiers"
-        className="mb-6"
-      />
-
-      {/* Loyalty Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
-        <GlassCard className="p-6">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Combined Container - All sections in one */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section - Enhanced Modal Style */}
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center justify-between">
+            {/* Left: Icon + Text */}
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                <Award className="w-8 h-8 text-white" />
+              </div>
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Customers</p>
-              <p className="text-2xl font-bold text-gray-900">{metrics.totalCustomers}</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">Customer Loyalty</h1>
+                <p className="text-sm text-gray-600">Manage loyalty points, rewards, and customer tiers</p>
             </div>
-            <div className="p-3 bg-blue-100 rounded-full">
-              <span className="text-blue-600 text-xl">👥</span>
             </div>
-          </div>
-          <div className="mt-2">
-            <span className="text-sm text-gray-600">In loyalty program</span>
-          </div>
-        </GlassCard>
 
-        <GlassCard className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Points</p>
-              <p className="text-2xl font-bold text-gray-900">{metrics.totalPoints.toLocaleString()}</p>
-            </div>
-            <div className="p-3 bg-green-100 rounded-full">
-              <span className="text-green-600 text-xl">⭐</span>
-            </div>
+            {/* Right: Back Button */}
+            <BackButton to="/lats" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
           </div>
-          <div className="mt-2">
-            <span className="text-sm text-gray-600">Average: {metrics.averagePoints}</span>
           </div>
-        </GlassCard>
 
-        <GlassCard className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">VIP Customers</p>
-              <p className="text-2xl font-bold text-purple-600">{metrics.vipCustomers}</p>
-            </div>
-            <div className="p-3 bg-purple-100 rounded-full">
-              <span className="text-purple-600 text-xl">👑</span>
-            </div>
-          </div>
-          <div className="mt-2">
-            <span className="text-sm text-gray-600">Platinum tier</span>
-          </div>
-        </GlassCard>
+        {/* Action Bar - Enhanced Design */}
+        <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
+          <div className="flex gap-3 flex-wrap">
+            {/* Add Customer Button */}
+            <button
+              onClick={() => alert('Add new customer to loyalty program')}
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg hover:from-purple-600 hover:to-purple-700"
+            >
+              <Plus size={18} />
+              <span>Add Customer</span>
+            </button>
 
-        <GlassCard className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Active Customers</p>
-              <p className="text-2xl font-bold text-green-600">{metrics.activeCustomers}</p>
-            </div>
-            <div className="p-3 bg-green-100 rounded-full">
-              <span className="text-green-600 text-xl">✅</span>
-            </div>
-          </div>
-          <div className="mt-2">
-            <span className="text-sm text-gray-600">Recently active</span>
-          </div>
-        </GlassCard>
+            {/* Campaigns Button */}
+            <button
+              onClick={() => setShowCampaignsModal(true)}
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700"
+            >
+              <Megaphone size={18} />
+              <span>Campaigns</span>
+            </button>
 
-        <GlassCard className="p-6">
-          <div className="flex items-center justify-between">
+            {/* Reports Button */}
+            <button
+              onClick={() => setShowReportsModal(true)}
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700"
+            >
+              <Download size={18} />
+              <span>Reports</span>
+            </button>
+            </div>
+            </div>
+
+        {/* Main Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Fixed Statistics Section */}
+          <div className="p-6 pb-0 flex-shrink-0">
+            <div 
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
+                gap: '1rem'
+              }}
+            >
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                    <Users className="w-6 h-6 text-white" />
+          </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-600 mb-1">Total Customers</p>
+                    <p className="text-2xl font-bold text-gray-900">{metrics.totalCustomers}</p>
+          </div>
+                </div>
+              </div>
+
+              <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                    <Star className="w-6 h-6 text-white" />
+                  </div>
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Revenue</p>
+                    <p className="text-xs font-medium text-gray-600 mb-1">Total Points</p>
+                    <p className="text-2xl font-bold text-gray-900">{metrics.totalPoints.toLocaleString()}</p>
+            </div>
+            </div>
+          </div>
+              
+              <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                    <Crown className="w-6 h-6 text-white" />
+                  </div>
+            <div>
+                    <p className="text-xs font-medium text-gray-600 mb-1">VIP Customers</p>
+                    <p className="text-2xl font-bold text-gray-900">{metrics.vipCustomers}</p>
+            </div>
+            </div>
+          </div>
+              
+              <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                    <CheckCircle className="w-6 h-6 text-white" />
+          </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-600 mb-1">Active Customers</p>
+                    <p className="text-2xl font-bold text-gray-900">{metrics.activeCustomers}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-teal-50 border-2 border-teal-200 rounded-2xl p-5 hover:bg-teal-100 hover:border-teal-300 transition-all shadow-sm hover:shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-teal-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                    <DollarSign className="w-6 h-6 text-white" />
+                  </div>
+            <div>
+                    <p className="text-xs font-medium text-gray-600 mb-1">Total Revenue</p>
               <p className="text-2xl font-bold text-gray-900">{formatMoney(metrics.totalSpent)}</p>
             </div>
-            <div className="p-3 bg-orange-100 rounded-full">
-              <span className="text-orange-600 text-xl">💰</span>
             </div>
           </div>
-          <div className="mt-2">
-            <span className="text-sm text-gray-600">From all customers</span>
           </div>
-        </GlassCard>
       </div>
 
-      {/* Enhanced Filters and Controls */}
-      <GlassCard className="p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">Customer Management</h3>
-          <div className="flex space-x-2">
-            <GlassButton
-              variant="secondary"
-              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              icon={showAdvancedFilters ? <EyeOff size={16} /> : <Filter size={16} />}
-            >
-              {showAdvancedFilters ? 'Hide' : 'Advanced'} Filters
-            </GlassButton>
-            <GlassButton
-              variant="secondary"
-              onClick={() => setShowBulkOperations(true)}
-              icon={<Zap size={16} />}
-            >
-              Bulk Operations
-            </GlassButton>
-            <GlassButton
-              variant="secondary"
-              onClick={() => setShowCampaignsModal(true)}
-              icon={<Megaphone size={16} />}
-            >
-              Campaigns
-            </GlassButton>
-            <GlassButton
-              variant="secondary"
-              onClick={() => setShowReportsModal(true)}
-              icon={<Download size={16} />}
-            >
-              Reports
-            </GlassButton>
-            <GlassButton
-              variant="secondary"
-              onClick={() => setShowSegmentationModal(true)}
-              icon={<Target size={16} />}
-            >
-              Segments
-            </GlassButton>
-          </div>
-        </div>
-
-        {/* Basic Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+          {/* Fixed Search and Filters Section - Enhanced */}
+          <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
+            <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
+              <div className="flex flex-col lg:flex-row gap-4">
+                {/* Search Bar */}
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
-              placeholder="Search customers..."
+                      placeholder="Search customers, phone, or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all text-gray-900 bg-white font-medium"
             />
+                  </div>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Loyalty Tier</label>
+                {/* Filters Row */}
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Tier Filter */}
             <select
               value={selectedTier}
               onChange={(e) => setSelectedTier(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all text-gray-900 bg-white font-medium min-w-[140px]"
             >
               <option value="all">All Tiers</option>
-              <option value="bronze">Bronze</option>
-              <option value="silver">Silver</option>
-              <option value="gold">Gold</option>
-              <option value="platinum">Platinum</option>
+                    <option value="vip">VIP</option>
+                    <option value="premium">Premium</option>
+                    <option value="regular">Regular</option>
+                    <option value="active">Active</option>
+                    <option value="payment_customer">Payment Customer</option>
+                    <option value="engaged">Engaged</option>
+                    <option value="interested">Interested</option>
             </select>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                  {/* Status Filter */}
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all text-gray-900 bg-white font-medium min-w-[140px]"
             >
               <option value="all">All Status</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                  {/* Sort Filter */}
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all text-gray-900 bg-white font-medium min-w-[160px]"
             >
               <option value="points">Points</option>
               <option value="spent">Total Spent</option>
               <option value="name">Name</option>
               <option value="lastVisit">Last Visit</option>
             </select>
+
+                  {/* Refresh Button */}
+                  <button
+                    onClick={() => fetchLoyaltyData(1, false)}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 hover:border-purple-300 transition-all disabled:opacity-50 bg-white font-medium"
+            >
+                    {loading ? (
+                      <LoadingSpinner size="sm" color="purple" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                    <span className="hidden sm:inline">Refresh</span>
+                  </button>
+                </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Order</label>
-            <select
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-            >
-              <option value="desc">Descending</option>
-              <option value="asc">Ascending</option>
-            </select>
+              {/* Enhanced Feature Buttons Row */}
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm ${
+                      showAdvancedFilters 
+                        ? 'bg-purple-50 text-purple-600 hover:bg-purple-100' 
+                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Filter className="w-4 h-4" />
+                    <span className="hidden sm:inline">{showAdvancedFilters ? 'Hide' : 'Advanced'} Filters</span>
+                  </button>
+                  <button
+                    onClick={() => setShowBulkOperations(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all shadow-sm hover:shadow-md font-medium text-sm"
+                  >
+                    <Zap className="w-4 h-4" />
+                    <span className="hidden sm:inline">Bulk Operations</span>
+                  </button>
+                  <button
+                    onClick={() => setShowSegmentationModal(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-all shadow-sm hover:shadow-md font-medium text-sm"
+                  >
+                    <Target className="w-4 h-4" />
+                    <span className="hidden sm:inline">Segments</span>
+                  </button>
           </div>
 
-          <div className="flex items-end space-x-2">
-            <GlassButton
-              variant="secondary"
-              onClick={handleSearch}
-              className="flex-1"
-            >
-              Search
-            </GlassButton>
-            <GlassButton
-              variant="primary"
-              onClick={() => alert('Add new customer to loyalty program')}
-              className="flex-1"
-            >
-              Add Customer
-            </GlassButton>
-          </div>
+                {/* Last Updated Timestamp */}
+                {lastUpdated && (
+                  <div className="text-xs text-gray-600 bg-gray-100 px-3 py-2 rounded-xl font-medium">
+                    Last: {lastUpdated.toLocaleTimeString()}
+                  </div>
+                )}
         </div>
 
         {/* Advanced Filters */}
         {showAdvancedFilters && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
+                <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Min Points</label>
               <input
@@ -1119,7 +1166,7 @@ const CustomerLoyaltyPage: React.FC = () => {
                 placeholder="0"
                 value={minPoints}
                 onChange={(e) => setMinPoints(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
               />
             </div>
             <div>
@@ -1129,7 +1176,7 @@ const CustomerLoyaltyPage: React.FC = () => {
                 placeholder="∞"
                 value={maxPoints}
                 onChange={(e) => setMaxPoints(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
               />
             </div>
             <div>
@@ -1138,7 +1185,7 @@ const CustomerLoyaltyPage: React.FC = () => {
                 value={parseFloat(minSpent) || 0}
                 onChange={(value) => setMinSpent(value.toString())}
                 placeholder="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
               />
             </div>
             <div>
@@ -1147,127 +1194,273 @@ const CustomerLoyaltyPage: React.FC = () => {
                 value={parseFloat(maxSpent) || 0}
                 onChange={(value) => setMaxSpent(value.toString())}
                 placeholder="∞"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
               />
             </div>
           </div>
         )}
-      </GlassCard>
-
-      {/* Customer List and Tiers */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Customer List */}
-        <div className="lg:col-span-2">
-          <GlassCard className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">
-                Loyalty Customers ({getFilteredCustomers().length} of {totalCount})
-              </h3>
-              <div className="flex space-x-2">
-                <GlassButton
-                  variant="secondary"
-                  onClick={() => setShowPointsHistory(!showPointsHistory)}
-                >
-                  {showPointsHistory ? 'Hide' : 'Show'} History
-                </GlassButton>
-                <GlassButton
-                  variant="secondary"
-                  onClick={() => alert('Export loyalty data')}
-                >
-                  Export
-                </GlassButton>
               </div>
             </div>
 
+          {/* Scrollable Customers List */}
+          <div className="flex-1 overflow-y-auto px-6 py-6 border-t border-gray-100">
+            {/* Error Display */}
+            {customers.length === 0 && !loading ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <Users className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">No customers found</h3>
+                <p className="text-gray-600 mb-6">
+                  {searchQuery || selectedTier !== 'all' || selectedStatus !== 'all'
+                    ? 'Try adjusting your search or filters'
+                    : 'Get started by adding customers to the loyalty program'
+                  }
+                </p>
+                {!searchQuery && selectedTier === 'all' && selectedStatus === 'all' && (
+                  <button
+                    onClick={() => alert('Add new customer to loyalty program')}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Customer</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
             {/* Bulk Selection Controls */}
-            <div className="flex items-center justify-between mb-4 p-3 bg-gray-50 rounded-lg">
+                {getFilteredCustomers().length > 0 && (
+                  <div className="flex items-center justify-between mb-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
               <div className="flex items-center space-x-4">
                 <label className="flex items-center">
                   <input
                     type="checkbox"
                     checked={selectedCustomers.length === getFilteredCustomers().length && getFilteredCustomers().length > 0}
                     onChange={selectAllCustomers}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                   />
-                  <span className="ml-2 text-sm text-gray-700">Select All</span>
+                        <span className="ml-2 text-sm font-medium text-gray-700">Select All</span>
                 </label>
                 <button
                   onClick={clearSelection}
-                  className="text-sm text-gray-600 hover:text-gray-800"
+                        className="text-sm text-gray-600 hover:text-gray-800 font-medium"
                 >
                   Clear Selection
                 </button>
-                <span className="text-sm text-gray-600">
+                      <span className="text-sm text-gray-600 font-medium">
                   {selectedCustomers.length} selected
                 </span>
               </div>
               {selectedCustomers.length > 0 && (
-                <div className="flex space-x-2">
-                  <GlassButton
-                    variant="secondary"
-                    size="sm"
+                      <button
                     onClick={() => setShowBulkOperations(true)}
+                        className="px-4 py-2 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700 font-medium shadow-sm"
                   >
                     Bulk Actions ({selectedCustomers.length})
-                  </GlassButton>
-                </div>
+                      </button>
               )}
             </div>
+                )}
 
-            <div className="space-y-4">
-              {getFilteredCustomers().map((customer) => (
-                <div key={customer.id} className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedCustomers.includes(customer.customerId)}
-                        onChange={() => toggleCustomerSelection(customer.customerId)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
+                {/* Customers List - Enhanced Modal Style */}
+                <div className="space-y-3 mb-4">
+                  {getFilteredCustomers().map((customer) => {
+                    const isExpanded = expandedCustomer === customer.customerId;
+                    
+                    return (
+                      <div
+                        key={customer.id}
+                        className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 hover:shadow-lg ${
+                          isExpanded
+                            ? 'border-purple-500 shadow-xl' 
+                            : 'border-gray-200 hover:border-purple-400'
+                        }`}
+                      >
+                        {/* Mobile Card View */}
+                        <div className="md:hidden p-4">
+                          <div className="space-y-3">
+                            {/* Customer Name and Tier */}
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
+                                  <Users className="w-6 h-6 text-white" />
+                                </div>
                       <div>
-                        <div className="font-medium text-gray-900">{customer.name}</div>
-                        <div className="text-sm text-gray-600">{customer.phone}</div>
-                        {customer.email && (
-                          <div className="text-sm text-gray-600">{customer.email}</div>
-                        )}
+                                  <h3 className="font-bold text-gray-900 text-sm">{customer.name}</h3>
+                                  <p className="text-xs text-gray-500">{customer.phone}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="font-semibold text-gray-900">{customer.points} points</div>
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getTierColor(customer.tier)}`}>
+                              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-sm ${getTierColor(customer.tier)}`}>
                         {customer.tier}
                       </span>
+                  </div>
+
+                            {/* Points and Spent */}
+                            <div className="flex items-center justify-between">
+                    <div>
+                                <p className="text-xs text-gray-600">Points</p>
+                                <p className="text-lg font-bold text-gray-900">{customer.points}</p>
+                    </div>
+                              <div className="text-right">
+                                <p className="text-xs text-gray-600">Total Spent</p>
+                                <p className="text-lg font-bold text-gray-900">{formatMoney(customer.totalSpent)}</p>
+                    </div>
+                    </div>
+                            
+                            {/* Actions */}
+                            <div className="flex items-center gap-2 pt-2">
+                              <button
+                                onClick={() => setExpandedCustomer(isExpanded ? null : customer.id)}
+                                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 bg-purple-600 text-white rounded-xl transition-all shadow-md hover:shadow-lg text-xs font-semibold"
+                              >
+                                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                <span>{isExpanded ? 'Less' : 'More'}</span>
+                              </button>
+                              <button
+                                onClick={() => openCustomerAnalytics(customer)}
+                                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 bg-blue-600 text-white rounded-xl transition-all shadow-md hover:shadow-lg text-xs font-semibold"
+                              >
+                                <BarChart3 className="w-4 h-4" />
+                                <span>Analytics</span>
+                              </button>
+                            </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                    <div>
-                      <div className="text-sm text-gray-600">Total Spent</div>
-                      <div className="font-medium text-gray-900">{formatMoney(customer.totalSpent)}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Orders</div>
-                      <div className="font-medium text-gray-900">{customer.orders}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Join Date</div>
-                      <div className="font-medium text-gray-900">{new Date(customer.joinDate).toLocaleDateString()}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Last Purchase</div>
-                      <div className="font-medium text-gray-900">{new Date(customer.lastPurchase).toLocaleDateString()}</div>
-                    </div>
+                        {/* Desktop List View - Expandable */}
+                        <div className="hidden md:block w-full">
+                          {/* Header - Clickable */}
+                          <div 
+                            className="flex items-start justify-between p-6 cursor-pointer"
+                            onClick={() => setExpandedCustomer(isExpanded ? null : customer.id)}
+                          >
+                            <div className="flex items-start gap-3 flex-1 min-w-0">
+                              {/* Expand/Collapse Icon */}
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
+                                isExpanded ? 'bg-purple-500 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-600'
+                              }`}>
+                                <ChevronDown 
+                                  className={`w-5 h-5 transition-transform duration-200 ${
+                                    isExpanded ? 'rotate-180' : ''
+                                  }`}
+                                />
                   </div>
 
-                  <div className="flex items-center justify-between text-sm text-gray-600 mb-3">
-                    <div>Status: {customer.status}</div>
-                    <div>Last Visit: {new Date(customer.lastVisit).toLocaleDateString()}</div>
-                  </div>
+                              {/* Main Content */}
+                              <div className="flex-1 min-w-0">
+                                {/* Customer Name and Tier Row */}
+                                <div className="flex items-center gap-3 mb-4 flex-wrap">
+                                  <h3 className="text-2xl font-bold text-gray-900 truncate">{customer.name}</h3>
+                                  
+                                  {/* Tier Badge */}
+                                  <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-base font-bold ${getTierColor(customer.tier)} flex items-center gap-2 flex-shrink-0`}>
+                                    <Crown className="w-5 h-5" />
+                                    <span className="capitalize">{customer.tier.replace('_', ' ')}</span>
+                                  </span>
+                                </div>
+                                
+                                {/* Info Badges Row */}
+                                <div className="flex items-center gap-3 flex-wrap">
+                                  {/* Points Badge */}
+                                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-50 text-purple-700 border border-purple-200 flex-shrink-0">
+                                    <Star className="w-5 h-5" />
+                                    <span className="text-base font-semibold">{customer.points.toLocaleString()}</span>
+                                    <span className="text-sm text-purple-600 font-medium">points</span>
+                                  </div>
 
-                  <div className="flex space-x-2">
+                                  {/* Total Spent */}
+                                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-50 text-green-700 border border-green-200">
+                                    <DollarSign className="w-5 h-5" />
+                                    <span className="text-base font-semibold">{formatMoney(customer.totalSpent)}</span>
+                                  </div>
+
+                                  {/* Orders & Date Combined Card */}
+                                  <div className="inline-flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-50 border border-gray-200">
+                                    <div className="flex items-center gap-2">
+                                      <ShoppingBag className="w-5 h-5 text-teal-600" />
+                                      <span className="text-base font-semibold text-teal-700">{customer.orders}</span>
+                                      <span className="text-sm text-teal-600 font-medium">orders</span>
+                                    </div>
+                                    <div className="w-px h-5 bg-gray-300"></div>
+                                    <div className="flex items-center gap-2">
+                                      <Calendar className="w-5 h-5 text-gray-600" />
+                                      <span className="text-base font-medium text-gray-600">{formatDate(customer.lastVisit)}</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Status Badge */}
+                                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${
+                                    customer.status === 'active' 
+                                      ? 'bg-green-50 text-green-700 border border-green-200' 
+                                      : 'bg-gray-50 text-gray-700 border border-gray-200'
+                                  }`}>
+                                    <CheckCircle className="w-5 h-5" />
+                                    <span className="text-sm font-medium capitalize">{customer.status}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Points Display Card */}
+                            <div className="ml-4 flex-shrink-0">
+                              <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 shadow-lg min-w-[140px]">
+                                <p className="text-xs font-medium text-purple-100 mb-1">Points Balance</p>
+                                <p className="text-2xl font-bold text-white">{customer.points.toLocaleString()}</p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Expanded Content */}
+                          {isExpanded && (
+                            <div className="px-6 pb-6 border-t border-gray-200 pt-6">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                {/* Customer Details */}
+                                <div className="space-y-4">
+                                  <h4 className="font-semibold text-gray-900">Customer Information</h4>
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <Phone className="w-4 h-4 text-gray-400" />
+                                      <span className="text-sm text-gray-600">{customer.phone}</span>
+                                    </div>
+                                    {customer.email && (
+                                      <div className="flex items-center gap-2">
+                                        <Mail className="w-4 h-4 text-gray-400" />
+                                        <span className="text-sm text-gray-600">{customer.email}</span>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2">
+                                      <Calendar className="w-4 h-4 text-gray-400" />
+                                      <span className="text-sm text-gray-600">Joined: {formatDate(customer.joinDate)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Clock className="w-4 h-4 text-gray-400" />
+                                      <span className="text-sm text-gray-600">Last Purchase: {formatDate(customer.lastPurchase)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Statistics */}
+                                <div className="space-y-4">
+                                  <h4 className="font-semibold text-gray-900">Statistics</h4>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                      <p className="text-xs text-gray-600 mb-1">Total Orders</p>
+                                      <p className="text-lg font-bold text-gray-900">{customer.orders}</p>
+                                    </div>
+                                    <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                                      <p className="text-xs text-gray-600 mb-1">Total Spent</p>
+                                      <p className="text-lg font-bold text-gray-900">{formatMoney(customer.totalSpent)}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div className="flex flex-wrap gap-2">
                     <button
-                      onClick={() => {
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                         const points = prompt('Enter points to add (positive) or subtract (negative):');
                         if (points !== null) {
                           const pointsNum = parseInt(points);
@@ -1277,132 +1470,134 @@ const CustomerLoyaltyPage: React.FC = () => {
                           }
                         }
                       }}
-                      className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-sm hover:shadow-md text-sm font-semibold"
                     >
+                                  <Zap className="w-4 h-4" />
                       Adjust Points
                     </button>
                     <button
-                      onClick={() => openCommunicationModal(customer, 'whatsapp')}
-                      className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
-                      title="Send WhatsApp"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openCommunicationModal(customer, 'sms');
+                                  }}
+                                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all shadow-sm hover:shadow-md text-sm font-semibold"
                     >
-                      <MessageCircle size={14} />
-                    </button>
-                    <button
-                      onClick={() => openCommunicationModal(customer, 'sms')}
-                      className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
-                      title="Send SMS"
-                    >
-                      <Phone size={14} />
+                                  <Phone className="w-4 h-4" />
+                                  SMS
                     </button>
                     {customer.email && (
                       <button
-                        onClick={() => openCommunicationModal(customer, 'email')}
-                        className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700"
-                        title="Send Email"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openCommunicationModal(customer, 'email');
+                                    }}
+                                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all shadow-sm hover:shadow-md text-sm font-semibold"
                       >
-                        <Mail size={14} />
+                                    <Mail className="w-4 h-4" />
+                                    Email
                       </button>
                     )}
                     <button
-                      onClick={() => openCustomerAnalytics(customer)}
-                      className="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700"
-                      title="View Analytics"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openCustomerAnalytics(customer);
+                                  }}
+                                  className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-all shadow-sm hover:shadow-md text-sm font-semibold"
                     >
-                      <BarChart3 size={14} />
+                                  <BarChart3 className="w-4 h-4" />
+                                  Analytics
                     </button>
                     <button
-                      onClick={() => openRewardRedemption(customer)}
-                      className="px-3 py-1 bg-pink-600 text-white text-sm rounded hover:bg-pink-700"
-                      title="Redeem Rewards"
-                    >
-                      <Gift size={14} />
-                    </button>
-                    <button
-                      onClick={() => alert(`View ${customer.name} loyalty details`)}
-                      className="px-3 py-1 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50"
-                    >
-                      View Details
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openRewardRedemption(customer);
+                                  }}
+                                  className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-xl hover:bg-pink-700 transition-all shadow-sm hover:shadow-md text-sm font-semibold"
+                                >
+                                  <Gift className="w-4 h-4" />
+                                  Redeem
                     </button>
                   </div>
 
+                              {/* Points History */}
                   {showPointsHistory && (
-                    <div className="mt-4 p-3 bg-white rounded border">
-                      <h4 className="font-medium text-gray-900 mb-2">Points History</h4>
-                      <div className="space-y-2 max-h-32 overflow-y-auto">
+                                <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                                  <h4 className="font-semibold text-gray-900 mb-3">Points History</h4>
+                                  <div className="space-y-2 max-h-40 overflow-y-auto">
                         {pointHistory
                           .filter(transaction => transaction.customerId === customer.customerId)
-                          .slice(0, 5)
+                                      .slice(0, 10)
                           .map((transaction, index) => (
-                            <div key={index} className="flex justify-between text-sm">
-                              <span className="text-gray-600">{transaction.reason}</span>
-                              <span className={`font-medium ${transaction.points > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        <div key={index} className="flex justify-between items-center p-2 bg-white rounded-lg">
+                                          <span className="text-sm text-gray-600">{transaction.reason}</span>
+                                          <span className={`font-semibold text-sm ${transaction.points > 0 ? 'text-green-600' : 'text-red-600'}`}>
                                 {transaction.points > 0 ? '+' : ''}{transaction.points}
                               </span>
                             </div>
                           ))}
                         {pointHistory.filter(t => t.customerId === customer.customerId).length === 0 && (
-                          <div className="text-sm text-gray-500">No point history available</div>
+                                      <div className="text-sm text-gray-500 text-center py-2">No point history available</div>
                         )}
                       </div>
                     </div>
                   )}
                 </div>
-              ))}
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
             </div>
 
             {/* Load More Button */}
             {hasNextPage && (
               <div className="mt-6 text-center">
-                <GlassButton
-                  variant="secondary"
+                    <button
                   onClick={loadMoreCustomers}
                   disabled={loadingMore}
-                  className="px-8 py-3"
+                      className="inline-flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loadingMore ? (
-                    <div className="flex items-center space-x-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        <>
+                          <LoadingSpinner size="sm" color="white" />
                       <span>Loading...</span>
-                    </div>
+                        </>
                   ) : (
-                    `Load More (${customers.length} of ${totalCount})`
+                        <>
+                          <span>Load More ({customers.length} of {totalCount})</span>
+                        </>
                   )}
-                </GlassButton>
+                    </button>
               </div>
             )}
 
             {/* Pagination Info */}
-            <div className="mt-4 text-center text-sm text-gray-600">
+                <div className="mt-4 text-center text-sm text-gray-600 font-medium">
               Showing {customers.length} of {totalCount} customers
               {totalPages > 1 && (
                 <span> • Page {currentPage} of {totalPages}</span>
               )}
             </div>
-
-            {customers.length === 0 && !loading && (
-              <div className="text-center py-8 text-gray-500">
-                <div className="text-4xl mb-2">👥</div>
-                <div>No loyalty customers found</div>
-                <div className="text-sm mt-1">Try adjusting your search or filters</div>
-              </div>
+              </>
             )}
-          </GlassCard>
-        </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
+            {/* Sidebar - Tiers and Rewards */}
+            <div className="p-6 border-t border-gray-100 bg-gray-50">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Loyalty Tiers */}
-          <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Loyalty Tiers</h3>
+                <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Crown className="w-5 h-5 text-purple-600" />
+                    Loyalty Tiers
+                  </h3>
             <div className="space-y-3">
               {tiers.map((tier, index) => (
-                <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                      <div key={index} className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200 hover:border-purple-300 transition-all">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium text-gray-900">{tier.name}</div>
-                    <div className="text-sm text-gray-600">{tier.discount}% discount</div>
+                          <div className="font-semibold text-gray-900">{tier.name}</div>
+                          <div className="text-sm font-bold text-purple-600">{tier.discount}% discount</div>
                   </div>
-                  <div className="text-xs text-gray-600 mb-2">
+                        <div className="text-xs text-gray-600 mb-2 font-medium">
                     {tier.minPoints} - {tier.maxPoints === 999999 ? '∞' : tier.maxPoints} points
                   </div>
                   <div className="text-xs text-gray-500">
@@ -1411,28 +1606,31 @@ const CustomerLoyaltyPage: React.FC = () => {
                 </div>
               ))}
             </div>
-          </GlassCard>
+                </div>
 
           {/* Available Rewards */}
-          <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Available Rewards</h3>
+                <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Gift className="w-5 h-5 text-pink-600" />
+                    Available Rewards
+                  </h3>
             <div className="space-y-3">
               {rewards.map((reward) => (
-                <div key={reward.id} className="p-3 bg-gray-50 rounded-lg">
+                      <div key={reward.id} className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200 hover:border-pink-300 transition-all">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium text-gray-900">{reward.name}</div>
-                    <div className="text-sm font-semibold text-blue-600">{reward.points} points</div>
+                          <div className="font-semibold text-gray-900">{reward.name}</div>
+                          <div className="text-sm font-bold text-pink-600">{reward.points} points</div>
                   </div>
                   <div className="text-xs text-gray-600 mb-2">{reward.description}</div>
                   <div className="flex justify-between items-center">
-                    <span className={`text-xs px-2 py-1 rounded-full ${
+                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                       reward.active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'
                     }`}>
                       {reward.active ? 'Active' : 'Inactive'}
                     </span>
                     <button
                       onClick={() => alert(`Redeem ${reward.name}`)}
-                      className="text-xs text-blue-600 hover:text-blue-800"
+                            className="text-xs text-pink-600 hover:text-pink-800 font-semibold"
                     >
                       Redeem
                     </button>
@@ -1440,37 +1638,11 @@ const CustomerLoyaltyPage: React.FC = () => {
                 </div>
               ))}
             </div>
-          </GlassCard>
         </div>
       </div>
-
-      {/* Quick Actions */}
-      <div className="mt-6">
-        <GlassCard className="p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <button className="p-4 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors">
-              <div className="text-blue-600 text-2xl mb-2">🎁</div>
-              <div className="font-medium text-gray-900">Send Rewards</div>
-              <div className="text-sm text-gray-600">Send points to customers</div>
-            </button>
-            <button className="p-4 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors">
-              <div className="text-green-600 text-2xl mb-2">📧</div>
-              <div className="font-medium text-gray-900">Email Campaign</div>
-              <div className="text-sm text-gray-600">Send loyalty promotions</div>
-            </button>
-            <button className="p-4 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors">
-              <div className="text-purple-600 text-2xl mb-2">📊</div>
-              <div className="font-medium text-gray-900">Loyalty Analytics</div>
-              <div className="text-sm text-gray-600">View program performance</div>
-            </button>
-            <button className="p-4 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors">
-              <div className="text-orange-600 text-2xl mb-2">⚙️</div>
-              <div className="font-medium text-gray-900">Program Settings</div>
-              <div className="text-sm text-gray-600">Configure loyalty rules</div>
-            </button>
           </div>
-        </GlassCard>
+          </div>
+        </div>
       </div>
 
       {/* Customer Analytics Modal */}

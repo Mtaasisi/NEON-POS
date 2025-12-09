@@ -273,8 +273,35 @@ export const useInventoryStore = create<InventoryState>()(
       forceRefreshProducts: async () => {
         console.log('🔄 [useInventoryStore] Force refreshing products...');
         const state = get();
-        
-        // Clear all caches and reset loading state to ensure fresh data
+
+        // Clear all caches - memory, localStorage, query cache, and enhanced cache
+        try {
+          // 1. Clear localStorage product cache (using already imported service)
+          productCacheService.clearProducts();
+          console.log('✅ [useInventoryStore] localStorage cache cleared');
+        } catch (error) {
+          console.warn('⚠️ [useInventoryStore] Failed to clear localStorage cache:', error);
+        }
+
+        try {
+          // 2. Clear query cache
+          const { invalidateCachePattern } = await import('../../../lib/queryCache');
+          invalidateCachePattern('^products:');
+          console.log('✅ [useInventoryStore] Query cache cleared');
+        } catch (error) {
+          console.warn('⚠️ [useInventoryStore] Failed to clear query cache:', error);
+        }
+
+        try {
+          // 3. Clear enhanced cache
+          const { smartCache } = await import('../../../lib/enhancedCacheManager');
+          await smartCache.invalidateCache('products');
+          console.log('✅ [useInventoryStore] Enhanced cache cleared');
+        } catch (error) {
+          console.warn('⚠️ [useInventoryStore] Failed to clear enhanced cache:', error);
+        }
+
+        // 4. Clear memory cache and reset loading state
         set({
           dataCache: { ...state.dataCache, products: null },
           cacheTimestamp: 0,
@@ -282,9 +309,9 @@ export const useInventoryStore = create<InventoryState>()(
           isDataLoading: false, // Reset loading state to allow refresh
           isLoading: false
         });
-        
+
         // Load fresh data with force=true to bypass loading check
-        await get().loadProducts({ page: 1, limit: 200 }, true);
+        await get().loadProducts({ page: 1, limit: 500 }, true);
         console.log('✅ [useInventoryStore] Products force refreshed');
       },
 

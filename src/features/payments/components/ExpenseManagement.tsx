@@ -14,13 +14,14 @@ import {
   TrendingDown, AlertCircle, RefreshCw, Eye, Edit3, Trash2,
   Building, Receipt, FileText, X, Lightbulb, Package, Truck,
   User, Home, CreditCard, Shield, Bug, ChevronDown, ChevronUp,
-  Activity, Database, Clock, CheckCircle, XCircle, AlertTriangle
+  Activity, Database, Clock, CheckCircle, XCircle, AlertTriangle, Repeat
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
 import { financeAccountService, FinanceAccount } from '../../../lib/financeAccountService';
 import { useSuccessModal } from '../../../hooks/useSuccessModal';
 import SuccessModal from '../../../components/ui/SuccessModal';
+import RecurringExpenseManagement from './RecurringExpenseManagement';
 
 interface Expense {
   id: string;
@@ -79,6 +80,7 @@ const ExpenseManagement: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadingStep, setLoadingStep] = useState<string>('Initializing...');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showRecurringModal, setShowRecurringModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [accountFilter, setAccountFilter] = useState('all');
@@ -729,30 +731,40 @@ const ExpenseManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Expense Management</h2>
-          <p className="text-gray-600">Track and manage business expenses</p>
-        </div>
-        <div className="flex gap-2">
-          <GlassButton 
-            onClick={() => setShowDebugPanel(!showDebugPanel)} 
-            variant={showDebugPanel ? "primary" : "secondary"}
-            className="flex items-center gap-2"
-          >
-            <Bug size={16} />
-            Debug
-          </GlassButton>
-          <GlassButton onClick={fetchExpenses} variant="secondary">
-            <RefreshCw size={16} />
-            Refresh
-          </GlassButton>
-          <GlassButton onClick={() => setShowAddModal(true)}>
-            <Plus size={16} />
-            Add Expense
-          </GlassButton>
-        </div>
+      {/* Action Buttons */}
+      <div className="flex gap-3 flex-wrap">
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg hover:from-orange-600 hover:to-amber-700"
+        >
+          <Plus size={18} />
+          <span>Add Expense</span>
+        </button>
+        <button
+          onClick={() => setShowRecurringModal(true)}
+          className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700"
+        >
+          <Repeat size={18} />
+          <span>Recurring Expenses</span>
+        </button>
+        <button
+          onClick={fetchExpenses}
+          className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 disabled:opacity-50 bg-white shadow-sm"
+        >
+          <RefreshCw size={18} />
+          <span>Refresh</span>
+        </button>
+        <button
+          onClick={() => setShowDebugPanel(!showDebugPanel)}
+          className={`flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 ${
+            showDebugPanel
+              ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg hover:from-purple-600 hover:to-purple-700'
+              : 'border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-purple-300 bg-white shadow-sm'
+          }`}
+        >
+          <Bug size={18} />
+          <span>Debug</span>
+        </button>
       </div>
 
       {/* Debug Panel */}
@@ -1283,6 +1295,36 @@ const ExpenseManagement: React.FC = () => {
 
       {/* Success Modal */}
       <SuccessModal {...successModal.props} />
+
+      {/* Recurring Expenses Modal */}
+      {showRecurringModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Repeat className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Recurring Expenses</h3>
+                  <p className="text-sm text-gray-600">Manage automated recurring expenses</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRecurringModal(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <RecurringExpenseManagement />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

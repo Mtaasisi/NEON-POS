@@ -57,17 +57,30 @@ class CategoryService {
     const startTime = performance.now();
 
     try {
-      // Ensure we use proper Supabase syntax - no custom parameters
+      // Categories should always be shared - fetch ALL active categories regardless of branch
+      // This ensures parent-child relationships are preserved and the full hierarchy is visible
+      // Since categories are organizational data, they should be visible across all branches
       let query = supabase
         .from('lats_categories')
         .select('*')
-        .order('name');
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
 
-      // Apply branch filtering based on isolation settings
-      const { addBranchFilter } = await import('../../../lib/branchAwareApi');
-      query = await addBranchFilter(query, 'categories');
+      // Always fetch all shared categories + any branch-specific categories
+      // This ensures the complete category tree is available
+      const { getCurrentBranchId } = await import('../../../lib/branchAwareApi');
+      const branchId = getCurrentBranchId();
+      
+      if (branchId) {
+        // Include: shared categories OR categories for current branch
+        query = query.or(`is_shared.eq.true,branch_id.eq.${branchId}`);
+      } else {
+        // No branch selected - show all shared categories
+        query = query.eq('is_shared', true);
+      }
 
-      console.log('🔍 [CategoryService] Executing categories query with proper syntax and branch filtering');
+      console.log('🔍 [CategoryService] Fetching all categories (shared + branch-specific) to preserve hierarchy');
       
       const { data, error } = await query;
 

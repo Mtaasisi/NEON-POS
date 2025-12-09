@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-
+import { createPortal } from 'react-dom';
 import { X, Upload, Download, AlertCircle, CheckCircle, UserPlus, FileText, Info, Shield, FileSpreadsheet, XCircle, CheckCheck } from 'lucide-react';
-import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassButton from '../../shared/components/ui/GlassButton';
 import { Customer } from '../../../types';
 import { toast } from 'react-hot-toast';
 import { addCustomerToDb } from '../../../lib/customerApi';
 import { useAuth } from '../../../context/AuthContext';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 interface ExcelImportModalProps {
   isOpen: boolean;
@@ -662,21 +661,65 @@ Alice Brown,alice@example.com,655123456,female,DSM,655123456,June,10,INSTAGRAM,S
     toast.success('Template downloaded! To add dropdowns in Excel: Select column → Data → Data Validation → List → Enter values separated by commas');
   };
 
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
+
+  // Additional scroll prevention for html element
+  useEffect(() => {
+    if (isOpen) {
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      document.documentElement.style.overflow = 'hidden';
+      
+      return () => {
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
+    }
+  }, [isOpen]);
+
   // Only allow admin users to access this modal
   if (!isOpen || currentUser?.role !== 'admin') return null;
 
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[99999] p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
+  return createPortal(
+    <>
+      <div 
+        className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]" 
+        style={{
+          top: 0, 
+          left: 0, 
+          right: 0,
+          bottom: 0,
+          overflow: 'hidden',
+          overscrollBehavior: 'none'
+        }}
+        role="dialog" 
+        aria-modal="true" 
+        aria-labelledby="excel-import-title"
+        onClick={handleClose}
+      >
+        <div 
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden relative"
+          style={{ pointerEvents: 'auto' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Close Button */}
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={isImporting}
+            className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50 disabled:opacity-50"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
         {/* Header with Step Indicator */}
-        <div className="p-8 bg-gradient-to-r from-green-600 to-emerald-600 flex-shrink-0">
+          <div className="p-8 bg-gradient-to-r from-green-600 to-emerald-600 flex-shrink-0 border-b border-green-700">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg">
                 <Upload className="w-8 h-8 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-white mb-1">
+                  <h2 className="text-2xl font-bold text-white mb-1" id="excel-import-title">
                   Import Customers from Excel
                 </h2>
                 <p className="text-base text-green-100 font-medium">
@@ -686,13 +729,6 @@ Alice Brown,alice@example.com,655123456,female,DSM,655123456,June,10,INSTAGRAM,S
                 </p>
               </div>
             </div>
-            <button
-              onClick={handleClose}
-              disabled={isImporting}
-              className="w-9 h-9 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full flex items-center justify-center transition-colors disabled:opacity-50"
-            >
-              <X className="w-5 h-5 text-white" />
-            </button>
           </div>
           
           {/* Progress Steps */}
@@ -1384,9 +1420,11 @@ Alice Brown,alice@example.com,655123456,female,DSM,655123456,June,10,INSTAGRAM,S
             )}
           </div>
         )}
+        </div>
       </div>
-    </div>
-  </div>
+      </div>
+    </>,
+    document.body
   );
 };
 

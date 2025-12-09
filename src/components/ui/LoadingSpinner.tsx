@@ -57,7 +57,9 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
     }
   };
 
-  const colors = colorClasses[color];
+  // Ensure color is valid, default to 'blue' if invalid
+  const validColor = colorClasses[color] ? color : 'blue';
+  const colors = colorClasses[validColor];
 
   return (
     <div className={`flex flex-col items-center justify-center ${className}`}>

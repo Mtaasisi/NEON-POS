@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassButton from '../../shared/components/ui/GlassButton';
-import PageHeader from '../components/ui/PageHeader';
+import { BackButton } from '../../shared/components/ui/BackButton';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import {
   Package,
   Plus,
@@ -24,7 +26,15 @@ import {
   Check,
   X,
   RefreshCw,
-  Info
+  Info,
+  ChevronDown,
+  ChevronUp,
+  Calendar,
+  FileText,
+  ShoppingCart,
+  ChevronLeft,
+  ChevronRight,
+  MapPin
 } from 'lucide-react';
 import {
   getStockTransfers,
@@ -72,6 +82,7 @@ const StockTransferPage: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedTransfer, setSelectedTransfer] = useState<StockTransfer | null>(null);
   const [stats, setStats] = useState<any>(null);
+  const [expandedTransfer, setExpandedTransfer] = useState<string | null>(null);
 
   // Get current branch
   const currentBranchId = localStorage.getItem('current_branch_id') || '';
@@ -191,98 +202,176 @@ const StockTransferPage: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <PageHeader
-        title="Stock Transfer Management"
-        subtitle="Manage inventory transfers between branches"
-        actions={[
-          {
-            label: 'Refresh',
-            onClick: () => window.location.reload(), // Simple refresh for now
-            variant: 'secondary' as const,
-            icon: <RefreshCw size={18} />,
-            disabled: loading
-          },
-          {
-            label: 'New Transfer',
-            onClick: () => setShowCreateModal(true),
-            variant: 'primary' as const,
-            icon: <Plus size={18} />
-          }
-        ]}
-      />
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Combined Container - All sections in one */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section - Enhanced Modal Style */}
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            {/* Left: Icon + Text */}
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                <Truck className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">Stock Transfer Management</h1>
+                <p className="text-sm text-gray-600">Manage inventory transfers between branches</p>
+              </div>
+            </div>
 
-      {/* Stats Cards */}
+            {/* Right: Back Button */}
+            <BackButton to="/lats" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
+          </div>
+        </div>
+
+        {/* Action Bar - Enhanced Design */}
+        <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
+          <div className="flex gap-3 flex-wrap">
+            {/* Create Transfer Button */}
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700"
+            >
+              <Plus size={18} />
+              <span>New Transfer</span>
+            </button>
+
+            {/* Refresh Button */}
+            <button
+              onClick={() => loadTransfers()}
+              disabled={loading}
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-gray-500 to-gray-600 text-white shadow-lg hover:from-gray-600 hover:to-gray-700 disabled:opacity-50"
+            >
+              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+              <span>Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Main Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Fixed Statistics Section */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-          <GlassCard className="p-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-              <div className="text-xs text-gray-600 mt-1">Total</div>
+            <div className="p-6 pb-0 flex-shrink-0">
+              <div 
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
+                  gap: '1rem'
+                }}
+              >
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                      <Package className="w-6 h-6 text-white" />
             </div>
-          </GlassCard>
-          <GlassCard className="p-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
-              <div className="text-xs text-gray-600 mt-1">Pending</div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-600 mb-1">Total</p>
+                      <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
             </div>
-          </GlassCard>
-          <GlassCard className="p-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{stats.approved}</div>
-              <div className="text-xs text-gray-600 mt-1">Approved</div>
             </div>
-          </GlassCard>
-          <GlassCard className="p-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{stats.in_transit}</div>
-              <div className="text-xs text-gray-600 mt-1">In Transit</div>
             </div>
-          </GlassCard>
-          <GlassCard className="p-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-700">{stats.completed}</div>
-              <div className="text-xs text-gray-600 mt-1">Completed</div>
+                
+                <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-5 hover:bg-yellow-100 hover:border-yellow-300 transition-all shadow-sm hover:shadow-md">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-yellow-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                      <Clock className="w-6 h-6 text-white" />
             </div>
-          </GlassCard>
-          <GlassCard className="p-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-red-600">{stats.rejected}</div>
-              <div className="text-xs text-gray-600 mt-1">Rejected</div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-600 mb-1">Pending</p>
+                      <p className="text-2xl font-bold text-gray-900">{stats.pending}</p>
             </div>
-          </GlassCard>
-          <GlassCard className="p-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-600">{stats.cancelled}</div>
-              <div className="text-xs text-gray-600 mt-1">Cancelled</div>
             </div>
-          </GlassCard>
+                </div>
+                
+                <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                      <CheckCircle className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-600 mb-1">Approved</p>
+                      <p className="text-2xl font-bold text-gray-900">{stats.approved}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                      <Truck className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-600 mb-1">In Transit</p>
+                      <p className="text-2xl font-bold text-gray-900">{stats.in_transit}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                      <CheckCircle className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-600 mb-1">Completed</p>
+                      <p className="text-2xl font-bold text-gray-900">{stats.completed}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 hover:bg-red-100 hover:border-red-300 transition-all shadow-sm hover:shadow-md">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                      <XCircle className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-600 mb-1">Rejected</p>
+                      <p className="text-2xl font-bold text-gray-900">{stats.rejected}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-5 hover:bg-gray-100 hover:border-gray-300 transition-all shadow-sm hover:shadow-md">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-gray-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                      <XCircle className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-600 mb-1">Cancelled</p>
+                      <p className="text-2xl font-bold text-gray-900">{stats.cancelled}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
         </div>
       )}
 
-      {/* Filters */}
-      <GlassCard className="p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          {/* Search */}
+          {/* Fixed Search and Filters Section - Enhanced */}
+          <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
+            <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
+              <div className="flex flex-col lg:flex-row gap-4">
+                {/* Search Bar */}
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
                 placeholder="Search by branch, product, or SKU..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 bg-white font-medium"
               />
             </div>
           </div>
 
+                {/* Filters Row */}
+                <div className="flex flex-wrap items-center gap-3">
           {/* Status Filter */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 bg-white font-medium min-w-[140px]"
           >
             <option value="all">All Statuses</option>
             <option value="pending">Pending</option>
@@ -297,82 +386,65 @@ const StockTransferPage: React.FC = () => {
           <select
             value={directionFilter}
             onChange={(e) => setDirectionFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 bg-white font-medium min-w-[160px]"
           >
             <option value="all">All Transfers</option>
             <option value="sent">Sent Only</option>
             <option value="received">Received Only</option>
           </select>
         </div>
-      </GlassCard>
+              </div>
+            </div>
+          </div>
 
-      {/* Transfers List */}
-      <GlassCard className="overflow-hidden">
+          {/* Scrollable Transfers List */}
+          <div className="flex-1 overflow-y-auto px-6 py-6 border-t border-gray-100">
         {loading ? (
-          <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading transfers...</p>
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
         ) : filteredTransfers.length === 0 ? (
-          <div className="p-8 text-center">
-            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No transfers found</h3>
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <Package className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">No transfers found</h3>
             <p className="text-gray-600 mb-6">
               {searchTerm || statusFilter !== 'all' || directionFilter !== 'all'
-                ? 'Try adjusting your filters'
-                : 'Create your first stock transfer to get started'}
+                    ? 'Try adjusting your search or filters'
+                    : 'Get started by creating your first stock transfer'}
             </p>
             {!searchTerm && statusFilter === 'all' && directionFilter === 'all' && (
-              <GlassButton
+                  <button
                 onClick={() => setShowCreateModal(true)}
-                icon={<Plus size={18} />}
-                className="bg-gradient-to-r from-blue-500 to-blue-600 text-white"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
               >
-                Create Transfer
-              </GlassButton>
+                    <Plus className="w-4 h-4" />
+                    <span>Create Transfer</span>
+                  </button>
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Direction
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Product
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Quantity
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredTransfers.map((transfer) => (
-                  <TransferRow
-                    key={transfer.id}
-                    transfer={transfer}
-                    currentBranchId={currentBranchId}
-                    currentUserId={currentUser?.id || ''}
-                    onView={() => setSelectedTransfer(transfer)}
-                    onUpdate={loadTransfers}
-                  />
-                ))}
-              </tbody>
-            </table>
+              <div className="space-y-3">
+            {filteredTransfers.map((transfer) => (
+              <TransferCard
+                key={transfer.id}
+                transfer={transfer}
+                currentBranchId={currentBranchId}
+                currentUserId={currentUser?.id || ''}
+                isExpanded={expandedTransfer === transfer.id}
+                onToggleExpanded={() => setExpandedTransfer(expandedTransfer === transfer.id ? null : transfer.id)}
+                onView={() => setSelectedTransfer(transfer)}
+                onUpdate={loadTransfers}
+                getStatusIcon={getStatusIcon}
+                getStatusBadge={getStatusBadge}
+              />
+            ))}
           </div>
         )}
-      </GlassCard>
+          </div>
+        </div>
+      </div>
 
       {/* Create Transfer Modal */}
       {showCreateModal && (
@@ -401,21 +473,29 @@ const StockTransferPage: React.FC = () => {
   );
 };
 
-// Transfer Row Component
-interface TransferRowProps {
+// Transfer Card Component
+interface TransferCardProps {
   transfer: StockTransfer;
   currentBranchId: string;
   currentUserId: string;
+  isExpanded: boolean;
+  onToggleExpanded: () => void;
   onView: () => void;
   onUpdate: () => void;
+  getStatusIcon: (status: string) => React.ReactNode;
+  getStatusBadge: (status: string) => React.ReactNode;
 }
 
-const TransferRow: React.FC<TransferRowProps> = ({
+const TransferCard: React.FC<TransferCardProps> = ({
   transfer,
   currentBranchId,
   currentUserId,
+  isExpanded,
+  onToggleExpanded,
   onView,
-  onUpdate
+  onUpdate,
+  getStatusIcon,
+  getStatusBadge
 }) => {
   const isSent = transfer.from_branch_id === currentBranchId;
   const [processing, setProcessing] = useState(false);
@@ -425,6 +505,23 @@ const TransferRow: React.FC<TransferRowProps> = ({
   const batchInfo = transfer.notes?.match(/\[BATCH:.*?\]\s*(\d+)\s*products/);
   const batchProductCount = batchInfo ? parseInt(batchInfo[1]) : 0;
   const isBatch = batchProductCount > 1;
+
+  const formatDate = (date: string | Date) => {
+    const d = new Date(date);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      approved: 'bg-green-100 text-green-800 border-green-200',
+      in_transit: 'bg-blue-100 text-blue-800 border-blue-200',
+      completed: 'bg-green-100 text-green-800 border-green-200',
+      rejected: 'bg-red-100 text-red-800 border-red-200',
+      cancelled: 'bg-gray-100 text-gray-800 border-gray-200'
+    };
+    return colors[status] || colors.pending;
+  };
 
   const handleApprove = async () => {
     const message = `Approve transfer of ${transfer.quantity} units of ${transfer.variant?.variant_name} to ${transfer.to_branch?.name}? Stock will remain reserved until completion.`;
@@ -520,222 +617,360 @@ const TransferRow: React.FC<TransferRowProps> = ({
     }
   };
 
+  const getActionButtons = () => {
+    const actions = [];
+    
+    // View Details button (always available)
+    actions.push({
+      type: 'view',
+      label: 'View Details',
+      icon: <Eye className="w-4 h-4" />,
+      color: 'bg-blue-600 hover:bg-blue-700',
+      onClick: onView
+    });
+
+    // Action buttons based on status and direction
+    if (!isSent && transfer.status === 'pending') {
+      actions.push({
+        type: 'approve',
+        label: 'Approve',
+        icon: <Check className="w-4 h-4" />,
+        color: 'bg-green-600 hover:bg-green-700',
+        onClick: handleApprove,
+        disabled: processing
+      });
+      actions.push({
+        type: 'reject',
+        label: 'Reject',
+        icon: <X className="w-4 h-4" />,
+        color: 'bg-red-600 hover:bg-red-700',
+        onClick: handleReject,
+        disabled: processing
+      });
+    }
+
+    if (isSent && transfer.status === 'approved') {
+      actions.push({
+        type: 'ship',
+        label: 'Mark In Transit',
+        icon: <Truck className="w-4 h-4" />,
+        color: 'bg-blue-600 hover:bg-blue-700',
+        onClick: handleMarkInTransit,
+        disabled: processing
+      });
+    }
+
+    if (!isSent && transfer.status === 'in_transit') {
+      actions.push({
+        type: 'receive',
+        label: 'Receive',
+        icon: <CheckCircle className="w-4 h-4" />,
+        color: 'bg-green-600 hover:bg-green-700',
+        onClick: handleComplete,
+        disabled: processing
+      });
+    }
+
+    if ((transfer.status === 'pending' || transfer.status === 'approved') && isSent) {
+      actions.push({
+        type: 'cancel',
+        label: 'Cancel',
+        icon: <XCircle className="w-4 h-4" />,
+        color: 'bg-gray-600 hover:bg-gray-700',
+        onClick: handleCancel,
+        disabled: processing
+      });
+    }
+
+    return actions;
+  };
+
+  const actionButtons = getActionButtons();
+
   return (
-    <tr className="hover:bg-gray-50">
-      <td className="px-6 py-4">
-        <div className="flex items-center gap-2">
-          {isSent ? (
-            <>
-              <Send className="w-4 h-4 text-orange-500" />
-              <div className="text-sm">
-                <div className="font-medium text-gray-900">To: {transfer.to_branch?.name}</div>
-                <div className="text-gray-500">{transfer.to_branch?.city}</div>
+    <div
+      className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 hover:shadow-lg cursor-pointer relative ${
+        isExpanded
+          ? 'border-blue-500 shadow-xl' 
+          : 'border-gray-200 hover:border-orange-400'
+      }`}
+    >
+      {/* Mobile Card View - shown on small screens */}
+      <div className="md:hidden p-4">
+        <div className="space-y-3">
+          {/* Direction and Status */}
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md ${
+                isSent ? 'bg-gradient-to-br from-orange-500 to-orange-600' : 'bg-gradient-to-br from-green-500 to-green-600'
+              }`}>
+                {isSent ? <Send className="w-6 h-6 text-white" /> : <Inbox className="w-6 h-6 text-white" />}
               </div>
-            </>
-          ) : (
-            <>
-              <Inbox className="w-4 h-4 text-green-500" />
-              <div className="text-sm">
-                <div className="font-medium text-gray-900">From: {transfer.from_branch?.name}</div>
-                <div className="text-gray-500">{transfer.from_branch?.city}</div>
+              <div>
+                <h3 className="font-bold text-gray-900 text-sm">
+                  {isSent ? `To: ${transfer.to_branch?.name}` : `From: ${transfer.from_branch?.name}`}
+                </h3>
+                <p className="text-xs text-gray-500">{formatDate(transfer.created_at)}</p>
               </div>
-            </>
-          )}
-        </div>
-      </td>
-      <td className="px-6 py-4">
-        <div className="text-sm">
-          <div className="font-medium text-gray-900">
-            {(transfer.variant?.product as any)?.name || 'N/A'}
-            {isBatch && (
-              <span className="ml-1 text-xs font-normal text-blue-600">
-                and {batchProductCount - 1} more
-              </span>
-            )}
+            </div>
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-sm ${getStatusColor(transfer.status)}`}>
+              {getStatusIcon(transfer.status)}
+              <span className="capitalize">{transfer.status.replace('_', ' ')}</span>
+            </span>
           </div>
-          <div className="text-gray-500">
-            {isBatch ? (
-              <span className="text-blue-600 font-medium">
-                Batch Transfer • {batchProductCount} products
-              </span>
-            ) : (
-              <>
-                {/* Display user-defined variant name if it's not just "Default Variant" */}
-                {transfer.variant?.name && transfer.variant.name !== 'Default Variant' && (
-                  <span>{transfer.variant.name} • </span>
-                )}
-                {/* Fall back to variant_name for trade-ins */}
-                {!transfer.variant?.name && transfer.variant?.variant_name && transfer.variant.variant_name !== 'Default Variant' && (
-                  <span>{transfer.variant.variant_name} • </span>
-                )}
-                SKU: {transfer.variant?.sku || 'N/A'}
-              </>
-            )}
-          </div>
-        </div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm font-semibold text-gray-900">
-          {isBatch ? (
-            <>
-              {transfer.quantity}
-              <span className="ml-1 text-xs font-normal text-gray-500">
-                (batch)
-              </span>
-            </>
-          ) : (
-            `${transfer.quantity} units`
-          )}
-        </div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
-          transfer.status === 'pending' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-          transfer.status === 'approved' ? 'bg-green-100 text-green-800 border-green-200' :
-          transfer.status === 'in_transit' ? 'bg-blue-100 text-blue-800 border-blue-200' :
-          transfer.status === 'completed' ? 'bg-green-100 text-green-800 border-green-200' :
-          transfer.status === 'rejected' ? 'bg-red-100 text-red-800 border-red-200' :
-          'bg-gray-100 text-gray-800 border-gray-200'
-        }`}>
-          {transfer.status.charAt(0).toUpperCase() + transfer.status.slice(1).replace('_', ' ')}
-        </span>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-        {new Date(transfer.created_at).toLocaleDateString()}
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onView}
-            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            title="View Details"
-          >
-            <Eye className="w-4 h-4" />
-          </button>
-
-          {/* Action buttons based on status and direction */}
-          {!isSent && transfer.status === 'pending' && (
-            <>
-              <button
-                onClick={handleApprove}
-                disabled={processing}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
-                title="Approve this transfer request - stock will remain reserved"
-              >
-                {processing ? (
-                  <div className="flex items-center gap-1.5">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Processing...
-                  </div>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Approve
-                  </>
-                )}
-              </button>
-              <button
-                onClick={handleReject}
-                disabled={processing}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
-                title="Reject this transfer - reserved stock will be released"
-              >
-                {processing ? (
-                  <div className="flex items-center gap-1.5">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Processing...
-                  </div>
-                ) : (
-                  <>
-                    <X className="w-4 h-4" />
-                    Reject
-                  </>
-                )}
-              </button>
-            </>
-          )}
-
-          {isSent && transfer.status === 'approved' && (
-            <button
-              onClick={handleMarkInTransit}
-              disabled={processing}
-              className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
-              title="Mark as shipped - notify receiving branch"
-            >
-              {processing ? (
-                <div className="flex items-center gap-1.5">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Shipping...
-                </div>
+          
+          {/* Product Info */}
+          <div>
+            <div className="font-medium text-gray-900 text-sm">
+              {(transfer.variant?.product as any)?.name || 'N/A'}
+              {isBatch && (
+                <span className="ml-1 text-xs font-normal text-blue-600">
+                  and {batchProductCount - 1} more
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-gray-500">
+              {isBatch ? (
+                <span className="text-blue-600 font-medium">
+                  Batch Transfer • {batchProductCount} products
+                </span>
               ) : (
                 <>
-                  <Truck className="w-4 h-4" />
-                  Ship
+                  {transfer.variant?.name && transfer.variant.name !== 'Default Variant' && (
+                    <span>{transfer.variant.name} • </span>
+                  )}
+                  {!transfer.variant?.name && transfer.variant?.variant_name && transfer.variant.variant_name !== 'Default Variant' && (
+                    <span>{transfer.variant.variant_name} • </span>
+                  )}
+                  SKU: {transfer.variant?.sku || 'N/A'}
                 </>
               )}
-            </button>
-          )}
-
-          {/* Show In Transit status for receiver */}
-          {!isSent && transfer.status === 'in_transit' && (
-            <div className="flex items-center gap-2">
-              <div className="px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-100 rounded-lg border border-blue-200 flex items-center gap-1.5">
-                <Truck className="w-4 h-4" />
-                In Transit
-              </div>
-              <button
-                onClick={handleComplete}
-                disabled={processing}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
-                title="Click when items arrive"
-              >
-                {processing ? (
-                  <div className="flex items-center gap-1.5">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Receiving...
-                  </div>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4" />
-                    Receive
-                  </>
-                )}
-              </button>
             </div>
-          )}
-
-          {/* Show waiting message if only approved (not shipped yet) */}
-          {!isSent && transfer.status === 'approved' && (
-            <div className="px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-100 rounded-lg border border-amber-200 flex items-center gap-1.5">
-              <Clock className="w-4 h-4" />
-              Not Shipped Yet
-            </div>
-          )}
-
-          {/* Cancel button for senders */}
-          {(transfer.status === 'pending' || transfer.status === 'approved') && isSent && (
-            <button
-              onClick={handleCancel}
-              disabled={processing}
-              className="px-3 py-1.5 text-sm font-medium text-white bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
-              title="Cancel this transfer and release reserved stock"
-            >
-              {processing ? (
-                <div className="flex items-center gap-1.5">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Cancelling...
-                </div>
-              ) : (
+          </div>
+          
+          {/* Quantity */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold text-gray-900">
+              {isBatch ? (
                 <>
-                  <XCircle className="w-4 h-4" />
-                  Cancel
+                  {transfer.quantity}
+                  <span className="ml-1 text-xs font-normal text-gray-500">(batch)</span>
                 </>
+              ) : (
+                `${transfer.quantity} units`
               )}
-            </button>
-          )}
+            </span>
+          </div>
+          
+          {/* Actions */}
+          <div className="flex items-center gap-2 pt-2">
+            {actionButtons.map((action, index) => (
+              <button
+                key={`${action.type}-${index}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!action.disabled && action.onClick) {
+                    action.onClick();
+                  }
+                }}
+                disabled={action.disabled}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 text-white rounded-xl transition-all shadow-md hover:shadow-lg text-xs font-semibold ${action.color} disabled:opacity-50`}
+                title={action.label}
+              >
+                {action.icon}
+                <span>{action.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
-      </td>
-    </tr>
+      </div>
+      
+      {/* Desktop List View - Expandable - shown on md+ screens */}
+      <div className="hidden md:block w-full">
+        {/* Header - Clickable */}
+        <div 
+          className="flex items-start justify-between p-6 cursor-pointer"
+          onClick={onToggleExpanded}
+        >
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            {/* Expand/Collapse Icon */}
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
+              isExpanded ? 'bg-orange-500 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-600'
+            }`}>
+              <ChevronDown 
+                className={`w-5 h-5 transition-transform duration-200 ${
+                  isExpanded ? 'rotate-180' : ''
+                }`}
+              />
+            </div>
+            
+            {/* Main Content */}
+            <div className="flex-1 min-w-0">
+              {/* Direction and Status Row */}
+              <div className="flex items-center gap-3 mb-4 flex-wrap">
+                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg flex-shrink-0 ${
+                  isSent ? 'bg-orange-50 text-orange-700 border border-orange-200' : 'bg-green-50 text-green-700 border border-green-200'
+                }`}>
+                  {isSent ? <Send className="w-5 h-5" /> : <Inbox className="w-5 h-5" />}
+                  <span className="text-base font-semibold">
+                    {isSent ? `To: ${transfer.to_branch?.name}` : `From: ${transfer.from_branch?.name}`}
+                  </span>
+                </div>
+                
+                {/* Status Badge */}
+                <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-base font-bold ${getStatusColor(transfer.status)} flex items-center gap-2 flex-shrink-0`}>
+                  {getStatusIcon(transfer.status)}
+                  <span>{transfer.status.replace('_', ' ').split(' ').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</span>
+                </span>
+              </div>
+              
+              {/* Info Badges Row */}
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* Product Badge */}
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0">
+                  <Package className="w-5 h-5" />
+                  <span className="text-base font-semibold truncate max-w-[200px]">
+                    {(transfer.variant?.product as any)?.name || 'N/A'}
+                    {isBatch && (
+                      <span className="ml-1 text-xs font-normal">
+                        +{batchProductCount - 1} more
+                      </span>
+                    )}
+                  </span>
+                </div>
+
+                {/* Quantity & Date Combined Card */}
+                <div className="inline-flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-50 border border-gray-200">
+                  <div className="flex items-center gap-2">
+                    <Package className="w-5 h-5 text-teal-600" />
+                    <span className="text-base font-semibold text-teal-700">{transfer.quantity}</span>
+                    <span className="text-sm text-teal-600 font-medium">units</span>
+                  </div>
+                  <div className="w-px h-5 bg-gray-300"></div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-gray-600" />
+                    <span className="text-base font-medium text-gray-600">{formatDate(transfer.created_at)}</span>
+                  </div>
+                </div>
+
+                {/* Batch Badge */}
+                {isBatch && (
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-50 text-purple-700 border border-purple-200">
+                    <Package className="w-5 h-5" />
+                    <span className="text-sm font-medium">Batch: {batchProductCount} products</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Separator Line - Only show when expanded */}
+        {isExpanded && (
+          <div className="mt-5 pt-5 border-t-2 border-gray-200 relative">
+            <div className="absolute top-0 left-0 right-0 flex items-center justify-center -mt-3">
+              <span className="bg-white px-5 py-1.5 text-xs text-gray-500 font-semibold uppercase tracking-wider rounded-full border border-gray-200 shadow-sm">Transfer Details</span>
+            </div>
+          </div>
+        )}
+
+        {/* Expanded Content - Only show when expanded */}
+        {isExpanded && (
+          <div className="px-6 pb-6 pt-2">
+            {/* Product Details */}
+            <div className="mb-4">
+              <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-3">
+                <Package className="w-5 h-5 text-blue-600" />
+                Product Information
+              </h4>
+              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="font-medium text-gray-900 mb-1">
+                  {(transfer.variant?.product as any)?.name || 'N/A'}
+                </div>
+                <div className="text-sm text-gray-600">
+                  {isBatch ? (
+                    <span className="text-blue-600 font-medium">
+                      Batch Transfer • {batchProductCount} products
+                    </span>
+                  ) : (
+                    <>
+                      {transfer.variant?.name && transfer.variant.name !== 'Default Variant' && (
+                        <span>{transfer.variant.name} • </span>
+                      )}
+                      {!transfer.variant?.name && transfer.variant?.variant_name && transfer.variant.variant_name !== 'Default Variant' && (
+                        <span>{transfer.variant.variant_name} • </span>
+                      )}
+                      SKU: {transfer.variant?.sku || 'N/A'}
+                    </>
+                  )}
+                </div>
+                <div className="text-lg font-bold text-blue-600 mt-2">
+                  Quantity: {transfer.quantity} units
+                </div>
+              </div>
+            </div>
+
+            {/* Branch Information */}
+            <div className="mb-4 bg-blue-50 rounded-xl p-4 border border-blue-200">
+              <h4 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-blue-600" />
+                Branch Information
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div className="flex justify-between items-center py-2 border-b border-blue-200">
+                  <span className="text-gray-600 font-medium">From Branch:</span>
+                  <span className="font-bold text-gray-900">{transfer.from_branch?.name}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-blue-200">
+                  <span className="text-gray-600 font-medium">To Branch:</span>
+                  <span className="font-bold text-gray-900">{transfer.to_branch?.name}</span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-600 font-medium">City:</span>
+                  <span className="font-semibold text-gray-700">{transfer.to_branch?.city}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Notes Section */}
+            {transfer.notes && (
+              <div className="mb-4 bg-yellow-50 rounded-xl p-4 border border-yellow-200">
+                <h4 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-yellow-600" />
+                  Notes
+                </h4>
+                <p className="text-gray-700 leading-relaxed text-sm">{transfer.notes}</p>
+              </div>
+            )}
+
+            {/* Action Buttons Section */}
+            <div className="mt-5 pt-5 border-t-2 border-gray-200">
+              {actionButtons.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {actionButtons.map((action, index) => (
+                    <button
+                      key={`${action.type}-${index}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!action.disabled && action.onClick) {
+                          action.onClick();
+                        }
+                      }}
+                      disabled={action.disabled}
+                      className={`flex items-center justify-center gap-2 px-4 py-3 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-semibold text-sm ${action.color} disabled:opacity-50`}
+                    >
+                      {action.icon}
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
@@ -772,6 +1007,10 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
   const [recentlyAdded, setRecentlyAdded] = useState<string[]>([]);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [tempSelection, setTempSelection] = useState({ entity_id: '', quantity: 1 });
+  const [currentStep, setCurrentStep] = useState(1);
+  
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(true);
 
   useEffect(() => {
     loadBranches();
@@ -1174,53 +1413,131 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
 
   const tempSelectedVariant = variants.find(v => v.id === tempSelection.entity_id);
 
-  return (
+  // Step validation
+  const canProceedToStep2 = formData.to_branch_id !== '';
+  const canProceedToStep3 = selectedItems.length > 0;
+  const canSubmit = canProceedToStep2 && canProceedToStep3;
+
+  const handleNext = () => {
+    if (currentStep === 1 && canProceedToStep2) {
+      setCurrentStep(2);
+    } else if (currentStep === 2 && canProceedToStep3) {
+      setCurrentStep(3);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  return createPortal(
     <>
-      {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-black/50 z-40"
+        className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]" 
+        style={{
+          top: 0, 
+          left: 0, 
+          right: 0,
+          bottom: 0,
+          overflow: 'hidden',
+          overscrollBehavior: 'none'
+        }}
+        role="dialog" 
+        aria-modal="true" 
+        aria-labelledby="transfer-form-title"
         onClick={onClose}
-      />
-      
-      {/* Modal Container */}
-      <div className="fixed inset-0 flex items-center justify-center p-4 z-50 pointer-events-none">
+      >
         <div 
-          className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto pointer-events-auto"
+          className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden relative"
+          style={{ pointerEvents: 'auto' }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="p-6">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Package className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">Create Stock Transfer</h3>
-                  <p className="text-xs text-gray-500">Transfer products to another branch</p>
-                </div>
-              </div>
+          {/* Close Button */}
               <button
+            type="button"
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+            disabled={loading}
+            className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
               >
-                <X className="w-6 h-6" />
+            <X className="w-5 h-5" />
               </button>
+
+          {/* Icon Header - Fixed */}
+          <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+            <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <Truck className="w-8 h-8 text-white" />
             </div>
 
-            {/* Form Content */}
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Destination Branch Selection */}
+              {/* Text */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Destination Branch
+                <h3 className="text-2xl font-bold text-gray-900 mb-2" id="transfer-form-title">
+                  Create Stock Transfer
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {currentStep === 1 && 'Select destination branch'}
+                  {currentStep === 2 && 'Add products to transfer'}
+                  {currentStep === 3 && 'Review and confirm transfer'}
+                </p>
+              </div>
+            </div>
+
+            {/* Step Indicator */}
+            <div className="mt-6 flex items-center justify-center gap-2">
+              {/* Step 1 */}
+              <div className={`flex items-center gap-2 ${currentStep >= 1 ? 'text-blue-600' : 'text-gray-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-all ${
+                  currentStep > 1 ? 'bg-green-500 text-white' : currentStep === 1 ? 'bg-blue-600 text-white ring-4 ring-blue-200' : 'bg-gray-200 text-gray-500'
+                }`}>
+                  {currentStep > 1 ? <CheckCircle className="w-5 h-5" /> : '1'}
+                </div>
+                <span className="text-sm font-medium hidden sm:inline">Branch</span>
+              </div>
+              <div className={`w-8 sm:w-12 h-0.5 transition-colors ${currentStep >= 2 ? 'bg-blue-600' : 'bg-gray-300'}`} />
+              
+              {/* Step 2 */}
+              <div className={`flex items-center gap-2 ${currentStep >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-all ${
+                  currentStep > 2 ? 'bg-green-500 text-white' : currentStep === 2 ? 'bg-blue-600 text-white ring-4 ring-blue-200' : 'bg-gray-200 text-gray-500'
+                }`}>
+                  {currentStep > 2 ? <CheckCircle className="w-5 h-5" /> : '2'}
+                </div>
+                <span className="text-sm font-medium hidden sm:inline">Products</span>
+              </div>
+              <div className={`w-8 sm:w-12 h-0.5 transition-colors ${currentStep >= 3 ? 'bg-blue-600' : 'bg-gray-300'}`} />
+              
+              {/* Step 3 */}
+              <div className={`flex items-center gap-2 ${currentStep >= 3 ? 'text-blue-600' : 'text-gray-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-all ${
+                  currentStep === 3 ? 'bg-blue-600 text-white ring-4 ring-blue-200' : 'bg-gray-200 text-gray-500'
+                }`}>
+                  3
+                </div>
+                <span className="text-sm font-medium hidden sm:inline">Review</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Form - Scrollable */}
+          <div className="flex-1 overflow-y-auto p-6">
+            <form id="transfer-form" onSubmit={handleSubmit} className="space-y-6">
+              {/* Step 1: Select Destination Branch */}
+              {currentStep === 1 && (
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-base font-semibold text-gray-900 mb-3">
+                      Select Destination Branch
                 </label>
                 <select
                   value={formData.to_branch_id}
                   onChange={(e) => setFormData({ ...formData, to_branch_id: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 bg-white font-medium"
                   required
                 >
-                  <option value="">Select destination branch...</option>
+                      <option value="">Choose a branch...</option>
                   {branches.map((branch) => (
                     <option key={branch.id} value={branch.id}>
                       {branch.name} ({branch.code}) - {branch.city}
@@ -1229,9 +1546,30 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                 </select>
               </div>
 
-              {/* Product Search */}
+                  {formData.to_branch_id && (
+                    <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                      <div className="flex items-center gap-3">
+                        <MapPin className="w-5 h-5 text-blue-600" />
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <p className="font-semibold text-gray-900">
+                            {branches.find(b => b.id === formData.to_branch_id)?.name}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {branches.find(b => b.id === formData.to_branch_id)?.city}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Step 2: Select Products */}
+              {currentStep === 2 && (
+                <div className="space-y-6">
+                  {/* Search */}
+                  <div>
+                    <label className="block text-base font-semibold text-gray-900 mb-3">
                   Search Products
                 </label>
                 <div className="relative">
@@ -1242,15 +1580,15 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                     placeholder="Type product name or scan barcode..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-10 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                        className="w-full pl-10 pr-10 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 bg-white font-medium"
                   />
                   {searchTerm && (
                     <button
                       type="button"
                       onClick={() => setSearchTerm('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                     >
-                      <X className="w-4 h-4" />
+                          <X className="w-5 h-5" />
                     </button>
                   )}
                 </div>
@@ -1260,16 +1598,15 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Available Products */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-base font-semibold text-gray-900 mb-3">
                     Available Products
                     {!loadingProducts && filteredProducts.length > 0 && (
-                      <span className="ml-2 text-xs text-gray-500">
+                          <span className="ml-2 text-sm text-gray-500 font-normal">
                         ({filteredProducts.length})
                       </span>
                     )}
                   </label>
-
-                  <div className="border-2 border-gray-200 rounded-lg h-96 overflow-y-auto bg-gray-50 p-3">
+                      <div className="border-2 border-gray-300 rounded-xl h-96 overflow-y-auto bg-gray-50 p-4">
                     {loadingProducts ? (
                       <div className="flex items-center justify-center h-full">
                         <div className="text-center">
@@ -1303,14 +1640,14 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                         return (
                           <div
                             key={group.product.id}
-                            className="bg-white border border-gray-300 rounded-lg p-3 hover:border-blue-500 transition-colors"
+                            className="bg-white border border-gray-300 rounded-lg p-3 hover:border-blue-500 hover:shadow-sm transition-all mb-2"
                           >
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm text-gray-900 truncate">
+                                <p className="font-semibold text-sm text-gray-900 truncate">
                                   {group.product.name}
                                 </p>
-                                <p className="text-xs text-gray-500 mt-1">
+                                <p className="text-xs text-gray-500">
                                   {hasMultipleVariants ? `${availableVariants.length} variants` : availableVariants[0].sku} • {totalStock} in stock
                                 </p>
                               </div>
@@ -1344,9 +1681,14 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
 
                 {/* Selected Items */}
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Selected Products ({selectedItems.length})
+                      <div className="flex items-center justify-between mb-3">
+                        <label className="block text-base font-semibold text-gray-900">
+                          Selected Products
+                          {selectedItems.length > 0 && (
+                            <span className="ml-2 text-sm text-gray-500 font-normal">
+                              ({selectedItems.length})
+                            </span>
+                          )}
                     </label>
                     {selectedItems.length > 0 && (
                       <button
@@ -1359,17 +1701,17 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                     )}
                   </div>
                   
-                  <div className="border-2 border-gray-200 rounded-lg h-96 overflow-y-auto bg-gray-50 p-3">
+                      <div className="border-2 border-gray-300 rounded-xl h-96 overflow-y-auto bg-gray-50 p-4">
                     {selectedItems.length > 0 ? (
                       <div className="space-y-2">
                         {selectedItems.map((item) => (
                           <div 
                             key={item.variant.id} 
-                            className="bg-white border border-gray-300 rounded-lg p-3"
+                            className="bg-white border border-gray-300 rounded-lg p-3 mb-2"
                           >
                             <div className="flex items-center justify-between gap-2 mb-2">
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm text-gray-900 truncate">
+                                <p className="font-semibold text-sm text-gray-900 truncate">
                                   {(item.variant.product as any)?.name || item.variant.variant_name}
                                 </p>
                                 <p className="text-xs text-gray-500">{item.variant.sku}</p>
@@ -1398,7 +1740,7 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                                 max={item.variant.quantity}
                                 value={item.quantity}
                                 onChange={(e) => handleUpdateItemQuantity(item.variant.id, parseInt(e.target.value) || 1)}
-                                className="flex-1 px-2 py-1 text-center border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 font-semibold"
+                                className="flex-1 px-2 py-1 text-center border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 font-semibold text-gray-900"
                               />
                               
                               <button
@@ -1429,22 +1771,22 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                 </div>
               </div>
 
-              {/* Variant Selection Modal */}
+                  {/* Variant Selection */}
               {selectedProduct && selectedProduct.variants.filter(v => !selectedItems.some(item => item.variant.id === v.id)).length > 0 && (
-                <div className="mb-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-medium text-gray-900">
-                      <span className="font-bold">{selectedProduct.product.name}</span> - Select Variant
+                    <p className="font-semibold text-sm text-gray-900">
+                      {selectedProduct.product.name} - Select Variant
                     </p>
                     <button
                       type="button"
                       onClick={() => setSelectedProduct(null)}
-                      className="text-xs text-gray-600 hover:text-gray-900 font-medium"
+                      className="text-xs text-gray-600 hover:text-gray-900"
                     >
                       Cancel
                     </button>
                   </div>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
                     {selectedProduct.variants.filter(v => !selectedItems.some(item => item.variant.id === v.id)).map((variant) => (
                       <button
                         key={variant.id}
@@ -1453,44 +1795,85 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                           handleQuickAdd(variant);
                           setSelectedProduct(null);
                         }}
-                        className="w-full text-left px-4 py-3 bg-white border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                        className="w-full text-left px-3 py-2 bg-white border border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
                       >
-                        <div className="flex justify-between items-center gap-3">
-                          <div className="flex-1">
-                            <p className="font-medium text-sm text-gray-900 mb-1">{variant.variant_name}</p>
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium text-sm text-gray-900">{variant.variant_name}</p>
                             <p className="text-xs text-gray-500">SKU: {variant.sku}</p>
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-semibold text-gray-900">{variant.quantity} in stock</p>
-                            <p className="text-xs text-gray-500">TSh {Number(variant.selling_price || 0).toLocaleString()}</p>
                           </div>
                         </div>
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-gray-500 mt-3 text-center">
-                    Click any variant to add it to your transfer
-                  </p>
+                </div>
+              )}
                 </div>
               )}
 
-              {/* Summary Display */}
-              {selectedItems.length > 0 && (
-                <div className="bg-blue-50 rounded-lg p-6">
-                  <div className="flex items-center justify-between">
+              {/* Step 3: Review & Confirm */}
+              {currentStep === 3 && (
+                <div className="space-y-6">
+                  {/* Destination Branch */}
                     <div>
-                      <p className="text-sm text-gray-600 mb-1">Total Products</p>
-                      <p className="text-4xl font-bold text-blue-600">{selectedItems.length}</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Destination Branch</label>
+                    <div className="bg-gray-50 border border-gray-300 rounded-lg p-4">
+                      <div className="flex items-center gap-3">
+                        <MapPin className="w-5 h-5 text-blue-600" />
+                        <div>
+                          <p className="font-semibold text-gray-900">
+                            {branches.find(b => b.id === formData.to_branch_id)?.name}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {branches.find(b => b.id === formData.to_branch_id)?.city}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Selected Products Summary */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Products to Transfer ({selectedItems.length})
+                    </label>
+                    <div className="border border-gray-300 rounded-lg divide-y divide-gray-200 max-h-64 overflow-y-auto">
+                      {selectedItems.map((item) => (
+                        <div key={item.variant.id} className="p-3 bg-white">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <p className="font-semibold text-sm text-gray-900">
+                                {(item.variant.product as any)?.name || item.variant.variant_name}
+                              </p>
+                              <p className="text-xs text-gray-500">{item.variant.sku}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-gray-600 mb-1">Total Units</p>
-                      <p className="text-3xl font-bold text-green-600">
+                              <p className="font-bold text-gray-900">{item.quantity} units</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Summary Stats */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-600 mb-1">Total Products</p>
+                        <p className="text-2xl font-bold text-blue-700">{selectedItems.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-600 mb-1">Total Units</p>
+                        <p className="text-2xl font-bold text-blue-700">
                         {selectedItems.reduce((sum, item) => sum + item.quantity, 0)}
                       </p>
                     </div>
                   </div>
                 </div>
-              )}
 
               {/* Notes */}
               <div>
@@ -1501,34 +1884,83 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors resize-none text-gray-900"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all resize-none text-gray-900 bg-white"
                   placeholder="Add any notes about this transfer..."
                 />
+                  </div>
+                </div>
+              )}
+            </form>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-3">
+          {/* Action Buttons - Fixed Footer */}
+          <div className="flex gap-3 pt-4 border-t border-gray-200 flex-shrink-0 bg-white px-6 pb-6">
+            {currentStep > 1 && (
+              <button
+                type="button"
+                onClick={handlePrevious}
+                disabled={loading}
+                className="px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <ChevronLeft className="w-5 h-5" />
+                Back
+              </button>
+            )}
                 <button
                   type="button"
                   onClick={onClose}
                   disabled={loading}
-                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className={`px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${currentStep === 1 ? 'flex-1' : ''}`}
                 >
                   Cancel
                 </button>
+            {currentStep < 3 ? (
                 <button
-                  type="submit"
-                  disabled={loading || !formData.to_branch_id || selectedItems.length === 0}
-                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Creating...' : 'Create Transfer'}
+                type="button"
+                onClick={handleNext}
+                disabled={
+                  (currentStep === 1 && !canProceedToStep2) ||
+                  (currentStep === 2 && !canProceedToStep3) ||
+                  loading
+                }
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                Next
+                <ChevronRight className="w-5 h-5" />
                 </button>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  const form = document.getElementById('transfer-form') as HTMLFormElement;
+                  if (form) {
+                    form.requestSubmit();
+                  } else {
+                    handleSubmit(e as any);
+                  }
+                }}
+                disabled={loading || !canSubmit}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Truck className="w-5 h-5" />
+                    Create Transfer
+                  </>
+                )}
+              </button>
+            )}
               </div>
-            </form>
           </div>
         </div>
-      </div>
-    </>
+    </>,
+    document.body
   );
 };
 

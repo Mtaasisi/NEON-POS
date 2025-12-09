@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
-import GlassCard from '../../../features/shared/components/ui/GlassCard';
-import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import SearchBar from '../../../features/shared/components/ui/SearchBar';
 import GlassSelect from '../../../features/shared/components/ui/GlassSelect';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import CreateUserModal from '../components/CreateUserModal';
 import EditUserModal from '../components/EditUserModal';
 import RoleManagementModal from '../components/RoleManagementModal';
@@ -496,26 +495,42 @@ const UserManagementPage: React.FC = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <BackButton to="/dashboard" />
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Wrapper Container - Single rounded container */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section */}
+        <div className="p-8 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <Users className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-            <p className="text-gray-600 mt-1">Manage users, roles, and permissions</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">User Management</h1>
+                <p className="text-sm text-gray-600">
+                  Manage users, roles, and permissions
+                </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <GlassButton
+            {/* Back Button */}
+            <BackButton to="/dashboard" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
+          </div>
+        </div>
+        {/* Action Bar - Enhanced Design */}
+        <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
+          <div className="flex gap-3 flex-wrap items-center">
+            <button
             onClick={handleRefresh}
-            variant="secondary"
-            icon={<RefreshCw size={18} />}
+              className="flex items-center gap-2 px-4 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-gray-500 to-gray-600 text-white shadow-lg hover:from-gray-600 hover:to-gray-700"
             title="Refresh users list"
           >
-            Refresh
-          </GlassButton>
+              <RefreshCw size={18} />
+              <span>Refresh</span>
+            </button>
           
           <div className="relative">
             <input
@@ -526,34 +541,29 @@ const UserManagementPage: React.FC = () => {
               id="import-users"
             />
             <label htmlFor="import-users">
-              <GlassButton
-                variant="secondary"
-                icon={<Upload size={18} />}
-                as="span"
-              >
-                Import
-              </GlassButton>
+                <button className="flex items-center gap-2 px-4 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-lg hover:from-teal-600 hover:to-teal-700 cursor-pointer">
+                  <Upload size={18} />
+                  <span>Import</span>
+                </button>
             </label>
           </div>
 
           <div className="relative group">
-            <GlassButton
-              variant="secondary"
-              icon={<Download size={18} />}
-            >
-              Export
-            </GlassButton>
-            <div className="hidden group-hover:block absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+              <button className="flex items-center gap-2 px-4 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg hover:from-purple-600 hover:to-purple-700">
+                <Download size={18} />
+                <span>Export</span>
+              </button>
+              <div className="hidden group-hover:block absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border-2 border-gray-200 z-10">
               <button
                 onClick={handleExportCSV}
-                className="w-full text-left px-4 py-2 hover:bg-gray-50 rounded-t-lg flex items-center gap-2"
+                  className="w-full text-left px-4 py-2.5 hover:bg-gray-50 rounded-t-xl flex items-center gap-2 font-medium text-gray-700"
               >
                 <Download size={16} />
                 <span>Export as CSV</span>
               </button>
               <button
                 onClick={handleExportJSON}
-                className="w-full text-left px-4 py-2 hover:bg-gray-50 rounded-b-lg flex items-center gap-2"
+                  className="w-full text-left px-4 py-2.5 hover:bg-gray-50 rounded-b-xl flex items-center gap-2 font-medium text-gray-700"
               >
                 <Download size={16} />
                 <span>Export as JSON</span>
@@ -561,77 +571,88 @@ const UserManagementPage: React.FC = () => {
             </div>
           </div>
 
-          <GlassButton
+            <button
             onClick={() => setShowUserEmployeeLink(true)}
-            variant="secondary"
-            icon={<LinkIcon size={18} />}
+              className="flex items-center gap-2 px-4 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-lg hover:from-indigo-600 hover:to-indigo-700"
             title="Link users to employee records"
           >
-            User-Employee Links
-          </GlassButton>
-          <GlassButton
+              <LinkIcon size={18} />
+              <span>User-Employee Links</span>
+            </button>
+            <button
             onClick={() => setShowRoleManagement(true)}
-            variant="secondary"
-            icon={<Shield size={18} />}
-          >
-            Manage Roles
-          </GlassButton>
-          <GlassButton
+              className="flex items-center gap-2 px-4 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg hover:from-orange-600 hover:to-orange-700"
+            >
+              <Shield size={18} />
+              <span>Manage Roles</span>
+            </button>
+            <button
             onClick={handleCreateUser}
-            icon={<Plus size={18} />}
-            className="bg-gradient-to-r from-green-500 to-green-600 text-white"
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg hover:from-green-600 hover:to-green-700"
           >
-            Add User
-          </GlassButton>
+              <Plus size={18} />
+              <span>Add User</span>
+            </button>
         </div>
       </div>
 
-      {/* Statistics */}
+        {/* Statistics Section */}
+        <div className="p-6 pb-0 flex-shrink-0">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <GlassCard className="bg-gradient-to-br from-blue-50 to-blue-100">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-blue-600">Total Users</p>
-              <p className="text-2xl font-bold text-blue-900">{metrics.totalUsers}</p>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Total Users</p>
+                  <p className="text-2xl font-bold text-gray-900">{metrics.totalUsers}</p>
             </div>
-            <Users className="w-8 h-8 text-blue-600" />
+                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <Users className="w-6 h-6 text-white" />
           </div>
-        </GlassCard>
+              </div>
+            </div>
         
-        <GlassCard className="bg-gradient-to-br from-green-50 to-green-100">
+            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-green-600">Active Users</p>
-              <p className="text-2xl font-bold text-green-900">{metrics.activeUsers}</p>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Active Users</p>
+                  <p className="text-2xl font-bold text-gray-900">{metrics.activeUsers}</p>
             </div>
-            <UserCheck className="w-8 h-8 text-green-600" />
+                <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <UserCheck className="w-6 h-6 text-white" />
           </div>
-        </GlassCard>
+              </div>
+            </div>
         
-        <GlassCard className="bg-gradient-to-br from-purple-50 to-purple-100">
+            <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-purple-600">Admins</p>
-              <p className="text-2xl font-bold text-purple-900">{users.filter(u => u.role === 'admin').length}</p>
-              <p className="text-xs text-purple-500">Full Access</p>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Admins</p>
+                  <p className="text-2xl font-bold text-gray-900">{users.filter(u => u.role === 'admin').length}</p>
+                  <p className="text-xs text-gray-500 mt-1">Full Access</p>
             </div>
-            <Shield className="w-8 h-8 text-purple-600" />
+                <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <Shield className="w-6 h-6 text-white" />
           </div>
-        </GlassCard>
+              </div>
+            </div>
         
-        <GlassCard className="bg-gradient-to-br from-red-50 to-red-100">
+            <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 hover:bg-red-100 hover:border-red-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-red-600">Inactive Users</p>
-              <p className="text-2xl font-bold text-red-900">{metrics.inactiveUsers}</p>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Inactive Users</p>
+                  <p className="text-2xl font-bold text-gray-900">{metrics.inactiveUsers}</p>
             </div>
-            <UserX className="w-8 h-8 text-red-600" />
+                <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <UserX className="w-6 h-6 text-white" />
           </div>
-        </GlassCard>
+              </div>
+            </div>
+          </div>
       </div>
 
-      {/* Filters and Search */}
-      <GlassCard className="p-6">
+        {/* Filters and Search Section */}
+        <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
         <div className="flex flex-col lg:flex-row gap-4">
           <div className="flex-1">
             <SearchBar
@@ -673,47 +694,48 @@ const UserManagementPage: React.FC = () => {
             />
           </div>
         </div>
-      </GlassCard>
+        </div>
+        </div>
 
       {/* Bulk Actions */}
       {selectedUsers.length > 0 && (
-        <GlassCard className="p-4 bg-blue-50 border-blue-200">
+          <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-blue-800 font-medium">
+                <span className="text-blue-800 font-semibold">
               {selectedUsers.length} user(s) selected
             </span>
             <div className="flex gap-2">
-              <GlassButton
+                  <button
                 onClick={() => handleBulkAction('activate')}
-                variant="secondary"
-                size="sm"
-                icon={<UserCheck size={16} />}
-              >
-                Activate
-              </GlassButton>
-              <GlassButton
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl font-semibold text-sm hover:bg-green-700 transition-all shadow-sm"
+                  >
+                    <UserCheck size={16} />
+                    <span>Activate</span>
+                  </button>
+                  <button
                 onClick={() => handleBulkAction('deactivate')}
-                variant="secondary"
-                size="sm"
-                icon={<UserX size={16} />}
-              >
-                Deactivate
-              </GlassButton>
-              <GlassButton
+                    className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-xl font-semibold text-sm hover:bg-yellow-700 transition-all shadow-sm"
+                  >
+                    <UserX size={16} />
+                    <span>Deactivate</span>
+                  </button>
+                  <button
                 onClick={() => handleBulkAction('delete')}
-                variant="danger"
-                size="sm"
-                icon={<Trash2 size={16} />}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl font-semibold text-sm hover:bg-red-700 transition-all shadow-sm"
               >
-                Delete
-              </GlassButton>
+                    <Trash2 size={16} />
+                    <span>Delete</span>
+                  </button>
             </div>
           </div>
-        </GlassCard>
+            </div>
+          </div>
       )}
 
-      {/* Users Table */}
-      <GlassCard className="p-6">
+        {/* Scrollable Users Table */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 border-t border-gray-100">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -862,30 +884,32 @@ const UserManagementPage: React.FC = () => {
                     </div>
                   </td>
                   <td className="py-3 px-4">
-                    <div className="flex gap-1">
-                      <GlassButton
+                    <div className="flex gap-1.5">
+                      <button
                         onClick={() => handleEditUser(user)}
-                        variant="ghost"
-                        size="sm"
-                        icon={<Edit size={14} />}
+                        className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors"
                         title="Edit user"
-                      />
-                      <GlassButton
+                      >
+                        <Edit size={14} />
+                      </button>
+                      <button
                         onClick={() => handleToggleUserStatus(user.id)}
-                        variant="ghost"
-                        size="sm"
-                        icon={user.status === 'active' ? <Lock size={14} /> : <Unlock size={14} />}
+                        className={`p-2 rounded-lg transition-colors ${
+                          user.status === 'active' 
+                            ? 'bg-orange-50 hover:bg-orange-100 text-orange-600' 
+                            : 'bg-green-50 hover:bg-green-100 text-green-600'
+                        }`}
                         title={user.status === 'active' ? 'Deactivate' : 'Activate'}
-                        className={user.status === 'active' ? 'text-orange-600' : 'text-green-600'}
-                      />
-                      <GlassButton
+                      >
+                        {user.status === 'active' ? <Lock size={14} /> : <Unlock size={14} />}
+                      </button>
+                      <button
                         onClick={() => handleDeleteUser(user.id)}
-                        variant="ghost"
-                        size="sm"
-                        icon={<Trash2 size={14} />}
-                        className="text-red-600 hover:text-red-700"
+                        className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors"
                         title="Delete user"
-                      />
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -895,27 +919,32 @@ const UserManagementPage: React.FC = () => {
         </div>
 
         {filteredUsers.length === 0 && (
-          <div className="text-center py-8">
-            <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
-            <p className="text-gray-500 mb-6">
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <Users className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">No users found</h3>
+                <p className="text-gray-600 mb-6">
               {searchQuery || roleFilter !== 'all' || statusFilter !== 'all' 
                 ? 'Try adjusting your search or filters'
                 : 'Get started by adding your first user'
               }
             </p>
             {!searchQuery && roleFilter === 'all' && statusFilter === 'all' && (
-              <GlassButton
+                  <button
                 onClick={handleCreateUser}
-                icon={<Plus size={18} />}
-                className="bg-gradient-to-r from-green-500 to-green-600 text-white"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
               >
-                Add Your First User
-              </GlassButton>
+                    <Plus className="w-4 h-4" />
+                    <span>Add Your First User</span>
+                  </button>
             )}
           </div>
         )}
-      </GlassCard>
+          </div>
+        </div>
+      </div>
+    </div>
 
       {/* Modals */}
       <CreateUserModal

@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { useNavigationHistory } from '../../../hooks/useNavigationHistory';
-import GlassCard from '../../../features/shared/components/ui/GlassCard';
-import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
 import { 
   Sparkles, CreditCard, DollarSign, BarChart2, Receipt, Users,
@@ -214,30 +212,36 @@ const BusinessManagementPage: React.FC = () => {
   const currentSummary = getTabSummary(activeTab);
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <BackButton to="/dashboard" />
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Wrapper Container - Single rounded container */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section */}
+        <div className="p-8 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <BarChart2 className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Business Management</h1>
-            <p className="text-gray-600 mt-1">Customer loyalty, payments, analytics, and business tools</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Business Management</h1>
+                <p className="text-sm text-gray-600">
+                  Customer loyalty, payments, analytics, and business tools
+                </p>
+              </div>
+            </div>
+
+            {/* Back Button */}
+            <BackButton to="/dashboard" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <GlassButton
-            onClick={handleBackClick}
-            variant="secondary"
-            icon={<RefreshCw size={18} />}
-          >
-            Back
-          </GlassButton>
-        </div>
-      </div>
-
+        {/* Main Container - Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-6">
       {/* Page Overview */}
-      <GlassCard className="p-6 bg-gradient-to-r from-gray-50 to-green-50 border border-gray-200">
+          <div className="bg-gradient-to-r from-gray-50 to-green-50 border-2 border-gray-200 rounded-2xl p-6 shadow-sm mb-6">
         <div className="text-center mb-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Business Management Overview</h2>
           <p className="text-gray-600 max-w-3xl mx-auto">
@@ -247,7 +251,7 @@ const BusinessManagementPage: React.FC = () => {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="text-center p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+              <div className="text-center p-4 bg-white border-2 border-gray-200 rounded-xl shadow-sm">
             <div className="p-3 bg-purple-100 text-purple-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
               <Sparkles size={20} />
             </div>
@@ -256,7 +260,7 @@ const BusinessManagementPage: React.FC = () => {
             <p className="text-xs text-gray-500 mt-1">Programs, Points, Analytics</p>
           </div>
           
-          <div className="text-center p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+              <div className="text-center p-4 bg-white border-2 border-gray-200 rounded-xl shadow-sm">
             <div className="p-3 bg-green-100 text-green-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
               <CreditCard size={20} />
             </div>
@@ -265,7 +269,7 @@ const BusinessManagementPage: React.FC = () => {
             <p className="text-xs text-gray-500 mt-1">Tracking, Reports, Accounts</p>
           </div>
           
-          <div className="text-center p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+              <div className="text-center p-4 bg-white border-2 border-gray-200 rounded-xl shadow-sm">
             <div className="p-3 bg-red-100 text-red-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
               <TrendingUp size={20} />
             </div>
@@ -274,7 +278,7 @@ const BusinessManagementPage: React.FC = () => {
             <p className="text-xs text-gray-500 mt-1">Advanced, Sales, Business</p>
           </div>
           
-          <div className="text-center p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+              <div className="text-center p-4 bg-white border-2 border-gray-200 rounded-xl shadow-sm">
             <div className="p-3 bg-blue-100 text-blue-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
               <FileText size={20} />
             </div>
@@ -283,7 +287,7 @@ const BusinessManagementPage: React.FC = () => {
             <p className="text-xs text-gray-500 mt-1">Sales, Customer</p>
           </div>
           
-          <div className="text-center p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+              <div className="text-center p-4 bg-white border-2 border-gray-200 rounded-xl shadow-sm">
             <div className="p-3 bg-amber-100 text-amber-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
               <Settings size={20} />
             </div>
@@ -292,10 +296,10 @@ const BusinessManagementPage: React.FC = () => {
             <p className="text-xs text-gray-500 mt-1">Calendar, Dashboard</p>
           </div>
         </div>
-      </GlassCard>
+          </div>
 
       {/* Navigation Tabs */}
-      <GlassCard className="p-6">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm mb-6">
         <div className="relative mb-8">
           {/* Tab Background */}
           <div className="absolute inset-0 bg-gradient-to-r from-gray-50 to-gray-100 rounded-2xl" />
@@ -307,10 +311,10 @@ const BusinessManagementPage: React.FC = () => {
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`
-                  relative flex items-center gap-3 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300
+                      relative flex items-center gap-3 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 border-2
                   ${activeTab === tab
-                    ? 'bg-white text-blue-700 shadow-lg transform scale-105'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50 hover:shadow-md'
+                        ? 'bg-white text-blue-700 shadow-lg border-blue-300'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/50 hover:shadow-md border-transparent'
                   }
                 `}
               >
@@ -343,7 +347,7 @@ const BusinessManagementPage: React.FC = () => {
 
         {/* Tab Summary */}
         <div className="mb-8">
-          <GlassCard className="p-6 bg-gradient-to-r from-green-50 to-blue-50 border border-green-100">
+              <div className="bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200 rounded-2xl p-6 shadow-sm">
             <div className="flex items-start gap-4">
               <div className="p-3 bg-gradient-to-r from-green-500 to-blue-500 rounded-xl text-white shadow-lg">
                 {currentSummary.icon}
@@ -355,13 +359,13 @@ const BusinessManagementPage: React.FC = () => {
                   {currentSummary.features.map((feature, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-gradient-to-r from-green-500 to-blue-500 rounded-full" />
-                      <span className="text-sm text-gray-700">{feature}</span>
+                          <span className="text-sm font-medium text-gray-700">{feature}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          </GlassCard>
         </div>
 
         {/* Tab Content */}
@@ -372,7 +376,7 @@ const BusinessManagementPage: React.FC = () => {
               className="group cursor-pointer"
               onClick={() => navigate(section.path)}
             >
-              <GlassCard className="p-6 h-full transition-all duration-300 hover:shadow-lg hover:scale-105">
+                  <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 h-full transition-all duration-300 hover:shadow-lg hover:scale-105 hover:border-blue-300">
                 <div className="flex items-start justify-between mb-4">
                   <div className={`p-3 rounded-xl bg-gradient-to-r ${section.color} text-white shadow-lg`}>
                     {section.icon}
@@ -382,7 +386,7 @@ const BusinessManagementPage: React.FC = () => {
                   </div>
                 </div>
                 
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">
                   {section.title}
                 </h3>
                 
@@ -391,30 +395,32 @@ const BusinessManagementPage: React.FC = () => {
                 </p>
                 
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500 capitalize">
+                      <span className="text-xs text-gray-500 capitalize font-medium">
                     {section.category}
                   </span>
-                  <GlassButton
-                    size="sm"
-                    variant="ghost"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      <button
+                        className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700"
                   >
                     Access
-                  </GlassButton>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </GlassCard>
-            </div>
           ))}
         </div>
 
         {filteredSections.length === 0 && (
-          <div className="text-center py-12">
-            <BarChart2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No tools available</h3>
-            <p className="text-gray-500">Select a different category to view available tools.</p>
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <BarChart2 className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">No tools available</h3>
+                <p className="text-gray-600">Select a different category to view available tools.</p>
+              </div>
+            )}
           </div>
-        )}
-      </GlassCard>
+        </div>
+      </div>
     </div>
   );
 };

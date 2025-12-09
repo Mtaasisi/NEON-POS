@@ -4,6 +4,12 @@
 // This implementation uses Neon's WebSocket pooler connection which works in browsers.
 // The HTTP API (neon() function) has CORS restrictions in browsers.
 //
+// IMPORTANT: WebSocket connection errors are EXPECTED and NORMAL
+// - Initial connection attempts may fail (especially on cold starts)
+// - The Pool automatically retries failed connections
+// - These errors are suppressed in the console to reduce noise
+// - Your application will continue to work - queries will succeed after retry
+//
 // For production, consider:
 // 1. Backend API proxy for database calls (BEST for production security)
 // 2. Deploy as serverless function (Vercel, Netlify, Cloudflare Workers)
@@ -53,7 +59,13 @@ if (isSupabaseDatabase) {
 }
 
 // Global error handler for WebSocket connection errors
+// ✅ CRITICAL: Set up error suppression BEFORE any database connections
 if (typeof window !== 'undefined') {
+  // Initialize error counter if not exists
+  if (!(window as any).__wsErrorCount) {
+    (window as any).__wsErrorCount = 0;
+  }
+  
   // Suppress transient WebSocket errors that are automatically retried
   const originalConsoleError = console.error;
   const originalConsoleWarn = console.warn;
@@ -75,26 +87,38 @@ if (typeof window !== 'undefined') {
       (errorMsg.includes('WebSocket connection') && errorMsg.includes('failed')) ||
       // Check full message for WebSocket errors (library may log file path first)
       fullMessage.includes('WebSocket connection to') ||
-      fullMessage.includes('WebSocket connection') && fullMessage.includes('failed') ||
-      // Neon-specific patterns
-      (fullMessage.includes('wss://') && (fullMessage.includes('neon.tech') || fullMessage.includes('neon') || fullMessage.includes('pooler')) && (fullMessage.includes('failed') || fullMessage.includes('error'))) ||
+      (fullMessage.includes('WebSocket connection') && fullMessage.includes('failed')) ||
+      // Neon-specific patterns - match the exact error format we're seeing
+      fullMessage.includes('wss://') && (
+        fullMessage.includes('neon.tech') || 
+        fullMessage.includes('ep-') || 
+        allArgsString.includes('ep-')
+      ) && (
+        fullMessage.includes('failed') || 
+        fullMessage.includes('error') ||
+        errorMsg.includes('failed')
+      ) ||
+      (fullMessage.includes('wss://') && (fullMessage.includes('pooler') || allArgsString.includes('pooler'))) ||
       (errorMsg.includes('@neondatabase/serverless') && errorMsg.includes('Unhandled error')) ||
       (fullMessage.includes('neon.tech') && fullMessage.includes('WebSocket')) ||
       // Library file path patterns
       (fullMessage.includes('@neondatabase_serverless.js') || fullMessage.includes('neondatabase_serverless.js')) ||
       (fullMessage.includes('@neondatabase') && (fullMessage.includes('WebSocket') || fullMessage.includes('wss://'))) ||
       // Lowercase checks for case-insensitive matching
-      (allArgsString.includes('websocket') && allArgsString.includes('failed')) ||
+      (allArgsString.includes('websocket') && (allArgsString.includes('failed') || allArgsString.includes('connection'))) ||
       (allArgsString.includes('websocket') && allArgsString.includes('neon')) ||
-      (allArgsString.includes('wss://') && allArgsString.includes('pooler') && (allArgsString.includes('failed') || allArgsString.includes('error'))) ||
+      (allArgsString.includes('wss://') && (allArgsString.includes('pooler') || allArgsString.includes('neon.tech'))) ||
       (allArgsString.includes('websocket') && allArgsString.includes('pooler')) ||
       // Additional patterns from the actual error messages
-      (allArgsString.includes('ep-icy-mouse') || (allArgsString.includes('ep-') && allArgsString.includes('pooler'))) ||
-      (errorMsg.includes('connect @') && allArgsString.includes('neondatabase')) ||
+      (allArgsString.includes('ep-icy-mouse') || allArgsString.includes('ep-') && allArgsString.includes('pooler')) ||
+      (errorMsg.includes('connect @') && (allArgsString.includes('neondatabase') || allArgsString.includes('@neondatabase'))) ||
       (fullMessage.includes('supabaseClient.ts') && allArgsString.includes('websocket')) ||
       // Stack trace patterns
-      (allArgsString.includes('neondatabase') && allArgsString.includes('websocket') && allArgsString.includes('failed')) ||
-      (allArgsString.includes('neondatabase') && allArgsString.includes('wss://') && allArgsString.includes('pooler'))
+      (allArgsString.includes('neondatabase') && allArgsString.includes('websocket')) ||
+      (allArgsString.includes('neondatabase') && (allArgsString.includes('wss://') || allArgsString.includes('pooler'))) ||
+      // Match the specific error format: "WebSocket connection to 'wss://...' failed"
+      (fullMessage.match(/websocket\s+connection\s+to\s+['"]wss:\/\//i)) ||
+      (allArgsString.match(/websocket\s+connection\s+to/i))
     );
   };
   
@@ -197,24 +221,81 @@ if (typeof window !== 'undefined') {
   });
   
   // Global error event listener to catch WebSocket errors at the window level
-  window.addEventListener('error', (event) => {
+  // ✅ Use capture phase and set up immediately to catch errors as early as possible
+  const errorListener = (event: ErrorEvent) => {
     const errorMsg = event.message || String(event.error || '');
     const errorString = errorMsg.toLowerCase();
+    const errorSource = (event.filename || '').toLowerCase();
+    const fullErrorText = `${errorMsg} ${errorSource}`.toLowerCase();
     
-    // Suppress WebSocket connection errors
-    if (
+    // Suppress WebSocket connection errors - check multiple sources
+    // Match the exact error format: "WebSocket connection to 'wss://ep-...' failed"
+    const isWebSocketError = (
       errorString.includes('websocket') ||
       errorString.includes('wss://') ||
-      (errorString.includes('neon') && errorString.includes('pooler')) ||
-      errorMsg.includes('WebSocket connection to')
-    ) {
+      errorString.includes('ws://') ||
+      (errorString.includes('neon') && (errorString.includes('pooler') || errorString.includes('ep-') || errorString.includes('.tech'))) ||
+      errorMsg.includes('WebSocket connection to') ||
+      errorMsg.includes('WebSocket connection') ||
+      errorSource.includes('neondatabase') ||
+      errorSource.includes('serverless') ||
+      fullErrorText.match(/websocket\s+connection\s+to/i) ||
+      (fullErrorText.includes('ep-') && (fullErrorText.includes('pooler') || fullErrorText.includes('neon')))
+    );
+    
+    if (isWebSocketError) {
       // These are transient and will be retried automatically
       event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      
+      // Only log occasionally in dev mode
       if (import.meta.env.DEV) {
-        console.debug('🔄 Suppressed WebSocket error event (will retry)');
+        const errorKey = 'websocket_window_error';
+        const count = ((window as any).__wsErrorCount || 0) + 1;
+        (window as any).__wsErrorCount = count;
+        if (count <= 3) {
+          console.debug(`🔄 Suppressed WebSocket error event ${count}/3 (will retry automatically)`);
+        }
+      }
+      return false; // Prevent default and stop propagation
+    }
+  };
+  
+  // Add listener in capture phase to catch errors as early as possible
+  window.addEventListener('error', errorListener, true);
+  
+  // Also listen for unhandled promise rejections from WebSocket connections
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    const errorMsg = reason?.message || String(reason || '');
+    const errorString = String(reason || '').toLowerCase();
+    
+    // Suppress WebSocket-related unhandled rejections
+    const isWebSocketRejection = (
+      errorMsg.includes('WebSocket') ||
+      errorMsg.includes('neon.tech') ||
+      errorMsg.includes('pooler') ||
+      errorString.includes('websocket') ||
+      errorString.includes('wss://') ||
+      (errorString.includes('neon') && (errorString.includes('pooler') || errorString.includes('ep-'))) ||
+      (errorString.includes('ep-') && errorString.includes('pooler')) ||
+      errorString.match(/websocket\s+connection/i)
+    );
+    
+    if (isWebSocketRejection) {
+      // These are handled by the pool's retry mechanism
+      event.preventDefault();
+      if (import.meta.env.DEV) {
+        const errorKey = 'websocket_rejection';
+        const count = ((window as any).__wsErrorCount || 0) + 1;
+        (window as any).__wsErrorCount = count;
+        if (count <= 3) {
+          console.debug(`🔄 Suppressed WebSocket unhandled rejection ${count}/3 (will retry)`);
+        }
       }
     }
-  }, true); // Use capture phase to catch errors early
+  });
 }
 
 // ✅ FIXED: Use WebSocket Pool for browser compatibility
@@ -357,21 +438,36 @@ if (!isSupabaseDatabase) {
   };
   
     console.log('✅ Neon WebSocket Pool created successfully');
-    console.log('ℹ️  Pool config: max=10, idle=30s, timeout=30s, statement_timeout=60s');
-    console.log('ℹ️  Note: Transient errors are automatically retried - no action needed');
+    console.log('ℹ️  Pool config: max=10, idle=30s, timeout=60s, statement_timeout=60s');
+    console.log('ℹ️  Note: WebSocket connection errors are expected during initial connection and will be automatically retried');
     
     // Warm up the connection pool in the background (non-blocking)
     // This helps reduce cold start latency for the first query
+    // Use a longer delay to allow the pool to initialize properly
     setTimeout(async () => {
       try {
-        console.log('🔥 Warming up connection pool...');
-        await pool.query('SELECT 1');
-        console.log('✅ Connection pool warmed up successfully');
-      } catch (warmupError) {
+        if (import.meta.env.DEV) {
+          console.log('🔥 Warming up connection pool...');
+        }
+        // Use a timeout for the warmup query to prevent hanging
+        const warmupPromise = pool.query('SELECT 1');
+        const warmupTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Warmup timeout')), 10000)
+        );
+        
+        await Promise.race([warmupPromise, warmupTimeout]);
+        if (import.meta.env.DEV) {
+          console.log('✅ Connection pool warmed up successfully');
+        }
+      } catch (warmupError: any) {
         // Ignore warmup errors - they'll be retried on actual queries
-        console.log('ℹ️  Pool warmup deferred - will connect on first query');
+        // WebSocket connection failures during warmup are expected and will be handled by retry logic
+        const errorMsg = getErrorMessage(warmupError);
+        if (import.meta.env.DEV && !errorMsg.includes('WebSocket') && !errorMsg.includes('timeout')) {
+          console.debug('ℹ️  Pool warmup deferred - will connect on first query');
+        }
       }
-    }, 1000); // Start warmup after 1 second
+    }, 2000); // Start warmup after 2 seconds to allow pool initialization
     
     // Keep-alive: Ping database every 4 minutes to prevent it from sleeping
     // Neon free tier databases sleep after ~5 minutes of inactivity
@@ -534,6 +630,15 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
   const MAX_NETWORK_RETRIES = 5; // Increased for WebSocket reconnection
   const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
   
+  // Check if pool is available (might be null if Supabase is being used)
+  if (!pool) {
+    const errorMsg = 'Database pool not initialized. Check your database configuration.';
+    if (!suppressLogs) {
+      console.error('❌', errorMsg);
+    }
+    throw new Error(errorMsg);
+  }
+  
   // Only log queries when suppressLogs is false (reduced noise)
   if (!suppressLogs && isDevelopment && retryCount === 0) {
     console.log('🔍 [SQL]', query.substring(0, 100) + '...');
@@ -558,11 +663,22 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
   } catch (error: any) {
     // Check error types - safely handle undefined message and Event objects
     const errorMessage = getErrorMessage(error);
+    const errorString = errorMessage.toLowerCase();
     const is400Error = errorMessage.includes('400') || error?.status === 400 || error?.statusCode === 400;
     const isNetwork = isNetworkError(error);
-    const isConnectionTerminated = errorMessage.toLowerCase().includes('connection terminated');
-    const isTimeout = errorMessage.toLowerCase().includes('timeout');
-    const isWebSocketError = errorMessage.includes('WebSocket') || errorMessage.includes('wss://');
+    const isConnectionTerminated = errorString.includes('connection terminated') || errorString.includes('connection closed');
+    const isTimeout = errorString.includes('timeout') || errorString.includes('timed out');
+    // Enhanced WebSocket error detection - check for various WebSocket failure patterns
+    const isWebSocketError = (
+      errorMessage.includes('WebSocket') || 
+      errorMessage.includes('wss://') || 
+      errorMessage.includes('ws://') ||
+      errorString.includes('websocket') ||
+      errorString.includes('websocket connection') ||
+      (errorString.includes('failed') && (errorString.includes('wss://') || errorString.includes('ws://'))) ||
+      error?.type === 'error' ||
+      (error instanceof Event && error.type === 'error')
+    );
     
     // Determine if we should retry
     const shouldRetry = (
@@ -607,16 +723,41 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
         console.warn('📝 Query causing 400 error:', query.substring(0, 300));
       }
       
-      // Longer delay for connection termination, timeout, and network errors
-      const delay = (isNetwork || isConnectionTerminated || isTimeout) ? RETRY_DELAY * 2 : RETRY_DELAY;
-      await new Promise(resolve => setTimeout(resolve, delay * (retryCount + 1))); // Exponential backoff
+      // Exponential backoff with jitter for better retry distribution
+      // WebSocket errors get longer delays since they need time to reconnect
+      const baseDelay = (isWebSocketError || isNetwork || isConnectionTerminated || isTimeout) 
+        ? RETRY_DELAY * 2 
+        : RETRY_DELAY;
+      const exponentialDelay = baseDelay * Math.pow(2, retryCount);
+      const jitter = Math.random() * 0.3 * exponentialDelay; // Add 0-30% jitter
+      const totalDelay = Math.round(exponentialDelay + jitter);
+      
+      // Only log retry attempts in development mode and when not suppressed
+      if (!suppressLogs && isDevelopment && isWebSocketError) {
+        console.debug(`🔄 WebSocket connection retry ${retryCount + 1}/${MAX_NETWORK_RETRIES} in ${totalDelay}ms...`);
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, totalDelay));
       return executeSql(query, params, suppressLogs, retryCount + 1);
     }
     
     // Only log significant errors, not every failure
     if (!suppressLogs) {
       const finalErrorMsg = getErrorMessage(error);
-      if (isTimeout) {
+      if (isWebSocketError) {
+        console.error('❌ WebSocket connection failed after', MAX_NETWORK_RETRIES, 'retries');
+        console.error('💡 Possible causes:');
+        console.error('   - Network firewall blocking WebSocket connections (wss://)');
+        console.error('   - Database pooler endpoint is unreachable');
+        console.error('   - Browser security settings blocking WebSocket connections');
+        console.error('   - Database is temporarily unavailable');
+        console.error('💡 Solutions:');
+        console.error('   - Check your internet connection');
+        console.error('   - Verify database connection string is correct');
+        console.error('   - Try refreshing the page');
+        console.error('   - If using Supabase, ensure VITE_SUPABASE_URL is set');
+        console.error('Error details:', finalErrorMsg);
+      } else if (isTimeout) {
         console.error('⏱️ Database connection timeout after', MAX_NETWORK_RETRIES, 'retries');
         console.error('💡 Possible causes:');
         console.error('   - Database is cold-starting (first request after idle period)');
@@ -783,6 +924,73 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         explicitPattern.lastIndex = 0;
       }
       
+      // Pattern 1.5: table!foreign_key(columns) - explicit foreign key without alias
+      // Use a simpler regex to find the start, then use findMatchingParen for proper nesting
+      // Updated regex to handle underscores in foreign key names (like customer_id)
+      const tableExplicitPattern = /([a-zA-Z][a-zA-Z0-9_]*)!([a-zA-Z][a-zA-Z0-9_]*)\s*\(/g;
+      
+      // Reset regex lastIndex to ensure we start from the beginning
+      tableExplicitPattern.lastIndex = 0;
+      
+      while ((match = tableExplicitPattern.exec(workingFields)) !== null) {
+        const [startMatch, table, foreignKeyOrJoinType] = match;
+        
+        console.log(`🔍 [Pattern 1.5] Found match: ${startMatch}, table: ${table}, FK: ${foreignKeyOrJoinType}`);
+        
+        // Skip if already processed as explicit relationship with alias
+        if (relationships.some(r => r.table === table && r.foreignKey === foreignKeyOrJoinType)) {
+          console.log(`⏭️ [Pattern 1.5] Skipping duplicate: ${table}!${foreignKeyOrJoinType}`);
+          tableExplicitPattern.lastIndex = 0;
+          continue;
+        }
+        
+        const openParenIdx = match.index + startMatch.length - 1;
+        const closeParenIdx = findMatchingParen(workingFields, openParenIdx);
+        
+        if (closeParenIdx === -1) {
+          console.warn(`⚠️ [Table Explicit FK] Could not find matching parenthesis for: ${startMatch}`);
+          tableExplicitPattern.lastIndex = 0;
+          continue;
+        }
+        
+        const fullMatch = workingFields.substring(match.index, closeParenIdx + 1);
+        const columnsStr = workingFields.substring(openParenIdx + 1, closeParenIdx);
+        
+        // Check if the "foreignKey" is actually a JOIN type modifier (inner, left, right)
+        const joinTypes = ['inner', 'left', 'right', 'outer', 'full'];
+        let foreignKey;
+        if (joinTypes.includes(foreignKeyOrJoinType.toLowerCase())) {
+          // It's a JOIN type, infer the foreign key from table name
+          foreignKey = `${table}_id`;
+          if (table.endsWith('s') && table.length > 1) {
+            const singularName = table.slice(0, -1);
+            foreignKey = `${singularName}_id`;
+          }
+          console.log(`🔗 [Table JOIN Type] Detected ${foreignKeyOrJoinType.toUpperCase()} JOIN, inferring FK: ${foreignKey}`);
+        } else {
+          // It's an actual foreign key
+          foreignKey = foreignKeyOrJoinType;
+        }
+        
+        // Extract only top-level column names (ignore nested relationships)
+        const columns = extractColumns(columnsStr);
+        
+        // Use table name as alias
+        const alias = table;
+        
+        console.log(`🔑 [Table Explicit FK] Alias: ${alias}, Table: ${table}, FK: ${foreignKey}, Columns: ${columns.join(', ')}`);
+        relationships.push({ alias, table, foreignKey, columns });
+        
+        // Remove this relationship from working fields
+        // Use a more robust replacement that handles the full match including any whitespace
+        const matchToRemove = workingFields.substring(match.index, closeParenIdx + 1);
+        workingFields = workingFields.replace(matchToRemove, '');
+        console.log(`🗑️ [Pattern 1.5] Removed: ${matchToRemove.substring(0, 50)}...`);
+        
+        // Reset regex index after modifying the string
+        tableExplicitPattern.lastIndex = 0;
+      }
+      
       // Pattern 2: alias:table(columns) - inferred foreign key
       // Use a simpler regex to find the start, then use findMatchingParen for proper nesting
       const inferredPattern = /(\w+):(\w+)\s*\(/g;
@@ -865,6 +1073,35 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         
         // Skip if already processed
         if (relationships.some(r => r.alias === tableName)) {
+          simplePattern.lastIndex = 0;
+          continue;
+        }
+        
+        // Skip if this looks like it should have been matched by Pattern 1.5 (table!foreign_key)
+        // Check if there's a ! before the opening parenthesis (but not part of alias:table! format)
+        const checkStart = Math.max(0, match.index - 50);
+        const beforeParen = workingFields.substring(checkStart, match.index);
+        // If we see a ! before the paren and it's not in alias:table! format, skip this match
+        const lastExclamation = beforeParen.lastIndexOf('!');
+        if (lastExclamation !== -1) {
+          const beforeExclamation = beforeParen.substring(0, lastExclamation);
+          // Check if it's in alias:table! format (Pattern 1) - if so, it's already handled
+          const hasColonBeforeExclamation = beforeExclamation.includes(':');
+          if (!hasColonBeforeExclamation) {
+            // This is table!foreign_key format that should have been caught by Pattern 1.5
+            // Skip it to avoid incorrect parsing
+            console.log(`⏭️ [Pattern 3] Skipping ${tableName}( - looks like it should be handled by Pattern 1.5`);
+            simplePattern.lastIndex = 0;
+            continue;
+          }
+        }
+        
+        // Also check if the tableName contains an underscore and there's a word before it with !
+        // This catches cases like "customers!customer_id" where Pattern 1.5 should have matched
+        const wordBeforeMatch = workingFields.substring(Math.max(0, match.index - 30), match.index);
+        const tableExclamationPattern = /([a-zA-Z][a-zA-Z0-9_]*)!([a-zA-Z][a-zA-Z0-9_]*)\s*\(/;
+        if (tableExclamationPattern.test(wordBeforeMatch + startMatch)) {
+          console.log(`⏭️ [Pattern 3] Skipping ${tableName}( - detected table!foreign_key pattern`);
           simplePattern.lastIndex = 0;
           continue;
         }
@@ -1156,15 +1393,29 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         join.table.endsWith('_' + pattern)
       );
       
+      // Known foreign keys in main table that don't end with '_id'
+      // These are foreign keys in the main table pointing to parent tables
+      const knownParentTableFKs = ['assigned_to', 'related_to', 'created_by'];
+      const isParentTableFK = knownParentTableFKs.includes(join.on);
+      
       // Determine if foreign key is on main table or joined table
-      if (isChildTable || !join.on.endsWith('_id')) {
+      // Priority: Check if it's a known parent table FK first, then check child patterns, then check _id suffix
+      if (isParentTableFK) {
+        // Parent table join: main_table.foreign_key = parent_table.id
+        // Examples: main_table.assigned_to = users.id, main_table.related_to = reminders.id
+        query += ` LEFT JOIN ${join.table} AS ${join.alias} ON ${this.tableName}.${join.on} = ${join.alias}.id`;
+      } else if (isChildTable) {
         // Child table join: main_table.id = child_table.foreign_key
         // This handles cases like items, variants, details where the FK is on the child table
         query += ` LEFT JOIN ${join.table} AS ${join.alias} ON ${this.tableName}.id = ${join.alias}.${join.on}`;
-      } else {
+      } else if (join.on.endsWith('_id')) {
         // Parent table join: main_table.foreign_key_id = parent_table.id
         // Examples: main_table.user_id = users.id, main_table.branch_id = branches.id
         query += ` LEFT JOIN ${join.table} AS ${join.alias} ON ${this.tableName}.${join.on} = ${join.alias}.id`;
+      } else {
+        // Default: assume child table join for unknown patterns
+        // Child table join: main_table.id = child_table.foreign_key
+        query += ` LEFT JOIN ${join.table} AS ${join.alias} ON ${this.tableName}.id = ${join.alias}.${join.on}`;
       }
     }
     

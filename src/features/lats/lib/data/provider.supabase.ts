@@ -92,14 +92,14 @@ const getBranchSettings = async (branchId: string | null) => {
       } else {
         console.error('❌ Error fetching branch settings:', error);
       }
-      // Fallback to safe defaults (all isolated)
+      // Fallback to recommended defaults (hybrid mode with shared products, isolated inventory)
       return {
-        data_isolation_mode: 'isolated',
-        share_products: false,
-        share_customers: false,
-        share_inventory: false,
-        share_suppliers: false,
-        share_categories: false,
+        data_isolation_mode: 'hybrid',
+        share_products: true,   // ✅ Shared catalog
+        share_customers: true,
+        share_inventory: false, // ✅ Isolated stock
+        share_suppliers: true,
+        share_categories: true,
         share_employees: false,
         share_sales: false,
         share_purchase_orders: false,
@@ -126,10 +126,10 @@ const getBranchSettings = async (branchId: string | null) => {
   } catch (error) {
     console.error('❌ Exception fetching branch settings:', error);
     return {
-      data_isolation_mode: 'isolated',
-      share_products: false,
+      data_isolation_mode: 'hybrid',
+      share_products: true,   // ✅ Shared catalog
+      share_inventory: false,  // ✅ Isolated stock
       share_customers: false,
-      share_inventory: false,
       share_suppliers: false,
       share_categories: false,
       share_employees: false,

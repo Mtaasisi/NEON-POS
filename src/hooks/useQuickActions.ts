@@ -129,9 +129,9 @@ export const useQuickActions = () => {
       category: 'navigation' 
     },
     { 
-      id: 'import-customers', 
-      name: 'Import Customers', 
-      description: 'Import customers from Excel', 
+      id: 'import-export-customers', 
+      name: 'Customer Import/Export', 
+      description: 'Import, update, or export customers', 
       icon: 'Upload', 
       path: '/customers/import', 
       color: 'bg-emerald-500 hover:bg-emerald-600', 

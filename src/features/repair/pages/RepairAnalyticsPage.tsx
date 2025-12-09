@@ -2,11 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDevices } from '../../../context/DevicesContext';
 import { useAuth } from '../../../context/AuthContext';
-import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassButton from '../../shared/components/ui/GlassButton';
 import GlassSelect from '../../shared/components/ui/GlassSelect';
 import { BackButton } from '../../shared/components/ui/BackButton';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import {
   BarChart3, TrendingUp, TrendingDown, DollarSign, Clock,
   Wrench, Users, CheckCircle, AlertTriangle, Calendar,
@@ -350,119 +349,148 @@ const RepairAnalyticsPage: React.FC = () => {
 
   if (!analyticsData) {
     return (
-      <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-        <GlassCard className="p-8 text-center">
-          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No Data Available</h3>
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-8 text-center">
+          <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle className="w-8 h-8 text-yellow-600" />
+          </div>
+          <h3 className="text-xl font-bold mb-2">No Data Available</h3>
           <p className="text-gray-600">Unable to load analytics data. Please try again later.</p>
-        </GlassCard>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Wrapper Container - Single rounded container */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section */}
+        <div className="p-8 border-b border-gray-200 flex-shrink-0">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <BackButton />
+            <div className="flex items-center gap-6">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <BarChart3 className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
           <div>
-            <h1 className="text-2xl font-bold">Repair Analytics</h1>
-            <p className="text-gray-600">Comprehensive insights into repair operations</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Repair Analytics</h1>
+                <p className="text-sm text-gray-600">
+                  Comprehensive insights into repair operations
+                </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3">
           <GlassSelect
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value as any)}
+                className="border-2 rounded-xl"
           >
             <option value="month">Last Month</option>
             <option value="quarter">Last Quarter</option>
             <option value="year">Last Year</option>
           </GlassSelect>
-          <GlassButton
+            <button
             onClick={exportAnalytics}
-            variant="outline"
-            icon={<Download className="w-4 h-4" />}
+              className="flex items-center gap-2 px-4 py-2.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 rounded-xl font-semibold transition-all"
           >
+              <Download className="w-4 h-4" />
             Export
-          </GlassButton>
+            </button>
+          </div>
         </div>
       </div>
 
+        {/* Main Container - Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <GlassCard className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Revenue</p>
+                  <p className="text-sm font-semibold text-gray-600">Total Revenue</p>
               <p className="text-2xl font-bold text-green-600">
                 {formatCurrency(analyticsData.totalRevenue)}
               </p>
             </div>
-            <DollarSign className="w-8 h-8 text-green-500" />
+                <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
+                  <DollarSign className="w-6 h-6 text-white" />
+                </div>
           </div>
           <div className="mt-2 flex items-center text-sm">
             <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-            <span className="text-green-600">+12% from last period</span>
+                <span className="text-green-600 font-medium">+12% from last period</span>
+              </div>
           </div>
-        </GlassCard>
 
-        <GlassCard className="p-4">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Repairs</p>
+                  <p className="text-sm font-semibold text-gray-600">Total Repairs</p>
               <p className="text-2xl font-bold text-blue-600">
                 {analyticsData.totalRepairs}
               </p>
             </div>
-            <Wrench className="w-8 h-8 text-blue-500" />
+                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+                  <Wrench className="w-6 h-6 text-white" />
+                </div>
           </div>
           <div className="mt-2 flex items-center text-sm">
             <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-            <span className="text-green-600">+8% from last period</span>
+                <span className="text-green-600 font-medium">+8% from last period</span>
+              </div>
           </div>
-        </GlassCard>
 
-        <GlassCard className="p-4">
+            <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Success Rate</p>
+                  <p className="text-sm font-semibold text-gray-600">Success Rate</p>
               <p className="text-2xl font-bold text-purple-600">
                 {analyticsData.successRate}%
               </p>
             </div>
-            <CheckCircle className="w-8 h-8 text-purple-500" />
+                <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-white" />
+                </div>
           </div>
           <div className="mt-2 flex items-center text-sm">
             <Target className="w-4 h-4 text-purple-500 mr-1" />
-            <span className="text-purple-600">Above target</span>
+                <span className="text-purple-600 font-medium">Above target</span>
+              </div>
           </div>
-        </GlassCard>
 
-        <GlassCard className="p-4">
+            <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Avg Repair Time</p>
+                  <p className="text-sm font-semibold text-gray-600">Avg Repair Time</p>
               <p className="text-2xl font-bold text-orange-600">
                 {analyticsData.averageRepairTime}h
               </p>
             </div>
-            <Clock className="w-8 h-8 text-orange-500" />
+                <div className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center">
+                  <Clock className="w-6 h-6 text-white" />
+                </div>
           </div>
           <div className="mt-2 flex items-center text-sm">
             <TrendingDown className="w-4 h-4 text-green-500 mr-1" />
-            <span className="text-green-600">-5% improvement</span>
+                <span className="text-green-600 font-medium">-5% improvement</span>
           </div>
-        </GlassCard>
+            </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Technician Performance */}
-        <GlassCard className="p-6">
+            <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Technician Performance</h3>
-            <Award className="w-5 h-5 text-yellow-500" />
+                <h3 className="text-lg font-bold">Technician Performance</h3>
+                <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+                  <Award className="w-5 h-5 text-yellow-600" />
+                </div>
           </div>
           <div className="space-y-3">
             {analyticsData.technicianPerformance.map((tech) => (
@@ -480,13 +508,15 @@ const RepairAnalyticsPage: React.FC = () => {
               </div>
             ))}
           </div>
-        </GlassCard>
+            </div>
 
         {/* Monthly Trends */}
-        <GlassCard className="p-6">
+            <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Monthly Trends</h3>
-            <Activity className="w-5 h-5 text-blue-500" />
+                <h3 className="text-lg font-bold">Monthly Trends</h3>
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <Activity className="w-5 h-5 text-blue-600" />
+                </div>
           </div>
           <div className="space-y-3">
             {analyticsData.monthlyTrends.slice(-6).map((month) => (
@@ -499,15 +529,17 @@ const RepairAnalyticsPage: React.FC = () => {
               </div>
             ))}
           </div>
-        </GlassCard>
+            </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Device Types */}
-        <GlassCard className="p-6">
+            <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Popular Device Types</h3>
-            <BarChart3 className="w-5 h-5 text-green-500" />
+                <h3 className="text-lg font-bold">Popular Device Types</h3>
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                  <BarChart3 className="w-5 h-5 text-green-600" />
+                </div>
           </div>
           <div className="space-y-3">
             {analyticsData.deviceTypeStats.slice(0, 5).map((device) => (
@@ -523,13 +555,15 @@ const RepairAnalyticsPage: React.FC = () => {
               </div>
             ))}
           </div>
-        </GlassCard>
+            </div>
 
         {/* Parts Usage */}
-        <GlassCard className="p-6">
+            <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Top Spare Parts Used</h3>
-            <Package className="w-5 h-5 text-orange-500" />
+                <h3 className="text-lg font-bold">Top Spare Parts Used</h3>
+                <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                  <Package className="w-5 h-5 text-orange-600" />
+                </div>
           </div>
           <div className="space-y-3">
             {analyticsData.partsUsage.map((part) => (
@@ -545,14 +579,16 @@ const RepairAnalyticsPage: React.FC = () => {
               </div>
             ))}
           </div>
-        </GlassCard>
+            </div>
       </div>
 
       {/* Profitability Analysis */}
-      <GlassCard className="p-6">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold">Profitability Analysis</h3>
-          <TrendingUp className="w-5 h-5 text-green-500" />
+              <h3 className="text-lg font-bold">Profitability Analysis</h3>
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-green-600" />
+              </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="text-center">
@@ -577,7 +613,8 @@ const RepairAnalyticsPage: React.FC = () => {
             <div className="text-xs text-purple-600 mt-1">For period</div>
           </div>
         </div>
-      </GlassCard>
+        </div>
+      </div>
     </div>
   );
 };

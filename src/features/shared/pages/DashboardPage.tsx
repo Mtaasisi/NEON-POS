@@ -486,12 +486,12 @@ const DashboardPageContent: React.FC = () => {
     
     // Import/Export & Data Management
     {
-      id: 'excelImport' as const,
-      title: 'Excel Import',
-      description: 'Data import',
+      id: 'customerImportExport' as const,
+      title: 'Customer Import/Export',
+      description: 'Import, update, or export customers',
       icon: Upload,
       color: 'from-emerald-500 to-emerald-600',
-      path: '/excel-import'
+      path: '/customers/import'
     },
     {
       id: 'excelTemplates' as const,
@@ -508,14 +508,6 @@ const DashboardPageContent: React.FC = () => {
       icon: Download,
       color: 'from-pink-500 to-pink-600',
       path: '/product-export'
-    },
-    {
-      id: 'customerImport' as const,
-      title: 'Customer Import',
-      description: 'Import customers',
-      icon: Upload,
-      color: 'from-rose-500 to-rose-600',
-      path: '/customers/import'
     },
     
     // Advanced System Features

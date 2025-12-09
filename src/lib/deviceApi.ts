@@ -9,7 +9,7 @@ export async function fetchAllDevices(): Promise<Device[]> {
       // 🔒 Get current branch for isolation
       const currentBranchId = localStorage.getItem('current_branch_id');
       
-      // First try with customer join - use explicit column selection
+      // Enhanced query with customer and technician joins
       let query = supabase
         .from('devices')
         .select(`
@@ -18,15 +18,40 @@ export async function fetchAllDevices(): Promise<Device[]> {
           brand,
           model,
           serial_number,
+          imei,
           problem_description,
+          issue_description,
           status,
+          assigned_to,
           technician_id,
           estimated_completion_date,
+          expected_return_date,
+          estimated_hours,
           created_at,
           updated_at,
           estimated_cost,
           actual_cost,
-          deposit_amount
+          repair_cost,
+          deposit_amount,
+          device_cost,
+          repair_price,
+          diagnosis_required,
+          device_notes,
+          customers!customer_id (
+            id,
+            name,
+            phone,
+            email,
+            loyalty_level,
+            total_spent,
+            last_visit,
+            color_tag
+          ),
+          technician:users!technician_id (
+            id,
+            full_name,
+            email
+          )
         `)
         .order('created_at', { ascending: false });
       
@@ -37,14 +62,21 @@ export async function fetchAllDevices(): Promise<Device[]> {
       
       const { data, error } = await query;
       
-
+      // Check if error is due to PostgREST syntax not being supported (Neon direct connection)
+      const isPostgRESTError = error?.message?.includes('syntax error') || 
+                               error?.message?.includes('relation') ||
+                               error?.code === '42601' ||
+                               error?.code === '42703';
       
-      if (error) {
-
-        // Database constraint should now support all statuses after migration
-        
-        // Fallback: fetch devices without customer join - use explicit column selection
-        const { data: fallbackData, error: fallbackError } = await supabase
+      if (error && !isPostgRESTError) {
+        // Non-syntax errors - log and continue to fallback
+        console.warn('⚠️ Device query error (non-syntax):', error.message);
+      }
+      
+      // If query failed or returned no data, use fallback approach
+      if (error || !data || data.length === 0) {
+        // Fallback: fetch devices without PostgREST joins - use explicit column selection
+        let fallbackQuery = supabase
           .from('devices')
           .select(`
             id,
@@ -52,25 +84,62 @@ export async function fetchAllDevices(): Promise<Device[]> {
             brand,
             model,
             serial_number,
+            imei,
             problem_description,
+            issue_description,
             status,
+            assigned_to,
             technician_id,
             estimated_completion_date,
+            expected_return_date,
+            estimated_hours,
             created_at,
             updated_at,
             estimated_cost,
             actual_cost,
-            deposit_amount
+            repair_cost,
+            deposit_amount,
+            device_cost,
+            repair_price,
+            diagnosis_required,
+            device_notes
           `)
           .order('created_at', { ascending: false });
         
+        // 🔒 COMPLETE ISOLATION: Only show devices from current branch
+        if (currentBranchId) {
+          fallbackQuery = fallbackQuery.eq('branch_id', currentBranchId);
+        }
+        
+        const { data: fallbackData, error: fallbackError } = await fallbackQuery;
+        
         if (fallbackError) {
-          console.error('Error fetching devices:', fallbackError);
-          
-          // Database constraint should now support all statuses after migration
-          
+          console.error('Error fetching devices (fallback):', fallbackError);
           throw fallbackError;
         }
+        
+        // If no data returned, return empty array
+        if (!fallbackData || fallbackData.length === 0) {
+          await cacheSetAll('devices', []);
+          return [];
+        }
+        
+        // Fetch customer and technician data for fallback
+        const fallbackCustomerIds = [...new Set((fallbackData || []).map(d => d.customer_id).filter(Boolean))];
+        const fallbackTechnicianIds = [...new Set((fallbackData || []).map(d => d.assigned_to || d.technician_id).filter(Boolean))];
+        
+        const { data: fallbackCustomersData } = await supabase
+          .from('customers')
+          .select('id, name, phone, email, loyalty_level, total_spent, last_visit, color_tag')
+          .in('id', fallbackCustomerIds.length > 0 ? fallbackCustomerIds : ['00000000-0000-0000-0000-000000000000']);
+        
+        const { data: fallbackTechniciansData } = await supabase
+          .from('users')
+          .select('id, full_name, email')
+          .in('id', fallbackTechnicianIds.length > 0 ? fallbackTechnicianIds : ['00000000-0000-0000-0000-000000000000']);
+        
+        const fallbackCustomersMap = new Map((fallbackCustomersData || []).map(c => [c.id, c]));
+        const fallbackTechniciansMap = new Map((fallbackTechniciansData || []).map(t => [t.id, t]));
         
         const devicesWithData = (fallbackData || []).map(device => {
           const transformedRemarks = (device.remarks || []).map((remark: any) => ({
@@ -98,15 +167,31 @@ export async function fetchAllDevices(): Promise<Device[]> {
             createdAt: rating.created_at
           }));
 
+          const customer = fallbackCustomersMap.get(device.customer_id);
+          const technician = fallbackTechniciansMap.get(device.assigned_to || device.technician_id);
+
           return {
             ...device,
-            serialNumber: device.serial_number,
-            issueDescription: device.issue_description,
+            serialNumber: device.serial_number || device.imei || '',
+            issueDescription: device.issue_description || device.problem_description || '',
             customerId: device.customer_id,
-            assignedTo: device.assigned_to,
-            expectedReturnDate: device.expected_return_date,
-            customerName: '', // No customer data available
-            phoneNumber: '', // No customer data available
+            assignedTo: device.assigned_to || device.technician_id,
+            expectedReturnDate: device.expected_return_date || device.estimated_completion_date,
+            estimatedHours: device.estimated_hours,
+            customerName: customer?.name || '',
+            phoneNumber: customer?.phone || '',
+            customerEmail: customer?.email || '',
+            customerLoyaltyLevel: customer?.loyalty_level || '',
+            customerTotalSpent: customer?.total_spent || 0,
+            customerLastVisit: customer?.last_visit || null,
+            customerColorTag: customer?.color_tag || '',
+            assignedToName: technician?.full_name || '',
+            repairCost: device.repair_cost || device.estimated_cost || device.actual_cost || null,
+            depositAmount: device.deposit_amount || null,
+            deviceCost: device.device_cost || null,
+            repairPrice: device.repair_price || null,
+            diagnosisRequired: device.diagnosis_required || false,
+            deviceNotes: device.device_notes || null,
             remarks: transformedRemarks,
             transitions: transformedTransitions,
             ratings: transformedRatings,
@@ -119,32 +204,79 @@ export async function fetchAllDevices(): Promise<Device[]> {
         return devicesWithData;
       }
       
+      // If query succeeded but data is empty, return empty array
+      if (!data || data.length === 0) {
+        await cacheSetAll('devices', []);
+        return [];
+      }
+      
+      // Fetch customer and technician data separately (always use this approach for reliability)
+      const customerIds = [...new Set((data || []).map(d => d.customer_id).filter(Boolean))];
+      const technicianIds = [...new Set((data || []).map(d => d.assigned_to || d.technician_id).filter(Boolean))];
+      
+      // Fetch customers (handle empty array case)
+      let customersData: any[] = [];
+      if (customerIds.length > 0) {
+        const { data: custData, error: custError } = await supabase
+          .from('customers')
+          .select('id, name, phone, email, loyalty_level, total_spent, last_visit, color_tag')
+          .in('id', customerIds);
+        
+        if (!custError && custData) {
+          customersData = custData;
+        } else if (custError) {
+          console.warn('⚠️ Error fetching customers:', custError.message);
+        }
+      }
+      
+      // Fetch technicians (handle empty array case)
+      let techniciansData: any[] = [];
+      if (technicianIds.length > 0) {
+        const { data: techData, error: techError } = await supabase
+          .from('users')
+          .select('id, full_name, email')
+          .in('id', technicianIds);
+        
+        if (!techError && techData) {
+          techniciansData = techData;
+        } else if (techError) {
+          console.warn('⚠️ Error fetching technicians:', techError.message);
+        }
+      }
+      
+      const customersMap = new Map(customersData.map(c => [c.id, c]));
+      const techniciansMap = new Map(techniciansData.map(t => [t.id, t]));
+      
       const devicesWithData = (data || []).map(device => {
-        // Related data will be fetched separately on details page
+        // Try to get customer/technician from joined data first, then from maps
+        const customer = (device as any).customers || customersMap.get(device.customer_id);
+        const technician = (device as any).technician || techniciansMap.get(device.assigned_to || device.technician_id);
 
         return {
           ...device,
-          serialNumber: device.serial_number,
-          issueDescription: device.issue_description,
+          serialNumber: device.serial_number || device.imei || '',
+          issueDescription: device.issue_description || device.problem_description || '',
           customerId: device.customer_id,
-          assignedTo: device.assigned_to,
-          expectedReturnDate: device.expected_return_date,
-          customerName: device.customers?.name || '',
-          phoneNumber: device.customers?.phone || '',
-          customerEmail: device.customers?.email || '',
-          customerLoyaltyLevel: device.customers?.loyalty_level || '',
-          customerTotalSpent: device.customers?.total_spent || 0,
-          customerLastVisit: device.customers?.last_visit || null,
-          customerColorTag: device.customers?.color_tag || '',
+          assignedTo: device.assigned_to || device.technician_id,
+          expectedReturnDate: device.expected_return_date || device.estimated_completion_date,
+          estimatedHours: device.estimated_hours,
+          customerName: customer?.name || '',
+          phoneNumber: customer?.phone || '',
+          customerEmail: customer?.email || '',
+          customerLoyaltyLevel: customer?.loyalty_level || '',
+          customerTotalSpent: customer?.total_spent || 0,
+          customerLastVisit: customer?.last_visit || null,
+          customerColorTag: customer?.color_tag || '',
+          assignedToName: technician?.full_name || '',
           // Cost fields - now supported in database
-          repairCost: device.repair_cost || null,
+          repairCost: device.repair_cost || device.estimated_cost || device.actual_cost || null,
           depositAmount: device.deposit_amount || null,
-          deviceCost: device.device_cost,
+          deviceCost: device.device_cost || null,
           repairPrice: device.repair_price || null,
           // Additional device fields
           unlockCode: null,
-          diagnosisRequired: device.diagnosis_required,
-          deviceNotes: device.device_notes,
+          diagnosisRequired: device.diagnosis_required || false,
+          deviceNotes: device.device_notes || null,
           deviceCondition: null,
           // Checklist fields
           diagnosticChecklist: null,
@@ -207,17 +339,22 @@ export async function addDeviceToDb(device: Device) {
   const currentBranchId = localStorage.getItem('current_branch_id');
   
   // Map camelCase fields to snake_case for DB
+  // Ensure IMEI and serial_number are synced (both should have the same value)
+  const serialNumber = device.serialNumber || '';
+  const imei = serialNumber; // IMEI and serial_number are the same in this system
+  
   const dbDevice = {
     id: device.id,
     branch_id: currentBranchId || '00000000-0000-0000-0000-000000000001', // 🔒 Add branch isolation
     customer_id: device.customerId,
     device_name: device.model || `${device.brand} Device` || 'Unknown Device', // REQUIRED field
-    brand: device.brand,
-    model: device.model,
-    serial_number: device.serialNumber,
-    problem_description: device.issueDescription, // Legacy field for compatibility
-    issue_description: device.issueDescription,
-    status: device.status,
+    brand: device.brand || null,
+    model: device.model || null,
+    serial_number: serialNumber || null,
+    imei: imei || null, // Sync IMEI with serial_number
+    problem_description: device.issueDescription || null, // Legacy field for compatibility
+    issue_description: device.issueDescription || null,
+    status: device.status || 'assigned',
     technician_id: device.assignedTo || null, // Legacy field for compatibility
     assigned_to: device.assignedTo || null,
     // Fix: set expected_return_date to null if empty string
@@ -227,23 +364,46 @@ export async function addDeviceToDb(device: Device) {
     updated_at: device.updatedAt,
     unlock_code: device.unlockCode || null,
     // Pricing information - now supported in database
-    repair_cost: device.repairCost || null,
-    repair_price: device.repairPrice || null,
-    deposit_amount: device.depositAmount || null,
+    repair_cost: device.repairCost ? parseFloat(String(device.repairCost)) : null,
+    repair_price: device.repairPrice ? parseFloat(String(device.repairPrice)) : null,
+    deposit_amount: device.depositAmount ? parseFloat(String(device.depositAmount)) : null,
     diagnosis_required: device.diagnosisRequired || false,
     device_notes: device.deviceNotes || null,
-    device_cost: device.deviceCost || null,
+    device_cost: device.deviceCost ? parseFloat(String(device.deviceCost)) : null,
     estimated_hours: device.estimatedHours || null,
-    device_condition: device.deviceCondition || null,
+    device_condition: device.deviceCondition ? JSON.stringify(device.deviceCondition) : null,
   };
+  
+  // Log the data being inserted for debugging
+  console.log('💾 Inserting device to database:', {
+    id: dbDevice.id,
+    customer_id: dbDevice.customer_id,
+    device_name: dbDevice.device_name,
+    brand: dbDevice.brand,
+    model: dbDevice.model,
+    serial_number: dbDevice.serial_number,
+    imei: dbDevice.imei,
+    status: dbDevice.status,
+    assigned_to: dbDevice.assigned_to,
+    branch_id: dbDevice.branch_id
+  });
   
   // Insert device first
   const { data: deviceData, error: deviceError } = await supabase.from('devices').insert([dbDevice]).select();
-  if (deviceError) throw deviceError;
   
-
+  if (deviceError) {
+    console.error('❌ Database error inserting device:', deviceError);
+    throw new Error(`Failed to insert device: ${deviceError.message}`);
+  }
   
-  return deviceData && deviceData[0] ? deviceData[0] : null;
+  if (!deviceData || deviceData.length === 0) {
+    console.error('❌ No data returned from device insert');
+    throw new Error('Failed to create device - no data returned');
+  }
+  
+  console.log('✅ Device inserted successfully:', deviceData[0].id);
+  
+  return deviceData[0];
 }
 
 // Utility function to fix corrupted device data

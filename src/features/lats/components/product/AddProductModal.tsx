@@ -112,12 +112,15 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const attributeInputRef = useRef<HTMLInputElement>(null);
+  const attributeDropdownRef = useRef<HTMLDivElement>(null);
+  const [attributeDropdownPosition, setAttributeDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   
   // Autocomplete suggestions for attribute values
   const [valueSuggestions, setValueSuggestions] = useState<string[]>([]);
   const [showValueSuggestions, setShowValueSuggestions] = useState(false);
   const [selectedValueSuggestionIndex, setSelectedValueSuggestionIndex] = useState(-1);
   const valueInputRef = useRef<HTMLInputElement>(null);
+  const valueDropdownRef = useRef<HTMLDivElement>(null);
   const [valueDropdownPosition, setValueDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   
   // Common attribute name suggestions
@@ -164,6 +167,50 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
   const handleAttributeInputChange = (value: string) => {
     setCustomAttributeInput(value);
     setShowSuggestions(true);
+    // Update position when input changes
+    if (attributeInputRef.current) {
+      const rect = attributeInputRef.current.getBoundingClientRect();
+      setAttributeDropdownPosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width
+      });
+    }
+  };
+
+  // Format attribute name for display (remove underscores, capitalize, preserve acronyms)
+  const formatAttributeName = (name: string): string => {
+    // Common acronyms that should remain uppercase
+    const acronyms = new Set([
+      'gps', 'hdd', 'ssd', 'usb', 'usb-c', 'usb-a', 'hdmi', 'nfc', '5g', 'wifi', 'wifi-6', 'wifi-6e',
+      'cpu', 'gpu', 'ram', 'rom', 'dvd', 'cd', 'blu-ray', 'oled', 'amoled', 'ips', 'tn', 'va',
+      'led', 'lcd', 'hdr', 'dolby', 'thx', 'dts', 'ac', 'dc', 'api', 'sdk', 'sata', 'nvme',
+      'pcie', 'pci', 'agp', 'ddr', 'ddr3', 'ddr4', 'ddr5', 'lpddr', 'lpddr4', 'lpddr5',
+      'ghz', 'mhz', 'khz', 'mb', 'gb', 'tb', 'kb', 'mbps', 'gbps', 'kbps', 'mah', 'wh',
+      'w', 'v', 'a', 'ma', 'mv', 'kv', 'mw', 'kw', 'hz', 'fps', 'rpm', 'dpi', 'ppi',
+      'rgb', 'rgba', 'hsv', 'cmyk', 'html', 'css', 'js', 'json', 'xml', 'pdf', 'jpg', 'jpeg',
+      'png', 'gif', 'svg', 'mp3', 'mp4', 'avi', 'mkv', 'wav', 'flac', 'aac', 'ogg',
+      'os', 'ios', 'android', 'windows', 'macos', 'linux', 'unix', 'dos', 'bios', 'uefi',
+      'tcp', 'ip', 'udp', 'http', 'https', 'ftp', 'smtp', 'pop3', 'imap', 'ssh', 'ssl', 'tls',
+      'dns', 'dhcp', 'vpn', 'voip', 'sip', 'rtp', 'rtsp', 'rtmp', 'hls', 'dash',
+      'ai', 'ml', 'dl', 'nlp', 'cv', 'ar', 'vr', 'xr', 'iot', 'bt', 'ble',
+      'qr', 'rfid', 'irda', 'zigbee', 'z-wave', 'thread', 'matter',
+      'h264', 'h265', 'hevc', 'vp9', 'av1', 'mpeg', 'mpeg2', 'mpeg4', 'divx', 'xvid',
+      'aac', 'ac3', 'vorbis', 'opus', 'truehd', 'dts-hd'
+    ]);
+
+    return name
+      .split('_')
+      .map(word => {
+        const wordLower = word.toLowerCase();
+        // Check if the word is an acronym (matches known acronyms or is all uppercase)
+        if (acronyms.has(wordLower) || (word.length <= 4 && word === word.toUpperCase())) {
+          return word.toUpperCase();
+        }
+        // Otherwise, capitalize first letter
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .join(' ');
   };
 
   // Handle suggestion selection
@@ -256,6 +303,48 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
       setShowValueSuggestions(false);
     }
   }, [customAttributeValue, customAttributeInput, showVariantSpecificationsModal]);
+
+  // Close attribute suggestions dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showSuggestions &&
+        attributeInputRef.current &&
+        !attributeInputRef.current.contains(event.target as Node) &&
+        attributeDropdownRef.current &&
+        !attributeDropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowSuggestions(false);
+        setSelectedSuggestionIndex(-1);
+      }
+    };
+
+    if (showSuggestions) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showSuggestions]);
+
+  // Close value suggestions dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showValueSuggestions &&
+        valueInputRef.current &&
+        !valueInputRef.current.contains(event.target as Node) &&
+        valueDropdownRef.current &&
+        !valueDropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowValueSuggestions(false);
+        setSelectedValueSuggestionIndex(-1);
+      }
+    };
+
+    if (showValueSuggestions) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showValueSuggestions]);
 
   // Handle value suggestion selection
   const handleValueSuggestionSelect = (suggestion: string) => {
@@ -936,11 +1025,11 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
                     {variants[currentVariantIndex].attributes && Object.keys(variants[currentVariantIndex].attributes || {}).length > 0 && (
                       <div className="mb-4">
                         <h4 className="text-sm font-semibold text-gray-700 mb-3">Current Specifications</h4>
-                        <div className="space-y-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {Object.entries(variants[currentVariantIndex].attributes || {}).map(([key, value]) => (
                             <div key={key} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl">
-                              <div className="flex-1">
-                                <span className="text-sm font-medium text-gray-700">{key.replace(/_/g, ' ')}:</span>
+                              <div className="flex-1 min-w-0">
+                                <span className="text-sm font-medium text-gray-700">{formatAttributeName(key)}:</span>
                                 <span className="text-sm text-gray-600 ml-2">{String(value)}</span>
                               </div>
                               <button
@@ -954,7 +1043,7 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
                                       : v
                                   ));
                                 }}
-                                className="text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium"
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium flex-shrink-0 ml-2"
                               >
                                 Remove
                               </button>
@@ -967,7 +1056,7 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
                     {/* Add New Specification */}
                     <div className="border-t border-gray-200 pt-4">
                       <h4 className="text-sm font-semibold text-gray-700 mb-3">Add Specification</h4>
-                      <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-4">
                         <div className="relative">
                           <label className="block text-xs font-medium text-gray-700 mb-2">Attribute Name</label>
                           <input
@@ -977,36 +1066,65 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
                             onChange={(e) => handleAttributeInputChange(e.target.value)}
                             onKeyDown={handleAttributeInputKeyDown}
                             onFocus={() => {
-                              if (customAttributeInput.trim() && attributeSuggestions.length > 0) {
+                              if (attributeInputRef.current) {
+                                const rect = attributeInputRef.current.getBoundingClientRect();
+                                setAttributeDropdownPosition({
+                                  top: rect.bottom + window.scrollY,
+                                  left: rect.left + window.scrollX,
+                                  width: rect.width
+                                });
+                              }
+                              // Always show suggestions when field is focused
+                              if (customAttributeInput.trim()) {
+                                const filtered = commonAttributeNames.filter(name =>
+                                  name.toLowerCase().includes(customAttributeInput.toLowerCase())
+                                );
+                                setAttributeSuggestions(filtered);
+                                setShowSuggestions(filtered.length > 0);
+                              } else {
+                                // Show all suggestions when field is empty and focused
+                                setAttributeSuggestions(commonAttributeNames);
                                 setShowSuggestions(true);
                               }
                             }}
                             onBlur={() => {
-                              // Delay to allow click on suggestion
-                              setTimeout(() => setShowSuggestions(false), 200);
+                              // Don't close immediately - let click-outside handler manage it
+                              // This allows clicking on suggestions without closing
                             }}
                             placeholder="e.g., Color, Size, Storage, Processor"
                             className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-sm"
                             autoComplete="off"
                           />
                           {/* Autocomplete Suggestions Dropdown */}
-                          {showSuggestions && attributeSuggestions.length > 0 && (
-                            <div className="absolute z-50 w-full mt-1 bg-white border-2 border-purple-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                              {attributeSuggestions.map((suggestion, index) => (
-                                <button
-                                  key={suggestion}
-                                  type="button"
-                                  onClick={() => handleSuggestionSelect(suggestion)}
-                                  className={`w-full text-left px-4 py-2.5 text-sm hover:bg-purple-50 transition-colors ${
-                                    index === selectedSuggestionIndex ? 'bg-purple-100' : ''
-                                  } ${index === 0 ? 'rounded-t-xl' : ''} ${
-                                    index === attributeSuggestions.length - 1 ? 'rounded-b-xl' : ''
-                                  }`}
-                                >
-                                  <span className="font-medium text-gray-800">{suggestion}</span>
-                                </button>
-                              ))}
-                            </div>
+                          {showSuggestions && attributeSuggestions.length > 0 && createPortal(
+                            <div 
+                              ref={attributeDropdownRef}
+                              className="fixed z-[999999] bg-white border-2 border-purple-200 rounded-xl shadow-2xl max-h-60 overflow-y-auto p-2"
+                              style={{
+                                top: `${attributeDropdownPosition.top}px`,
+                                left: `${attributeDropdownPosition.left}px`,
+                                width: `${attributeDropdownPosition.width}px`,
+                                maxWidth: '100vw'
+                              }}
+                            >
+                              <div className="grid grid-cols-2 gap-2">
+                                {attributeSuggestions.map((suggestion, index) => (
+                                  <button
+                                    key={suggestion}
+                                    type="button"
+                                    onClick={() => handleSuggestionSelect(suggestion)}
+                                    className={`w-full text-left px-3 py-2 text-sm hover:bg-purple-50 transition-colors rounded-lg border ${
+                                      index === selectedSuggestionIndex 
+                                        ? 'bg-purple-100 border-purple-300' 
+                                        : 'border-gray-200 hover:border-purple-200'
+                                    }`}
+                                  >
+                                    <span className="font-medium text-gray-800">{formatAttributeName(suggestion)}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>,
+                            document.body
                           )}
                         </div>
                         <div className="relative">
@@ -1053,6 +1171,7 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
                                   width: rect.width
                                 });
                               }
+                              // Always show suggestions when field is focused (if attribute name is set)
                               if (customAttributeInput.trim()) {
                                 const allSuggestions = getValueSuggestions(customAttributeInput);
                                 if (customAttributeValue.trim()) {
@@ -1065,10 +1184,15 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
                                   setValueSuggestions(allSuggestions);
                                   setShowValueSuggestions(allSuggestions.length > 0);
                                 }
+                              } else {
+                                // If no attribute name, show empty suggestions
+                                setValueSuggestions([]);
+                                setShowValueSuggestions(false);
                               }
                             }}
                             onBlur={() => {
-                              setTimeout(() => setShowValueSuggestions(false), 200);
+                              // Don't close immediately - let click-outside handler manage it
+                              // This allows clicking on suggestions without closing
                             }}
                             placeholder="e.g., Black, Large, 256GB"
                             className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-sm"
@@ -1077,6 +1201,7 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
                           {/* Autocomplete Suggestions Dropdown for Value */}
                           {showValueSuggestions && valueSuggestions.length > 0 && createPortal(
                             <div 
+                              ref={valueDropdownRef}
                               className="fixed z-[999999] bg-white border-2 border-purple-200 rounded-xl shadow-2xl max-h-60 overflow-y-auto p-2"
                               style={{
                                 top: `${valueDropdownPosition.top}px`,
@@ -1105,29 +1230,29 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
                             document.body
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (customAttributeInput && customAttributeValue) {
-                              const updatedAttributes = {
-                                ...variants[currentVariantIndex].attributes,
-                                [customAttributeInput]: customAttributeValue
-                              };
-                              setVariants(prev => prev.map((v, i) => 
-                                i === currentVariantIndex 
-                                  ? { ...v, attributes: updatedAttributes }
-                                  : v
-                              ));
-                              setCustomAttributeInput('');
-                              setCustomAttributeValue('');
-                            }
-                          }}
-                          disabled={!customAttributeInput || !customAttributeValue}
-                          className="w-full px-4 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                        >
-                          Add Specification
-                        </button>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (customAttributeInput && customAttributeValue) {
+                            const updatedAttributes = {
+                              ...variants[currentVariantIndex].attributes,
+                              [customAttributeInput]: customAttributeValue
+                            };
+                            setVariants(prev => prev.map((v, i) => 
+                              i === currentVariantIndex 
+                                ? { ...v, attributes: updatedAttributes }
+                                : v
+                            ));
+                            setCustomAttributeInput('');
+                            setCustomAttributeValue('');
+                          }
+                        }}
+                        disabled={!customAttributeInput || !customAttributeValue}
+                        className="w-full px-4 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-lg mt-4"
+                      >
+                        Add Specification
+                      </button>
                     </div>
                   </div>
                 )}

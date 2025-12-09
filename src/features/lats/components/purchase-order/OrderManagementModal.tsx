@@ -2176,6 +2176,20 @@ const registerOrderCardRef = useCallback(
             </div>
           </div>
 
+          {/* Add New Order Button */}
+          <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
+            <button
+              onClick={() => {
+                navigate('/lats/purchase-order/create');
+                onClose();
+              }}
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg hover:from-orange-600 hover:to-amber-700"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Add New Order</span>
+            </button>
+          </div>
+
           {/* Show More Orders Button */}
           {visibleOrderCount < filteredOrders.length && (
           <div className="p-6 pb-0 flex-shrink-0">

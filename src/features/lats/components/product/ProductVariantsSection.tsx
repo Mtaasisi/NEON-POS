@@ -94,20 +94,27 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
         return;
       }
       
-      // If tracking is enabled and stock is reduced, trim excess fields
+      // If tracking is enabled, automatically adjust fields to match stock quantity
       if (currentVariant.useChildrenVariants && newStockQuantity > 0) {
-        if (currentChildren.length > newStockQuantity) {
-          // Trim excess fields
-          const updatedChildren = currentChildren.slice(0, newStockQuantity);
-          setVariants(prev => prev.map((variant, i) => 
-            i === index 
-              ? { ...variant, [field]: value, childrenVariants: updatedChildren }
-              : variant
-          ));
+        // Always ensure fields array matches stock quantity exactly
+        let updatedChildren: string[];
+        if (currentChildren.length < newStockQuantity) {
+          // Add empty fields if stock increased
+          updatedChildren = [...currentChildren, ...Array(newStockQuantity - currentChildren.length).fill('')];
+        } else if (currentChildren.length > newStockQuantity) {
+          // Trim excess fields if stock decreased
+          updatedChildren = currentChildren.slice(0, newStockQuantity);
           toast.info(`Reduced IMEI/Serial number fields to ${newStockQuantity} to match stock quantity.`);
-          return;
+        } else {
+          // Same length, no change needed
+          updatedChildren = currentChildren;
         }
-        // If stock increased, don't auto-add fields - let user add them manually
+        setVariants(prev => prev.map((variant, i) => 
+          i === index 
+            ? { ...variant, [field]: value, childrenVariants: updatedChildren }
+            : variant
+        ));
+        return;
       }
     }
     
@@ -133,8 +140,22 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
       const stockQuantity = currentVariant.stockQuantity || 0;
       const trimmedChildren = value.map(c => c.trim()).filter(Boolean);
       
+      // If tracking is enabled, ensure array length matches stock quantity exactly
+      if (currentVariant.useChildrenVariants && stockQuantity > 0) {
+        // Ensure array has exactly stockQuantity elements
+        let adjustedValue = [...value];
+        if (adjustedValue.length < stockQuantity) {
+          // Pad with empty strings
+          adjustedValue = [...adjustedValue, ...Array(stockQuantity - adjustedValue.length).fill('')];
+        } else if (adjustedValue.length > stockQuantity) {
+          // Trim to stock quantity
+          adjustedValue = adjustedValue.slice(0, stockQuantity);
+        }
+        value = adjustedValue;
+      }
+      
       // Check if total number of fields (including empty) exceeds stock quantity
-      if (value.length > stockQuantity) {
+      if (value.length > stockQuantity && stockQuantity > 0) {
         toast.error(`Cannot have more than ${stockQuantity} IMEI/Serial number fields. Stock quantity is ${stockQuantity}.`);
         // Limit to stock quantity
         const limitedValue = value.slice(0, stockQuantity);
@@ -145,7 +166,7 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
       }
       
       // Check if number of filled IMEI/Serial numbers exceeds stock quantity
-      if (trimmedChildren.length > stockQuantity) {
+      if (trimmedChildren.length > stockQuantity && stockQuantity > 0) {
         toast.error(`Cannot add more than ${stockQuantity} filled IMEI/Serial numbers. Stock quantity is ${stockQuantity}.`);
         return;
       }
@@ -693,14 +714,12 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                               const useChildren = !variant.useChildrenVariants;
                               updateVariant(index, 'useChildrenVariants', useChildren);
                               if (useChildren) {
-                                // Initialize with one empty field (user can add more)
+                                // Initialize with all fields based on stock quantity
                                 const stockQuantity = variant.stockQuantity || 0;
                                 if (stockQuantity > 0) {
-                                  // Start with one empty field, user can add more up to stock quantity
-                                  const currentChildren = variant.childrenVariants || [];
-                                  if (currentChildren.length === 0) {
-                                    updateVariant(index, 'childrenVariants', ['']);
-                                  }
+                                  // Create array with stockQuantity number of empty fields
+                                  const newChildren = Array(stockQuantity).fill('');
+                                  updateVariant(index, 'childrenVariants', newChildren);
                                 } else {
                                   toast.error('Please set stock quantity first before tracking individual items.');
                                   // Don't enable if stock is 0
@@ -763,8 +782,13 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                                   const stockQuantity = variant.stockQuantity || 0;
                                   const currentChildren = variant.childrenVariants || [];
                                   
-                                  // Show only existing fields (can be less than stock quantity)
-                                  return currentChildren.map((child, childIndex) => {
+                                  // Ensure we have exactly stockQuantity fields
+                                  const fieldsToShow = stockQuantity > 0 
+                                    ? Array.from({ length: stockQuantity }, (_, i) => currentChildren[i] || '')
+                                    : [];
+                                  
+                                  // Show all fields based on stock quantity
+                                  return fieldsToShow.map((child, childIndex) => {
                                     const isFilled = child && child.trim() !== '';
                                     
                                     return (
@@ -791,9 +815,12 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                                           type="text"
                                           value={child}
                                           onChange={(e) => {
-                                            const newChildren = [...currentChildren];
-                                            newChildren[childIndex] = e.target.value;
-                                            updateVariant(index, 'childrenVariants', newChildren);
+                                            // Ensure we maintain exactly stockQuantity fields
+                                            const stockQuantity = variant.stockQuantity || 0;
+                                            const currentChildren = variant.childrenVariants || [];
+                                            const fieldsArray = Array.from({ length: stockQuantity }, (_, i) => currentChildren[i] || '');
+                                            fieldsArray[childIndex] = e.target.value;
+                                            updateVariant(index, 'childrenVariants', fieldsArray);
                                           }}
                                           placeholder={`Enter IMEI or Serial #${childIndex + 1}`}
                                           className={`w-full pl-10 pr-10 py-2.5 border-0 rounded-lg focus:outline-none focus:ring-2 text-sm font-medium bg-transparent ${
@@ -812,15 +839,15 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          const newChildren = [...currentChildren];
-                                          // Remove this field from the array
-                                          newChildren.splice(childIndex, 1);
+                                          const newChildren = [...fieldsToShow];
+                                          // Clear this field (set to empty string instead of removing)
+                                          newChildren[childIndex] = '';
                                           updateVariant(index, 'childrenVariants', newChildren);
                                         }}
                                         className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-red-100 text-red-600 hover:bg-red-200"
-                                        title="Remove this field"
+                                        title="Clear this field"
                                       >
-                                        Skip
+                                        Clear
                                       </button>
                                     </div>
                                     );
@@ -828,35 +855,10 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                                 })()}
                               </div>
                               
-                              {/* Add Field Button */}
-                              {(() => {
-                                const stockQuantity = variant.stockQuantity || 0;
-                                const currentChildren = variant.childrenVariants || [];
-                                const currentCount = currentChildren.length;
-                                const canAddMore = currentCount < stockQuantity;
-                                const remaining = stockQuantity - currentCount;
-                                
-                                return (
-                                  canAddMore && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const newChildren = [...(variant.childrenVariants || []), ''];
-                                        updateVariant(index, 'childrenVariants', newChildren);
-                                      }}
-                                      className="w-full px-4 py-3 border-2 border-dashed border-indigo-300 rounded-xl hover:border-indigo-500 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 text-indigo-600 text-sm font-bold shadow-sm hover:shadow-md"
-                                    >
-                                      <Plus size={18} className="text-indigo-600" />
-                                      Add Field ({remaining} remaining)
-                                    </button>
-                                  )
-                                );
-                              })()}
-                              
                               {/* Help Button with Tooltip */}
                               <div className="flex items-center justify-between pt-2">
                                 <div className="text-xs font-semibold text-indigo-900">
-                                  Stock: {variant.stockQuantity || 0} items. Fields: {(variant.childrenVariants || []).length} / {variant.stockQuantity || 0}. Filled: {(variant.childrenVariants || []).filter(c => c.trim()).length}
+                                  Stock: {variant.stockQuantity || 0} items. Filled: {(variant.childrenVariants || []).filter(c => c.trim()).length} / {variant.stockQuantity || 0}
                                 </div>
                                 <div className="relative help-tooltip-container">
                                   <button
@@ -895,11 +897,11 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                                           </li>
                                           <li className="flex items-start gap-2">
                                             <span className="text-indigo-600 font-bold mt-0.5">•</span>
-                                            <span>Add fields as needed (up to {variant.stockQuantity || 0} based on stock quantity)</span>
+                                            <span>All {variant.stockQuantity || 0} fields are shown automatically based on stock quantity</span>
                                           </li>
                                           <li className="flex items-start gap-2">
                                             <span className="text-indigo-600 font-bold mt-0.5">•</span>
-                                            <span>Use the "Skip" button to remove a field</span>
+                                            <span>Use the "Clear" button to clear a field</span>
                                           </li>
                                           <li className="flex items-start gap-2">
                                             <span className="text-indigo-600 font-bold mt-0.5">•</span>

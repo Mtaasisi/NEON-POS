@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import GlassCard from '../../../features/shared/components/ui/GlassCard';
-import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import { useNavigate } from 'react-router-dom';
+import { BackButton } from '../../../features/shared/components/ui/BackButton';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { toast } from 'react-hot-toast';
 import { ArrowLeft, Plus, Edit, Trash2, Search, Filter, X, Save, RotateCcw, Tag, Smartphone, Laptop, Monitor, Headphones, Camera, Gamepad2, Printer, Watch, Speaker, Keyboard, Mouse, Router, Server, HardDrive, Package, Eye, MessageCircle, Users, Star, UserPlus } from 'lucide-react';
 import { 
@@ -172,41 +172,53 @@ const CategoryManagementPage: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <GlassButton
-          onClick={() => navigate('/dashboard')}
-          className="flex items-center gap-2"
-        >
-          <ArrowLeft size={20} />
-          Back to Dashboard
-        </GlassButton>
+      {/* Wrapper Container - Single rounded container */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section */}
+        <div className="p-8 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <Tag className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Category Management</h1>
-          <p className="text-gray-600">Manage device categories and their colors</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Category Management</h1>
+                <p className="text-sm text-gray-600">
+                  Manage device categories and their colors
+                </p>
         </div>
       </div>
 
+            {/* Back Button */}
+            <BackButton to="/dashboard" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
+          </div>
+        </div>
+
+        {/* Main Container - Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <GlassCard className="p-4 text-center">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 text-center hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
           <div className="text-2xl font-bold text-blue-600">{categories.length}</div>
-          <div className="text-sm text-gray-600">Total Categories</div>
-        </GlassCard>
-        <GlassCard className="p-4 text-center">
+              <div className="text-sm font-semibold text-gray-600">Total Categories</div>
+            </div>
+            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 text-center hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
           <div className="text-2xl font-bold text-green-600">{categories.filter(c => c.description).length}</div>
-          <div className="text-sm text-gray-600">With Description</div>
-        </GlassCard>
-        <GlassCard className="p-4 text-center">
+              <div className="text-sm font-semibold text-gray-600">With Description</div>
+            </div>
+            <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 text-center hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
           <div className="text-2xl font-bold text-purple-600">{new Set(categories.map(c => c.color)).size}</div>
-          <div className="text-sm text-gray-600">Color Variants</div>
-        </GlassCard>
+              <div className="text-sm font-semibold text-gray-600">Color Variants</div>
+            </div>
       </div>
 
       {/* Controls */}
-      <GlassCard className="mb-6">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 mb-6 shadow-sm">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 flex-1">
             <div className="relative flex-1 md:w-80">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
@@ -214,52 +226,55 @@ const CategoryManagementPage: React.FC = () => {
                 placeholder="Search categories..."
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
               />
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <GlassButton
+                <button
               onClick={() => setShowCategoryForm(true)}
-              className="flex items-center gap-2"
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
             >
               <Plus size={16} />
               Add Category
-            </GlassButton>
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      </GlassCard>
 
       {/* Categories Grid */}
       {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="flex flex-col items-center justify-center py-12">
+              <LoadingSpinner size="lg" color="blue" />
+              <p className="mt-4 text-gray-600 font-medium">Loading categories...</p>
         </div>
       ) : filteredCategories.length === 0 ? (
-        <GlassCard className="text-center py-12">
-          <Tag className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No categories found</h3>
-          <p className="text-gray-600 mb-4">
+            <div className="bg-white rounded-2xl border-2 border-gray-200 text-center py-12 shadow-sm">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Tag className="w-8 h-8 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">No categories found</h3>
+              <p className="text-gray-600 mb-6">
             {searchQuery 
               ? 'Try adjusting your search' 
               : 'Get started by creating your first category'
             }
           </p>
           {!searchQuery && (
-            <GlassButton
+                <button
               onClick={() => setShowCategoryForm(true)}
-              className="flex items-center gap-2"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
             >
               <Plus size={16} />
               Create First Category
-            </GlassButton>
+                </button>
           )}
-        </GlassCard>
+            </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredCategories.map(category => (
-            <GlassCard key={category.id} className="relative group">
+                <div key={category.id} className="bg-white border-2 border-gray-200 rounded-2xl shadow-sm relative group hover:shadow-md transition-all">
               {/* Category Color Display */}
               <div className="flex items-center justify-center h-32 mb-4 rounded-lg" style={{ backgroundColor: category.color + '20' }}>
                 <div 

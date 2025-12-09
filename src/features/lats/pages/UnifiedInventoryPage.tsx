@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import GlassButton from '../../shared/components/ui/GlassButton';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { PageErrorBoundary } from '../../../features/shared/components/PageErrorBoundary';
 import { useErrorHandler } from '../../../hooks/useErrorHandler';
 import ErrorState from '../components/ui/ErrorState';
 import { 
   Package, Plus, Download, Upload,
-  Trash2, Star, Settings, RefreshCw, AlertTriangle, ShoppingCart, MoreHorizontal, Tag, Truck,
+  Trash2, Star, Settings, RefreshCw, AlertTriangle, ShoppingCart, Tag, Truck,
   FileText, ArrowUp, ArrowDown, X
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -16,8 +16,7 @@ import { toast } from 'react-hot-toast';
 import EnhancedStockAdjustModal from '../components/inventory/EnhancedStockAdjustModal';
 import CategoryFormModal from '../components/inventory/CategoryFormModal';
 import ManageCategoriesModal from '../components/inventory/ManageCategoriesModal';
-import ProductExcelImportModal from '../components/ProductExcelImportModal';
-import ProductExcelExport from '../components/inventory/ProductExcelExport';
+import ProductImportExportModal from '../components/inventory/ProductImportExportModal';
 
 import SupplierForm from '../components/inventory/SupplierForm';
 import { useProductModals } from '../hooks/useProductModals';
@@ -126,8 +125,7 @@ const UnifiedInventoryPage: React.FC = () => {
   const [selectedBrand, setSelectedBrand] = useState('all');
   
   // Excel import/export modal state
-  const [showExcelImportModal, setShowExcelImportModal] = useState(false);
-  const [showExcelExportModal, setShowExcelExportModal] = useState(false);
+  const [showImportExportModal, setShowImportExportModal] = useState(false);
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
   const [showFeaturedOnly, setShowFeaturedOnly] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -141,28 +139,10 @@ const UnifiedInventoryPage: React.FC = () => {
   const [showManageCategoriesModal, setShowManageCategoriesModal] = useState(false);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [selectedProductForHistory, setSelectedProductForHistory] = useState<string | null>(null);
-  const [showMoreActions, setShowMoreActions] = useState(false);
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [showOrderManagementModal, setShowOrderManagementModal] = useState(false);
 
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Element;
-      if (!target.closest('.more-actions-dropdown')) {
-        setShowMoreActions(false);
-      }
-    };
-
-    if (showMoreActions) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showMoreActions]);
 
   // Optimized data loading with parallel execution and caching
   useEffect(() => {
@@ -789,14 +769,14 @@ const UnifiedInventoryPage: React.FC = () => {
     }
   };
 
-  // Handle import functionality - opens Excel import modal
+  // Handle import functionality - opens combined import/export modal
   const handleImport = () => {
-    setShowExcelImportModal(true);
+    setShowImportExportModal(true);
   };
 
   // Handle Excel import completion
   const handleExcelImportComplete = async (importedProducts: Product[]) => {
-    setShowExcelImportModal(false);
+    setShowImportExportModal(false);
     toast.success(`Successfully imported ${importedProducts.length} products!`);
     
     // Refresh the data
@@ -853,7 +833,6 @@ const UnifiedInventoryPage: React.FC = () => {
       <div className="fixed bottom-4 right-4 z-40 group">
         <button
           className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-3 py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2 text-sm font-medium"
-          onClick={() => setShowMoreActions(!showMoreActions)}
         >
           <span>⌨️</span>
           <span className="hidden md:inline">Shortcuts</span>
@@ -935,31 +914,22 @@ const UnifiedInventoryPage: React.FC = () => {
                 <span>Add Product</span>
               </button>
 
-              {/* Create PO Button */}
+              {/* Manage Orders Button */}
               <button
-                onClick={() => navigate('/lats/purchase-order/create')}
-                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg hover:from-orange-600 hover:to-amber-700"
+                onClick={() => setShowOrderManagementModal(true)}
+                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg hover:from-purple-600 hover:to-purple-700"
               >
-                <Truck size={18} />
-                <span>Create PO</span>
+                <ShoppingCart size={18} />
+                <span>Manage Orders</span>
               </button>
 
-              {/* Import Excel Button */}
+              {/* Import/Export Excel Button */}
               <button
                 onClick={handleImport}
                 className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700"
               >
                 <Upload size={18} />
-                <span>Import Excel</span>
-              </button>
-
-              {/* Export Excel Button */}
-              <button
-                onClick={() => setShowExcelExportModal(true)}
-                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow-lg hover:from-cyan-600 hover:to-teal-700"
-              >
-                <Download size={18} />
-                <span>Export Excel</span>
+                <span>Import / Export</span>
               </button>
 
               {/* Refresh Data Button */}
@@ -967,12 +937,21 @@ const UnifiedInventoryPage: React.FC = () => {
                 onClick={async () => {
                   setIsDataLoading(true);
                   try {
+                    // Clear all product-related caches before refresh
+                    try {
+                      const { getProducts } = await import('../../../lib/latsProductApi');
+                      await getProducts({ forceRefresh: true });
+                    } catch (e) {
+                      console.warn('Cache clear warning:', e);
+                    }
+                    
                     await Promise.all([
                       loadLiveMetrics(),
                       forceRefreshProducts()
                     ]);
-                    toast.success('Data refreshed successfully!');
+                    toast.success('Data refreshed successfully! All caches cleared.');
                   } catch (error) {
+                    console.error('Refresh error:', error);
                     toast.error('Failed to refresh data');
                   } finally {
                     setIsDataLoading(false);
@@ -985,149 +964,6 @@ const UnifiedInventoryPage: React.FC = () => {
                 <span>{isLoadingLiveMetrics || isDataLoading ? 'Refreshing...' : 'Refresh'}</span>
               </button>
 
-              {/* More Actions Button */}
-              <div className="relative more-actions-dropdown">
-                <button
-                  onClick={() => setShowMoreActions(!showMoreActions)}
-                  className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-gray-400 to-gray-500 text-white shadow-lg hover:from-gray-500 hover:to-gray-600"
-                  title="More actions"
-                >
-                  <MoreHorizontal size={18} />
-                  <span>More</span>
-                </button>
-              
-                {showMoreActions && (
-                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
-                    {/* Header */}
-                    <div className="bg-gradient-to-r from-slate-50 to-gray-50 px-4 py-3 border-b border-gray-100">
-                      <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                        <Settings size={16} className="text-slate-600" />
-                        More Actions
-                      </h3>
-                    </div>
-                    
-                    {/* Actions List */}
-                    <div className="p-2">
-                      <button
-                        onClick={() => {
-                          setShowOrderManagementModal(true);
-                          setShowMoreActions(false);
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-purple-50 transition-colors text-left group"
-                      >
-                        <div className="w-9 h-9 bg-purple-500/10 rounded-lg flex items-center justify-center">
-                          <ShoppingCart size={16} className="text-purple-600" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900 text-sm">Manage Orders</div>
-                          <div className="text-xs text-gray-500">View purchase orders</div>
-                        </div>
-                      </button>
-                      
-                      <div className="border-t border-gray-100 my-2"></div>
-                      
-                      {dbStatus === 'error' && (
-                        <button
-                          onClick={async () => {
-                            setDbStatus('connecting');
-                            try {
-                              await Promise.all([
-                                loadProducts({ page: 1, limit: 100 }),
-                                loadCategories(),
-                                loadSuppliers()
-                              ]);
-                              setDbStatus('connected');
-                              toast.success('Reconnected successfully!');
-                            } catch (error) {
-                              setDbStatus('error');
-                              toast.error('Failed to reconnect');
-                            } finally {
-                              setShowMoreActions(false);
-                            }
-                          }}
-                          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-red-50 transition-colors text-left group mt-1"
-                        >
-                          <div className="w-9 h-9 bg-red-500/10 rounded-lg flex items-center justify-center">
-                            <RefreshCw size={16} className="text-red-600" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-medium text-gray-900 text-sm">Retry Connection</div>
-                            <div className="text-xs text-gray-500">Reconnect to database</div>
-                          </div>
-                        </button>
-                      )}
-                      
-                      <div className="border-t border-gray-100 my-2"></div>
-                      
-                      <button
-                        onClick={() => {
-                          setShowCategoryForm(true);
-                          setShowMoreActions(false);
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-blue-50 transition-colors text-left group"
-                      >
-                        <div className="w-9 h-9 bg-blue-500/10 rounded-lg flex items-center justify-center">
-                          <Tag size={16} className="text-blue-600" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900 text-sm">Add Category</div>
-                          <div className="text-xs text-gray-500">Organize products</div>
-                        </div>
-                      </button>
-                      
-                      <button
-                        onClick={() => {
-                          setShowSupplierForm(true);
-                          setShowMoreActions(false);
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-purple-50 transition-colors text-left group mt-1"
-                      >
-                        <div className="w-9 h-9 bg-purple-500/10 rounded-lg flex items-center justify-center">
-                          <Truck size={16} className="text-purple-600" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900 text-sm">Add Supplier</div>
-                          <div className="text-xs text-gray-500">Manage suppliers</div>
-                        </div>
-                      </button>
-                      
-                      <div className="border-t border-gray-100 my-2"></div>
-                      
-                      <button
-                        onClick={() => {
-                          navigate('/excel-templates');
-                          setShowMoreActions(false);
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-50 transition-colors text-left group"
-                      >
-                        <div className="w-9 h-9 bg-indigo-500/10 rounded-lg flex items-center justify-center">
-                          <FileText size={16} className="text-indigo-600" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900 text-sm">Download Template</div>
-                          <div className="text-xs text-gray-500">Excel templates</div>
-                        </div>
-                      </button>
-                      
-                      <button
-                        onClick={() => {
-                          handleExport();
-                          setShowMoreActions(false);
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-orange-50 transition-colors text-left group mt-1"
-                      >
-                        <div className="w-9 h-9 bg-orange-500/10 rounded-lg flex items-center justify-center">
-                          <Download size={16} className="text-orange-600" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900 text-sm">Export CSV</div>
-                          <div className="text-xs text-gray-500">Download CSV data</div>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
 
@@ -1244,7 +1080,9 @@ const UnifiedInventoryPage: React.FC = () => {
             onClose={() => setShowManageCategoriesModal(false)}
             categories={categories || []}
             onCategoryUpdate={async () => {
-              // Reload categories when updated
+              // Force refresh categories to clear cache and get all categories including children
+              const { categoryService } = await import('../lib/categoryService');
+              await categoryService.forceRefresh();
               await loadCategories();
             }}
           />
@@ -1302,53 +1140,32 @@ const UnifiedInventoryPage: React.FC = () => {
               </p>
               
               <div className="flex gap-3 justify-end">
-                <GlassButton
-                  variant="secondary"
+                <button
                   onClick={() => setShowDeleteConfirmation(false)}
-                  className="text-sm"
+                  className="px-4 py-2.5 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-colors text-sm"
                 >
                   Cancel
-                </GlassButton>
-                <GlassButton
+                </button>
+                <button
                   onClick={() => {
                     handleBulkAction('delete');
                     setShowDeleteConfirmation(false);
                   }}
-                  className="text-sm bg-red-600 hover:bg-red-700 text-white"
+                  className="px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl text-sm"
                 >
                   Delete {selectedProducts.length} Product{selectedProducts.length !== 1 ? 's' : ''}
-                </GlassButton>
+                </button>
               </div>
             </div>
           </div>
         )}
 
-      {/* Excel Import Modal */}
-      <ProductExcelImportModal
-        isOpen={showExcelImportModal}
-        onClose={() => setShowExcelImportModal(false)}
+      {/* Combined Import/Export Modal */}
+      <ProductImportExportModal
+        isOpen={showImportExportModal}
+        onClose={() => setShowImportExportModal(false)}
         onImportComplete={handleExcelImportComplete}
       />
-
-      {/* Excel Export Modal */}
-      {showExcelExportModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]" role="dialog" aria-modal="true">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden relative">
-            {/* Close Button */}
-            <button
-              onClick={() => setShowExcelExportModal(false)}
-              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-6">
-              <ProductExcelExport />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Add Product Modal */}
       <AddProductModal

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Plus, 
   Edit, 
@@ -9,7 +10,8 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
-  Copy
+  Copy,
+  FileText
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import { toast } from 'react-hot-toast';
@@ -346,181 +348,221 @@ const ProblemTemplateManager: React.FC = () => {
         </div>
       )}
 
-      {/* Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold text-gray-900">
-                  {editingTemplate ? 'Edit Template' : 'New Template'}
-                </h3>
-                <button
-                  onClick={resetForm}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X size={24} />
-                </button>
+      {/* Form Modal - Matching AddProductModal Style */}
+      {showForm && createPortal(
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/60 z-[99999]"
+            onClick={resetForm}
+            aria-hidden="true"
+          />
+          
+          {/* Modal Container */}
+          <div 
+            className="fixed inset-0 flex items-center justify-center z-[100000] p-4 pointer-events-none"
+          >
+            <div 
+              className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden relative pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="template-modal-title"
+            >
+              {/* Close Button */}
+              <button
+                onClick={resetForm}
+                className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+                disabled={saving}
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Icon Header - Fixed */}
+              <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                  {/* Icon */}
+                  <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                    <FileText className="w-8 h-8 text-white" />
+                  </div>
+                  
+                  {/* Text */}
+                  <div>
+                    <h3 id="template-modal-title" className="text-2xl font-bold text-gray-900 mb-2">
+                      {editingTemplate ? 'Edit Template' : 'New Template'}
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      {editingTemplate ? 'Update problem template details' : 'Create a new diagnostic problem template'}
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-6">
-                {/* Basic Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                <div className="py-6 space-y-6">
+                  {/* Basic Information */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Problem Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.problem_name}
+                        onChange={(e) => setFormData(prev => ({ ...prev, problem_name: e.target.value }))}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                        placeholder="e.g., Phone No Power"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Category *
+                      </label>
+                      <select
+                        value={formData.category}
+                        onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      >
+                        {categories.map(category => (
+                          <option key={category} value={category}>
+                            {category.charAt(0).toUpperCase() + category.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Problem Name *
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Problem Description
                     </label>
-                    <input
-                      type="text"
-                      value={formData.problem_name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, problem_name: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., Phone No Power"
+                    <textarea
+                      value={formData.problem_description}
+                      onChange={(e) => setFormData(prev => ({ ...prev, problem_description: e.target.value }))}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+                      rows={3}
+                      placeholder="Describe the problem and what technicians should look for..."
                     />
                   </div>
+
+                  {/* Checklist Items */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Category *
-                    </label>
-                    <select
-                      value={formData.category}
-                      onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      {categories.map(category => (
-                        <option key={category} value={category}>
-                          {category.charAt(0).toUpperCase() + category.slice(1)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Problem Description
-                  </label>
-                  <textarea
-                    value={formData.problem_description}
-                    onChange={(e) => setFormData(prev => ({ ...prev, problem_description: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    rows={3}
-                    placeholder="Describe the problem and what technicians should look for..."
-                  />
-                </div>
-
-                {/* Checklist Items */}
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Checklist Items *
-                    </label>
-                    <button
-                      onClick={addChecklistItem}
-                      className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-                    >
-                      <Plus size={16} />
-                      Add Item
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    {formData.checklist_items.map((item, index) => (
-                      <div key={item.id} className="border border-gray-200 rounded-lg p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="flex-1 space-y-3">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Item Title *
-                              </label>
-                              <input
-                                type="text"
-                                value={item.title}
-                                onChange={(e) => updateChecklistItem(index, 'title', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="e.g., Check Power Button"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Description
-                              </label>
-                              <textarea
-                                value={item.description}
-                                onChange={(e) => updateChecklistItem(index, 'description', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                rows={2}
-                                placeholder="Describe what the technician should check..."
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                id={`required-${index}`}
-                                checked={item.required}
-                                onChange={(e) => updateChecklistItem(index, 'required', e.target.checked)}
-                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                              />
-                              <label htmlFor={`required-${index}`} className="text-sm text-gray-700">
-                                Required item
-                              </label>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => removeChecklistItem(index)}
-                            className="text-red-500 hover:text-red-700 p-1"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {formData.checklist_items.length === 0 && (
-                    <div className="text-center py-8 border-2 border-dashed border-gray-300 rounded-lg">
-                      <CheckSquare className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-gray-500">No checklist items added yet</p>
+                    <div className="flex items-center justify-between mb-4">
+                      <label className="block text-sm font-semibold text-gray-700">
+                        Checklist Items *
+                      </label>
                       <button
                         onClick={addChecklistItem}
-                        className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl"
                       >
-                        Add your first item
+                        <Plus size={18} />
+                        Add Item
                       </button>
                     </div>
-                  )}
+
+                    <div className="space-y-4">
+                      {formData.checklist_items.map((item, index) => (
+                        <div key={item.id} className="border-2 border-gray-200 rounded-xl p-5 hover:border-blue-300 transition-all">
+                          <div className="flex items-start gap-4">
+                            <div className="flex-1 space-y-4">
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                  Item Title *
+                                </label>
+                                <input
+                                  type="text"
+                                  value={item.title}
+                                  onChange={(e) => updateChecklistItem(index, 'title', e.target.value)}
+                                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                  placeholder="e.g., Check Power Button"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                  Description
+                                </label>
+                                <textarea
+                                  value={item.description}
+                                  onChange={(e) => updateChecklistItem(index, 'description', e.target.value)}
+                                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+                                  rows={2}
+                                  placeholder="Describe what the technician should check..."
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  id={`required-${index}`}
+                                  checked={item.required}
+                                  onChange={(e) => updateChecklistItem(index, 'required', e.target.checked)}
+                                  className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-2 border-gray-300"
+                                />
+                                <label htmlFor={`required-${index}`} className="text-sm font-medium text-gray-700 cursor-pointer">
+                                  Required item
+                                </label>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => removeChecklistItem(index)}
+                              className="w-10 h-10 flex items-center justify-center text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {formData.checklist_items.length === 0 && (
+                      <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-xl bg-gray-50">
+                        <CheckSquare className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                        <p className="text-gray-600 font-medium mb-3">No checklist items added yet</p>
+                        <button
+                          onClick={addChecklistItem}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                        >
+                          Add your first item
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Form Actions */}
-              <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
-                <button
-                  onClick={resetForm}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={saveTemplate}
-                  disabled={saving}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  {saving ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save size={16} />
-                      {editingTemplate ? 'Update Template' : 'Create Template'}
-                    </>
-                  )}
-                </button>
+              {/* Fixed Footer */}
+              <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={resetForm}
+                    disabled={saving}
+                    className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-semibold disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveTemplate}
+                    disabled={saving}
+                    className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg hover:shadow-xl font-semibold"
+                  >
+                    {saving ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save size={18} />
+                        {editingTemplate ? 'Update Template' : 'Create Template'}
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </>,
+        document.body
       )}
     </div>
   );

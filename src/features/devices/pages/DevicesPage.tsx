@@ -1,15 +1,18 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDevices } from '../../../context/DevicesContext';
 import { useAuth } from '../../../context/AuthContext';
 import { Device, DeviceStatus } from '../../../types';
-import GlassCard from '../../shared/components/ui/GlassCard';
 import SearchBar from '../../shared/components/ui/SearchBar';
 import GlassSelect from '../../shared/components/ui/GlassSelect';
 import { BackButton } from '../../shared/components/ui/BackButton';
 import StatusBadge from '../../shared/components/ui/StatusBadge';
 import DeviceRepairDetailModal from '../components/DeviceRepairDetailModal';
 import CBMCalculatorModal from '../../calculator/components/CBMCalculatorModal';
+import ProblemTemplateManager from '../components/ProblemTemplateManager';
+import AddDeviceModal from '../components/AddDeviceModal';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
+import CustomerTooltip from '../../lats/components/pos/CustomerTooltip';
 import { 
   Plus, 
   Smartphone,
@@ -19,8 +22,6 @@ import {
   Wrench,
   Eye,
   Edit,
-  Grid,
-  List,
   X,
   Settings,
   ChevronDown,
@@ -28,12 +29,22 @@ import {
   SortAsc,
   SortDesc,
   Filter,
-  Calculator
+  Calculator,
+  Search,
+  Package,
+  User,
+  Clock,
+  DollarSign,
+  Copy,
+  Trash2,
+  Printer,
+  ArrowRightLeft
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { updateDeviceInDb } from '../../../lib/deviceApi';
 import { supabase } from '../../../lib/supabaseClient';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { formatPhoneForDisplay } from '../../../utils/phoneNumberCleaner';
 
 const DevicesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -46,6 +57,7 @@ const DevicesPage: React.FC = () => {
   let loading = false;
   let deleteDevice: any = null;
   let addDevice: any = null;
+  let updateDeviceStatus: any = null;
   
   try {
     const devicesContext = useDevices();
@@ -53,6 +65,7 @@ const DevicesPage: React.FC = () => {
     loading = devicesContext?.loading || false;
     deleteDevice = devicesContext?.deleteDevice || null;
     addDevice = devicesContext?.addDevice || null;
+    updateDeviceStatus = devicesContext?.updateDeviceStatus || null;
   } catch (error) {
     // Silently handle - context may not be available during HMR
   }
@@ -63,7 +76,6 @@ const DevicesPage: React.FC = () => {
   const [technicianFilter, setTechnicianFilter] = useState<string>('all');
   const [customerFilter, setCustomerFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
-  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [sortBy, setSortBy] = useState<'createdAt' | 'expectedReturnDate' | 'status' | 'customerName'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -78,6 +90,131 @@ const DevicesPage: React.FC = () => {
   
   // CBM Calculator modal state
   const [showCbmCalculator, setShowCbmCalculator] = useState(false);
+  
+  // Template Manager modal state
+  const [showTemplateManagerModal, setShowTemplateManagerModal] = useState(false);
+  
+  // Add Device modal state
+  const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
+  
+  // Expanded cards state for grid view
+  const [expandedDevices, setExpandedDevices] = useState<Set<string>>(new Set());
+  
+  // Loading state for status updates
+  const [updatingStatus, setUpdatingStatus] = useState<{deviceId: string, status: DeviceStatus} | null>(null);
+  
+  // Customer tooltip state
+  const [showCustomerTooltips, setShowCustomerTooltips] = useState<Record<string, boolean>>({});
+  const customerBadgeRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  
+  // Helper function to extract brand from model if brand is Unknown or missing
+  const getDisplayBrand = (device: Device): string => {
+    if (device.brand && device.brand !== 'Unknown' && device.brand.trim() !== '') {
+      return device.brand;
+    }
+    
+    // Extract brand from model name
+    const modelLower = (device.model || '').toLowerCase();
+    if (modelLower.includes('iphone') || modelLower.includes('ipad') || modelLower.includes('macbook') || modelLower.includes('imac') || modelLower.includes('watch') || modelLower.includes('airpods')) {
+      return 'Apple';
+    } else if (modelLower.includes('samsung') || modelLower.includes('galaxy')) {
+      return 'Samsung';
+    } else if (modelLower.includes('google') || modelLower.includes('pixel')) {
+      return 'Google';
+    } else if (modelLower.includes('huawei')) {
+      return 'Huawei';
+    } else if (modelLower.includes('xiaomi') || modelLower.includes('redmi') || modelLower.includes('poco')) {
+      return 'Xiaomi';
+    } else if (modelLower.includes('oneplus')) {
+      return 'OnePlus';
+    } else if (modelLower.includes('sony') || modelLower.includes('xperia')) {
+      return 'Sony';
+    } else if (modelLower.includes('lg')) {
+      return 'LG';
+    } else if (modelLower.includes('motorola')) {
+      return 'Motorola';
+    } else if (modelLower.includes('nokia')) {
+      return 'Nokia';
+    } else if (modelLower.includes('microsoft') || modelLower.includes('surface')) {
+      return 'Microsoft';
+    } else if (modelLower.includes('hp')) {
+      return 'HP';
+    } else if (modelLower.includes('dell')) {
+      return 'Dell';
+    } else if (modelLower.includes('lenovo')) {
+      return 'Lenovo';
+    }
+    
+    return device.brand || '';
+  };
+  
+  // Helper function to get available status transitions based on current status
+  const getAvailableStatusTransitions = (device: Device): Array<{status: DeviceStatus, label: string, icon: React.ReactNode, color: string}> => {
+    const { status } = device;
+    const role = currentUser?.role || 'customer-care';
+    
+    const statusTransitions: Record<DeviceStatus, Array<{status: DeviceStatus, label: string, icon: React.ReactNode, color: string}>> = {
+      'assigned': [
+        { status: 'diagnosis-started', label: 'Start Diagnosis', icon: <Wrench className="w-4 h-4" />, color: 'bg-blue-600 hover:bg-blue-700' }
+      ],
+      'diagnosis-started': [
+        { status: 'awaiting-parts', label: 'Awaiting Parts', icon: <Package className="w-4 h-4" />, color: 'bg-yellow-600 hover:bg-yellow-700' },
+        { status: 'in-repair', label: 'Start Repair', icon: <Wrench className="w-4 h-4" />, color: 'bg-purple-600 hover:bg-purple-700' }
+      ],
+      'awaiting-parts': [
+        { status: 'parts-arrived', label: 'Parts Arrived', icon: <Package className="w-4 h-4" />, color: 'bg-green-600 hover:bg-green-700' }
+      ],
+      'parts-arrived': [
+        { status: 'in-repair', label: 'Start Repair', icon: <Wrench className="w-4 h-4" />, color: 'bg-purple-600 hover:bg-purple-700' }
+      ],
+      'in-repair': [
+        { status: 'reassembled-testing', label: 'Testing', icon: <CheckCircle className="w-4 h-4" />, color: 'bg-cyan-600 hover:bg-cyan-700' }
+      ],
+      'reassembled-testing': [
+        { status: 'repair-complete', label: 'Repair Complete', icon: <CheckCircle className="w-4 h-4" />, color: 'bg-emerald-600 hover:bg-emerald-700' }
+      ],
+      'repair-complete': [
+        { status: 'returned-to-customer-care', label: 'Give to Customer', icon: <User className="w-4 h-4" />, color: 'bg-teal-600 hover:bg-teal-700' }
+      ],
+      'returned-to-customer-care': [
+        { status: 'done', label: 'Return to Customer', icon: <User className="w-4 h-4" />, color: 'bg-gray-600 hover:bg-gray-700' }
+      ],
+      'done': [],
+      'failed': role === 'admin' || role === 'customer-care' 
+        ? [{ status: 'done', label: 'Return to Customer', icon: <User className="w-4 h-4" />, color: 'bg-gray-600 hover:bg-gray-700' }]
+        : [{ status: 'returned-to-customer-care', label: 'Send to Customer Care', icon: <User className="w-4 h-4" />, color: 'bg-teal-600 hover:bg-teal-700' }]
+    };
+    
+    return statusTransitions[status] || [];
+  };
+  
+  // Handle status update
+  const handleStatusUpdate = async (deviceId: string, newStatus: DeviceStatus) => {
+    if (!updateDeviceStatus) {
+      toast.error('Status update function not available');
+      return;
+    }
+    
+    // Set loading state
+    setUpdatingStatus({ deviceId, status: newStatus });
+    
+    try {
+      const success = await updateDeviceStatus(deviceId, newStatus, '');
+      if (success) {
+        toast.success(`Device status updated to ${newStatus.replace(/-/g, ' ')}`);
+      } else {
+        toast.error('Failed to update device status');
+      }
+    } catch (error) {
+      console.error('Error updating device status:', error);
+      toast.error('Failed to update device status');
+    } finally {
+      // Clear loading state after a short delay to show the update
+      setTimeout(() => {
+        setUpdatingStatus(null);
+      }, 500);
+    }
+  };
 
   // Fetch technicians and customers for filters
   useEffect(() => {
@@ -212,211 +349,217 @@ const DevicesPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#3498db]"></div>
-          <span className="ml-3 text-gray-600 font-medium">Loading devices...</span>
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+        <div className="flex flex-col items-center justify-center h-64">
+          <LoadingSpinner size="lg" color="blue" />
+          <p className="mt-4 text-gray-600 font-medium">Loading devices...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header - Modern Flat Design */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <BackButton to="/dashboard" />
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Device Management</h1>
-            <p className="text-gray-600 mt-1">Manage all devices in the repair system</p>
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Wrapper Container - Single rounded container */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section */}
+        <div className="p-8 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <Smartphone className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Device Management</h1>
+                <p className="text-sm text-gray-600">Manage all devices in the repair system</p>
+              </div>
+            </div>
+
+            {/* Back Button */}
+            <BackButton to="/dashboard" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button 
-            onClick={() => setShowCbmCalculator(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 transition-colors text-sm"
-            title="CBM Calculator"
-          >
-            <Calculator size={18} />
-            CBM
-          </button>
-          <button 
-            onClick={() => navigate('/devices/new')}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
-          >
-            <Plus size={18} />
-            Add Device
-          </button>
-          {(currentUser?.permissions?.includes('all') || currentUser?.permissions?.includes('edit_settings') || currentUser?.role === 'admin') && (
+        {/* Action Bar - Enhanced Design */}
+        <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
+          <div className="flex gap-3 flex-wrap items-center">
             <button 
-              onClick={() => setShowTemplateManagerModal(true)}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg font-medium bg-gray-600 text-white hover:bg-gray-700 transition-colors"
+              onClick={() => setShowAddDeviceModal(true)}
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700"
             >
-              <Settings size={18} />
+              <Plus size={18} />
+              <span>Add Device</span>
             </button>
-          )}
-        </div>
-      </div>
-
-      {/* Statistics - Minimal Flat Design */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-        <div className="bg-blue-50 rounded-lg p-5 hover:bg-blue-100 transition-colors">
-          <div className="flex items-center gap-3">
-            <Smartphone className="w-7 h-7 text-blue-600 flex-shrink-0" />
-            <div>
-              <p className="text-xs text-gray-600 mb-1">Total Devices</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-orange-50 rounded-lg p-5 hover:bg-orange-100 transition-colors">
-          <div className="flex items-center gap-3">
-            <Wrench className="w-7 h-7 text-orange-600 flex-shrink-0" />
-            <div>
-              <p className="text-xs text-gray-600 mb-1">Active</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-red-50 rounded-lg p-5 hover:bg-red-100 transition-colors">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="w-7 h-7 text-red-600 flex-shrink-0" />
-            <div>
-              <p className="text-xs text-gray-600 mb-1">Overdue</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.overdue}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-green-50 rounded-lg p-5 hover:bg-green-100 transition-colors">
-          <div className="flex items-center gap-3">
-            <CheckCircle className="w-7 h-7 text-green-600 flex-shrink-0" />
-            <div>
-              <p className="text-xs text-gray-600 mb-1">Completed</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.completed}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-gray-50 rounded-lg p-5 hover:bg-gray-100 transition-colors">
-          <div className="flex items-center gap-3">
-            <X className="w-7 h-7 text-gray-600 flex-shrink-0" />
-            <div>
-              <p className="text-xs text-gray-600 mb-1">Failed</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.failed}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-
-      {/* Search and Filters */}
-      <GlassCard className="p-6">
-        <div className="flex flex-col gap-4">
-          {/* Main Search and Controls */}
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1">
-              <SearchBar
-                onSearch={setSearchQuery}
-                placeholder="Search devices by brand, model, serial number, or customer..."
-                className="w-full"
-                suggestions={devices.map(d => `${d.brand} ${d.model}`)}
-                searchKey="device_search"
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <GlassSelect
-                options={[
-                  { value: 'all', label: 'All Status' },
-                  { value: 'assigned', label: 'Assigned' },
-                  { value: 'diagnosis-started', label: 'Diagnosis Started' },
-                  { value: 'awaiting-parts', label: 'Awaiting Parts' },
-                  { value: 'in-repair', label: 'In Repair' },
-                  { value: 'reassembled-testing', label: 'Testing' },
-                  { value: 'repair-complete', label: 'Repair Complete' },
-                  { value: 'returned-to-customer-care', label: 'Returned to Care' },
-                  { value: 'done', label: 'Done' },
-                  { value: 'failed', label: 'Failed' }
-                ]}
-                value={statusFilter}
-                onChange={(value) => setStatusFilter(value as DeviceStatus | 'all')}
-                placeholder="Filter by Status"
-                className="min-w-[150px]"
-              />
-              <button
-                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  showAdvancedFilters 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+            <button 
+              onClick={() => setShowCbmCalculator(true)}
+              className="flex items-center gap-2 px-4 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg hover:from-green-600 hover:to-green-700"
+              title="CBM Calculator"
+            >
+              <Calculator size={18} />
+              <span>CBM Calculator</span>
+            </button>
+            {(currentUser?.permissions?.includes('all') || currentUser?.permissions?.includes('edit_settings') || currentUser?.role === 'admin') && (
+              <button 
+                onClick={() => setShowTemplateManagerModal(true)}
+                className="flex items-center gap-2 px-4 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-gray-500 to-gray-600 text-white shadow-lg hover:from-gray-600 hover:to-gray-700"
               >
-                <Filter size={16} />
-                More Filters
-                {showAdvancedFilters ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                <Settings size={18} />
+                <span>Settings</span>
               </button>
-              {/* View Mode Toggle - Minimal */}
-              <div className="flex rounded-lg bg-gray-100 p-1">
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                    viewMode === 'table'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600'
-                  }`}
-                >
-                  <List size={16} />
-                  Table
-                </button>
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                    viewMode === 'grid'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600'
-                  }`}
-                >
-                  <Grid size={16} />
-                  Grid
-                </button>
+            )}
+          </div>
+        </div>
+
+        {/* Statistics Section */}
+        <div className="p-6 pb-0 flex-shrink-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <Smartphone className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Total Devices</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <Wrench className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Active</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 hover:bg-red-100 hover:border-red-300 transition-all shadow-sm hover:shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <AlertTriangle className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Overdue</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.overdue}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <CheckCircle className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Completed</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.completed}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-5 hover:bg-gray-100 hover:border-gray-300 transition-all shadow-sm hover:shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gray-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <X className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Failed</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.failed}</p>
+                </div>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Advanced Filters */}
-          {showAdvancedFilters && (
-            <div className="pt-4 border-t border-gray-200 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <GlassSelect
-                  options={[
-                    { value: 'all', label: 'All Technicians' },
-                    ...technicians.map(tech => ({ value: tech.id, label: tech.full_name }))
-                  ]}
-                  value={technicianFilter}
-                  onChange={setTechnicianFilter}
-                  placeholder="Filter by Technician"
-                  className="w-full"
-                />
-                <GlassSelect
-                  options={[
-                    { value: 'all', label: 'All Customers' },
-                    ...customersList.map(customer => ({ value: customer.id, label: customer.name }))
-                  ]}
-                  value={customerFilter}
-                  onChange={setCustomerFilter}
-                  placeholder="Filter by Customer"
-                  className="w-full"
-                />
-                <GlassSelect
-                  options={[
-                    { value: 'all', label: 'All Time' },
-                    { value: 'today', label: 'Today' },
-                    { value: 'week', label: 'This Week' },
+        {/* Search and Filters Section */}
+        <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
+            <div className="flex flex-col gap-4">
+              {/* Main Search and Controls */}
+              <div className="flex flex-col lg:flex-row gap-4">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      placeholder="Search devices by brand, model, serial number, or customer..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 bg-white font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3 items-center">
+                  <GlassSelect
+                    options={[
+                      { value: 'all', label: 'All Status' },
+                      { value: 'assigned', label: 'Assigned' },
+                      { value: 'diagnosis-started', label: 'Diagnosis Started' },
+                      { value: 'awaiting-parts', label: 'Awaiting Parts' },
+                      { value: 'in-repair', label: 'In Repair' },
+                      { value: 'reassembled-testing', label: 'Testing' },
+                      { value: 'repair-complete', label: 'Repair Complete' },
+                      { value: 'returned-to-customer-care', label: 'Returned to Care' },
+                      { value: 'done', label: 'Done' },
+                      { value: 'failed', label: 'Failed' }
+                    ]}
+                    value={statusFilter}
+                    onChange={(value) => setStatusFilter(value as DeviceStatus | 'all')}
+                    placeholder="Filter by Status"
+                    className="min-w-[150px]"
+                  />
+                  <button
+                    onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all border-2 ${
+                      showAdvancedFilters 
+                        ? 'bg-blue-50 text-blue-600 border-blue-200' 
+                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Filter size={16} />
+                    More Filters
+                    {showAdvancedFilters ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Advanced Filters */}
+              {showAdvancedFilters && (
+                <div className="pt-4 border-t border-gray-200 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <GlassSelect
+                      options={[
+                        { value: 'all', label: 'All Technicians' },
+                        ...technicians.map(tech => ({ value: tech.id, label: tech.full_name }))
+                      ]}
+                      value={technicianFilter}
+                      onChange={setTechnicianFilter}
+                      placeholder="Filter by Technician"
+                      className="w-full"
+                    />
+                    <GlassSelect
+                      options={[
+                        { value: 'all', label: 'All Customers' },
+                        ...customersList.map(customer => ({ value: customer.id, label: customer.name }))
+                      ]}
+                      value={customerFilter}
+                      onChange={setCustomerFilter}
+                      placeholder="Filter by Customer"
+                      className="w-full"
+                    />
+                    <GlassSelect
+                      options={[
+                        { value: 'all', label: 'All Time' },
+                        { value: 'today', label: 'Today' },
+                        { value: 'week', label: 'This Week' },
                     { value: 'month', label: 'This Month' }
                   ]}
                   value={dateFilter}
@@ -426,233 +569,350 @@ const DevicesPage: React.FC = () => {
                 />
               </div>
 
-              {/* Sort Controls */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-4 border-t border-gray-200">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-600 font-medium">Sort by:</span>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as any)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#3498db] focus:border-transparent bg-white"
-                  >
-                    <option value="createdAt">Date Created</option>
-                    <option value="expectedReturnDate">Return Date</option>
-                    <option value="status">Status</option>
-                    <option value="customerName">Customer Name</option>
-                  </select>
-                  <button
-                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                    title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
-                  >
-                    {sortOrder === 'asc' ? <SortAsc size={18} /> : <SortDesc size={18} />}
-                  </button>
+                  {/* Sort Controls */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-semibold text-gray-700">Sort by:</span>
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as any)}
+                        className="px-4 py-2.5 border-2 border-gray-300 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white font-medium"
+                      >
+                        <option value="createdAt">Date Created</option>
+                        <option value="expectedReturnDate">Return Date</option>
+                        <option value="status">Status</option>
+                        <option value="customerName">Customer Name</option>
+                      </select>
+                      <button
+                        onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                        className="p-2.5 hover:bg-gray-100 rounded-xl transition-colors border-2 border-gray-200"
+                        title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                      >
+                        {sortOrder === 'asc' ? <SortAsc size={18} /> : <SortDesc size={18} />}
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={clearFilters}
+                      className="px-4 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors border-2 border-gray-200"
+                    >
+                      Clear All Filters
+                    </button>
+                  </div>
                 </div>
-
-                <button
-                  onClick={clearFilters}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  Clear All Filters
-                </button>
-              </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
-      </GlassCard>
 
-      {/* Devices List */}
-      <GlassCard className="p-6">
-        {viewMode === 'table' ? (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Device</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Customer</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Issue</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Status</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Return Date</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredDevices.map((device) => (
-                  <tr key={device.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#3498db]/10 rounded-lg flex items-center justify-center">
-                          <Smartphone className="w-5 h-5 text-[#3498db]" />
+        {/* Scrollable Devices List */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 border-t border-gray-100">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm overflow-hidden">
+          <div className="space-y-4 p-6">
+            {filteredDevices.map((device) => {
+              const isExpanded = expandedDevices.has(device.id);
+              const toggleExpanded = () => {
+                setExpandedDevices(prev => {
+                  const newSet = new Set(prev);
+                  if (newSet.has(device.id)) {
+                    newSet.delete(device.id);
+                  } else {
+                    newSet.add(device.id);
+                  }
+                  return newSet;
+                });
+              };
+              
+              const getStatusBadgeColor = (status: DeviceStatus) => {
+                switch (status) {
+                  case 'done':
+                    return 'bg-gradient-to-r from-green-500 to-green-600';
+                  case 'failed':
+                    return 'bg-gradient-to-r from-red-500 to-red-600';
+                  case 'repair-complete':
+                    return 'bg-gradient-to-r from-emerald-500 to-emerald-600';
+                  case 'in-repair':
+                  case 'diagnosis-started':
+                    return 'bg-gradient-to-r from-blue-500 to-blue-600';
+                  case 'assigned':
+                    return 'bg-gradient-to-r from-amber-500 to-amber-600';
+                  default:
+                    return 'bg-gradient-to-r from-gray-500 to-gray-600';
+                }
+              };
+              
+              const getStatusLabel = (status: DeviceStatus) => {
+                switch (status) {
+                  case 'done': return 'Done';
+                  case 'failed': return 'Failed';
+                  case 'repair-complete': return 'Complete';
+                  case 'in-repair': return 'Repairing';
+                  case 'diagnosis-started': return 'Diagnosis';
+                  case 'assigned': return 'Assigned';
+                  default: return status.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                }
+              };
+
+              return (
+                <div 
+                  key={device.id} 
+                  className="relative border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 w-full border-blue-500 shadow-xl"
+                >
+                  <div className="flex items-start justify-between p-6 cursor-pointer" onClick={toggleExpanded}>
+                    <div className="flex items-start gap-4 flex-1 min-w-0">
+                      <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 relative">
+                        <Smartphone className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 text-gray-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-3 flex-wrap">
+                          <h3 className="text-2xl font-bold text-gray-900 truncate">
+                            {getDisplayBrand(device)} {device.model}
+                          </h3>
+                          <div className={`inline-flex items-center justify-center p-1.5 sm:p-2 rounded-full border-2 border-white shadow-lg z-30 min-w-[3.5rem] sm:min-w-[4rem] min-h-[2rem] sm:min-h-[2.5rem] transition-all duration-300 ${getStatusBadgeColor(device.status)}`}>
+                            <span className="text-xs sm:text-sm font-bold text-white whitespace-nowrap px-1">
+                              {getStatusLabel(device.status)}
+                            </span>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900">{device.brand} {device.model}</p>
+                        <div className="flex items-center gap-3 flex-wrap mb-3">
+                          <div 
+                            ref={(el) => {
+                              customerBadgeRefs.current[device.id] = el;
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (device.customerId && device.customerName) {
+                                setShowCustomerTooltips(prev => ({
+                                  ...prev,
+                                  [device.id]: !prev[device.id]
+                                }));
+                              }
+                            }}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0 cursor-pointer hover:bg-blue-100 transition-colors"
+                          >
+                            <User className="w-5 h-5" />
+                            <span className="text-base font-semibold truncate max-w-[200px]" title={device.customerName}>
+                              {device.customerName || 'No Customer'}
+                            </span>
+                          </div>
+                          
+                          {/* Customer Tooltip */}
+                          {device.customerId && device.customerName && customerBadgeRefs.current[device.id] && (
+                            <CustomerTooltip
+                              customer={{
+                                id: device.customerId,
+                                name: device.customerName,
+                                phone: device.phoneNumber,
+                                email: device.customerEmail,
+                                points: device.customerTotalSpent ? Math.floor(device.customerTotalSpent / 100) : 0,
+                                totalSpent: device.customerTotalSpent || 0,
+                                loyaltyLevel: device.customerLoyaltyLevel,
+                                lastVisit: device.customerLastVisit
+                              }}
+                              anchorRef={{ current: customerBadgeRefs.current[device.id] }}
+                              isOpen={showCustomerTooltips[device.id] || false}
+                              onClose={() => setShowCustomerTooltips(prev => {
+                                const newState = { ...prev };
+                                delete newState[device.id];
+                                return newState;
+                              })}
+                              formatCurrency={(amount) => `TSh ${amount.toLocaleString()}`}
+                              formatDate={(dateString) => {
+                                if (!dateString) return 'N/A';
+                                try {
+                                  return new Date(dateString).toLocaleDateString('en-US', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                  });
+                                } catch {
+                                  return dateString;
+                                }
+                              }}
+                            />
+                          )}
                           {device.serialNumber && (
-                            <p className="text-xs text-gray-500">S/N: {device.serialNumber}</p>
+                            <div className="inline-flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-50 border border-gray-200">
+                              <div className="flex items-center gap-2">
+                                <Package className="w-5 h-5 text-purple-600" />
+                                <span className="text-base font-semibold text-purple-700">{device.serialNumber}</span>
+                              </div>
+                            </div>
+                          )}
+                          {device.expectedReturnDate && (
+                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-50 text-green-700 border border-green-200">
+                              <Calendar className="w-5 h-5" />
+                              <span className="text-base font-semibold">
+                                {new Date(device.expectedReturnDate).toLocaleDateString()}
+                              </span>
+                            </div>
                           )}
                         </div>
                       </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div>
-                        <p className="font-medium text-gray-900">{device.customerName}</p>
-                        <p className="text-sm text-gray-500">{device.phoneNumber}</p>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <p className="text-sm text-gray-700 truncate max-w-[250px]" title={device.issueDescription || device.issue}>
-                        {device.issueDescription || device.issue || 'No description'}
-                      </p>
-                      {device.estimatedHours && (
-                        <p className="text-xs text-gray-500 mt-1">Est: {device.estimatedHours}h</p>
-                      )}
-                    </td>
-                    <td className="py-3 px-4">
-                      <StatusBadge status={device.status} />
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-1">
-                        <Calendar size={14} className="text-gray-400" />
-                        <span className="text-sm text-gray-700">
-                          {device.expectedReturnDate 
-                            ? new Date(device.expectedReturnDate).toLocaleDateString()
-                            : 'Not set'
+                    </div>
+                    <div className="ml-4 flex-shrink-0 flex flex-col items-end gap-2">
+                      <div className="text-right">
+                        <span className="text-3xl font-bold text-gray-900 leading-tight">
+                          {device.repairCost 
+                            ? `TSh ${parseFloat(String(device.repairCost)).toLocaleString()}`
+                            : 'No price set'
                           }
                         </span>
                       </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex gap-1.5">
-                        <button 
-                          onClick={() => {
-                            setSelectedDeviceForDetail(device.id);
-                            setShowDeviceDetailModal(true);
-                          }}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                        >
-                          <Eye size={13} />
-                          View
-                        </button>
-                        <button 
-                          onClick={() => {
-                            setSelectedDeviceForEdit(device);
-                            setShowDeviceEditModal(true);
-                          }}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-gray-600 text-white hover:bg-gray-700 transition-colors"
-                        >
-                          <Edit size={13} />
-                          Edit
-                        </button>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center transition-all flex-shrink-0 bg-gray-100 hover:bg-gray-200">
+                        <ChevronDown className={`text-gray-600 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {filteredDevices.map((device) => (
-              <div key={device.id} className="bg-white rounded-lg border border-gray-200 p-4 hover:border-gray-300 transition-colors">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2.5 flex-1">
-                    <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Smartphone className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 text-sm truncate">{device.brand} {device.model}</h3>
-                      <p className="text-xs text-gray-500 truncate">{device.serialNumber || 'No S/N'}</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-3 mb-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">Customer</span>
-                    <span className="text-sm font-medium text-gray-900 truncate ml-2" title={device.customerName}>{device.customerName}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">Status</span>
-                    <StatusBadge status={device.status} />
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">Issue</span>
-                    <span className="text-xs text-gray-700 truncate ml-2 max-w-[150px]" title={device.issueDescription || device.issue}>
-                      {device.issueDescription || device.issue || 'No description'}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">Return Date</span>
-                    <div className="flex items-center gap-1">
-                      <Calendar size={14} className="text-gray-400" />
-                      <span className="text-xs text-gray-700">
-                        {device.expectedReturnDate 
-                          ? new Date(device.expectedReturnDate).toLocaleDateString()
-                          : 'Not set'
-                        }
-                      </span>
                     </div>
                   </div>
                   
-                  {device.estimatedHours && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500">Estimated</span>
-                      <span className="text-sm font-medium text-gray-900">{device.estimatedHours}h</span>
-                    </div>
+                  {isExpanded && (
+                    <>
+                      <div className="mt-5 pt-5 border-t-2 border-gray-200 relative">
+                        <div className="absolute top-0 left-0 right-0 flex items-center justify-center -mt-3">
+                          <span className="bg-white px-5 py-1.5 text-xs text-gray-500 font-semibold uppercase tracking-wider rounded-full border border-gray-200 shadow-sm">
+                            Device Details
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="px-6 pb-6 pt-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                          <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                            <div className="flex items-center gap-3 mb-2">
+                              <Calendar className="w-5 h-5 text-blue-600" />
+                              <h4 className="text-sm font-semibold text-gray-500 uppercase">Return Date</h4>
+                            </div>
+                            <p className="text-lg font-bold text-gray-900">
+                              {device.expectedReturnDate 
+                                ? new Date(device.expectedReturnDate).toLocaleDateString('en-US', { 
+                                    weekday: 'long', 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric' 
+                                  })
+                                : 'Not set'
+                              }
+                            </p>
+                          </div>
+                          
+                          <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                            <div className="flex items-center gap-3 mb-2">
+                              <Wrench className="w-5 h-5 text-purple-600" />
+                              <h4 className="text-sm font-semibold text-gray-500 uppercase">Issue</h4>
+                            </div>
+                            <p className="text-lg font-bold text-gray-900">
+                              {device.issueDescription || device.issue || 'No issue description'}
+                            </p>
+                          </div>
+                          
+                          {device.assignedToName && (
+                            <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                              <div className="flex items-center gap-3 mb-2">
+                                <User className="w-5 h-5 text-green-600" />
+                                <h4 className="text-sm font-semibold text-gray-500 uppercase">Technician</h4>
+                              </div>
+                              <p className="text-lg font-bold text-gray-900">
+                                {device.assignedToName}
+                              </p>
+                            </div>
+                          )}
+                          
+                          {device.estimatedHours && (
+                            <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                              <div className="flex items-center gap-3 mb-2">
+                                <Clock className="w-5 h-5 text-orange-600" />
+                                <h4 className="text-sm font-semibold text-gray-500 uppercase">Estimated Hours</h4>
+                              </div>
+                              <p className="text-lg font-bold text-gray-900">
+                                {device.estimatedHours}h
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="mt-6 pt-6 border-t-2 border-gray-200">
+                          <h4 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <CheckCircle className="w-5 h-5 text-blue-600" />
+                            Status Updates
+                          </h4>
+                          {(() => {
+                            const availableTransitions = getAvailableStatusTransitions(device);
+                            
+                            if (availableTransitions.length === 0) {
+                              return (
+                                <div className="text-center py-4 text-gray-500">
+                                  <p className="text-sm">No status updates available for this device</p>
+                                  <p className="text-xs mt-1">Current status: <span className="font-semibold">{device.status.replace(/-/g, ' ')}</span></p>
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {availableTransitions.map((transition) => {
+                                  const isUpdating = updatingStatus?.deviceId === device.id && updatingStatus?.status === transition.status;
+                                  return (
+                                    <button
+                                      key={transition.status}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleStatusUpdate(device.id, transition.status);
+                                      }}
+                                      disabled={isUpdating || !!updatingStatus}
+                                      className={`flex items-center justify-center gap-2 px-4 py-3 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 ${transition.color}`}
+                                    >
+                                      {isUpdating ? (
+                                        <>
+                                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                          <span>Updating...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          {transition.icon}
+                                          {transition.label}
+                                        </>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
-                
-                <div className="flex gap-1.5 pt-3 border-t border-gray-100">
-                  <button 
-                    onClick={() => {
-                      setSelectedDeviceForDetail(device.id);
-                      setShowDeviceDetailModal(true);
-                    }}
-                    className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                  >
-                    <Eye size={13} />
-                    View
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setSelectedDeviceForEdit(device);
-                      setShowDeviceEditModal(true);
-                    }}
-                    className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-gray-600 text-white hover:bg-gray-700 transition-colors"
-                  >
-                    <Edit size={13} />
-                    Edit
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-        )}
 
-        {filteredDevices.length === 0 && (
-          <div className="text-center py-8">
-            <Smartphone className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No devices found</h3>
-            <p className="text-gray-500 mb-6">
-              {searchQuery || statusFilter !== 'all' || technicianFilter !== 'all' || customerFilter !== 'all' || dateFilter !== 'all'
-                ? 'Try adjusting your search or filters'
-                : 'Get started by adding your first device'
-              }
-            </p>
-            {!searchQuery && statusFilter === 'all' && technicianFilter === 'all' && customerFilter === 'all' && dateFilter === 'all' && (
-              <button 
-                onClick={() => navigate('/devices/new')}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors mx-auto"
-              >
-                <Plus size={18} />
-                Add Your First Device
-              </button>
+          {filteredDevices.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <Smartphone className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">No devices found</h3>
+                <p className="text-gray-600 mb-6">
+                  {searchQuery || statusFilter !== 'all' || technicianFilter !== 'all' || customerFilter !== 'all' || dateFilter !== 'all'
+                    ? 'Try adjusting your search or filters'
+                    : 'Get started by adding your first device'
+                  }
+                </p>
+                {!searchQuery && statusFilter === 'all' && technicianFilter === 'all' && customerFilter === 'all' && dateFilter === 'all' && (
+                  <button 
+                    onClick={() => setShowAddDeviceModal(true)}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Your First Device</span>
+                  </button>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </GlassCard>
+        </div>
+      </div>
 
       {/* Device Detail Modal */}
       {selectedDeviceForDetail && (
@@ -668,23 +928,42 @@ const DevicesPage: React.FC = () => {
       
       {/* Device Edit Modal */}
       {selectedDeviceForEdit && showDeviceEditModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 99999 }}>
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Edit Device</h3>
-                <button
-                  onClick={() => {
-                    setShowDeviceEditModal(false);
-                    setSelectedDeviceForEdit(null);
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden relative">
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowDeviceEditModal(false);
+                setSelectedDeviceForEdit(null);
+              }}
+              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Icon Header - Fixed */}
+            <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+              <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                {/* Icon */}
+                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                  <Smartphone className="w-8 h-8 text-white" />
+                </div>
+                
+                {/* Text */}
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Edit Device</h3>
+                  <p className="text-sm text-gray-600">
+                    Update device information
+                  </p>
+                </div>
               </div>
+            </div>
+
+            {/* Form - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-6">
               
-              <form onSubmit={async (e) => {
+              <form id="device-edit-form" onSubmit={async (e) => {
                 e.preventDefault();
                 if (!selectedDeviceForEdit?.id) return;
                 
@@ -787,25 +1066,29 @@ const DevicesPage: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="flex gap-3 mt-6">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowDeviceEditModal(false);
-                      setSelectedDeviceForEdit(null);
-                    }}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200"
-                  >
-                    Save Changes
-                  </button>
-                </div>
               </form>
+            </div>
+
+            {/* Action Buttons - Fixed Footer */}
+            <div className="flex gap-3 pt-4 border-t border-gray-200 flex-shrink-0 bg-white px-6 pb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeviceEditModal(false);
+                  setSelectedDeviceForEdit(null);
+                }}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="device-edit-form"
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+              >
+                <CheckCircle className="w-5 h-5" />
+                Save Changes
+              </button>
             </div>
           </div>
         </div>
@@ -816,6 +1099,42 @@ const DevicesPage: React.FC = () => {
         isOpen={showCbmCalculator}
         onClose={() => setShowCbmCalculator(false)}
       />
+
+      {/* Add Device Modal */}
+      <AddDeviceModal
+        isOpen={showAddDeviceModal}
+        onClose={() => setShowAddDeviceModal(false)}
+        onDeviceCreated={() => {
+          setShowAddDeviceModal(false);
+          // Refresh devices list if needed
+        }}
+      />
+
+      {/* Template Manager Modal */}
+      {showTemplateManagerModal && (
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowTemplateManagerModal(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-900">Problem Template Manager</h2>
+              <button
+                onClick={() => setShowTemplateManagerModal(false)}
+                className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-gray-600 hover:text-gray-900"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <ProblemTemplateManager />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

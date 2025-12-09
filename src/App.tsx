@@ -74,7 +74,7 @@ const NewDevicePage = lazy(() => import('./features/devices/pages/NewDevicePage'
 const DevicesPage = createSafeLazyComponent(() => import('./features/devices/pages/DevicesPage'), 'DevicesPage');
 
 const CustomersPage = lazy(() => import('./features/customers/pages/CustomersPage'));
-const CustomerDataUpdatePage = lazy(() => import('./features/customers/pages/CustomerDataUpdatePage'));
+const CustomerImportExportPage = lazy(() => import('./features/customers/pages/CustomerImportExportPage'));
 const AppLayout = createSafeLazyComponent(() => import('./layout/AppLayout'), 'AppLayout');
 import { ErrorBoundary } from './features/shared/components/ErrorBoundary';
 import DynamicImportErrorBoundary from './features/shared/components/DynamicImportErrorBoundary';
@@ -111,7 +111,6 @@ const InstallmentsPage = lazy(() => import('./features/installments/pages/Instal
 const CategoryManagementPage = lazy(() => import('./features/settings/pages/CategoryManagementPage'));
 const StoreLocationManagementPage = lazy(() => import('./features/settings/pages/StoreLocationManagementPage'));
 // DatabaseSetupPage merged into AdminSettingsPage Database tab
-const ExcelImportPage = lazy(() => import('./features/reports/pages/ExcelImportPage'));
 const ExcelTemplateDownloadPage = lazy(() => import('./features/lats/pages/ExcelTemplateDownloadPage'));
 
 // Customer Portal Pages
@@ -747,18 +746,25 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             </Suspense>
           </RoleProtectedRoute>
         } />
-        {/* Database Setup merged into Admin Settings Database tab */}
+        {/* Unified Customer Import/Export Page */}
         <Route path="/customers/import" element={
           <RoleProtectedRoute allowedRoles={['admin']}>
             <Suspense fallback={<DynamicPageLoader />}>
-              <ExcelImportPage />
+              <CustomerImportExportPage />
             </Suspense>
           </RoleProtectedRoute>
         } />
         <Route path="/excel-import" element={
           <RoleProtectedRoute allowedRoles={['admin']}>
             <Suspense fallback={<DynamicPageLoader />}>
-              <ExcelImportPage />
+              <CustomerImportExportPage />
+            </Suspense>
+          </RoleProtectedRoute>
+        } />
+        <Route path="/customers/update" element={
+          <RoleProtectedRoute allowedRoles={['admin']}>
+            <Suspense fallback={<DynamicPageLoader />}>
+              <CustomerImportExportPage />
             </Suspense>
           </RoleProtectedRoute>
         } />
@@ -780,13 +786,6 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             </RoleProtectedRoute>
           } />
 
-          <Route path="/customers/update" element={
-            <RoleProtectedRoute allowedRoles={['admin']}>
-              <Suspense fallback={<DynamicPageLoader />}>
-                <CustomerDataUpdatePage />
-              </Suspense>
-            </RoleProtectedRoute>
-          } />
 
           {/* User Settings - Available to all authenticated users */}
           <Route path="/settings" element={<Suspense fallback={<DynamicPageLoader />}><UserSettingsPage /></Suspense>} />
@@ -851,8 +850,8 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           {/* Payment Management - Single consolidated page */}
           <Route path="/payments" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><EnhancedPaymentManagementPage /></Suspense></RoleProtectedRoute>} />
           
-          {/* Expenses Management */}
-          <Route path="/expenses" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><ExpensesPage /></Suspense></RoleProtectedRoute>} />
+          {/* Expenses Management - Redirect to payments page with transactions tab */}
+          <Route path="/expenses" element={<Navigate to="/payments?tab=transactions" replace />} />
           
           {/* Appointment Management Routes */}
           <Route path="/appointments" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care', 'technician']}><Suspense fallback={<DynamicPageLoader />}><UnifiedAppointmentPage /></Suspense></RoleProtectedRoute>} />

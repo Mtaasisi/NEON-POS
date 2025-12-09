@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { useNavigationHistory } from '../../../hooks/useNavigationHistory';
-import GlassCard from '../../../features/shared/components/ui/GlassCard';
-import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
 import { 
   Building, Settings, Database, HardDrive, Shield, FileText,
@@ -319,30 +317,34 @@ const AdminManagementPage: React.FC = () => {
   const currentSummary = getTabSummary(activeTab);
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <BackButton to="/dashboard" />
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Wrapper Container - Single rounded container */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section */}
+        <div className="p-8 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <Settings className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Admin Management</h1>
-            <p className="text-gray-600 mt-1">Comprehensive administrative tools and settings</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Admin Management</h1>
+                <p className="text-sm text-gray-600">
+                  Comprehensive administrative tools and settings
+                </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <GlassButton
-            onClick={handleBackClick}
-            variant="secondary"
-            icon={<RefreshCw size={18} />}
-          >
-            Back
-          </GlassButton>
+            {/* Back Button */}
+            <BackButton to="/dashboard" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
+          </div>
         </div>
-      </div>
-
-      {/* Page Overview */}
-      <GlassCard className="p-6 bg-gradient-to-r from-gray-50 to-blue-50 border border-gray-200">
+        {/* Page Overview Section */}
+        <div className="p-6 pb-0 flex-shrink-0">
+          <div className="bg-gradient-to-r from-gray-50 to-blue-50 border-2 border-gray-200 rounded-2xl p-6 shadow-sm">
         <div className="text-center mb-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Admin Management Overview</h2>
           <p className="text-gray-600 max-w-3xl mx-auto">
@@ -397,10 +399,12 @@ const AdminManagementPage: React.FC = () => {
                             <p className="text-xs text-gray-500 mt-1">SMS</p>
           </div>
         </div>
-      </GlassCard>
+          </div>
+        </div>
 
-      {/* Navigation Tabs */}
-      <GlassCard className="p-6">
+        {/* Navigation Tabs Section */}
+        <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
         <div className="relative mb-8">
           {/* Tab Background */}
           <div className="absolute inset-0 bg-gradient-to-r from-gray-50 to-gray-100 rounded-2xl" />
@@ -412,10 +416,10 @@ const AdminManagementPage: React.FC = () => {
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`
-                  relative flex items-center gap-3 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300
+                      relative flex items-center gap-3 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 border-2
                   ${activeTab === tab
-                    ? 'bg-white text-blue-700 shadow-lg transform scale-105'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50 hover:shadow-md'
+                        ? 'bg-white text-blue-700 shadow-lg border-blue-300'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/50 hover:shadow-md border-transparent'
                   }
                 `}
               >
@@ -448,7 +452,7 @@ const AdminManagementPage: React.FC = () => {
 
         {/* Tab Summary */}
         <div className="mb-8">
-          <GlassCard className="p-6 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-100">
+              <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-2xl p-6 shadow-sm">
             <div className="flex items-start gap-4">
               <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl text-white shadow-lg">
                 {currentSummary.icon}
@@ -460,16 +464,19 @@ const AdminManagementPage: React.FC = () => {
                   {currentSummary.features.map((feature, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" />
-                      <span className="text-sm text-gray-700">{feature}</span>
+                          <span className="text-sm text-gray-700 font-medium">{feature}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
               </div>
             </div>
-          </GlassCard>
+          </div>
         </div>
 
-        {/* Tab Content */}
+        {/* Scrollable Tab Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 border-t border-gray-100">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredSections.map(section => (
             <div
@@ -477,7 +484,7 @@ const AdminManagementPage: React.FC = () => {
               className="group cursor-pointer"
               onClick={() => navigate(section.path)}
             >
-              <GlassCard className="p-6 h-full transition-all duration-300 hover:shadow-lg hover:scale-105">
+                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 h-full transition-all duration-300 hover:shadow-lg hover:scale-105 hover:border-blue-300">
                 <div className="flex items-start justify-between mb-4">
                   <div className={`p-3 rounded-xl bg-gradient-to-r ${section.color} text-white shadow-lg`}>
                     {section.icon}
@@ -487,7 +494,7 @@ const AdminManagementPage: React.FC = () => {
                   </div>
                 </div>
                 
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">
                   {section.title}
                 </h3>
                 
@@ -496,30 +503,31 @@ const AdminManagementPage: React.FC = () => {
                 </p>
                 
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500 capitalize">
+                    <span className="text-xs text-gray-500 capitalize font-medium">
                     {section.category}
                   </span>
-                  <GlassButton
-                    size="sm"
-                    variant="ghost"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    <button
+                      className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700"
                   >
                     Access
-                  </GlassButton>
+                    </button>
+                  </div>
                 </div>
-              </GlassCard>
             </div>
           ))}
         </div>
 
         {filteredSections.length === 0 && (
-          <div className="text-center py-12">
-            <Settings className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No tools available</h3>
-            <p className="text-gray-500">Select a different category to view available tools.</p>
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <Settings className="w-8 h-8 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">No tools available</h3>
+              <p className="text-gray-600">Select a different category to view available tools.</p>
           </div>
         )}
-      </GlassCard>
+        </div>
+      </div>
     </div>
   );
 };

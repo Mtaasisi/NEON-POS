@@ -21,8 +21,7 @@ import {
   Settings as SettingsIcon
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import GlassCard from '../../../features/shared/components/ui/GlassCard';
-import GlassButton from '../../../features/shared/components/ui/GlassButton';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import GlassTabs from '../../../features/shared/components/ui/GlassTabs';
 import { supabase } from '../../../lib/supabaseClient';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
@@ -477,21 +476,30 @@ const IntegrationSettingsPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
-      {/* Header - Enhanced Modal Style */}
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-8">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+      {/* Wrapper Container - Single rounded container */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section */}
+        <div className="p-8 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
             <SettingsIcon className="w-8 h-8 text-white" />
           </div>
+              
+              {/* Text */}
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">Integration Settings</h1>
-            <p className="text-sm text-gray-600">Configure SMS, WhatsApp, Mobile Money, and Email integrations</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Integration Settings</h1>
+                <p className="text-sm text-gray-600">
+                  Configure SMS, WhatsApp, Mobile Money, and Email integrations
+                </p>
           </div>
         </div>
       </div>
-
-      {/* Modern Tabs */}
+        </div>
+        {/* Action Bar - Tab Navigation */}
+        <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
       <GlassTabs
         tabs={[
           { 
@@ -524,14 +532,20 @@ const IntegrationSettingsPage: React.FC = () => {
         variant="modern"
         size="md"
       />
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-6">
 
       {/* SMS Settings */}
       {activeTab === 'sms' && (
-        <GlassCard className="p-6 space-y-6">
+            <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold flex items-center gap-3">
-                <Smartphone className="w-6 h-6 text-blue-600" />
+                  <h2 className="text-xl font-bold flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <Smartphone className="w-5 h-5 text-blue-600" />
+                    </div>
                 SMS Integration
               </h2>
               <p className="text-sm text-gray-600 mt-1">
@@ -611,14 +625,14 @@ const IntegrationSettingsPage: React.FC = () => {
               </div>
 
               {/* Test Button */}
-              <GlassButton
+              <button
                 onClick={() => testIntegration('sms')}
                 disabled={testing === 'sms'}
-                className="w-full"
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl disabled:opacity-50"
               >
                 {testing === 'sms' ? (
                   <>
-                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    <LoadingSpinner size="sm" color="white" />
                     Testing Connection...
                   </>
                 ) : (
@@ -627,7 +641,7 @@ const IntegrationSettingsPage: React.FC = () => {
                     Test SMS Connection
                   </>
                 )}
-              </GlassButton>
+              </button>
 
               {connectionStatus.sms?.message && (
                 <div className={`p-3 rounded-lg text-sm ${
@@ -640,16 +654,18 @@ const IntegrationSettingsPage: React.FC = () => {
               )}
             </div>
           )}
-        </GlassCard>
+            </div>
       )}
 
       {/* WhatsApp Settings - Similar structure */}
       {activeTab === 'whatsapp' && (
-        <GlassCard className="p-6 space-y-6">
+            <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold flex items-center gap-3">
-                <MessageCircle className="w-6 h-6 text-green-600" />
+                  <h2 className="text-xl font-bold flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <MessageCircle className="w-5 h-5 text-green-600" />
+                    </div>
                 WhatsApp Integration
               </h2>
               <p className="text-sm text-gray-600 mt-1">
@@ -709,14 +725,14 @@ const IntegrationSettingsPage: React.FC = () => {
                 </div>
               </div>
 
-              <GlassButton
+              <button
                 onClick={() => testIntegration('whatsapp')}
                 disabled={testing === 'whatsapp'}
-                className="w-full bg-green-600 hover:bg-green-700"
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl disabled:opacity-50"
               >
                 {testing === 'whatsapp' ? (
                   <>
-                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    <LoadingSpinner size="sm" color="white" />
                     Testing Connection...
                   </>
                 ) : (
@@ -725,7 +741,7 @@ const IntegrationSettingsPage: React.FC = () => {
                     Test WhatsApp Connection
                   </>
                 )}
-              </GlassButton>
+              </button>
 
               {connectionStatus.whatsapp?.message && (
                 <div className={`p-3 rounded-lg text-sm ${
@@ -738,18 +754,20 @@ const IntegrationSettingsPage: React.FC = () => {
               )}
             </div>
           )}
-        </GlassCard>
+            </div>
       )}
 
       {/* Mobile Money Settings */}
       {activeTab === 'mobile-money' && (
         <div className="space-y-6">
           {/* M-Pesa */}
-          <GlassCard className="p-6 space-y-6">
+              <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold flex items-center gap-3">
-                  <CreditCard className="w-6 h-6 text-red-600" />
+                    <h2 className="text-xl font-bold flex items-center gap-3">
+                      <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                        <CreditCard className="w-5 h-5 text-red-600" />
+                      </div>
                   M-Pesa Integration
                 </h2>
                 <p className="text-sm text-gray-600 mt-1">
@@ -880,14 +898,14 @@ const IntegrationSettingsPage: React.FC = () => {
                   />
                 </div>
 
-                <GlassButton
+                <button
                   onClick={() => testIntegration('mpesa')}
                   disabled={testing === 'mpesa'}
-                  className="w-full bg-red-600 hover:bg-red-700"
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl disabled:opacity-50"
                 >
                   {testing === 'mpesa' ? (
                     <>
-                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      <LoadingSpinner size="sm" color="white" />
                       Testing Connection...
                     </>
                   ) : (
@@ -896,10 +914,10 @@ const IntegrationSettingsPage: React.FC = () => {
                       Test M-Pesa Connection
                     </>
                   )}
-                </GlassButton>
+                </button>
               </div>
             )}
-          </GlassCard>
+              </div>
 
           {/* Info Box */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -915,23 +933,23 @@ const IntegrationSettingsPage: React.FC = () => {
       )}
 
       {/* Save Button */}
-      <div className="flex gap-4 justify-end sticky bottom-4">
-        <GlassButton
+          <div className="flex gap-4 justify-end sticky bottom-4 pt-6 border-t border-gray-200 bg-white">
+            <button
           onClick={loadIntegrationSettings}
-          variant="secondary"
+              className="flex items-center gap-2 px-6 py-3 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 rounded-xl font-semibold transition-all"
         >
           <RefreshCw className="w-5 h-5" />
           Reset Changes
-        </GlassButton>
+            </button>
         
-        <GlassButton
+            <button
           onClick={saveIntegrationSettings}
           disabled={saving}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl disabled:opacity-50"
         >
           {saving ? (
             <>
-              <RefreshCw className="w-5 h-5 animate-spin" />
+                  <LoadingSpinner size="sm" color="white" />
               Saving...
             </>
           ) : (
@@ -940,7 +958,9 @@ const IntegrationSettingsPage: React.FC = () => {
               Save All Settings
             </>
           )}
-        </GlassButton>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

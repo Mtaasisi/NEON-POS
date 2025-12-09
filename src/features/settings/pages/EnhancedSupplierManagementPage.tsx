@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
-import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassButton from '../../shared/components/ui/GlassButton';
 import SearchBar from '../../shared/components/ui/SearchBar';
 import { BackButton } from '../../shared/components/ui/BackButton';
 import { 
@@ -218,35 +216,39 @@ const EnhancedSupplierManagementPage: React.FC<EnhancedSupplierManagementPagePro
   }
 
   return (
-    <div className={embedded ? "" : "min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100"}>
-      {/* Header - Only show when not embedded */}
-      {!embedded && (
-        <div className="bg-white border-b border-gray-200 shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center gap-4">
-                <BackButton onClick={() => navigate('/dashboard')} />
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-50 rounded-lg">
-                    <Users className="w-6 h-6 text-blue-600" />
+    <div className={embedded ? "" : "p-4 sm:p-6 max-w-7xl mx-auto"}>
+      {/* Wrapper Container - Single rounded container (only when not embedded) */}
+      {!embedded ? (
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+          {/* Fixed Header Section */}
+          <div className="p-8 border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-6">
+                {/* Icon */}
+                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                  <Users className="w-8 h-8 text-white" />
                   </div>
+                
+                {/* Text */}
                   <div>
-                    <h1 className="text-xl font-semibold text-gray-900">Enhanced Supplier Management</h1>
-                    <p className="text-sm text-gray-600">Comprehensive supplier relationship management</p>
-                  </div>
+                  <h1 className="text-2xl font-bold text-gray-900 mb-2">Enhanced Supplier Management</h1>
+                  <p className="text-sm text-gray-600">
+                    Comprehensive supplier relationship management
+                  </p>
                 </div>
               </div>
 
+              {/* Action Buttons */}
               <div className="flex items-center gap-3">
                 {/* Notifications */}
                 {(stats.expiringContracts > 0 || stats.expiringDocuments > 0) && (
                   <button
                     onClick={() => setShowNotifications(!showNotifications)}
-                    className="relative p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                    className="relative p-2 text-orange-600 hover:bg-orange-50 rounded-xl transition-colors border-2 border-orange-200"
                     title="Expiring items"
                   >
                     <AlertCircle size={20} />
-                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-semibold">
                       {stats.expiringContracts + stats.expiringDocuments}
                     </span>
                   </button>
@@ -261,7 +263,7 @@ const EnhancedSupplierManagementPage: React.FC<EnhancedSupplierManagementPagePro
                 {/* Refresh */}
                 <button
                   onClick={loadAllData}
-                  className="px-4 py-2 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors inline-flex items-center gap-2 text-sm"
+                  className="px-4 py-2.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 rounded-xl font-semibold transition-all inline-flex items-center gap-2 text-sm"
                 >
                   <RefreshCw size={18} />
                   Refresh
@@ -270,7 +272,7 @@ const EnhancedSupplierManagementPage: React.FC<EnhancedSupplierManagementPagePro
                 {/* Add Supplier */}
                 <button
                   onClick={() => setShowAddModal(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors inline-flex items-center gap-2 text-sm"
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl inline-flex items-center gap-2 text-sm"
                 >
                   <Plus size={18} />
                   Add Supplier
@@ -278,10 +280,11 @@ const EnhancedSupplierManagementPage: React.FC<EnhancedSupplierManagementPagePro
               </div>
             </div>
           </div>
-        </div>
-      )}
 
-      <div className={embedded ? "space-y-6" : "max-w-7xl mx-auto p-4 sm:p-6 space-y-6"}>
+          {/* Main Container - Scrollable Content */}
+          <div className="flex-1 overflow-y-auto px-6 py-6">
+      ) : (
+        <div className="space-y-6">
         {/* Compact Toolbar for Embedded Mode */}
         {embedded && (
           <div className="flex items-center justify-between mb-4">
@@ -331,11 +334,11 @@ const EnhancedSupplierManagementPage: React.FC<EnhancedSupplierManagementPagePro
 
         {/* Notifications Panel */}
         {showNotifications && (stats.expiringContracts.length > 0 || stats.expiringDocuments.length > 0) && (
-          <GlassCard className="p-4 bg-orange-50 border-orange-200">
+            <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 shadow-sm mb-6">
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 text-orange-600" />
-                <h3 className="font-semibold text-orange-900">Expiring Items</h3>
+                  <h3 className="font-bold text-orange-900">Expiring Items</h3>
               </div>
               <button
                 onClick={() => setShowNotifications(false)}
@@ -346,96 +349,96 @@ const EnhancedSupplierManagementPage: React.FC<EnhancedSupplierManagementPagePro
             </div>
             <div className="space-y-2">
               {expiringContracts.slice(0, 3).map((contract: any) => (
-                <div key={contract.contract_id} className="text-sm text-orange-800">
+                  <div key={contract.contract_id} className="text-sm font-medium text-orange-800">
                   📄 Contract with {contract.supplier_name} expires in {contract.days_until_expiry} days
                 </div>
               ))}
               {expiringDocuments.slice(0, 3).map((doc: any) => (
-                <div key={doc.document_id} className="text-sm text-orange-800">
+                  <div key={doc.document_id} className="text-sm font-medium text-orange-800">
                   📋 {doc.document_type} for {doc.supplier_name} expires in {doc.days_until_expiry} days
                 </div>
               ))}
             </div>
-          </GlassCard>
+            </div>
         )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-          <GlassCard className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <Users className="w-5 h-5 text-blue-600" />
+                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+                  <Users className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Total</p>
-                <p className="text-xl font-semibold text-gray-900">{stats.total}</p>
+                  <p className="text-sm font-semibold text-gray-600">Total</p>
+                  <p className="text-xl font-bold text-gray-900">{stats.total}</p>
+                </div>
               </div>
             </div>
-          </GlassCard>
 
-          <GlassCard className="p-4">
+            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-50 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-green-600" />
+                <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
+                  <TrendingUp className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Active</p>
-                <p className="text-xl font-semibold text-gray-900">{stats.active}</p>
+                  <p className="text-sm font-semibold text-gray-600">Active</p>
+                  <p className="text-xl font-bold text-gray-900">{stats.active}</p>
+                </div>
               </div>
             </div>
-          </GlassCard>
 
-          <GlassCard className="p-4">
+            <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-50 rounded-lg">
-                <Star className="w-5 h-5 text-purple-600" />
+                <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
+                  <Star className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Premium</p>
-                <p className="text-xl font-semibold text-gray-900">{stats.premium}</p>
+                  <p className="text-sm font-semibold text-gray-600">Premium</p>
+                  <p className="text-xl font-bold text-gray-900">{stats.premium}</p>
+                </div>
               </div>
             </div>
-          </GlassCard>
 
-          <GlassCard className="p-4">
+            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-5 hover:bg-yellow-100 hover:border-yellow-300 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-yellow-50 rounded-lg">
-                <Star className="w-5 h-5 text-yellow-600" />
+                <div className="w-12 h-12 bg-yellow-600 rounded-full flex items-center justify-center">
+                  <Star className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Avg Rating</p>
-                <p className="text-xl font-semibold text-gray-900">{stats.avgRating.toFixed(1)}</p>
+                  <p className="text-sm font-semibold text-gray-600">Avg Rating</p>
+                  <p className="text-xl font-bold text-gray-900">{stats.avgRating.toFixed(1)}</p>
+                </div>
               </div>
             </div>
-          </GlassCard>
 
-          <GlassCard className="p-4">
+            <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-50 rounded-lg">
-                <Calendar className="w-5 h-5 text-orange-600" />
+                <div className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center">
+                  <Calendar className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Contracts</p>
-                <p className="text-xl font-semibold text-gray-900">{stats.expiringContracts}</p>
+                  <p className="text-sm font-semibold text-gray-600">Contracts</p>
+                  <p className="text-xl font-bold text-gray-900">{stats.expiringContracts}</p>
+                </div>
               </div>
             </div>
-          </GlassCard>
 
-          <GlassCard className="p-4">
+            <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 hover:bg-red-100 hover:border-red-300 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-50 rounded-lg">
-                <Package className="w-5 h-5 text-red-600" />
+                <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center">
+                  <Package className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Documents</p>
-                <p className="text-xl font-semibold text-gray-900">{stats.expiringDocuments}</p>
+                  <p className="text-sm font-semibold text-gray-600">Documents</p>
+                  <p className="text-xl font-bold text-gray-900">{stats.expiringDocuments}</p>
+                </div>
               </div>
             </div>
-          </GlassCard>
         </div>
 
         {/* Search & Filters */}
-        <GlassCard className="p-6">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm mb-6">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-4">
             <div className="flex-1 max-w-md">
               <SearchBar
@@ -542,11 +545,13 @@ const EnhancedSupplierManagementPage: React.FC<EnhancedSupplierManagementPagePro
         </GlassCard>
 
         {/* Suppliers Grid/List */}
-        <GlassCard className="overflow-hidden">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm overflow-hidden">
           {filteredSuppliers.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No suppliers found</h3>
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <Users className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">No suppliers found</h3>
               <p className="text-gray-600 mb-6">
                 {getActiveFiltersCount() > 0
                   ? 'No suppliers match your current filters'
@@ -555,7 +560,7 @@ const EnhancedSupplierManagementPage: React.FC<EnhancedSupplierManagementPagePro
               </p>
               <button
                 onClick={() => setShowAddModal(true)}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl inline-flex items-center gap-2"
               >
                 <Plus size={20} />
                 Add Supplier

@@ -300,6 +300,7 @@ const CategoriesTab: React.FC = () => {
         isOpen={showCategoryForm}
         onClose={() => setShowCategoryForm(false)}
         onSubmit={handleSubmitCategory}
+        onDelete={editingCategory ? handleDeleteCategory : undefined}
         parentCategories={getParentCategories()}
         loading={isSubmitting}
         editingCategory={editingCategory}

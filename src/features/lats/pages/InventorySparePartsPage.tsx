@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 // import { useAuth } from '../../../context/AuthContext'; // Unused import
-import GlassCard from '../../../features/shared/components/ui/GlassCard';
-import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import SearchBar from '../../../features/shared/components/ui/SearchBar';
 import GlassSelect from '../../../features/shared/components/ui/GlassSelect';
+import { BackButton } from '../../../features/shared/components/ui/BackButton';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { 
   Package, Plus, Grid, List, SortAsc, AlertCircle, Edit, Eye, Trash2, 
   RefreshCw, Wrench, Minus, CheckCircle, XCircle, Search
@@ -546,61 +546,79 @@ const InventorySparePartsPage: React.FC = () => {
 
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-
-        {/* Header - Flat Design */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Wrapper Container - Single rounded container */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section */}
+        <div className="p-8 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-orange-600 rounded-full flex items-center justify-center shadow-lg">
+                <Wrench className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <Wrench className="text-orange-600 w-8 h-8" />
-              Spare Parts Inventory
-            </h1>
-            <p className="text-gray-600 mt-1">
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Spare Parts Inventory</h1>
+                <p className="text-sm text-gray-600">
               Manage inventory, track usage, and monitor stock levels
             </p>
+              </div>
           </div>
           
-          <div className="flex flex-wrap gap-2">
+            {/* Back Button */}
+            <BackButton to="/lats" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
+          </div>
+        </div>
+        {/* Action Bar - Enhanced Design */}
+        <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
+          <div className="flex gap-3 flex-wrap items-center">
             <button
               onClick={() => {
                 setEditingSparePart(null);
                 setShowSparePartFormSteps(true);
               }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-orange-600 text-white hover:bg-orange-700 transition-colors text-sm"
+              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg hover:from-orange-600 hover:to-orange-700"
             >
               <Plus size={18} />
-              Add Part
+              <span>Add Part</span>
             </button>
             <button
               onClick={() => {
                 setEditingSparePart(null);
                 setShowSparePartForm(true);
               }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-sm bg-white"
+              className="flex items-center gap-2 px-4 py-3 font-semibold text-sm rounded-xl transition-all duration-200 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
             >
               <Package size={18} />
-              Advanced
+              <span>Advanced</span>
             </button>
           </div>
         </div>
 
-        {/* Statistics - Flat Design */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="bg-blue-50 rounded-lg p-5 hover:bg-blue-100 transition-colors">
+        {/* Statistics Section */}
+        <div className="p-6 pb-0 flex-shrink-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center gap-3">
-              <Package className="w-7 h-7 text-blue-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <Package className="w-6 h-6 text-white" />
+                </div>
               <div>
-                <p className="text-xs text-gray-600 mb-1">Total Parts</p>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Total Parts</p>
                 <p className="text-2xl font-bold text-gray-900">{filteredSpareParts.length}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-green-50 rounded-lg p-5 hover:bg-green-100 transition-colors">
+            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center gap-3">
-              <CheckCircle className="w-7 h-7 text-green-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <CheckCircle className="w-6 h-6 text-white" />
+                </div>
               <div>
-                <p className="text-xs text-gray-600 mb-1">In Stock</p>
+                  <p className="text-xs font-medium text-gray-600 mb-1">In Stock</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {spareParts.filter(part => part.quantity > part.min_quantity).length}
                 </p>
@@ -608,22 +626,27 @@ const InventorySparePartsPage: React.FC = () => {
             </div>
           </div>
           
-          <div className="bg-yellow-50 rounded-lg p-5 hover:bg-yellow-100 transition-colors">
+            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-5 hover:bg-yellow-100 hover:border-yellow-300 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center gap-3">
-              <AlertCircle className="w-7 h-7 text-yellow-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-yellow-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <AlertCircle className="w-6 h-6 text-white" />
+                </div>
               <div>
-                <p className="text-xs text-gray-600 mb-1">Low Stock</p>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Low Stock</p>
                 <p className="text-2xl font-bold text-gray-900">{stockAlerts.lowStock.length}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-red-50 rounded-lg p-5 hover:bg-red-100 transition-colors">
+            <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 hover:bg-red-100 hover:border-red-300 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center gap-3">
-              <XCircle className="w-7 h-7 text-red-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <XCircle className="w-6 h-6 text-white" />
+                </div>
               <div>
-                <p className="text-xs text-gray-600 mb-1">Out of Stock</p>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Out of Stock</p>
                 <p className="text-2xl font-bold text-gray-900">{stockAlerts.outOfStock.length}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -631,7 +654,8 @@ const InventorySparePartsPage: React.FC = () => {
 
         {/* Stock Alerts Banner with Reorder Suggestions */}
         {stockAlerts.total > 0 && (
-          <GlassCard className="mb-4 p-4 border-l-4 border-l-yellow-500">
+          <div className="p-6 pb-0 flex-shrink-0">
+            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-4 shadow-sm">
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
@@ -646,31 +670,28 @@ const InventorySparePartsPage: React.FC = () => {
               </div>
               <div className="flex flex-col gap-2">
                 {stockAlerts.outOfStock.length > 0 && (
-                  <GlassButton
-                    size="sm"
+                  <button
                     onClick={() => setStockFilter('out-of-stock')}
-                    className="bg-red-600 text-white hover:bg-red-700"
+                    className="px-4 py-2 text-sm font-semibold bg-red-600 text-white hover:bg-red-700 rounded-xl transition-all shadow-sm"
                   >
                     View Critical ({stockAlerts.outOfStock.length})
-                  </GlassButton>
+                  </button>
                 )}
                 {stockAlerts.lowStock.length > 0 && (
-                  <GlassButton
-                    size="sm"
+                  <button
                     onClick={() => setStockFilter('low-stock')}
-                    className="bg-yellow-600 text-white hover:bg-yellow-700"
+                    className="px-4 py-2 text-sm font-semibold bg-yellow-600 text-white hover:bg-yellow-700 rounded-xl transition-all shadow-sm"
                   >
                     View Low Stock ({stockAlerts.lowStock.length})
-                  </GlassButton>
+                  </button>
                 )}
                 {stockAlerts.reorderSuggestions.length > 0 && (
-                  <GlassButton
-                    size="sm"
+                  <button
                     onClick={handleBulkExport}
-                    className="bg-blue-600 text-white hover:bg-blue-700"
+                    className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-all shadow-sm"
                   >
                     Export Reorder List
-                  </GlassButton>
+                  </button>
                 )}
               </div>
             </div>
@@ -678,32 +699,34 @@ const InventorySparePartsPage: React.FC = () => {
             {/* Quick Reorder Suggestions */}
             {stockAlerts.reorderSuggestions.length > 0 && (
               <div className="mt-3 pt-3 border-t border-yellow-200">
-                <h4 className="text-sm font-medium text-yellow-800 mb-2">Quick Reorder Suggestions:</h4>
+                <h4 className="text-sm font-semibold text-yellow-800 mb-2">Quick Reorder Suggestions:</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                   {stockAlerts.reorderSuggestions.slice(0, 6).map((part) => (
-                    <div key={part.id} className={`p-2 rounded text-xs ${
-                      part.urgency === 'critical' ? 'bg-red-100 text-red-800' :
-                      part.urgency === 'high' ? 'bg-orange-100 text-orange-800' :
-                      'bg-yellow-100 text-yellow-800'
+                    <div key={part.id} className={`p-2 rounded-xl text-xs border-2 ${
+                      part.urgency === 'critical' ? 'bg-red-100 text-red-800 border-red-200' :
+                      part.urgency === 'high' ? 'bg-orange-100 text-orange-800 border-orange-200' :
+                      'bg-yellow-100 text-yellow-800 border-yellow-200'
                     }`}>
-                      <div className="font-medium truncate">{part.name}</div>
+                      <div className="font-semibold truncate">{part.name}</div>
                       <div>Current: {part.quantity} | Suggested: {part.suggestedReorder}</div>
                     </div>
                   ))}
                 </div>
                 {stockAlerts.reorderSuggestions.length > 6 && (
-                  <p className="text-xs text-yellow-600 mt-2">
+                  <p className="text-xs text-yellow-600 mt-2 font-medium">
                     +{stockAlerts.reorderSuggestions.length - 6} more parts need attention
                   </p>
                 )}
               </div>
             )}
-          </GlassCard>
+          </div>
+        </div>
         )}
 
         {/* Bulk Actions Bar */}
         {selectedSpareParts.length > 0 && (
-          <GlassCard className="bg-orange-50 border-orange-200 p-4">
+          <div className="p-6 pb-0 flex-shrink-0">
+            <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 shadow-sm">
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
               <div className="flex items-center gap-3">
                 <CheckCircle className="w-5 h-5 text-orange-600" />
@@ -722,25 +745,27 @@ const InventorySparePartsPage: React.FC = () => {
               <div className="flex gap-2">
                 <button
                   onClick={handleBulkExport}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 transition-colors text-sm"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold bg-green-600 text-white hover:bg-green-700 transition-all shadow-sm text-sm"
                 >
                   <Package className="w-4 h-4" />
                   Export CSV
                 </button>
                 <button
                   onClick={handleBulkDelete}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-red-600 text-white hover:bg-red-700 transition-colors text-sm"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold bg-red-600 text-white hover:bg-red-700 transition-all shadow-sm text-sm"
                 >
                   <Trash2 className="w-4 h-4" />
                   Delete
                 </button>
               </div>
             </div>
-          </GlassCard>
+          </div>
+        </div>
         )}
 
-        {/* Search and Filters */}
-        <GlassCard className="p-6">
+        {/* Search and Filters Section */}
+        <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
           <div className="flex flex-col lg:flex-row gap-4">
             {/* Search Bar */}
             <div className="flex-1">
@@ -828,7 +853,7 @@ const InventorySparePartsPage: React.FC = () => {
               </div>
             </div>
           </div>
-        </GlassCard>
+        </div>
 
         {/* Error Display */}
         {error && (
@@ -890,7 +915,7 @@ const InventorySparePartsPage: React.FC = () => {
               const stockStatus = getStockStatus(part);
               const isSelected = selectedSpareParts.includes(part.id);
               return (
-                <GlassCard key={part.id} className={`overflow-hidden hover:shadow-lg transition-all ${isSelected ? 'ring-2 ring-orange-500 bg-orange-50' : ''}`}>
+                <div key={part.id} className={`bg-white border-2 rounded-2xl shadow-sm overflow-hidden hover:shadow-lg transition-all ${isSelected ? 'ring-2 ring-orange-500 bg-orange-50 border-orange-300' : 'border-gray-200'}`}>
                   {/* Image Section */}
                   <div className="relative">
                     <div className="w-full h-40 bg-gray-100 flex items-center justify-center cursor-pointer" onClick={() => handleOpenDetailModal(part)}>
@@ -998,12 +1023,12 @@ const InventorySparePartsPage: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                </GlassCard>
+                </div>
               );
             })}
           </div>
         ) : (
-          <GlassCard className="overflow-hidden">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm overflow-hidden">
             {/* Table Header - Flat Style */}
             <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
               <div className="grid grid-cols-12 gap-4 items-center text-xs font-semibold text-gray-700 uppercase">
@@ -1145,8 +1170,11 @@ const InventorySparePartsPage: React.FC = () => {
                 );
               })}
             </div>
-          </GlassCard>
-        ))}
+          </div>
+        )}
+        </div>
+      </div>
+    </div>
 
       {/* Spare Part Form Modal */}
       {showSparePartForm && (

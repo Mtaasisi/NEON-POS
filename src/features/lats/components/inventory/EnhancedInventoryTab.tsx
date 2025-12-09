@@ -12,10 +12,10 @@ import { SafeImage } from '../../../../components/SafeImage';
 import { ProductImage } from '../../../../lib/robustImageService';
 import { LabelPrintingModal } from '../../../../components/LabelPrintingModal';
 import ProductModal from '../product/ProductModal';
-import { 
-  Package, Grid, List, Star, CheckCircle, XCircle, 
+import {
+  Package, Grid, List, Star, CheckCircle, XCircle,
   Download, Edit, Eye, Trash2, DollarSign, TrendingUp,
-  AlertTriangle, Calculator, Printer, QrCode, X, MoreVertical, ArrowRightLeft, Copy, Columns,
+  AlertTriangle, Calculator, Printer, QrCode, X, MoreVertical, ArrowRightLeft, Copy,
   CheckSquare, XSquare, Files, ShoppingCart, Plus, Search, ChevronDown, ChevronUp, ChevronRight
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -154,7 +154,6 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [showStockTransferModal, setShowStockTransferModal] = useState(false);
   const [selectedProductForTransfer, setSelectedProductForTransfer] = useState<any>(null);
-  const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [isPreLoading, setIsPreLoading] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   
@@ -174,33 +173,6 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
     });
   };
   
-  // Column visibility configuration
-  const availableColumns = [
-    { id: 'product', label: 'Product', required: true },
-    { id: 'sku', label: 'SKU', required: false },
-    { id: 'category', label: 'Category', required: false },
-    { id: 'supplier', label: 'Supplier', required: false },
-    { id: 'shelf', label: 'Shelf', required: false },
-    { id: 'price', label: 'Price', required: false },
-    { id: 'stock', label: 'Stock', required: false },
-    { id: 'actions', label: 'Actions', required: true }
-  ];
-  
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('inventory-visible-columns');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Filter out 'sku' from saved columns
-        return parsed.filter((col: string) => col !== 'sku');
-      }
-      // Default: all columns except 'sku'
-      return availableColumns.map(col => col.id).filter(id => id !== 'sku');
-    } catch {
-      // Default: all columns except 'sku'
-      return availableColumns.map(col => col.id).filter(id => id !== 'sku');
-    }
-  });
 
   // Improved debug logging for development only - only log once per session
   const [hasLoggedNoProducts, setHasLoggedNoProducts] = useState(false);
@@ -243,26 +215,6 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   // Selection mode state for grid view
   const [isSelectionMode, setIsSelectionMode] = React.useState(false);
 
-  // Save visible columns to localStorage
-  React.useEffect(() => {
-    try {
-      localStorage.setItem('inventory-visible-columns', JSON.stringify(visibleColumns));
-    } catch (error) {
-      console.error('Failed to save visible columns preference:', error);
-    }
-  }, [visibleColumns]);
-
-  // Toggle column visibility
-  const toggleColumnVisibility = (columnId: string) => {
-    const column = availableColumns.find(col => col.id === columnId);
-    if (column?.required) return; // Don't toggle required columns
-    
-    setVisibleColumns(prev => 
-      prev.includes(columnId) 
-        ? prev.filter(id => id !== columnId)
-        : [...prev, columnId]
-    );
-  };
 
   // Handler for duplicating a product
   const handleDuplicateProduct = async (product: any) => {
@@ -369,68 +321,58 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
             gap: '1rem'
           }}
         >
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-                <Package className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-600 mb-1">Total Products</p>
-                <p className="text-2xl font-bold text-gray-900">{metrics.totalItems}</p>
-                <p className="text-xs text-gray-500 mt-1">{metrics.activeProducts} active</p>
-              </div>
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md relative">
+            <div className="absolute top-3 right-3 w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg">
+              <Package className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-600 mb-1">Total Products</p>
+              <p className="text-2xl font-bold text-gray-900">{metrics.totalItems}</p>
+              <p className="text-xs text-gray-500 mt-1">{metrics.activeProducts} active</p>
             </div>
           </div>
           
-          <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-                <CheckCircle className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-600 mb-1">In Stock</p>
-                <p className="text-2xl font-bold text-gray-900">{metrics.totalItems - metrics.lowStockItems - metrics.outOfStockItems}</p>
-                <p className="text-xs text-gray-500 mt-1">{metrics.lowStockItems} low, {metrics.outOfStockItems} out</p>
-              </div>
+          <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md relative">
+            <div className="absolute top-3 right-3 w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center shadow-lg">
+              <CheckCircle className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-600 mb-1">In Stock</p>
+              <p className="text-2xl font-bold text-gray-900">{metrics.totalItems - metrics.lowStockItems - metrics.outOfStockItems}</p>
+              <p className="text-xs text-gray-500 mt-1">{metrics.lowStockItems} low, {metrics.outOfStockItems} out</p>
             </div>
           </div>
           
-          <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 hover:bg-red-100 hover:border-red-300 transition-all shadow-sm hover:shadow-md">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-                <AlertTriangle className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-600 mb-1">Reorder Alerts</p>
-                <p className="text-2xl font-bold text-gray-900">{metrics.reorderAlerts}</p>
-                <p className="text-xs text-gray-500 mt-1">Need attention</p>
-              </div>
+          <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 hover:bg-red-100 hover:border-red-300 transition-all shadow-sm hover:shadow-md relative">
+            <div className="absolute top-3 right-3 w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center shadow-lg">
+              <AlertTriangle className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-600 mb-1">Reorder Alerts</p>
+              <p className="text-2xl font-bold text-gray-900">{metrics.reorderAlerts}</p>
+              <p className="text-xs text-gray-500 mt-1">Need attention</p>
             </div>
           </div>
           
-          <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-                <DollarSign className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-600 mb-1">Total Value</p>
-                <p className="text-2xl font-bold text-gray-900">{formatShortMoney(metrics.totalValue)}</p>
-                <p className="text-xs text-gray-500 mt-1">Cost</p>
-              </div>
+          <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md relative">
+            <div className="absolute top-3 right-3 w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center shadow-lg">
+              <DollarSign className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-600 mb-1">Total Value</p>
+              <p className="text-2xl font-bold text-gray-900">{formatShortMoney(metrics.totalValue)}</p>
+              <p className="text-xs text-gray-500 mt-1">Cost</p>
             </div>
           </div>
           
-          <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-                <TrendingUp className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-600 mb-1">Retail Value</p>
-                <p className="text-2xl font-bold text-gray-900">{formatShortMoney(metrics.retailValue || 0)}</p>
-                <p className="text-xs text-gray-500 mt-1">Selling</p>
-              </div>
+          <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md relative">
+            <div className="absolute top-3 right-3 w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center shadow-lg">
+              <TrendingUp className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-600 mb-1">Retail Value</p>
+              <p className="text-2xl font-bold text-gray-900">{formatShortMoney(metrics.retailValue || 0)}</p>
+              <p className="text-xs text-gray-500 mt-1">Selling</p>
             </div>
           </div>
         </div>
@@ -514,17 +456,6 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                 </button>
 
 
-                {/* Column Selector (only show in list view) */}
-                {viewMode === 'list' && (
-                  <button
-                    onClick={() => setShowColumnSelector(true)}
-                    className="px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 hover:border-blue-300 transition-all bg-white font-medium flex items-center gap-2 whitespace-nowrap"
-                    title="Customize columns"
-                  >
-                    <Columns size={18} />
-                    <span className="hidden sm:inline">Columns</span>
-                  </button>
-                )}
               </div>
             </div>
 
@@ -782,355 +713,174 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
         )}
         {/* Products Display */}
         {viewMode === 'list' ? (
-        <GlassCard className="overflow-visible">
-          <div className="overflow-x-auto overflow-y-visible">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200/50">
-                  <th className="text-left py-4 px-4 font-medium text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={selectedProducts.length === products.length && products.length > 0}
-                      onChange={toggleSelectAll}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                  </th>
-                  {visibleColumns.includes('product') && (
-                    <th className="text-left py-4 px-4 font-medium text-gray-700">Product</th>
-                  )}
-                  {visibleColumns.includes('sku') && (
-                    <th className="text-left py-4 px-4 font-medium text-gray-700">SKU</th>
-                  )}
-                  {visibleColumns.includes('category') && (
-                    <th className="text-left py-4 px-4 font-medium text-gray-700">Category</th>
-                  )}
-                  {visibleColumns.includes('supplier') && (
-                    <th className="text-left py-4 px-4 font-medium text-gray-700">Supplier</th>
-                  )}
-                  {visibleColumns.includes('shelf') && (
-                    <th className="text-left py-4 px-4 font-medium text-gray-700">Shelf</th>
-                  )}
-                  {visibleColumns.includes('price') && (
-                    <th className="text-right py-4 px-4 font-medium text-gray-700">Price</th>
-                  )}
-                  {visibleColumns.includes('stock') && (
-                    <th className="text-right py-4 px-4 font-medium text-gray-700">Stock</th>
-                  )}
-                  {visibleColumns.includes('actions') && (
-                    <th className="text-center py-4 px-4 font-medium text-gray-700">Actions</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((product) => {
-                  // Debug: Log first product's data structure
-                  if (products.indexOf(product) === 0 && import.meta.env.MODE === 'development') {
-                    console.log('🔍 [EnhancedInventoryTab] First product data:', {
-                      id: product.id,
-                      name: product.name,
-                      sku: product.sku,
-                      categoryId: product.categoryId,
-                      supplierId: product.supplierId,
-                      shelfId: product.shelfId,
-                      shelfName: product.shelfName,
-                      shelfCode: product.shelfCode,
-                      productPrice: product.price,
-                      productSellingPrice: product.sellingPrice,
-                      variants: product.variants?.length || 0,
-                      variantPrices: product.variants?.map((v: any) => ({
-                        sku: v.sku,
-                        sellingPrice: v.sellingPrice,
-                        price: v.price,
-                        costPrice: v.costPrice
-                      })) || [],
-                      category: product.category,
-                      supplier: product.supplier,
-                      categoriesAvailable: categories.length,
-                      suppliersAvailable: suppliers.length
-                    });
+          <div className="space-y-3">
+            {products.map((product) => {
+              // Debug: Log first product's data structure
+              if (products.indexOf(product) === 0 && import.meta.env.MODE === 'development') {
+                console.log('🔍 [EnhancedInventoryTab] First product data:', {
+                  id: product.id,
+                  name: product.name,
+                  sku: product.sku,
+                  categoryId: product.categoryId,
+                  supplierId: product.supplierId,
+                  shelfId: product.shelfId,
+                  shelfName: product.shelfName,
+                  shelfCode: product.shelfCode,
+                  productPrice: product.price,
+                  productSellingPrice: product.sellingPrice,
+                  variants: product.variants?.length || 0,
+                  variantPrices: product.variants?.map((v: any) => ({
+                    sku: v.sku,
+                    sellingPrice: v.sellingPrice,
+                    price: v.price,
+                    costPrice: v.costPrice
+                  })) || [],
+                  category: product.category,
+                  supplier: product.supplier,
+                  categoriesAvailable: categories.length,
+                  suppliersAvailable: suppliers.length
+                });
+              }
+
+              const category = product.category || categories.find(c => c.id === product.categoryId);
+
+              // Smart variant selection: prefer variant with stock, then highest price
+              const mainVariant = (() => {
+                if (!product.variants || product.variants.length === 0) return null;
+
+                // Try to find variant with stock
+                const variantWithStock = product.variants.find((v: any) => (v.quantity || 0) > 0);
+                if (variantWithStock) return variantWithStock;
+
+                // Fallback to first variant
+                return product.variants[0];
+              })();
+
+              // Get best available price from all variants or product level
+              const getBestPrice = () => {
+                // First, try mainVariant price (check all price fields)
+                if (mainVariant) {
+                  if (mainVariant.sellingPrice > 0) return mainVariant.sellingPrice;
+                  if (mainVariant.price > 0) return mainVariant.price;
+                  if (mainVariant.unit_price > 0) return mainVariant.unit_price;
+                  if ((mainVariant as any).selling_price > 0) return (mainVariant as any).selling_price;
+                }
+
+                // Try all variants to find any with a price
+                if (product.variants && product.variants.length > 0) {
+                  for (const variant of product.variants) {
+                    if (variant.sellingPrice > 0) return variant.sellingPrice;
+                    if (variant.price > 0) return variant.price;
+                    if (variant.unit_price > 0) return variant.unit_price;
+                    if ((variant as any).selling_price > 0) return (variant as any).selling_price;
                   }
-                  
-                  const category = product.category || categories.find(c => c.id === product.categoryId);
-                  
-                  // Smart variant selection: prefer variant with stock, then highest price
-                  const mainVariant = (() => {
-                    if (!product.variants || product.variants.length === 0) return null;
-                    
-                    // Try to find variant with stock
-                    const variantWithStock = product.variants.find((v: any) => (v.quantity || 0) > 0);
-                    if (variantWithStock) return variantWithStock;
-                    
-                    // If no stock, use variant with highest price
-                    const variantWithPrice = [...product.variants]
-                      .sort((a: any, b: any) => (b.sellingPrice || b.price || 0) - (a.sellingPrice || a.price || 0))[0];
-                    if (variantWithPrice && (variantWithPrice.sellingPrice > 0 || variantWithPrice.price > 0)) return variantWithPrice;
-                    
-                    // Fallback to first variant
-                    return product.variants[0];
-                  })();
-                  
-                  // Get best available price from all variants or product level
-                  const getBestPrice = () => {
-                    // First, try mainVariant price (check all price fields)
-                    if (mainVariant) {
-                      if (mainVariant.sellingPrice > 0) return mainVariant.sellingPrice;
-                      if (mainVariant.price > 0) return mainVariant.price;
-                      if (mainVariant.unit_price > 0) return mainVariant.unit_price;
-                      if ((mainVariant as any).selling_price > 0) return (mainVariant as any).selling_price;
-                    }
-                    
-                    // Try all variants to find any with a price
-                    if (product.variants && product.variants.length > 0) {
-                      for (const variant of product.variants) {
-                        if (variant.sellingPrice > 0) return variant.sellingPrice;
-                        if (variant.price > 0) return variant.price;
-                        if (variant.unit_price > 0) return variant.unit_price;
-                        if ((variant as any).selling_price > 0) return (variant as any).selling_price;
-                      }
-                    }
-                    
-                    // Fallback to product-level price (check all price fields)
-                    if (product.price > 0) return product.price;
-                    if (product.sellingPrice > 0) return product.sellingPrice;
-                    if ((product as any).unit_price > 0) return (product as any).unit_price;
-                    if ((product as any).selling_price > 0) return (product as any).selling_price;
-                    
-                    return 0;
-                  };
-                  
-                  const displayPrice = getBestPrice();
-                  
-                  // Calculate stock: Use variant stock if product HAS variants, otherwise use product-level stock
-                  // 🐛 FIX: Don't fallback to product stock when variants exist but have 0 stock
-                  // ✅ FIX: Exclude IMEI child variants from stock calculation (they are counted as part of parent)
-                  const hasVariants = product.variants && product.variants.length > 0;
-                  const variantStock = hasVariants ? product.variants
-                    .filter((variant: any) => {
-                      // Exclude IMEI child variants - they should not be counted separately
-                      const isImeiChild = variant.parent_variant_id || 
-                                        variant.parentVariantId ||
-                                        variant.variant_type === 'imei_child' ||
-                                        variant.variantType === 'imei_child' ||
-                                        (variant.name && variant.name.toLowerCase().includes('imei:'));
-                      return !isImeiChild;
-                    })
-                    .reduce((sum: any, variant: any) => sum + (variant.quantity || 0), 0) : 0;
-                  const totalStock = hasVariants ? variantStock : (product.stockQuantity || product.stock_quantity || 0);
-                  const reservedStock = product.variants?.reduce((sum: any, variant: any) => sum + (variant.reservedQuantity || variant.reserved_quantity || 0), 0) || 0;
-                  const availableStock = totalStock - reservedStock;
-                  const stockStatus = availableStock <= 0 ? 'out-of-stock' : availableStock <= 10 ? 'low-stock' : 'in-stock';
-                  
-                  // ✅ IMPORTANT: Show products even if they have no variants in current branch
-                  // This allows shared products to be visible even when inventory is isolated
-                  // Products will show with 0 stock if they have no variants in the current branch
-                  
-                  const isExpanded = expandedRows.has(product.id);
-                  
-                  return (
-                    <React.Fragment key={product.id}>
-                      <tr 
-                        className="border-b border-gray-200/30 hover:bg-blue-50 cursor-pointer transition-colors"
-                        onClick={() => toggleRowExpansion(product.id)}
-                        title="Click to expand/collapse actions"
-                      >
-                        <td className="py-4 px-4" onClick={e => e.stopPropagation()}>
+                }
+
+                // Fallback to product-level price (check all price fields)
+                if (product.price > 0) return product.price;
+                if (product.sellingPrice > 0) return product.sellingPrice;
+                if ((product as any).unit_price > 0) return (product as any).unit_price;
+                if ((product as any).selling_price > 0) return (product as any).selling_price;
+
+                return 0;
+              };
+
+              const displayPrice = getBestPrice();
+
+              // Calculate stock: Use variant stock if product HAS variants, otherwise use product-level stock
+              // 🐛 FIX: Don't fallback to product stock when variants exist but have 0 stock
+              // ✅ FIX: Exclude IMEI child variants from stock calculation (they are counted as part of parent)
+              const hasVariants = product.variants && product.variants.length > 0;
+              const variantStock = hasVariants ? product.variants
+                .filter((variant: any) => {
+                  // Exclude IMEI child variants - they should not be counted separately
+                  const isImeiChild = variant.parent_variant_id ||
+                                variant.parentVariantId ||
+                                variant.variant_type === 'imei_child' ||
+                                variant.variantType === 'imei_child' ||
+                                (variant.name && variant.name.toLowerCase().includes('imei:'));
+                  return !isImeiChild;
+                })
+                .reduce((sum: any, variant: any) => sum + (variant.quantity || 0), 0) : 0;
+              const totalStock = hasVariants ? variantStock : (product.stockQuantity || product.stock_quantity || 0);
+              const reservedStock = product.variants?.reduce((sum: any, variant: any) => sum + (variant.reservedQuantity || variant.reserved_quantity || 0), 0) || 0;
+              const availableStock = totalStock - reservedStock;
+              const stockStatus = availableStock <= 0 ? 'out-of-stock' : availableStock <= 10 ? 'low-stock' : 'in-stock';
+
+              // ✅ IMPORTANT: Show products even if they have no variants in current branch
+              // This allows shared products to be visible even when inventory is isolated
+              // Products will show with 0 stock if they have no variants in the current branch
+
+              const isExpanded = expandedRows.has(product.id);
+
+              return (
+                <div
+                  key={product.id}
+                  className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 hover:shadow-lg cursor-pointer relative ${
+                    isExpanded
+                      ? 'border-blue-500 shadow-xl'
+                      : 'border-gray-200 hover:border-blue-400'
+                  }`}
+                >
+                  {/* Mobile Card View - shown on small screens */}
+                  <div className="md:hidden p-4">
+                    <div className="space-y-3">
+                      {/* Product Name and Status */}
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
+                            <Package className="w-6 h-6 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-gray-900 text-sm">{product.name}</h3>
+                            <p className="text-xs text-gray-500">{mainVariant?.sku || product.sku || 'No SKU'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {/* Checkbox */}
                           <input
                             type="checkbox"
                             checked={selectedProducts.includes(product.id)}
-                            onChange={e => { e.stopPropagation(); toggleProductSelection(product.id); }}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              toggleProductSelection(product.id);
+                            }}
                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                           />
-                        </td>
-                        {visibleColumns.includes('product') && (
-                          <td className="py-4 px-4">
-                            <div className="flex items-center gap-3">
-                              {/* Expand/Collapse Icon */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleRowExpansion(product.id);
-                                }}
-                                className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                                title={isExpanded ? "Collapse" : "Expand"}
-                              >
-                                {isExpanded ? (
-                                  <ChevronDown size={18} />
-                                ) : (
-                                  <ChevronRight size={18} />
-                                )}
-                              </button>
-                            {/* Product Image/Icon */}
-                            <div className="relative flex-shrink-0">
-                              {product.images && product.images.length > 0 ? (
-                                <>
-                                  <div className="w-10 h-10 rounded-lg overflow-hidden border-2 border-blue-200 bg-white">
-                                    <img
-                                      src={product.images[0]}
-                                      alt={product.name}
-                                      className="w-full h-full object-cover"
-                                      onError={(e) => {
-                                        const variantCount = product.variants?.length || 0;
-                                        const target = e.currentTarget;
-                                        target.style.display = 'none';
-                                        const parent = target.parentElement;
-                                        if (parent) {
-                                          parent.innerHTML = `
-                                            <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center border-2 border-blue-200">
-                                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500">
-                                                <path d="M16.5 9.4 7.55 4.24"></path>
-                                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                                                <polyline points="3.29 7 12 12 20.71 7"></polyline>
-                                                <line x1="12" x2="12" y1="22" y2="12"></line>
-                                              </svg>
-                                            </div>
-                                          `;
-                                          // Add badge after error fallback
-                                          const grandParent = parent.parentElement;
-                                          if (grandParent) {
-                                            const badge = document.createElement('div');
-                                            badge.className = 'absolute -top-2 -right-2 w-5 h-5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center';
-                                            badge.innerHTML = '<span class="text-xs font-bold text-white">' + variantCount + '</span>';
-                                            grandParent.appendChild(badge);
-                                          }
-                                        }
-                                      }}
-                                    />
-                                  </div>
-                                  <div className="absolute -top-2 -right-2 w-5 h-5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-10">
-                                    <span className="text-xs font-bold text-white">
-                                      {product.variants?.length || 0}
-                                    </span>
-                                  </div>
-                                </>
-                              ) : (
-                                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white relative">
-                                  <Package className="w-5 h-5" strokeWidth={2} />
-                                  <div className="absolute -top-2 -right-2 w-5 h-5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
-                                    <span className="text-xs font-bold text-white">
-                                      {product.variants?.length || 0}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-                              {product.isFeatured && (
-                                <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center border-2 border-white">
-                                  <Star className="w-2.5 h-2.5 text-white fill-current" />
-                                </div>
-                              )}
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900">{product.name}</p>
-                              {product.description && (
-                                <p className="text-sm text-gray-600">{product.description}</p>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                      )}
-                      {visibleColumns.includes('sku') && (
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-mono text-gray-700">
-                              {mainVariant?.sku || product.sku || 'N/A'}
-                            </span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedSKU(mainVariant?.sku || product.sku || 'N/A');
-                                setShowQRModal(true);
-                              }}
-                              className="text-blue-600 hover:text-blue-800 transition-colors"
-                              title="View QR Code"
-                            >
-                              <QrCode size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      )}
-                      {visibleColumns.includes('category') && (
-                        <td className="py-4 px-4">
-                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500 text-white shadow-sm inline-block max-w-[150px] truncate" title={category?.name || 'Uncategorized'}>
-                            {category?.name || (product.categoryId ? 'Loading...' : 'Uncategorized')}
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-sm ${stockStatus === 'out-of-stock' ? 'bg-red-500 text-white' : stockStatus === 'low-stock' ? 'bg-orange-500 text-white' : 'bg-green-500 text-white'}`}>
+                            {availableStock} in stock
                           </span>
-                        </td>
-                      )}
-                      {visibleColumns.includes('supplier') && (
-                        <td className="py-4 px-4">
-                          {(() => {
-                            // Look up supplier: first try embedded supplier object, then lookup by ID
-                            const supplier = product.supplier 
-                              || (product.supplierId ? suppliers.find(s => s.id === product.supplierId) : null);
-                            
-                            if (supplier?.name?.startsWith('Trade-In:')) {
-                              return (
-                                <div>
-                                  <p className="font-medium text-gray-900">{supplier.name.replace('Trade-In: ', '')}</p>
-                                  <p className="text-sm text-gray-600">Trade-In Customer</p>
-                                </div>
-                              );
-                            }
-                            
-                            return (
-                              <span className="text-sm text-gray-600">
-                                {supplier?.name || (product.supplierId ? 'Loading...' : 'N/A')}
-                              </span>
-                            );
-                          })()}
-                        </td>
-                      )}
-                      {visibleColumns.includes('shelf') && (
-                        <td className="py-4 px-4">
-                          <span className="text-sm text-gray-600">
-                            {product.shelfName || product.shelfCode || 'N/A'}
-                          </span>
-                        </td>
-                      )}
-                      {visibleColumns.includes('price') && (
-                        <td className="py-4 px-4 text-right">
-                          <p className="text-gray-900 font-semibold">
-                            {displayPrice > 0 ? formatMoney(displayPrice) : (
-                              <span className="text-gray-400 italic">No price set</span>
-                            )}
-                          </p>
-                          {(mainVariant?.costPrice || product.costPrice) > 0 && (
-                            <p className="text-sm text-gray-600">Cost: {formatMoney(mainVariant?.costPrice || product.costPrice || 0)}</p>
-                          )}
-                        </td>
-                      )}
-                      {visibleColumns.includes('stock') && (
-                        <td className="py-4 px-4 text-right">
-                          <div className="flex justify-end">
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm inline-block ${
-                              stockStatus === 'out-of-stock' 
-                                ? 'bg-red-500 text-white' 
-                                : stockStatus === 'low-stock'
-                                ? 'bg-orange-500 text-white'
-                                : 'bg-green-500 text-white'
-                            }`} title={`${availableStock} in stock${reservedStock > 0 ? ` (${reservedStock} reserved)` : ''}`}>
-                              {availableStock} in stock
-                            </span>
-                          </div>
-                          {reservedStock > 0 && (
-                            <p className="text-sm text-gray-600 mt-1 text-right">{reservedStock} reserved</p>
-                          )}
-                        </td>
-                      )}
-                      {visibleColumns.includes('actions') && (
-                        <td className="py-4 px-4">
-                          <div className="flex items-center justify-center">
-                            <span className="text-xs text-gray-400 font-medium">
-                              {isExpanded ? 'Expanded' : 'Click to expand'}
-                            </span>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                    {/* Expanded Row with Actions */}
-                    {isExpanded && (
-                      <tr key={`${product.id}-expanded`} className="bg-blue-50/50 border-b border-gray-200/30">
-                        <td colSpan={visibleColumns.length + 1} className="py-6 px-4">
-                          <div className="flex flex-wrap items-center gap-3">
-                            {/* Primary Actions */}
+                        </div>
+                      </div>
+
+                      {/* Category and Price */}
+                      <div className="flex items-center justify-between">
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500 text-white shadow-sm inline-block max-w-[120px] truncate" title={category?.name || 'Uncategorized'}>
+                          {category?.name || 'Uncategorized'}
+                        </span>
+                        <span className="text-sm font-bold text-gray-900">
+                          {displayPrice > 0 ? formatMoney(displayPrice) : 'No price'}
+                        </span>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 pt-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleRowExpansion(product.id);
+                          }}
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium text-sm"
+                        >
+                          <span>Actions</span>
+                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </button>
+                      </div>
+
+                      {/* Expanded Actions */}
+                      {isExpanded && (
+                        <div className="border-t border-gray-200 pt-3">
+                          <div className="flex flex-wrap gap-2">
                             <button
                               onClick={async (e) => {
                                 e.stopPropagation();
@@ -1145,38 +895,35 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                                   setTimeout(() => setIsPreLoading(false), 100);
                                 }
                               }}
-                              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm shadow-sm"
-                              title="View Details"
+                              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-xs"
                             >
-                              <Eye size={16} />
-                              <span>View Details</span>
+                              <Eye size={14} />
+                              <span>View</span>
                             </button>
-                            
+
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 productModals.openEditModal(product.id);
                               }}
-                              className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm shadow-sm"
-                              title="Edit Product"
+                              className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-xs"
                             >
-                              <Edit size={16} />
+                              <Edit size={14} />
                               <span>Edit</span>
                             </button>
-                            
+
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedProductForHistory(product.id);
                                 setShowStockAdjustModal(true);
                               }}
-                              className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm shadow-sm"
-                              title="Adjust Stock"
+                              className="flex items-center gap-1.5 px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-xs"
                             >
-                              <Calculator size={16} />
-                              <span>Adjust Stock</span>
+                              <Calculator size={14} />
+                              <span>Stock</span>
                             </button>
-                            
+
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1193,60 +940,308 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                                 });
                                 setShowLabelModal(true);
                               }}
-                              className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium text-sm shadow-sm"
-                              title="Print Label"
+                              className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium text-xs"
                             >
-                              <Printer size={16} />
-                              <span>Print Label</span>
-                            </button>
-                            
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleStockTransfer(product);
-                              }}
-                              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm shadow-sm"
-                              title="Stock Transfer"
-                            >
-                              <ArrowRightLeft size={16} />
-                              <span>Stock Transfer</span>
-                            </button>
-                            
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDuplicateProduct(product);
-                              }}
-                              className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium text-sm shadow-sm"
-                              title="Duplicate Product"
-                            >
-                              <Copy size={16} />
-                              <span>Duplicate</span>
-                            </button>
-                            
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedSKU(mainVariant?.sku || product.sku || 'N/A');
-                                setShowQRModal(true);
-                              }}
-                              className="flex items-center gap-2 px-4 py-2.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium text-sm shadow-sm"
-                              title="View QR Code"
-                            >
-                              <QrCode size={16} />
-                              <span>QR Code</span>
+                              <Printer size={14} />
+                              <span>Label</span>
                             </button>
                           </div>
-                        </td>
-                      </tr>
+                        </div>
                       )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+
+                  {/* Desktop List View - Expandable - shown on md+ screens */}
+                  <div className="hidden md:block w-full">
+                    {/* Header - Clickable */}
+                    <div
+                      className="flex items-start justify-between p-6 cursor-pointer"
+                      onClick={() => toggleRowExpansion(product.id)}
+                    >
+                      <div className="flex items-start gap-4 flex-1 min-w-0">
+                        {/* Checkbox and Expand/Collapse */}
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={selectedProducts.includes(product.id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              toggleProductSelection(product.id);
+                            }}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
+                            isExpanded ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-600'
+                          }`}>
+                            <ChevronDown
+                              className={`w-5 h-5 transition-transform duration-200 ${
+                                isExpanded ? 'rotate-180' : ''
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Product Image/Icon */}
+                        <div className="relative flex-shrink-0">
+                          {product.images && product.images.length > 0 ? (
+                            <>
+                              <div className="w-16 h-16 rounded-xl overflow-hidden border-2 border-blue-200 bg-white">
+                                <img
+                                  src={product.images[0]}
+                                  alt={product.name}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    const variantCount = product.variants?.length || 0;
+                                    const target = e.currentTarget;
+                                    target.style.display = 'none';
+                                    const parent = target.parentElement;
+                                    if (parent) {
+                                      parent.innerHTML = `
+                                        <div class="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center border-2 border-blue-200">
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500">
+                                            <path d="M16.5 9.4 7.55 4.24"></path>
+                                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                            <polyline points="3.29 7 12 12 20.71 7"></polyline>
+                                            <line x1="12" x2="12" y1="22" y2="12"></line>
+                                          </svg>
+                                        </div>
+                                      `;
+                                      // Add badge after error fallback
+                                      const grandParent = parent.parentElement;
+                                      if (grandParent) {
+                                        const badge = document.createElement('div');
+                                        badge.className = 'absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center';
+                                        badge.innerHTML = '<span class="text-xs font-bold text-white">' + variantCount + '</span>';
+                                        grandParent.appendChild(badge);
+                                      }
+                                    }
+                                  }}
+                                />
+                              </div>
+                              <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-10">
+                                <span className="text-xs font-bold text-white">
+                                  {product.variants?.length || 0}
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white relative">
+                              <Package className="w-7 h-7" strokeWidth={2} />
+                              <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
+                                <span className="text-xs font-bold text-white">
+                                  {product.variants?.length || 0}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                          {product.isFeatured && (
+                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-yellow-400 rounded-full flex items-center justify-center border-2 border-white">
+                              <Star className="w-3 h-3 text-white fill-current" />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Main Content */}
+                        <div className="flex-1 min-w-0">
+                          {/* Product Name and Status Row */}
+                          <div className="flex items-center gap-3 mb-3 flex-wrap">
+                            <h3 className="text-xl font-bold text-gray-900 truncate">{product.name}</h3>
+
+                            {/* Status Badge */}
+                            <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold ${
+                              stockStatus === 'out-of-stock'
+                                ? 'bg-red-500 text-white'
+                                : stockStatus === 'low-stock'
+                                ? 'bg-orange-500 text-white'
+                                : 'bg-green-500 text-white'
+                            } flex items-center gap-2 flex-shrink-0`}>
+                              {availableStock} in stock
+                            </span>
+                          </div>
+
+                          {/* Info Badges Row */}
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {/* SKU Badge */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-mono text-gray-700 bg-gray-100 px-3 py-1 rounded-lg">
+                                {mainVariant?.sku || product.sku || 'No SKU'}
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedSKU(mainVariant?.sku || product.sku || 'N/A');
+                                  setShowQRModal(true);
+                                }}
+                                className="text-blue-600 hover:text-blue-800 transition-colors p-1"
+                                title="View QR Code"
+                              >
+                                <QrCode size={16} />
+                              </button>
+                            </div>
+
+                            {/* Category Badge */}
+                            <span className="px-3 py-1 rounded-full text-sm font-semibold bg-blue-500 text-white shadow-sm inline-block max-w-[150px] truncate" title={category?.name || 'Uncategorized'}>
+                              {category?.name || (product.categoryId ? 'Loading...' : 'Uncategorized')}
+                            </span>
+
+                            {/* Price */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg font-bold text-gray-900">
+                                {displayPrice > 0 ? formatMoney(displayPrice) : (
+                                  <span className="text-gray-400 italic">No price set</span>
+                                )}
+                              </span>
+                              {(mainVariant?.costPrice || product.costPrice) > 0 && (
+                                <span className="text-sm text-gray-600">
+                                  (Cost: {formatMoney(mainVariant?.costPrice || product.costPrice || 0)})
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Supplier */}
+                            {(() => {
+                              const supplier = product.supplier
+                                || (product.supplierId ? suppliers.find(s => s.id === product.supplierId) : null);
+
+                              if (supplier?.name?.startsWith('Trade-In:')) {
+                                return (
+                                  <div className="bg-orange-100 text-orange-800 px-3 py-1 rounded-lg text-sm">
+                                    <span className="font-medium">{supplier.name.replace('Trade-In: ', '')}</span>
+                                    <span className="text-xs ml-1">(Trade-In)</span>
+                                  </div>
+                                );
+                              }
+
+                              return supplier?.name ? (
+                                <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-lg">
+                                  {supplier.name}
+                                </span>
+                              ) : null;
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Expanded Actions */}
+                    {isExpanded && (
+                      <div className="border-t border-gray-200 bg-blue-50/50 px-6 py-4">
+                        <div className="flex flex-wrap items-center gap-3">
+                          {/* Primary Actions */}
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              setIsPreLoading(true);
+                              try {
+                                const freshProduct = await useInventoryStore.getState().getProduct(product.id);
+                                if (freshProduct?.ok && freshProduct?.data) {
+                                  setSelectedProductForDetail(freshProduct.data);
+                                  setShowProductDetailModal(true);
+                                }
+                              } finally {
+                                setTimeout(() => setIsPreLoading(false), 100);
+                              }
+                            }}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm shadow-sm"
+                            title="View Details"
+                          >
+                            <Eye size={16} />
+                            <span>View Details</span>
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              productModals.openEditModal(product.id);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm shadow-sm"
+                            title="Edit Product"
+                          >
+                            <Edit size={16} />
+                            <span>Edit</span>
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedProductForHistory(product.id);
+                              setShowStockAdjustModal(true);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm shadow-sm"
+                            title="Adjust Stock"
+                          >
+                            <Calculator size={16} />
+                            <span>Adjust Stock</span>
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedProductForLabel({
+                                id: product.id,
+                                name: product.name,
+                                sku: product.variants?.[0]?.sku || product.id,
+                                barcode: product.variants?.[0]?.sku || product.id,
+                                price: product.variants?.[0]?.sellingPrice || 0,
+                                size: product.variants?.[0]?.attributes?.size || '',
+                                color: product.variants?.[0]?.attributes?.color || '',
+                                brand: product.brand?.name || '',
+                                category: categories.find(c => c.id === product.categoryId)?.name || ''
+                              });
+                              setShowLabelModal(true);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium text-sm shadow-sm"
+                            title="Print Label"
+                          >
+                            <Printer size={16} />
+                            <span>Print Label</span>
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStockTransfer(product);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm shadow-sm"
+                            title="Stock Transfer"
+                          >
+                            <ArrowRightLeft size={16} />
+                            <span>Stock Transfer</span>
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDuplicateProduct(product);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium text-sm shadow-sm"
+                            title="Duplicate Product"
+                          >
+                            <Copy size={16} />
+                            <span>Duplicate</span>
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedSKU(mainVariant?.sku || product.sku || 'N/A');
+                              setShowQRModal(true);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium text-sm shadow-sm"
+                            title="View QR Code"
+                          >
+                            <QrCode size={16} />
+                            <span>QR Code</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </GlassCard>
       ) : (
         /* Grid View */
         <>
@@ -1319,12 +1314,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
           </div>
 
           <div 
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))',
-              gap: 'clamp(0.75rem, 2vw, 1rem)',
-              gridAutoRows: '1fr'
-            }}
+            className="flex flex-col gap-4"
           >
           {products.map((product) => {
             const category = categories.find(c => c.id === product.categoryId);
@@ -1338,7 +1328,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                   categoryName: category?.name,
                   brandName: brand?.name
                 }}
-                className="w-full h-full"
+                className="w-full"
                 onView={async (product) => {
                   console.log('🔵 [Grid View] Clicking product:', product.name, product.id);
                   
@@ -1378,6 +1368,31 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                   if (confirm('Are you sure you want to delete this product?')) {
                     deleteProduct(product.id);
                   }
+                }}
+                onAdjustStock={(product) => {
+                  setSelectedProductForHistory(product.id);
+                  setShowStockAdjustModal(true);
+                }}
+                onDuplicate={(product) => {
+                  handleDuplicateProduct(product);
+                }}
+                onTransfer={(product) => {
+                  handleStockTransfer(product);
+                }}
+                onPrintLabel={(product) => {
+                  const firstVariant = product.variants?.[0];
+                  setSelectedProductForLabel({
+                    id: product.id,
+                    name: product.name,
+                    sku: firstVariant?.sku || product.id,
+                    barcode: firstVariant?.sku || product.id,
+                    price: firstVariant?.sellingPrice || 0,
+                    size: firstVariant?.attributes?.size || '',
+                    color: firstVariant?.attributes?.color || '',
+                    brand: product.brand?.name || '',
+                    category: categories.find(c => c.id === product.categoryId)?.name || ''
+                  });
+                  setShowLabelModal(true);
                 }}
                 showActions={true}
                 variant="detailed"
@@ -1477,91 +1492,6 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
         </div>
       )}
 
-      {/* Column Selector Popup Modal */}
-      {showColumnSelector && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 relative">
-            {/* Close Button */}
-            <button
-              onClick={() => setShowColumnSelector(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X size={24} />
-            </button>
-
-            {/* Modal Header */}
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Columns className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">Customize Columns</h3>
-                <p className="text-sm text-gray-500">Choose which columns to display in the table</p>
-              </div>
-            </div>
-
-            {/* Column Options */}
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {availableColumns.map((column) => (
-                <label
-                  key={column.id}
-                  className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
-                    column.required 
-                      ? 'cursor-not-allowed bg-gray-50 border-gray-200' 
-                      : 'cursor-pointer hover:bg-blue-50 border-gray-200 hover:border-blue-300'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={visibleColumns.includes(column.id)}
-                    onChange={() => toggleColumnVisibility(column.id)}
-                    disabled={column.required}
-                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
-                  />
-                  <div className="flex-1">
-                    <span className="text-sm font-medium text-gray-900">
-                      {column.label}
-                    </span>
-                    {column.required && (
-                      <span className="text-xs text-gray-500 ml-2">(always visible)</span>
-                    )}
-                  </div>
-                  {column.required && (
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  )}
-                </label>
-              ))}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
-              <button
-                onClick={() => {
-                  setVisibleColumns(availableColumns.map(col => col.id));
-                  toast.success('All columns enabled');
-                }}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                Show All Columns
-              </button>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowColumnSelector(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => setShowColumnSelector(false)}
-                  className="px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Pre-Loading Overlay - Shows immediately when clicking a product */}
       {isPreLoading && <ModernLoadingOverlay />}

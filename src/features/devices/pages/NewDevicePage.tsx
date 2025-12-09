@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import GlassCard from '../../../features/shared/components/ui/GlassCard';
-import GlassButton from '../../../features/shared/components/ui/GlassButton';
+import { createPortal } from 'react-dom';
 
 import { useNavigate } from 'react-router-dom';
 import { toast } from '../../../lib/toastUtils';
 import { SimpleBackButton as BackButton } from '../../../features/shared/components/ui/SimpleBackButton';
-import { ArrowLeft, User, Smartphone, Tag, Layers, Hash, FileText, DollarSign, Key, Phone, Mail, MapPin, Calendar, Clock, ChevronDown, Battery, Camera as CameraIcon, Wifi, Bluetooth, Plug, Volume2, Mic, Speaker, Vibrate, Cpu, HardDrive, Droplet, Shield, Wrench, AlertTriangle as AlertIcon, Eye, Edit, MessageCircle, Users, Star, UserPlus, Brain, Zap, Lightbulb, Search, Sparkles, Package, RefreshCw, WifiOff, Store, CheckSquare, X } from 'lucide-react';
+import { ArrowLeft, User, Smartphone, Tag, Layers, Hash, FileText, DollarSign, Key, Phone, Mail, MapPin, Calendar, Clock, ChevronDown, Battery, Camera as CameraIcon, Wifi, Bluetooth, Plug, Volume2, Mic, Speaker, Vibrate, Cpu, HardDrive, Droplet, Shield, Wrench, AlertTriangle as AlertIcon, Eye, Edit, MessageCircle, Users, Star, UserPlus, Brain, Zap, Lightbulb, Search, Sparkles, Package, RefreshCw, WifiOff, Store, CheckSquare, X, QrCode, StickyNote } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import Modal from '../../../features/shared/components/ui/Modal';
 import { useCustomers } from '../../../context/CustomersContext';
@@ -1616,9 +1615,35 @@ IMPORTANT INSTRUCTIONS:
   
 
   return (
-    <div className="p-4 sm:p-6 h-full overflow-y-auto pt-8">
-      <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
-        <GlassCard className="p-6">
+    <div className="p-4 sm:p-6 h-full overflow-y-auto">
+      <div className="max-w-4xl mx-auto">
+        {/* Wrapper Container - Single rounded container */}
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col">
+          {/* Fixed Header Section */}
+          <div className="p-8 border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-6">
+                {/* Icon */}
+                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                  <Smartphone className="w-8 h-8 text-white" />
+                </div>
+                
+                {/* Text */}
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900 mb-2">New Device Intake</h1>
+                  <p className="text-sm text-gray-600">
+                    Register a new device for repair
+                  </p>
+                </div>
+              </div>
+
+            {/* Back Button */}
+            <BackButton to="/devices" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" />
+            </div>
+          </div>
+
+          {/* Main Container - Scrollable Content */}
+          <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
             {/* Customer Section */}
             <div className="border-b border-gray-200 pb-6">
@@ -2717,56 +2742,107 @@ IMPORTANT INSTRUCTIONS:
               </form>
             </div>
           </div>
-        </GlassCard>
+          </div>
+        </div>
       </div>
-      {showQRPrint && submittedDevice && (
-        <Modal
-          isOpen={showQRPrint}
-          onClose={() => setShowQRPrint(false)}
-          title="Print QR Code"
-        >
-          <div ref={qrPrintRef} className="print-area">
-            <DeviceQRCodePrint
-              isOpen={showQRPrint}
-              onClose={() => setShowQRPrint(false)}
-              device={submittedDevice}
-            />
-          </div>
-          <div className="flex justify-end gap-2 mt-4 no-print">
-            <button
-              type="button"
-              className="px-6 py-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
-              onClick={() => {
-                if (qrPrintRef.current) {
-                  const printContents = qrPrintRef.current.innerHTML;
-                  const printWindow = window.open('', '', 'height=600,width=400');
-                  if (printWindow) {
-                    printWindow.document.write('<html><head><title>Print QR Code</title>');
-                    printWindow.document.write('<style>@media print { body { margin: 0; } }</style>');
-                    printWindow.document.write('</head><body >');
-                    printWindow.document.write(printContents);
-                    printWindow.document.write('</body></html>');
-                    printWindow.document.close();
-                    printWindow.focus();
-                    setTimeout(() => {
-                      printWindow.print();
-                      printWindow.close();
-                    }, 300);
-                  }
-                }
-              }}
+      {/* QR Print Modal - AddProductModal Style */}
+      {showQRPrint && submittedDevice && createPortal(
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/60 z-[99999]"
+            onClick={() => setShowQRPrint(false)}
+            aria-hidden="true"
+          />
+          
+          {/* Modal Container */}
+          <div 
+            className="fixed inset-0 flex items-center justify-center z-[100000] p-4 pointer-events-none"
+          >
+            <div 
+              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden relative pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
             >
-              Print
-            </button>
-            <button
-              type="button"
-              className="px-6 py-3 rounded-lg bg-gray-200 text-gray-800 font-semibold hover:bg-gray-300 transition"
-              onClick={() => setShowQRPrint(false)}
-            >
-              Close
-            </button>
+              {/* Close Button */}
+              <button
+                onClick={() => setShowQRPrint(false)}
+                className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Icon Header - Fixed */}
+              <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                  {/* Icon */}
+                  <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                    <QrCode className="w-8 h-8 text-white" />
+                  </div>
+                  
+                  {/* Text */}
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Print QR Code</h2>
+                    <p className="text-sm text-gray-600">Print QR code for device tracking</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                <div className="py-6">
+                  <div ref={qrPrintRef} className="print-area">
+                    <DeviceQRCodePrint
+                      isOpen={showQRPrint}
+                      onClose={() => setShowQRPrint(false)}
+                      device={submittedDevice}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Fixed Footer */}
+              <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowQRPrint(false)}
+                    className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-semibold"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl font-semibold"
+                    onClick={() => {
+                      if (qrPrintRef.current) {
+                        const printContents = qrPrintRef.current.innerHTML;
+                        const printWindow = window.open('', '', 'height=600,width=400');
+                        if (printWindow) {
+                          printWindow.document.write('<html><head><title>Print QR Code</title>');
+                          printWindow.document.write('<style>@media print { body { margin: 0; } }</style>');
+                          printWindow.document.write('</head><body >');
+                          printWindow.document.write(printContents);
+                          printWindow.document.write('</body></html>');
+                          printWindow.document.close();
+                          printWindow.focus();
+                          setTimeout(() => {
+                            printWindow.print();
+                            printWindow.close();
+                          }, 300);
+                        }
+                      }
+                    }}
+                  >
+                    Print
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-        </Modal>
+        </>,
+        document.body
       )}
       {showAddCustomerModal && (
         <AddCustomerModal
@@ -2784,323 +2860,475 @@ IMPORTANT INSTRUCTIONS:
           }}
         />
       )}
-      {/* AI Analysis Modal */}
-      {showAiAnalysis && (
-        <Modal
-          isOpen={showAiAnalysis}
-          onClose={() => setShowAiAnalysis(false)}
-          title={labels.modalTitle}
-          size="lg"
-        >
-          <div className="space-y-6">
-            {/* Language Toggle Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <div className="w-5 h-5 text-blue-600">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="2" y1="12" x2="22" y2="12"/>
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                  </svg>
+      {/* AI Analysis Modal - AddProductModal Style */}
+      {showAiAnalysis && createPortal(
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/60 z-[99999]"
+            onClick={() => setShowAiAnalysis(false)}
+            aria-hidden="true"
+          />
+          
+          {/* Modal Container */}
+          <div 
+            className="fixed inset-0 flex items-center justify-center z-[100000] p-4 pointer-events-none"
+          >
+            <div 
+              className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden relative pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setShowAiAnalysis(false)}
+                className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Icon Header - Fixed */}
+              <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                <div className="grid grid-cols-[auto,1fr] gap-6 items-center mb-6">
+                  {/* Icon */}
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
+                    <Brain className="w-8 h-8 text-white" />
+                  </div>
+                  
+                  {/* Text */}
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{labels.modalTitle}</h2>
+                    <p className="text-sm text-gray-600">AI-powered device problem analysis</p>
+                  </div>
                 </div>
-                <span className="text-sm font-medium text-gray-700">Analysis Language:</span>
+
+                {/* Language Toggle Header */}
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-5 h-5 text-blue-600">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                      </svg>
+                    </div>
+                    <span className="text-sm font-medium text-gray-700">Analysis Language:</span>
+                  </div>
+                  <div className="flex bg-gray-100 rounded-xl p-1">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (aiLanguage !== 'swahili' && !isLanguageSwitching) {
+                          setIsLanguageSwitching(true);
+                          setAiLanguage('swahili');
+                          // Auto re-analyze if we have existing analysis
+                          if (aiAnalysis.problem) {
+                            toast.success('Switching to Swahili and re-analyzing...');
+                            await analyzeDeviceProblem();
+                          }
+                          setIsLanguageSwitching(false);
+                        }
+                      }}
+                      disabled={isLanguageSwitching}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        aiLanguage === 'swahili'
+                          ? 'bg-blue-500 text-white shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                      } ${isLanguageSwitching ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      {isLanguageSwitching && aiLanguage === 'swahili' ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          Switching...
+                        </div>
+                      ) : (
+                        '🇹🇿 Swahili'
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (aiLanguage !== 'english' && !isLanguageSwitching) {
+                          setIsLanguageSwitching(true);
+                          setAiLanguage('english');
+                          // Auto re-analyze if we have existing analysis
+                          if (aiAnalysis.problem) {
+                            toast.success('Switching to English and re-analyzing...');
+                            await analyzeDeviceProblem();
+                          }
+                          setIsLanguageSwitching(false);
+                        }
+                      }}
+                      disabled={isLanguageSwitching}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        aiLanguage === 'english'
+                          ? 'bg-blue-500 text-white shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                      } ${isLanguageSwitching ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      {isLanguageSwitching && aiLanguage === 'english' ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          Switching...
+                        </div>
+                      ) : (
+                        '🇬🇧 English'
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="flex bg-gray-100 rounded-lg p-1">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (aiLanguage !== 'swahili' && !isLanguageSwitching) {
-                      setIsLanguageSwitching(true);
-                      setAiLanguage('swahili');
-                      // Auto re-analyze if we have existing analysis
-                      if (aiAnalysis.problem) {
-                        toast.success('Switching to Swahili and re-analyzing...');
-                        await analyzeDeviceProblem();
-                      }
-                      setIsLanguageSwitching(false);
-                    }
-                  }}
-                  disabled={isLanguageSwitching}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                    aiLanguage === 'swahili'
-                      ? 'bg-blue-500 text-white shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
-                  } ${isLanguageSwitching ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {isLanguageSwitching && aiLanguage === 'swahili' ? (
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Switching...
-                    </div>
-                  ) : (
-                    '🇹🇿 Swahili'
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (aiLanguage !== 'english' && !isLanguageSwitching) {
-                      setIsLanguageSwitching(true);
-                      setAiLanguage('english');
-                      // Auto re-analyze if we have existing analysis
-                      if (aiAnalysis.problem) {
-                        toast.success('Switching to English and re-analyzing...');
-                        await analyzeDeviceProblem();
-                      }
-                      setIsLanguageSwitching(false);
-                    }
-                  }}
-                  disabled={isLanguageSwitching}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                    aiLanguage === 'english'
-                      ? 'bg-blue-500 text-white shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
-                  } ${isLanguageSwitching ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {isLanguageSwitching && aiLanguage === 'english' ? (
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Switching...
-                    </div>
-                  ) : (
-                    '🇬🇧 English'
-                  )}
-                </button>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                <div className="py-6 space-y-6">
+
               </div>
             </div>
-            {/* Error State */}
-            {aiAnalysis.error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <h4 className="font-semibold text-red-900 mb-2 flex items-center gap-2">
-                  <AlertIcon size={20} />
-                  {labels.serviceError}
-                </h4>
-                <p className="text-red-800 mb-3">{aiAnalysis.error}</p>
-                {aiAnalysis.error.includes('not configured') && (
-                  <div className="bg-white border border-red-200 rounded-lg p-3">
-                    <h5 className="font-medium text-red-900 mb-2">{labels.setupInstructions}</h5>
-                    <ol className="text-sm text-red-700 space-y-1">
-                      <li>{labels.goToSettings}</li>
-                      <li>{labels.findGemini}</li>
-                      <li>{labels.addApiKey}</li>
-                      <li>{labels.enableIntegration}</li>
-                      <li>{labels.testConnection}</li>
-                    </ol>
-                    <div className="mt-3 text-xs text-red-600">
-                      {labels.getApiKey} <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="underline">Google AI Studio</a>
+
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+              <div className="py-6 space-y-6">
+                {/* Error State */}
+                {aiAnalysis.error && (
+                  <div className="bg-red-50 border-2 border-red-200 rounded-xl p-5">
+                    <h4 className="font-semibold text-red-900 mb-2 flex items-center gap-2">
+                      <AlertIcon size={20} />
+                      {labels.serviceError}
+                    </h4>
+                    <p className="text-red-800 mb-3">{aiAnalysis.error}</p>
+                    {aiAnalysis.error.includes('not configured') && (
+                      <div className="bg-white border-2 border-red-200 rounded-xl p-4">
+                        <h5 className="font-medium text-red-900 mb-2">{labels.setupInstructions}</h5>
+                        <ol className="text-sm text-red-700 space-y-1">
+                          <li>{labels.goToSettings}</li>
+                          <li>{labels.findGemini}</li>
+                          <li>{labels.addApiKey}</li>
+                          <li>{labels.enableIntegration}</li>
+                          <li>{labels.testConnection}</li>
+                        </ol>
+                        <div className="mt-3 text-xs text-red-600">
+                          {labels.getApiKey} <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="underline">Google AI Studio</a>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Problem Summary */}
+                {!aiAnalysis.error && (
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-5">
+                    <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                      <AlertIcon size={20} />
+                      {labels.problemAnalysis}
+                    </h4>
+                    <p className="text-blue-800">{aiAnalysis.problem}</p>
+                  </div>
+                )}
+
+                {/* Solutions */}
+                {!aiAnalysis.error && aiAnalysis.solutions.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <Lightbulb size={20} className="text-yellow-500" />
+                      {labels.solutions}
+                    </h4>
+                    <div className="space-y-3">
+                      {aiAnalysis.solutions.map((solution, index) => (
+                        <div key={index} className="bg-white border-2 border-gray-200 rounded-xl p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">
+                              {index + 1}
+                            </div>
+                            <p className="text-gray-800">{solution}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Repair Details */}
+                {!aiAnalysis.error && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Estimated Cost */}
+                    <div className="bg-green-50 border-2 border-green-200 rounded-xl p-5">
+                      <h5 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
+                        <DollarSign size={16} />
+                        {labels.estimatedCost}
+                      </h5>
+                      <p className="text-green-800 font-medium">{aiAnalysis.estimatedCost}</p>
+                    </div>
+
+                    {/* Difficulty */}
+                    <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-5">
+                      <h5 className="font-semibold text-orange-900 mb-2 flex items-center gap-2">
+                        <Zap size={16} />
+                        {labels.difficulty}
+                      </h5>
+                      <p className="text-orange-800 font-medium capitalize">{aiAnalysis.difficulty}</p>
+                    </div>
+
+                    {/* Time Estimate */}
+                    <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-5">
+                      <h5 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                        <Clock size={16} />
+                        {labels.timeEstimate}
+                      </h5>
+                      <p className="text-purple-800 font-medium">{aiAnalysis.timeEstimate}</p>
+                    </div>
+
+                    {/* Parts Needed */}
+                    <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-5">
+                      <h5 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                        <Package size={16} />
+                        {labels.partsNeeded}
+                      </h5>
+                      {aiAnalysis.partsNeeded.length > 0 ? (
+                        <ul className="space-y-1">
+                          {aiAnalysis.partsNeeded.map((part, index) => (
+                            <li key={index} className="text-gray-700 text-sm flex items-center gap-2">
+                              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                              {part}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-gray-600 text-sm">{labels.noParts}</p>
+                      )}
                     </div>
                   </div>
                 )}
               </div>
-            )}
+            </div>
 
-            {/* Problem Summary */}
-            {!aiAnalysis.error && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                  <AlertIcon size={20} />
-                  {labels.problemAnalysis}
-                </h4>
-                <p className="text-blue-800">{aiAnalysis.problem}</p>
-              </div>
-            )}
-
-            {/* Solutions */}
-            {!aiAnalysis.error && aiAnalysis.solutions.length > 0 && (
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Lightbulb size={20} className="text-yellow-500" />
-                  {labels.solutions}
-                </h4>
-                <div className="space-y-3">
-                  {aiAnalysis.solutions.map((solution, index) => (
-                    <div key={index} className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">
-                          {index + 1}
-                        </div>
-                        <p className="text-gray-800">{solution}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Repair Details */}
-            {!aiAnalysis.error && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Estimated Cost */}
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <h5 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
-                    <DollarSign size={16} />
-                    {labels.estimatedCost}
-                  </h5>
-                  <p className="text-green-800 font-medium">{aiAnalysis.estimatedCost}</p>
-                </div>
-
-                {/* Difficulty */}
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                  <h5 className="font-semibold text-orange-900 mb-2 flex items-center gap-2">
-                    <Zap size={16} />
-                    {labels.difficulty}
-                  </h5>
-                  <p className="text-orange-800 font-medium capitalize">{aiAnalysis.difficulty}</p>
-                </div>
-
-                {/* Time Estimate */}
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                  <h5 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
-                    <Clock size={16} />
-                    {labels.timeEstimate}
-                  </h5>
-                  <p className="text-purple-800 font-medium">{aiAnalysis.timeEstimate}</p>
-                </div>
-
-                {/* Parts Needed */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <h5 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                    <Package size={16} />
-                    {labels.partsNeeded}
-                  </h5>
-                  {aiAnalysis.partsNeeded.length > 0 ? (
-                    <ul className="space-y-1">
-                      {aiAnalysis.partsNeeded.map((part, index) => (
-                        <li key={index} className="text-gray-700 text-sm flex items-center gap-2">
-                          <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                          {part}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-gray-600 text-sm">{labels.noParts}</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex justify-between items-center pt-4 border-t border-gray-200">
-              <button
-                type="button"
-                onClick={analyzeDeviceProblem}
-                disabled={aiAnalysis.isAnalyzing}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {aiAnalysis.isAnalyzing ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    {labels.analyzing}
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw size={16} />
-                    {aiAnalysis.error ? labels.retryAnalysis : labels.reAnalyze}
-                  </>
-                )}
-              </button>
-              
-              <div className="flex gap-2">
-                {!aiAnalysis.error && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Apply AI suggestions to form
-                      if (aiAnalysis.estimatedCost && !formData.repairCost) {
-                        const costMatch = aiAnalysis.estimatedCost.match(/Tsh\s*(\d+(?:,\d+)*(?:\.\d{2})?)/);
-                        if (costMatch) {
-                          setFormData(prev => ({ ...prev, repairCost: costMatch[1].replace(/,/g, '') }));
-                        }
-                      }
-                      setShowAiAnalysis(false);
-                      toast.success(labels.suggestionsApplied);
-                    }}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    {labels.applySuggestions}
-                  </button>
-                )}
+            {/* Fixed Footer */}
+            <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+              <div className="flex justify-between items-center">
                 <button
                   type="button"
-                  onClick={() => setShowAiAnalysis(false)}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                  onClick={analyzeDeviceProblem}
+                  disabled={aiAnalysis.isAnalyzing}
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg hover:shadow-xl font-semibold"
                 >
-                  {labels.close}
+                  {aiAnalysis.isAnalyzing ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      {labels.analyzing}
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw size={18} />
+                      {aiAnalysis.error ? labels.retryAnalysis : labels.reAnalyze}
+                    </>
+                  )}
                 </button>
+                
+                <div className="flex gap-3">
+                  {!aiAnalysis.error && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Apply AI suggestions to form
+                        if (aiAnalysis.estimatedCost && !formData.repairCost) {
+                          const costMatch = aiAnalysis.estimatedCost.match(/Tsh\s*(\d+(?:,\d+)*(?:\.\d{2})?)/);
+                          if (costMatch) {
+                            setFormData(prev => ({ ...prev, repairCost: costMatch[1].replace(/,/g, '') }));
+                          }
+                        }
+                        setShowAiAnalysis(false);
+                        toast.success(labels.suggestionsApplied);
+                      }}
+                      className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all shadow-lg hover:shadow-xl font-semibold"
+                    >
+                      {labels.applySuggestions}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowAiAnalysis(false)}
+                    className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-semibold"
+                  >
+                    {labels.close}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </Modal>
-      )}
+        </div>
+      </>,
+      document.body
+    )}
 
-      {showNoteModal && (
-        <Modal
-          isOpen={showNoteModal}
-          onClose={() => setShowNoteModal(false)}
-          title="Add Note"
-        >
-          <textarea
-            className="w-full py-3 pl-4 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none resize-none"
-            placeholder="Add a note (optional)"
-            value={note}
-            onChange={e => setNote(e.target.value)}
+      {/* Note Modal - AddProductModal Style */}
+      {showNoteModal && createPortal(
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/60 z-[99999]"
+            onClick={() => setShowNoteModal(false)}
+            aria-hidden="true"
           />
-          <div className="flex justify-end gap-2 mt-4">
-            <button
-              type="button"
-              className="px-6 py-3 rounded-lg bg-gray-200 text-gray-800 font-semibold hover:bg-gray-300 transition"
-              onClick={() => setShowNoteModal(false)}
+          
+          {/* Modal Container */}
+          <div 
+            className="fixed inset-0 flex items-center justify-center z-[100000] p-4 pointer-events-none"
+          >
+            <div 
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full flex flex-col overflow-hidden relative pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
             >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="px-6 py-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
-              onClick={() => {
-                setShowNoteModal(false);
-                setNote('');
-              }}
-            >
-              Save Note
-            </button>
+              {/* Close Button */}
+              <button
+                onClick={() => setShowNoteModal(false)}
+                className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Icon Header - Fixed */}
+              <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                  {/* Icon */}
+                  <div className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center shadow-lg">
+                    <StickyNote className="w-8 h-8 text-white" />
+                  </div>
+                  
+                  {/* Text */}
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Add Note</h2>
+                    <p className="text-sm text-gray-600">Add a note for this device (optional)</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                <div className="py-6">
+                  <textarea
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all resize-none"
+                    placeholder="Add a note (optional)"
+                    value={note}
+                    onChange={e => setNote(e.target.value)}
+                    rows={5}
+                  />
+                </div>
+              </div>
+
+              {/* Fixed Footer */}
+              <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowNoteModal(false)}
+                    className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNoteModal(false);
+                      setNote('');
+                    }}
+                    className="px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all shadow-lg hover:shadow-xl font-semibold"
+                  >
+                    Save Note
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-        </Modal>
+        </>,
+        document.body
       )}
 
-      {/* Completion Time Selection Modal */}
-      {showCompletionModal && (
-        <Modal
-          isOpen={showCompletionModal}
-          onClose={() => setShowCompletionModal(false)}
-          title="Select Completion Time"
-        >
-          <div className="grid grid-cols-2 gap-4 p-4">
-            {completionOptions.map(opt => (
-              <button
-                key={opt.value}
-                type="button"
-                className={`flex items-center gap-3 px-4 py-4 rounded-lg transition hover:bg-blue-50 w-full text-left text-base border-2 ${
-                  completionOption === opt.value 
-                    ? 'bg-blue-100 border-blue-500' 
-                    : 'bg-white border-gray-200 hover:border-blue-300'
-                }`}
-                onClick={() => handleCompletionSelect(opt.value)}
-              >
-                {optionIcons[opt.value as keyof typeof optionIcons]}
-                <span className="font-medium">{opt.label}</span>
-              </button>
-            ))}
-          </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <button
-              type="button"
-              className="px-6 py-3 rounded-lg bg-gray-200 text-gray-800 font-semibold hover:bg-gray-300 transition"
-              onClick={() => setShowCompletionModal(false)}
+      {/* Completion Time Selection Modal - AddProductModal Style */}
+      {showCompletionModal && createPortal(
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/60 z-[99999]"
+            onClick={() => setShowCompletionModal(false)}
+            aria-hidden="true"
+          />
+          
+          {/* Modal Container */}
+          <div 
+            className="fixed inset-0 flex items-center justify-center z-[100000] p-4 pointer-events-none"
+          >
+            <div 
+              className="bg-white rounded-2xl shadow-2xl max-w-lg w-full flex flex-col overflow-hidden relative pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
             >
-              Cancel
-            </button>
+              {/* Close Button */}
+              <button
+                onClick={() => setShowCompletionModal(false)}
+                className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Icon Header - Fixed */}
+              <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                  {/* Icon */}
+                  <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center shadow-lg">
+                    <Clock className="w-8 h-8 text-white" />
+                  </div>
+                  
+                  {/* Text */}
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Select Completion Time</h2>
+                    <p className="text-sm text-gray-600">Choose expected completion time</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                <div className="py-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    {completionOptions.map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        className={`flex items-center gap-3 px-4 py-4 rounded-xl transition-all w-full text-left text-base border-2 ${
+                          completionOption === opt.value 
+                            ? 'bg-blue-100 border-blue-500 shadow-md' 
+                            : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                        }`}
+                        onClick={() => handleCompletionSelect(opt.value)}
+                      >
+                        {optionIcons[opt.value as keyof typeof optionIcons]}
+                        <span className="font-medium">{opt.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Fixed Footer */}
+              <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowCompletionModal(false)}
+                    className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-semibold"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-        </Modal>
+        </>,
+        document.body
       )}
 
       {/* Enhanced Error Display Components */}

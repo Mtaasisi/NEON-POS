@@ -317,35 +317,25 @@ export async function searchCustomersFast(query: string, page: number = 1, pageS
       // 🔒 Get current branch for isolation
       const currentBranchId = localStorage.getItem('current_branch_id');
       
+      // 🌐 CUSTOMERS ARE SHARED ACROSS ALL BRANCHES - Show all customers for search
       // Get count first (using a separate query since custom client doesn't support count in select)
       // @ts-ignore - Custom Neon client uses chainable then() pattern
-      let countQuery = supabase
+      const countQuery = supabase
         .from('customers')
         .select('id')
         .or(`name.ilike.%${searchLower}%,phone.ilike.%${searchLower}%,email.ilike.%${searchLower}%`);
       
-      // 🔒 Apply branch filter
-      if (currentBranchId) {
-        countQuery = countQuery.eq('branch_id', currentBranchId);
-      }
-      
       const { data: allMatches } = await countQuery;
-      
       const totalCount = allMatches?.length || 0;
       
-      // Get paginated data
+      // Get paginated data (ALL CUSTOMERS - no branch filter for search)
       // @ts-ignore - Custom Neon client uses chainable then() pattern
-      let dataQuery = supabase
+      const dataQuery = supabase
         .from('customers')
         .select('id,name,phone,email,gender,city,color_tag,loyalty_level,points,total_spent,last_visit,is_active,referral_source,birth_month,birth_day,initial_notes,notes,customer_tag,location_description,national_id,joined_date,created_at,updated_at,branch_id,is_shared')
         .or(`name.ilike.%${searchLower}%,phone.ilike.%${searchLower}%,email.ilike.%${searchLower}%`)
         .order('created_at', { ascending: false })
         .range(offset, offset + pageSize - 1);
-      
-      // 🔒 Apply branch filter
-      if (currentBranchId) {
-        dataQuery = dataQuery.eq('branch_id', currentBranchId);
-      }
       
       const { data: directResults, error: directError } = await dataQuery;
       

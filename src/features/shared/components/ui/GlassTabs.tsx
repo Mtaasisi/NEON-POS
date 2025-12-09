@@ -70,11 +70,11 @@ const GlassTabs: React.FC<GlassTabsProps> = ({
           'opacity-50 cursor-not-allowed': isDisabled,
           'cursor-pointer': !isDisabled,
           
-          // Active state - gradient background with shadow
-          'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/30 hover:shadow-xl': isActive && !isDisabled,
+          // Active state - gradient background with shadow, no border
+          'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/30 hover:shadow-xl border-0': isActive && !isDisabled,
           
           // Inactive state - subtle background with hover
-          'bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900': !isActive && !isDisabled,
+          'bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-0': !isActive && !isDisabled,
         }
       );
     }

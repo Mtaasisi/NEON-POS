@@ -245,10 +245,17 @@ export const DevicesProvider: React.FC<{ children: React.ReactNode }> = React.me
           console.log('✅ SMS sent successfully');
           toast.success('SMS notification sent to customer');
         } else {
-          console.warn('⚠️ SMS sending failed:', smsResult.error);
-          // Don't show error toast if it's just the dev server not running
-          if (!smsResult.error?.includes('proxy server')) {
+          // Don't log or show error if it's just the proxy server not running (expected in dev)
+          const isProxyError = smsResult.error?.includes('proxy server') || 
+                              smsResult.error?.includes('not running') ||
+                              smsResult.error?.includes('ERR_CONNECTION_REFUSED');
+          
+          if (!isProxyError) {
+            console.warn('⚠️ SMS sending failed:', smsResult.error);
             toast.error('SMS notification failed to send');
+          } else {
+            // Silently skip - proxy server not running is expected in development
+            console.log('ℹ️ SMS proxy server not running - skipping SMS notification');
           }
         }
       } else if (!customerData?.phone) {

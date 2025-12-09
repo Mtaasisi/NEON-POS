@@ -29,6 +29,10 @@ interface VariantProductCardProps {
   onView?: (product: ProductSearchResult) => void;
   onEdit?: (product: ProductSearchResult) => void;
   onDelete?: (product: ProductSearchResult) => void;
+  onAdjustStock?: (product: ProductSearchResult) => void;
+  onDuplicate?: (product: ProductSearchResult) => void;
+  onTransfer?: (product: ProductSearchResult) => void;
+  onPrintLabel?: (product: ProductSearchResult) => void;
   variant?: 'default' | 'compact' | 'detailed';
   showStockInfo?: boolean;
   showCategory?: boolean;
@@ -53,6 +57,10 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
   onView,
   onEdit,
   onDelete,
+  onAdjustStock,
+  onDuplicate,
+  onTransfer,
+  onPrintLabel,
   variant = 'default',
   showStockInfo = true,
   showCategory = true,
@@ -98,6 +106,7 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
   const [loadingChildren, setLoadingChildren] = useState<Set<string>>(new Set());
   const [variantImages, setVariantImages] = useState<Map<string, string[]>>(new Map());
   const loadedVariantImagesRef = useRef<Set<string>>(new Set());
+  const autoLoadedChildrenRef = useRef<Set<string>>(new Set());
   
   // Load variant images when product is expanded
   useEffect(() => {
@@ -175,61 +184,50 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
     }
   };
 
-  // Load children variants for a parent variant
-  const loadChildrenVariants = async (variantId: string) => {
-    console.log('🔍 Checking for children variants for variant:', variantId);
-    
-    // If already loaded and expanded, collapse it
-    if (variantChildren.has(variantId) && expandedVariantId === variantId) {
-      console.log('📦 Collapsing already expanded variant');
-      setExpandedVariantId(null);
-      return;
-    }
-    
-    // If already loaded but not expanded, just expand it
+  // Internal function to load children data (without expand/collapse logic) - for parallel loading
+  const loadChildrenVariantsData = async (variantId: string): Promise<any[]> => {
+    // If already loaded, return cached data
     if (variantChildren.has(variantId)) {
-      console.log('📦 Expanding already loaded children');
-      setExpandedVariantId(variantId);
-      return;
+      return variantChildren.get(variantId) || [];
     }
     
-    console.log('⏳ Loading children from database...');
-    setLoadingChildren(prev => new Set(prev).add(variantId));
     try {
       const { supabase } = await import('../../../../lib/supabaseClient');
       
-      // Get IMEI child variants
-      const { data: imeiChildren, error: imeiError } = await supabase
-        .from('lats_product_variants')
-        .select('*')
-        .eq('parent_variant_id', variantId)
-        .eq('variant_type', 'imei_child')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
-      
-      if (imeiError) {
-        console.error('❌ Error loading IMEI children:', imeiError);
-      } else {
-        console.log(`✅ Found ${imeiChildren?.length || 0} IMEI children:`, imeiChildren);
-      }
-      
-      // Get legacy inventory items - also check by product_id
+      // Get variant info for product_id
       const variant = product.variants?.find((v: any) => v.id === variantId);
       const productId = variant?.product_id || product.id;
       
-      const { data: legacyItems, error: legacyError } = await supabase
-        .from('inventory_items')
-        .select('*')
-        .eq('variant_id', variantId)
-        .eq('status', 'available')
-        .not('serial_number', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(50);
+      // Load both queries in parallel for maximum speed
+      const [imeiResult, legacyResult] = await Promise.all([
+        // Get IMEI child variants
+        supabase
+          .from('lats_product_variants')
+          .select('*')
+          .eq('parent_variant_id', variantId)
+          .eq('variant_type', 'imei_child')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false }),
+        
+        // Get legacy inventory items
+        supabase
+          .from('inventory_items')
+          .select('*')
+          .eq('variant_id', variantId)
+          .eq('status', 'available')
+          .not('serial_number', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(50)
+      ]);
       
+      const { data: imeiChildren, error: imeiError } = imeiResult;
+      const { data: legacyItems, error: legacyError } = legacyResult;
+      
+      if (imeiError) {
+        console.error('❌ Error loading IMEI children:', imeiError);
+      }
       if (legacyError) {
         console.error('❌ Error loading legacy items:', legacyError);
-      } else {
-        console.log(`✅ Found ${legacyItems?.length || 0} legacy items:`, legacyItems);
       }
       
       const children: any[] = [];
@@ -271,6 +269,35 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
         }));
       }
       
+      return children;
+    } catch (error) {
+      console.error('❌ Error loading children variants data:', error);
+      return [];
+    }
+  };
+
+  // Load children variants for a parent variant (with expand/collapse logic for manual clicks)
+  const loadChildrenVariants = async (variantId: string) => {
+    console.log('🔍 Checking for children variants for variant:', variantId);
+    
+    // If already loaded and expanded, collapse it
+    if (variantChildren.has(variantId) && expandedVariantId === variantId) {
+      console.log('📦 Collapsing already expanded variant');
+      setExpandedVariantId(null);
+      return;
+    }
+    
+    // If already loaded but not expanded, just expand it
+    if (variantChildren.has(variantId)) {
+      console.log('📦 Expanding already loaded children');
+      setExpandedVariantId(variantId);
+      return;
+    }
+    
+    console.log('⏳ Loading children from database...');
+    setLoadingChildren(prev => new Set(prev).add(variantId));
+    try {
+      const children = await loadChildrenVariantsData(variantId);
       console.log(`📦 Total children loaded: ${children.length}`, children);
       
       setVariantChildren(prev => new Map(prev).set(variantId, children));
@@ -288,6 +315,60 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
       });
     }
   };
+
+  // Automatically load children variants for all variants when product is expanded
+  useEffect(() => {
+    if (isExpanded && product.variants && product.variants.length > 0) {
+      // Get all variant IDs that haven't been loaded yet
+      const variantIdsToLoad = product.variants
+        .map((v: any) => v.id)
+        .filter((id: string) => 
+          id && 
+          !variantChildren.has(id) && 
+          !autoLoadedChildrenRef.current.has(id)
+        );
+      
+      if (variantIdsToLoad.length > 0) {
+        console.log(`⚡ Auto-loading children for ${variantIdsToLoad.length} variants in parallel...`);
+        
+        // Mark as loading to prevent duplicate loads
+        variantIdsToLoad.forEach(id => autoLoadedChildrenRef.current.add(id));
+        
+        // Load all variants' children in parallel for maximum speed
+        setLoadingChildren(prev => {
+          const next = new Set(prev);
+          variantIdsToLoad.forEach(id => next.add(id));
+          return next;
+        });
+        
+        // Load all in parallel
+        Promise.all(
+          variantIdsToLoad.map(async (variantId: string) => {
+            const children = await loadChildrenVariantsData(variantId);
+            return { variantId, children };
+          })
+        ).then(results => {
+          setVariantChildren(prev => {
+            const next = new Map(prev);
+            results.forEach(({ variantId, children }) => {
+              next.set(variantId, children);
+            });
+            return next;
+          });
+        }).catch(error => {
+          console.error('❌ Error auto-loading children variants:', error);
+          // Remove from ref on error so we can retry
+          variantIdsToLoad.forEach(id => autoLoadedChildrenRef.current.delete(id));
+        }).finally(() => {
+          setLoadingChildren(prev => {
+            const next = new Set(prev);
+            variantIdsToLoad.forEach(id => next.delete(id));
+            return next;
+          });
+        });
+      }
+    }
+  }, [isExpanded, product.variants?.length]);
 
   // Reset error state on mount/remount (helps with React refresh)
   useEffect(() => {
@@ -821,10 +902,27 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                 {/* Product Name and Status */}
                 <div className="flex items-center gap-3 mb-4 flex-wrap">
                   <h3 className="text-2xl font-bold text-gray-900 truncate">{product.name}</h3>
-                  <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-base font-bold ${statusColors.text} ${statusColors.bgLight} flex items-center gap-2 flex-shrink-0`}>
-                    <ShoppingCart className="w-4 h-4" />
-                    <span>{getTotalStock()} {stockStatusText}</span>
-                  </span>
+                  <div className={`inline-flex items-center justify-center p-1.5 sm:p-2 rounded-full border-2 border-white shadow-lg z-30 ${
+                    getTotalStock() === 0 
+                      ? 'min-w-[3.5rem] sm:min-w-[4rem]' 
+                      : getTotalStock() <= 10 && getTotalStock() > 0 
+                      ? 'min-w-[3.5rem] sm:min-w-[4rem]' 
+                      : 'min-w-[2rem] sm:min-w-[2.5rem]'
+                  } min-h-[2rem] sm:min-h-[2.5rem] transition-all duration-300 ${
+                    getTotalStock() <= 0 
+                      ? 'bg-gradient-to-r from-red-500 to-red-600' 
+                      : getTotalStock() <= 10 
+                      ? 'bg-gradient-to-r from-orange-500 to-orange-600' 
+                      : 'bg-gradient-to-r from-green-500 to-emerald-500'
+                  }`}>
+                    <span className="text-xs sm:text-sm font-bold text-white whitespace-nowrap px-1">
+                      {getTotalStock() === 0 
+                        ? '0 out' 
+                        : getTotalStock() <= 10 && getTotalStock() > 0 
+                        ? `${getTotalStock()} low` 
+                        : getTotalStock()}
+                    </span>
+                  </div>
                 </div>
                 
                 {/* Info Badges */}
@@ -962,9 +1060,9 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                   </h4>
                 </div>
                 
-                {/* Variants List */}
+                {/* Variants Grid */}
                 {product.variants && product.variants.length > 0 ? (
-                  <div className="flex flex-col gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {product.variants.slice(0, 4).map((variant: any, index: number) => {
                       // Check if variant has children - check both in-memory and assume it might have children if marked as parent
                       const hasChildrenInMemory = product.variants?.some((v: any) => 
@@ -1186,7 +1284,9 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Adjust stock action
+                      if (onAdjustStock) {
+                        onAdjustStock(product);
+                      }
                     }}
                     className="flex items-center justify-center gap-2 px-4 py-3 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 bg-orange-600 hover:bg-orange-700 action-button"
                   >
@@ -1196,7 +1296,9 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Print action
+                      if (onPrintLabel) {
+                        onPrintLabel(product);
+                      }
                     }}
                     className="flex items-center justify-center gap-2 px-4 py-3 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 bg-gray-600 hover:bg-gray-700 action-button"
                   >
@@ -1208,7 +1310,9 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Duplicate action
+                      if (onDuplicate) {
+                        onDuplicate(product);
+                      }
                     }}
                     className="flex items-center justify-center gap-2 px-4 py-2.5 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 bg-indigo-600 hover:bg-indigo-700 action-button"
                   >
@@ -1218,7 +1322,9 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Transfer action
+                      if (onTransfer) {
+                        onTransfer(product);
+                      }
                     }}
                     className="flex items-center justify-center gap-2 px-4 py-2.5 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 bg-red-600 hover:bg-red-700 action-button"
                   >

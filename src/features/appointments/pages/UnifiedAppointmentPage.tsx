@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
-import GlassCard from '../../../features/shared/components/ui/GlassCard';
-import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import GlassTabs from '../../../features/shared/components/ui/GlassTabs';
 import SearchBar from '../../../features/shared/components/ui/SearchBar';
 import GlassSelect from '../../../features/shared/components/ui/GlassSelect';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
 import { PageErrorBoundary } from '../../../features/shared/components/PageErrorBoundary';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { 
-  Calendar, Plus, CheckCircle, CalendarDays, RefreshCw
+  Calendar, Plus, CheckCircle, CalendarDays, RefreshCw, Search
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
@@ -135,20 +134,49 @@ const UnifiedAppointmentPage: React.FC = () => {
 
   return (
     <PageErrorBoundary pageName="Unified Appointments" showDetails={true}>
-      <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <div className="flex items-center gap-4">
-            <BackButton to="/dashboard" />
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+        {/* Wrapper Container - Single rounded container */}
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+          {/* Fixed Header Section */}
+          <div className="p-8 border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-6">
+                {/* Icon */}
+                <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center shadow-lg">
+                  <Calendar className="w-8 h-8 text-white" />
+                </div>
+                
+                {/* Text */}
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Appointments & Calendar</h1>
-              <p className="text-gray-600 mt-1">
+                  <h1 className="text-2xl font-bold text-gray-900 mb-2">Appointments & Calendar</h1>
+                  <p className="text-sm text-gray-600">
                 {currentTab?.description || 'Comprehensive appointment management system'}
               </p>
             </div>
           </div>
 
-          <div className="flex gap-3">
+              {/* Back Button */}
+              <BackButton to="/dashboard" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
+            </div>
+          </div>
+          {/* Action Bar - Enhanced Design */}
+          <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
+            <div className="flex gap-3 flex-wrap items-center">
+              {/* Search */}
+              <div className="flex-1 min-w-[200px]">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    placeholder="Search appointments..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all text-gray-900 bg-white font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* Status Filter */}
             <GlassSelect
               options={[
                 { value: 'all', label: 'All Status' },
@@ -165,33 +193,34 @@ const UnifiedAppointmentPage: React.FC = () => {
               className="min-w-[150px]"
             />
             
-            <SearchBar
-              onSearch={setSearchQuery}
-              placeholder="Search appointments..."
-              className="min-w-[200px]"
-            />
-
-            <GlassButton
+              {/* Refresh Button */}
+              <button
               onClick={handleRefresh}
-              icon={<RefreshCw size={18} />}
-              variant="secondary"
-              loading={isLoading}
               disabled={isLoading}
-            >
-              Refresh
-            </GlassButton>
+                className="flex items-center gap-2 px-4 py-2.5 border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50 bg-white font-semibold text-sm"
+              >
+                {isLoading ? (
+                  <LoadingSpinner size="sm" color="gray" />
+                ) : (
+                  <RefreshCw size={18} />
+                )}
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
 
-            <GlassButton
+              {/* New Appointment Button */}
+              <button
               onClick={handleCreateAppointment}
-              icon={<Plus size={18} />}
-              className="bg-gradient-to-r from-green-500 to-green-600 text-white"
+                className="flex items-center gap-2 px-6 py-2.5 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg hover:from-green-600 hover:to-green-700"
             >
-              New Appointment
-            </GlassButton>
+                <Plus size={18} />
+                <span>New Appointment</span>
+              </button>
           </div>
         </div>
 
-        {/* Modern Top Tabs Navigation */}
+          {/* Tab Navigation */}
+          <div className="p-6 pb-0 flex-shrink-0">
+            <div className="bg-white rounded-xl border-2 border-gray-200 p-2">
         <GlassTabs
           tabs={availableTabs.map(tab => ({
             id: tab.id,
@@ -205,16 +234,38 @@ const UnifiedAppointmentPage: React.FC = () => {
           variant="modern"
           size="md"
         />
+            </div>
+          </div>
 
-        {/* Appointment Content */}
-        <div className="w-full">
-            <GlassCard className="p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className={`text-${currentTab?.color}-500`}>
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {/* Loading State */}
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <LoadingSpinner size="lg" color="green" />
+                <p className="mt-4 text-gray-600 font-medium">Loading appointments...</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Tab Header */}
+                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-200">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    currentTab?.color === 'blue' ? 'bg-blue-100' :
+                    currentTab?.color === 'green' ? 'bg-green-100' :
+                    currentTab?.color === 'purple' ? 'bg-purple-100' :
+                    'bg-gray-100'
+                  }`}>
+                    <div className={
+                      currentTab?.color === 'blue' ? 'text-blue-600' :
+                      currentTab?.color === 'green' ? 'text-green-600' :
+                      currentTab?.color === 'purple' ? 'text-purple-600' :
+                      'text-gray-600'
+                    }>
                   {currentTab?.icon}
+                    </div>
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900">
+                    <h2 className="text-xl font-bold text-gray-900">
                     {currentTab?.label}
                   </h2>
                   <p className="text-sm text-gray-600">
@@ -223,18 +274,11 @@ const UnifiedAppointmentPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Loading State */}
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                  <span className="ml-3 text-gray-600">Loading appointments...</span>
-                </div>
-              ) : (
-                <div className="space-y-6">
+                {/* Tab Content */}
                   {renderTabContent()}
                 </div>
               )}
-            </GlassCard>
+          </div>
         </div>
       </div>
     </PageErrorBoundary>

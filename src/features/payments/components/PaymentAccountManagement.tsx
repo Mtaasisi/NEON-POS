@@ -635,147 +635,123 @@ const PaymentAccountManagement: React.FC = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
-      {/* Combined Container - All sections in one */}
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
-        {/* Fixed Header Section - Enhanced Modal Style */}
-        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            {/* Left: Icon + Text */}
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
-                <Wallet className="w-8 h-8 text-white" />
+    <div className="space-y-6">
+      {/* Action Bar - Enhanced Design */}
+      <div className="flex gap-3 flex-wrap">
+        {/* Add Account Button */}
+        <button
+          onClick={handleAdd}
+          className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl"
+        >
+          <Plus size={18} />
+          <span>Add Account</span>
+        </button>
+
+        {/* Transfer Button */}
+        <button
+          onClick={() => setShowTransferModal(true)}
+          className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg hover:from-purple-600 hover:to-purple-700 hover:shadow-xl"
+        >
+          <ArrowRightLeft size={18} />
+          <span>Transfer</span>
+        </button>
+
+        {/* Refresh Button */}
+        <button
+          onClick={async () => {
+            console.log('🔄 Manual refresh triggered');
+            setIsLoading(true);
+            await fetchAccounts();
+            setIsLoading(false);
+          }}
+          disabled={isLoading}
+          className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-orange-300 disabled:opacity-50 bg-white shadow-sm"
+        >
+          {isLoading ? (
+            <div className="w-4 h-4 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <RefreshCw size={18} />
+          )}
+          <span>Refresh</span>
+        </button>
+      </div>
+
+      {/* Currency Filter Section */}
+      <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
+        <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex items-center gap-3 flex-1">
+            <Filter size={18} className="text-gray-400" />
+            <select
+              value={currencyFilter}
+              onChange={(e) => setCurrencyFilter(e.target.value)}
+              className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 bg-white font-medium min-w-[200px]"
+            >
+              <option value="all">All Currencies</option>
+              <option value="TZS">Tanzanian Shilling (TZS)</option>
+              <option value="USD">US Dollar (USD)</option>
+              <option value="EUR">Euro (EUR)</option>
+              <option value="GBP">British Pound (GBP)</option>
+            </select>
+          </div>
+          {currencyFilter !== 'all' && (
+            <button
+              onClick={() => setCurrencyFilter('all')}
+              className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-2 px-4 py-2"
+            >
+              <X size={14} />
+              Clear Filter
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Summary Statistics Section */}
+      <div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Total Accounts */}
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <Wallet className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-1">Payment Accounts</h1>
-                <p className="text-sm text-gray-600">Track balances and manage your payment methods</p>
+                <p className="text-xs font-medium text-gray-600 mb-1">Total Accounts</p>
+                <p className="text-2xl font-bold text-gray-900">{summaryStats.totalAccounts}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Total Balance */}
+          <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <DollarSign className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Total Balance</p>
+                <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.totalBalance, currencyFilter !== 'all' ? currencyFilter : 'TZS')}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Net Flow */}
+          <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <BarChart3 className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Net Flow</p>
+                <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.netFlow, currencyFilter !== 'all' ? currencyFilter : 'TZS')}</p>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Action Bar - Enhanced Design */}
-        <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
-          <div className="flex gap-3 flex-wrap">
-            {/* Add Account Button */}
-            <button
-              onClick={handleAdd}
-              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl"
-            >
-              <Plus size={18} />
-              <span>Add Account</span>
-            </button>
-
-            {/* Transfer Button */}
-            <button
-              onClick={() => setShowTransferModal(true)}
-              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg hover:from-purple-600 hover:to-purple-700 hover:shadow-xl"
-            >
-              <ArrowRightLeft size={18} />
-              <span>Transfer</span>
-            </button>
-
-            {/* Refresh Button */}
-            <button
-              onClick={async () => {
-                console.log('🔄 Manual refresh triggered');
-                setIsLoading(true);
-                await fetchAccounts();
-                setIsLoading(false);
-              }}
-              disabled={isLoading}
-              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 disabled:opacity-50 bg-white shadow-sm"
-            >
-              {isLoading ? (
-                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <RefreshCw className="w-4 h-4" />
-              )}
-              <span>Refresh</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Main Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto">
-              {/* Currency Filter Section */}
-              <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
-                <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
-                  <div className="flex flex-col lg:flex-row gap-4">
-                    <div className="flex items-center gap-3 flex-1">
-                      <Filter size={18} className="text-gray-400" />
-                      <select
-                        value={currencyFilter}
-                        onChange={(e) => setCurrencyFilter(e.target.value)}
-                        className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 bg-white font-medium min-w-[200px]"
-                      >
-                        <option value="all">All Currencies</option>
-                        <option value="TZS">Tanzanian Shilling (TZS)</option>
-                        <option value="USD">US Dollar (USD)</option>
-                        <option value="EUR">Euro (EUR)</option>
-                        <option value="GBP">British Pound (GBP)</option>
-                      </select>
-                    </div>
-                    {currencyFilter !== 'all' && (
-                      <button
-                        onClick={() => setCurrencyFilter('all')}
-                        className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-2 px-4 py-2"
-                      >
-                        <X size={14} />
-                        Clear Filter
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Summary Statistics Section */}
-              <div className="p-6 pb-0 flex-shrink-0">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Total Accounts */}
-                  <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-                        <Wallet className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-gray-600 mb-1">Total Accounts</p>
-                        <p className="text-2xl font-bold text-gray-900">{summaryStats.totalAccounts}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Total Balance */}
-                  <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-                        <DollarSign className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-gray-600 mb-1">Total Balance</p>
-                        <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.totalBalance, currencyFilter !== 'all' ? currencyFilter : 'TZS')}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Net Flow */}
-                  <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-                        <BarChart3 className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-gray-600 mb-1">Net Flow</p>
-                        <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.netFlow, currencyFilter !== 'all' ? currencyFilter : 'TZS')}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Accounts List - Scrollable */}
-              <div className="p-6">
-                {filteredAccounts.length === 0 ? (
+      {/* Accounts List */}
+      <div>
+        {filteredAccounts.length === 0 ? (
                   <div className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-2xl p-16 text-center border-2 border-dashed border-gray-300">
                     <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl">
                       <Wallet className="w-12 h-12 text-white" />
@@ -802,9 +778,9 @@ const PaymentAccountManagement: React.FC = () => {
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredAccounts.map((account) => (
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredAccounts.map((account) => (
             <div 
               key={account.id} 
               className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-xl hover:border-gray-300 transition-all group"
@@ -964,11 +940,9 @@ const PaymentAccountManagement: React.FC = () => {
                 </div>
               </div>
             </div>
-                  ))}
-                  </div>
-                )}
-              </div>
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Add/Edit Modal */}

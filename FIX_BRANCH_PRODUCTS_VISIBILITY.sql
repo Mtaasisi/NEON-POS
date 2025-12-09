@@ -20,18 +20,36 @@ BEGIN;
 -- ================================================
 -- OPTION 1: Enable Product Sharing (RECOMMENDED)
 -- ================================================
--- This allows all branches to see all products in hybrid mode
--- while still maintaining inventory isolation if needed
+-- IMPORTANT: This enables PRODUCT VISIBILITY sharing, NOT inventory sharing
+-- 
+-- What this means:
+-- ✅ Products (catalog) = SHARED (all branches see same product catalog)
+-- ✅ Inventory (stock) = ISOLATED (each branch has its own stock levels)
+-- 
+-- This is the most common setup:
+-- - All branches can see and sell the same products
+-- - Each branch manages its own inventory/stock independently
+-- - Stock levels are branch-specific
 
 UPDATE store_locations
 SET share_products = true
 WHERE data_isolation_mode = 'hybrid'
   AND (share_products IS NULL OR share_products = false);
 
+-- Keep inventory isolated (each branch has its own stock)
+UPDATE store_locations
+SET share_inventory = false
+WHERE data_isolation_mode = 'hybrid'
+  AND (share_inventory IS NULL OR share_inventory = true);
+
 -- ================================================
 -- OPTION 2: Set Default Branch Settings
 -- ================================================
 -- Ensure all branches have proper default settings
+-- 
+-- Default configuration:
+-- - share_products = true  (product catalog shared)
+-- - share_inventory = false (stock levels isolated per branch)
 
 UPDATE store_locations
 SET 
@@ -68,6 +86,29 @@ ORDER BY name;
 
 COMMIT;
 
+-- ================================================
+-- UNDERSTANDING ISOLATION LEVELS
+-- ================================================
+-- 
+-- In HYBRID mode, you have TWO separate controls:
+-- 
+-- 1. share_products (Product Catalog Visibility)
+--    - true  = All branches see the same product catalog
+--    - false = Each branch only sees its own products
+-- 
+-- 2. share_inventory (Stock/Inventory Isolation)
+--    - true  = All branches share the same stock levels
+--    - false = Each branch has its own independent stock
+-- 
+-- RECOMMENDED SETUP:
+-- ✅ share_products = true   (shared catalog)
+-- ✅ share_inventory = false (isolated stock)
+-- 
+-- This means:
+-- - All branches can see and sell the same products
+-- - Each branch tracks its own inventory independently
+-- - Stock levels are branch-specific
+-- 
 -- ================================================
 -- NOTES
 -- ================================================

@@ -225,41 +225,52 @@ const DevicePriceHistoryModal: React.FC<DevicePriceHistoryModalProps> = ({
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 99999 }}>
+    <>
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/60 z-[99999]"
         onClick={onClose}
+        aria-hidden="true"
       />
       
-      {/* Modal */}
+      {/* Modal Container */}
       <div 
-        className="relative bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 flex items-center justify-center z-[100000] p-4 pointer-events-none"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white">
-              <History className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">Price History</h2>
-              <p className="text-sm text-gray-600">
-                {deviceName} • Current Price: <span className="font-semibold text-blue-600">{formatPrice(currentPrice)}</span>
-              </p>
-            </div>
-          </div>
-          <button 
+        <div 
+          className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] flex flex-col overflow-hidden relative pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+        >
+          {/* Close Button */}
+          <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
+
+          {/* Icon Header - Fixed */}
+          <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+            <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <History className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Price History</h2>
+                <p className="text-sm text-gray-600">
+                  {deviceName} • Current Price: <span className="font-semibold text-blue-600">{formatPrice(currentPrice)}</span>
+                </p>
+              </div>
+            </div>
+          </div>
 
         {/* Filters and Controls */}
-        <div className="p-6 border-b border-gray-100 bg-gray-50">
+        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-gray-500" />
@@ -269,7 +280,7 @@ const DevicePriceHistoryModal: React.FC<DevicePriceHistoryModalProps> = ({
             <select
               value={filter.changeType}
               onChange={(e) => setFilter(prev => ({ ...prev, changeType: e.target.value }))}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-3 py-2 border-2 border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
             >
               <option value="">All Types</option>
               <option value="manual">Manual</option>
@@ -283,7 +294,7 @@ const DevicePriceHistoryModal: React.FC<DevicePriceHistoryModalProps> = ({
             <select
               value={filter.dateRange}
               onChange={(e) => setFilter(prev => ({ ...prev, dateRange: e.target.value }))}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-3 py-2 border-2 border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
             >
               <option value="7">Last 7 days</option>
               <option value="30">Last 30 days</option>
@@ -295,7 +306,7 @@ const DevicePriceHistoryModal: React.FC<DevicePriceHistoryModalProps> = ({
             <select
               value={filter.source}
               onChange={(e) => setFilter(prev => ({ ...prev, source: e.target.value }))}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-3 py-2 border-2 border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
             >
               <option value="">All Sources</option>
               <option value="system">System</option>
@@ -309,7 +320,7 @@ const DevicePriceHistoryModal: React.FC<DevicePriceHistoryModalProps> = ({
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="px-3 py-2 border-2 border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
               >
                 <option value="date">Date</option>
                 <option value="change">Price Change</option>
@@ -317,35 +328,34 @@ const DevicePriceHistoryModal: React.FC<DevicePriceHistoryModalProps> = ({
               </select>
               <button
                 onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="p-2 border-2 border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
               >
                 {sortOrder === 'asc' ? '↑' : '↓'}
               </button>
             </div>
 
-            <GlassButton
+            <button
               onClick={loadPriceHistory}
-              variant="secondary"
-              size="sm"
               disabled={isLoading}
+              className="flex items-center gap-2 px-4 py-2 border-2 border-gray-300 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
-            </GlassButton>
+            </button>
 
-            <GlassButton
+            <button
               onClick={exportHistory}
-              variant="secondary"
-              size="sm"
+              className="flex items-center gap-2 px-4 py-2 border-2 border-gray-300 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold"
             >
               <Download className="w-4 h-4" />
               Export
-            </GlassButton>
+            </button>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+          <div className="py-6">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
@@ -405,24 +415,26 @@ const DevicePriceHistoryModal: React.FC<DevicePriceHistoryModalProps> = ({
               ))}
             </div>
           )}
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-6 border-t border-gray-100 bg-gray-50">
+        {/* Fixed Footer */}
+        <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-600">
               Showing {filteredHistory.length} of {priceHistory.length} price changes
             </div>
-            <GlassButton
+            <button
               onClick={onClose}
-              variant="secondary"
+              className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-semibold"
             >
               Close
-            </GlassButton>
+            </button>
           </div>
         </div>
       </div>
-    </div>,
+    </div>
+    </>,
     document.body
   );
 };

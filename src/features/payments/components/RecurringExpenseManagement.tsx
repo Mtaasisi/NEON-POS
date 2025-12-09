@@ -311,22 +311,22 @@ const RecurringExpenseManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Recurring Expenses</h2>
-          <p className="text-gray-600">Automate fixed expenses like salaries, rent, and subscriptions</p>
-        </div>
-        <div className="flex gap-2">
-          <GlassButton onClick={fetchRecurringExpenses} variant="secondary">
-            <RefreshCw size={16} />
-            Refresh
-          </GlassButton>
-          <GlassButton onClick={() => { resetForm(); setShowAddModal(true); }}>
-            <Plus size={16} />
-            Add Recurring Expense
-          </GlassButton>
-        </div>
+      {/* Action Buttons */}
+      <div className="flex gap-3 flex-wrap">
+        <button
+          onClick={() => { resetForm(); setShowAddModal(true); }}
+          className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg hover:from-orange-600 hover:to-amber-700"
+        >
+          <Plus size={18} />
+          <span>Add Recurring Expense</span>
+        </button>
+        <button
+          onClick={fetchRecurringExpenses}
+          className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 disabled:opacity-50 bg-white shadow-sm"
+        >
+          <RefreshCw size={18} />
+          <span>Refresh</span>
+        </button>
       </div>
 
       {/* Summary Cards */}

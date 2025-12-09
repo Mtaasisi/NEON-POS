@@ -209,6 +209,17 @@ class GlobalErrorHandler {
         }
         return String(arg);
       }).join(' ');
+      
+      // Suppress SMS proxy connection errors - expected when proxy server is not running
+      const isSMSProxyError = allArgsString.includes('sms-proxy') && 
+                             (allArgsString.includes('ERR_CONNECTION_REFUSED') ||
+                              allArgsString.includes('ECONNREFUSED') ||
+                              allArgsString.includes('Failed to fetch'));
+      
+      if (isSMSProxyError) {
+        // Don't log to console - this is expected when SMS proxy server is not running
+        return;
+      }
 
       // Only log cache-related errors from console.error
       // But skip generic React error boundary messages that don't contain actual errors
@@ -330,10 +341,29 @@ class GlobalErrorHandler {
           url.includes('wasenderapi.com/media')
         );
         
+        // Skip logging SMS proxy connection errors - expected when proxy server is not running
+        const isSMSProxyRequest = typeof url === 'string' && (
+          url.includes('/api/sms-proxy') || 
+          url.includes('sms-proxy') ||
+          url.includes('localhost:8000/api/sms-proxy')
+        );
+        
+        const isConnectionError = error instanceof TypeError && 
+                           (error.message.includes('Failed to fetch') || 
+                            error.message.includes('ERR_CONNECTION_REFUSED') ||
+                            error.message.includes('ECONNREFUSED') ||
+                            error.message.includes('network'));
+        
         const isCorsError = error instanceof TypeError && 
                            (error.message.includes('Failed to fetch') || 
                             error.message.includes('CORS') ||
                             error.message.includes('network'));
+        
+        // Don't log SMS proxy connection errors - they're handled gracefully by the SMS service
+        if (isSMSProxyRequest && isConnectionError) {
+          // Silently handle - SMS proxy server may not be running (expected in development)
+          throw error; // Re-throw but don't log
+        }
         
         // Don't log CORS errors for images - they're handled gracefully by the app
         if (isImageUrl && isCorsError) {

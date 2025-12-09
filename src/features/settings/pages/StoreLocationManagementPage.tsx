@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import GlassButton from '../../shared/components/ui/GlassButton';
 import GlassInput from '../../shared/components/ui/GlassInput';
 import GlassSelect from '../../shared/components/ui/GlassSelect';
 import Modal from '../../shared/components/ui/Modal';
-import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassBadge from '../../shared/components/ui/GlassBadge';
+import { BackButton } from '../../shared/components/ui/BackButton';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { 
   Plus, 
   Search, 
@@ -208,18 +207,18 @@ export const StoreLocationManagementPage: React.FC = () => {
             </div>
 
             <div className="flex justify-end gap-3">
-              <GlassButton
-                variant="outline"
+              <button
                 onClick={() => setDeletingLocation(null)}
+                className="px-4 py-2.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 rounded-xl font-semibold transition-all"
               >
                 Cancel
-              </GlassButton>
-              <GlassButton
-                variant="destructive"
+              </button>
+              <button
                 onClick={() => handleDelete(deletingLocation)}
+                className="px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
               >
                 Delete Location
-              </GlassButton>
+              </button>
             </div>
           </div>
         )}

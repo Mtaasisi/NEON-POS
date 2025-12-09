@@ -1,143 +1,285 @@
-import React, { useState } from 'react';
-import { Keyboard, X, Zap } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Keyboard, X, Command, Zap } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 
-interface GlobalShortcut {
+interface Shortcut {
   keys: string[];
   description: string;
-  action: string;
+  category?: string;
 }
 
-const GLOBAL_SHORTCUTS: GlobalShortcut[] = [
+interface PageShortcuts {
+  pageName: string;
+  shortcuts: Shortcut[];
+}
+
+// Page-specific shortcuts mapping
+const PAGE_SHORTCUTS_MAP: Record<string, PageShortcuts> = {
+  '/lats/purchase-order/create': {
+    pageName: 'Purchase Order Creation',
+    shortcuts: [
+      { keys: ['Ctrl', 'F'], description: 'Focus search bar', category: 'navigation' },
+      { keys: ['Ctrl', 'K'], description: 'Focus search (alternative)', category: 'navigation' },
+      { keys: ['Esc'], description: 'Clear search / Close modals', category: 'navigation' },
+      { keys: ['Ctrl', 'S'], description: 'Save as Draft', category: 'actions' },
+      { keys: ['Ctrl', 'Enter'], description: 'Create Purchase Order', category: 'actions' },
+      { keys: ['Ctrl', 'Shift', 'S'], description: 'Open Supplier Selector', category: 'actions' },
+      { keys: ['Ctrl', 'Shift', 'P'], description: 'Add New Product', category: 'actions' },
+      { keys: ['Ctrl', 'B'], description: 'Toggle Barcode Scanner', category: 'actions' },
+      { keys: ['Ctrl', 'I'], description: 'Bulk Import from CSV', category: 'actions' },
+      { keys: ['Ctrl', 'E'], description: 'Export to Excel', category: 'actions' },
+      { keys: ['Ctrl', 'Shift', 'C'], description: 'Clear Cart', category: 'cart' },
+      { keys: ['+'], description: 'Increase quantity (in cart)', category: 'cart' },
+      { keys: ['-'], description: 'Decrease quantity (in cart)', category: 'cart' },
+      { keys: ['?'], description: 'Show this help', category: 'modals' },
+    ]
+  },
+  '/customers': {
+    pageName: 'Customers',
+    shortcuts: [
+      { keys: ['Ctrl', 'K'], description: 'Focus search bar', category: 'navigation' },
+      { keys: ['Ctrl', 'F'], description: 'Focus search (alternative)', category: 'navigation' },
+      { keys: ['Esc'], description: 'Clear search / Close modals', category: 'navigation' },
+      { keys: ['Ctrl', 'N'], description: 'Add New Customer', category: 'actions' },
+      { keys: ['Ctrl', 'E'], description: 'Export to CSV', category: 'actions' },
+      { keys: ['Ctrl', 'I'], description: 'Import from Excel', category: 'actions' },
+      { keys: ['?'], description: 'Show this help', category: 'modals' },
+    ]
+  },
+  '/lats/unified-inventory': {
+    pageName: 'Inventory Management',
+    shortcuts: [
+      { keys: ['Ctrl', 'K'], description: 'Focus search bar', category: 'navigation' },
+      { keys: ['Ctrl', 'F'], description: 'Focus search (alternative)', category: 'navigation' },
+      { keys: ['Esc'], description: 'Clear search / Close modals', category: 'navigation' },
+      { keys: ['Ctrl', 'N'], description: 'Add New Product', category: 'actions' },
+      { keys: ['Ctrl', 'E'], description: 'Export to Excel', category: 'actions' },
+      { keys: ['?'], description: 'Show this help', category: 'modals' },
+    ]
+  }
+};
+
+const GLOBAL_SHORTCUTS: Shortcut[] = [
   {
     keys: ['Ctrl', 'K'],
     description: 'Open Global Search',
-    action: 'Search anywhere in the app'
   },
   {
     keys: ['Ctrl', 'Shift', 'O'],
     description: 'Create Purchase Order',
-    action: 'Quick access to PO creation'
   }
 ];
 
 /**
- * Floating help button that shows global keyboard shortcuts
+ * Floating help button that shows keyboard shortcuts based on current page
  */
 const GlobalKeyboardShortcutsHelp: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
+
+  // Get shortcuts for current page
+  const currentPageShortcuts = useMemo(() => {
+    const currentPath = location.pathname;
+    
+    // Try exact match first
+    if (PAGE_SHORTCUTS_MAP[currentPath]) {
+      return PAGE_SHORTCUTS_MAP[currentPath];
+    }
+    
+    // Try partial matches for nested routes
+    for (const [path, shortcuts] of Object.entries(PAGE_SHORTCUTS_MAP)) {
+      if (currentPath.startsWith(path)) {
+        return shortcuts;
+      }
+    }
+    
+    // Default to global shortcuts if no page-specific shortcuts found
+    return {
+      pageName: 'Global Shortcuts',
+      shortcuts: GLOBAL_SHORTCUTS
+    };
+  }, [location.pathname]);
+
+  // Group shortcuts by category if they have categories
+  const shortcutsByCategory = useMemo(() => {
+    const grouped: Record<string, Shortcut[]> = {};
+    const uncategorized: Shortcut[] = [];
+    
+    currentPageShortcuts.shortcuts.forEach(shortcut => {
+      if (shortcut.category) {
+        if (!grouped[shortcut.category]) {
+          grouped[shortcut.category] = [];
+        }
+        grouped[shortcut.category].push(shortcut);
+      } else {
+        uncategorized.push(shortcut);
+      }
+    });
+    
+    return { grouped, uncategorized };
+  }, [currentPageShortcuts]);
+
+  const categoryLabels: Record<string, string> = {
+    navigation: 'Navigation',
+    actions: 'Actions',
+    cart: 'Cart Management',
+    modals: 'Modals'
+  };
+
+  const categoryIcons: Record<string, React.ReactNode> = {
+    navigation: <Command className="w-3.5 h-3.5" />,
+    actions: <Zap className="w-3.5 h-3.5" />,
+    cart: <Keyboard className="w-3.5 h-3.5" />,
+    modals: <Keyboard className="w-3.5 h-3.5" />,
+  };
+
+  const categoryColors: Record<string, { bg: string; border: string; text: string }> = {
+    navigation: {
+      bg: 'bg-blue-50 dark:bg-blue-950/30',
+      border: 'border-blue-200 dark:border-blue-800',
+      text: 'text-blue-700 dark:text-blue-300'
+    },
+    actions: {
+      bg: 'bg-purple-50 dark:bg-purple-950/30',
+      border: 'border-purple-200 dark:border-purple-800',
+      text: 'text-purple-700 dark:text-purple-300'
+    },
+    cart: {
+      bg: 'bg-orange-50 dark:bg-orange-950/30',
+      border: 'border-orange-200 dark:border-orange-800',
+      text: 'text-orange-700 dark:text-orange-300'
+    },
+    modals: {
+      bg: 'bg-green-50 dark:bg-green-950/30',
+      border: 'border-green-200 dark:border-green-800',
+      text: 'text-green-700 dark:text-green-300'
+    }
+  };
 
   return (
     <>
-      {/* Floating Help Button */}
+      {/* Modern Floating Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-full shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 flex items-center justify-center group"
-        title="Keyboard Shortcuts (Global)"
+        className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-700 dark:to-slate-600 text-white rounded-2xl shadow-2xl hover:shadow-slate-900/50 hover:scale-105 transition-all duration-300 flex items-center justify-center group border border-slate-700/50"
+        title={`Keyboard Shortcuts - ${currentPageShortcuts.pageName}`}
       >
-        <Keyboard className="w-6 h-6 group-hover:scale-110 transition-transform" />
-        <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>
+        <Keyboard className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+        <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900 dark:border-slate-700 shadow-lg" />
       </button>
 
-      {/* Modal */}
+      {/* Modern Modal */}
       {isOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setIsOpen(false)}
+        >
+          <div 
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6">
+            <div className="relative bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 px-6 py-5 border-b border-slate-700/50">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                    <Zap className="w-7 h-7 text-white" />
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <Keyboard className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold text-white">Global Keyboard Shortcuts</h2>
-                    <p className="text-blue-100 text-sm">Work faster from anywhere in the app</p>
+                    <h2 className="text-2xl font-bold text-white mb-0.5">
+                      {currentPageShortcuts.pageName}
+                    </h2>
+                    <p className="text-sm text-slate-300">Keyboard shortcuts for this page</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="w-10 h-10 flex items-center justify-center bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors"
+                  className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="space-y-4">
-                {GLOBAL_SHORTCUTS.map((shortcut, index) => (
-                  <div
-                    key={index}
-                    className="p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border-2 border-blue-100 hover:border-blue-300 transition-all"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 mb-1">{shortcut.description}</h3>
-                        <p className="text-sm text-gray-600">{shortcut.action}</p>
+            {/* Content Area */}
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
+              <div className="space-y-6">
+                {/* Render categorized shortcuts */}
+                {Object.keys(shortcutsByCategory.grouped).length > 0 && (
+                  Object.entries(shortcutsByCategory.grouped).map(([category, shortcuts]) => {
+                    const colors = categoryColors[category] || categoryColors.navigation;
+                    return (
+                      <div key={category} className="space-y-3">
+                        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border ${colors.bg} ${colors.border} ${colors.text}`}>
+                          {categoryIcons[category]}
+                          <h3 className="text-sm font-bold uppercase tracking-wide">
+                            {categoryLabels[category] || category}
+                          </h3>
+                        </div>
+                        <div className="grid gap-2">
+                          {shortcuts.map((shortcut, index) => (
+                            <div
+                              key={index}
+                              className="group flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md transition-all duration-200"
+                            >
+                              <span className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white">
+                                {shortcut.description}
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                {shortcut.keys.map((key, keyIndex) => (
+                                  <React.Fragment key={keyIndex}>
+                                    {keyIndex > 0 && (
+                                      <span className="text-slate-400 dark:text-slate-500 text-xs font-medium mx-1">+</span>
+                                    )}
+                                    <kbd className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm min-w-[2.5rem] text-center">
+                                      {key}
+                                    </kbd>
+                                  </React.Fragment>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        {shortcut.keys.map((key, keyIndex) => (
-                          <React.Fragment key={keyIndex}>
-                            {keyIndex > 0 && (
-                              <span className="text-gray-400 text-sm mx-1">+</span>
-                            )}
-                            <kbd className="px-3 py-2 bg-white border-2 border-gray-300 rounded-lg text-sm font-bold text-gray-700 shadow-md min-w-[50px] text-center">
-                              {key}
-                            </kbd>
-                          </React.Fragment>
-                        ))}
-                      </div>
+                    );
+                  })
+                )}
+
+                {/* Render uncategorized shortcuts */}
+                {shortcutsByCategory.uncategorized.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300">
+                      <Command className="w-3.5 h-3.5" />
+                      <h3 className="text-sm font-bold uppercase tracking-wide">
+                        General
+                      </h3>
+                    </div>
+                    <div className="grid gap-2">
+                      {shortcutsByCategory.uncategorized.map((shortcut, index) => (
+                        <div
+                          key={index}
+                          className="group flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md transition-all duration-200"
+                        >
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white">
+                            {shortcut.description}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {shortcut.keys.map((key, keyIndex) => (
+                              <React.Fragment key={keyIndex}>
+                                {keyIndex > 0 && (
+                                  <span className="text-slate-400 dark:text-slate-500 text-xs font-medium mx-1">+</span>
+                                )}
+                                <kbd className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm min-w-[2.5rem] text-center">
+                                  {key}
+                                </kbd>
+                              </React.Fragment>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
-              </div>
-
-              {/* Additional Info */}
-              <div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Zap className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-green-900 mb-1">💡 Pro Tip</h4>
-                    <p className="text-sm text-green-800">
-                      These shortcuts work from <strong>anywhere</strong> in the application. 
-                      No need to navigate through menus - just press the keys!
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Page-Specific Shortcuts Note */}
-              <div className="mt-4 p-4 bg-amber-50 border-2 border-amber-200 rounded-xl">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Keyboard className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-amber-900 mb-1">📄 Page-Specific Shortcuts</h4>
-                    <p className="text-sm text-amber-800">
-                      Many pages have their own shortcuts too! Look for the <kbd className="px-1.5 py-0.5 bg-white border border-amber-300 rounded text-xs font-bold">?</kbd> button 
-                      or press <kbd className="px-1.5 py-0.5 bg-white border border-amber-300 rounded text-xs font-bold">?</kbd> on the Purchase Order page for more shortcuts.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-6 bg-gray-50 border-t border-gray-200">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-600">
-                  More shortcuts coming soon! 🚀
-                </p>
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                >
-                  Got it!
-                </button>
+                )}
               </div>
             </div>
           </div>

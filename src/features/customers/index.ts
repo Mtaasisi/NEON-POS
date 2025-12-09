@@ -1,7 +1,7 @@
 // Customers Feature Module
 export * from './pages/CustomersPage';
 export * from './pages/CustomerDetailPage';
-export * from './pages/CustomerDataUpdatePage';
+export * from './pages/CustomerImportExportPage';
 export * from './pages/CustomerCareDiagnosticsPage';
 
 export * from './components/CustomerFilters';

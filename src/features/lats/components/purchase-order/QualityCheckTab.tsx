@@ -80,11 +80,11 @@ const QualityCheckTab: React.FC<QualityCheckTabProps> = ({ purchaseOrderId }) =>
         .from('inventory_items')
         .select(`
           *,
-          product:product_id (
+          product!product_id (
             name,
             sku
           ),
-          variant:variant_id (
+          variant!variant_id (
             name,
             sku
           )

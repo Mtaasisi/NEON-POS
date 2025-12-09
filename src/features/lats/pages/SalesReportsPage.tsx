@@ -1,11 +1,10 @@
 // SalesReportsPage component for LATS module - Enhanced for Customer Care
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassButton from '../../shared/components/ui/GlassButton';
-import PageHeader from '../components/ui/PageHeader';
+import { BackButton } from '../../shared/components/ui/BackButton';
 import SaleDetailsModal from '../components/modals/SaleDetailsModal';
 import DailyClosingModal from '../components/modals/DailyClosingModal';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { supabase } from '../../../lib/supabaseClient';
 import { 
   Eye, 
@@ -1119,63 +1118,55 @@ const SalesReportsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'transparent' }}>
-      {/* Modern Header */}
-      <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Wrapper Container - Single rounded container */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section */}
+        <div className="p-8 border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                  Sales Reports
-                </h1>
-                <p className="text-gray-600 mt-1">Monitor and manage daily sales performance</p>
+            <div className="flex items-center gap-6">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <BarChart3 className="w-8 h-8 text-white" />
               </div>
               
-              {/* Back to POS shortcut hint */}
-              <button
-                onClick={() => navigate('/pos')}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-sm hover:shadow-md group"
-                title="Go back to POS (Press ESC or Ctrl+P)"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                <span className="font-medium">Back to POS</span>
-                <div className="ml-1 px-2 py-0.5 bg-white/20 rounded text-xs font-mono">
-                  ESC
+              {/* Text */}
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Sales Reports</h1>
+                <p className="text-sm text-gray-600">
+                  Monitor and manage daily sales performance
+                </p>
                 </div>
-              </button>
             </div>
+
             <div className="flex items-center gap-3">
-              <div className={`px-4 py-2 rounded-full text-sm font-medium ${
+              <div className={`px-4 py-2 rounded-full text-sm font-semibold border-2 ${
                 isDailyClosed 
-                  ? 'bg-green-100 text-green-800 border border-green-200' 
-                  : 'bg-orange-100 text-orange-800 border border-orange-200'
+                  ? 'bg-green-50 text-green-800 border-green-200' 
+                  : 'bg-orange-50 text-orange-800 border-orange-200'
               }`}>
                 {isDailyClosed ? '🔒 Day Closed' : '🕐 Day Open'}
               </div>
+              <BackButton to="/pos" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Report Controls */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-sm mb-8">
-          <div className="p-6 border-b border-gray-200/50">
+        {/* Report Controls Section */}
+        <div className="p-6 pb-0 flex-shrink-0 border-b border-gray-100 bg-white">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
+            <div className="mb-6">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-                <BarChart3 className="w-6 h-6 text-indigo-600" />
+                <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <BarChart3 className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-gray-900">Report Controls</h3>
-                <p className="text-gray-600">Configure your sales report parameters</p>
+                  <h3 className="text-xl font-bold text-gray-900">Report Controls</h3>
+                  <p className="text-sm text-gray-600">Configure your sales report parameters</p>
               </div>
             </div>
           </div>
           
-          <div className="p-6">
+            <div>
             <div className="flex flex-col lg:flex-row items-start lg:items-end gap-4">
               {/* Left side - Filters */}
               <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1184,7 +1175,7 @@ const SalesReportsPage: React.FC = () => {
                   <select
                     value={selectedReport}
                     onChange={(e) => setSelectedReport(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-300 bg-white/80 backdrop-blur-sm transition-all duration-200 text-sm"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white transition-all duration-200 text-sm font-medium"
                   >
                     <option value="daily">📊 Daily Sales</option>
                     <option value="products">📦 Product Performance</option>
@@ -1203,7 +1194,7 @@ const SalesReportsPage: React.FC = () => {
                         setTimeout(() => fetchSales(), 100);
                       }
                     }}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-300 bg-white/80 backdrop-blur-sm transition-all duration-200 text-sm"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white transition-all duration-200 text-sm font-medium"
                   >
                     <option value="1d">📅 Today</option>
                     <option value="7d">📅 Last 7 Days</option>
@@ -1226,16 +1217,20 @@ const SalesReportsPage: React.FC = () => {
                 <button
                   onClick={fetchSales}
                   disabled={loading}
-                  className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 flex items-center gap-1.5 shadow-sm hover:shadow text-sm"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl disabled:opacity-50 text-sm"
                   title="Refresh Data"
                 >
-                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  {loading ? (
+                    <LoadingSpinner size="sm" color="white" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
                   <span className="hidden sm:inline">Refresh</span>
                 </button>
                 
                 <button
                   onClick={printDailyReport}
-                  className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow text-sm"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl text-sm"
                   title="Print Report"
                 >
                   <FileText className="w-4 h-4" />
@@ -1244,7 +1239,7 @@ const SalesReportsPage: React.FC = () => {
 
                 <button
                   onClick={exportDailyReport}
-                  className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow text-sm"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl text-sm"
                   title="Export to CSV"
                 >
                   <Download className="w-4 h-4" />
@@ -1255,7 +1250,7 @@ const SalesReportsPage: React.FC = () => {
                   <button
                     onClick={() => setShowDailyClosingModal(true)}
                     disabled={isClosing}
-                    className="px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-all duration-200 disabled:opacity-50 flex items-center gap-1.5 shadow-sm hover:shadow text-sm"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl disabled:opacity-50 text-sm"
                     title="Close Day"
                   >
                     <Lock className="w-4 h-4" />
@@ -1275,7 +1270,7 @@ const SalesReportsPage: React.FC = () => {
                     value={dateRange.start}
                     onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
                     onBlur={() => fetchSales()}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-300 bg-white/80 backdrop-blur-sm transition-all duration-200 text-sm"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white transition-all duration-200 text-sm font-medium"
                   />
                 </div>
 
@@ -1286,76 +1281,79 @@ const SalesReportsPage: React.FC = () => {
                     value={dateRange.end}
                     onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
                     onBlur={() => fetchSales()}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-300 bg-white/80 backdrop-blur-sm transition-all duration-200 text-sm"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white transition-all duration-200 text-sm font-medium"
                   />
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
 
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-6">
         {/* Summary Metrics - Only for Daily Sales */}
         {selectedReport === 'daily' && (
-        <div className={`grid grid-cols-1 md:grid-cols-2 ${canViewProfit ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-6 mb-8`}>
-          <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/50 shadow-sm hover:shadow-md transition-all duration-200">
+          <div className={`grid grid-cols-1 md:grid-cols-2 ${canViewProfit ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4 mb-6`}>
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-6 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Sales</p>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Total Sales</p>
                 <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryMetrics.totalSales)}</p>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-blue-600" />
+                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <DollarSign className="w-6 h-6 text-white" />
               </div>
             </div>
             <div className="mt-4 flex items-center text-sm">
               <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-              <span className="text-green-600 font-medium">Today's Performance</span>
+                <span className="text-green-600 font-semibold">Today's Performance</span>
             </div>
           </div>
 
-          <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/50 shadow-sm hover:shadow-md transition-all duration-200">
+            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-6 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Transactions</p>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Transactions</p>
                 <p className="text-2xl font-bold text-gray-900">{summaryMetrics.totalTransactions}</p>
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <CreditCard className="w-6 h-6 text-green-600" />
+                <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <CreditCard className="w-6 h-6 text-white" />
               </div>
             </div>
             <div className="mt-4 flex items-center text-sm">
-              <span className="text-gray-500">Avg: {formatMoney(summaryMetrics.averageOrder)}</span>
+                <span className="text-gray-600 font-medium">Avg: {formatMoney(summaryMetrics.averageOrder)}</span>
             </div>
           </div>
 
-          <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/50 shadow-sm hover:shadow-md transition-all duration-200">
+            <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-6 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Customers</p>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Customers</p>
                 <p className="text-2xl font-bold text-gray-900">{summaryMetrics.totalCustomers}</p>
               </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                <User className="w-6 h-6 text-purple-600" />
+                <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <User className="w-6 h-6 text-white" />
               </div>
             </div>
             <div className="mt-4 flex items-center text-sm">
-              <span className="text-gray-500">Unique customers</span>
+                <span className="text-gray-600 font-medium">Unique customers</span>
             </div>
           </div>
 
           {canViewProfit && (
-            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/50 shadow-sm hover:shadow-md transition-all duration-200">
+              <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-6 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Profit Margin</p>
+                    <p className="text-xs font-medium text-gray-600 mb-1">Profit Margin</p>
                   <p className="text-2xl font-bold text-gray-900">{summaryMetrics.profitMargin}%</p>
                 </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                  <BarChart3 className="w-6 h-6 text-orange-600" />
+                  <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                    <BarChart3 className="w-6 h-6 text-white" />
                 </div>
               </div>
               <div className="mt-4 flex items-center text-sm">
-                <span className="text-gray-500">Total: {formatMoney(summaryMetrics.totalProfit)}</span>
+                  <span className="text-gray-600 font-medium">Total: {formatMoney(summaryMetrics.totalProfit)}</span>
               </div>
             </div>
           )}
@@ -1364,9 +1362,9 @@ const SalesReportsPage: React.FC = () => {
 
         {/* Analytics Charts Section - Only for Daily Sales */}
         {selectedReport === 'daily' && sales.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Sales Trend Chart */}
-            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/50 shadow-sm">
+              <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">Sales Trend</h3>
@@ -1415,10 +1413,10 @@ const SalesReportsPage: React.FC = () => {
             </div>
 
             {/* Payment Methods Distribution */}
-            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/50 shadow-sm">
+              <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Payment Methods</h3>
+                    <h3 className="text-lg font-bold text-gray-900">Payment Methods</h3>
                   <p className="text-sm text-gray-600">Distribution by method</p>
                 </div>
                 <PieChartIcon className="w-5 h-5 text-green-600" />
@@ -1455,10 +1453,10 @@ const SalesReportsPage: React.FC = () => {
             </div>
 
             {/* Daily Activity */}
-            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/50 shadow-sm">
+              <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Daily Activity</h3>
+                    <h3 className="text-lg font-bold text-gray-900">Daily Activity</h3>
                   <p className="text-sm text-gray-600">Sales by day</p>
                 </div>
                 <BarChart3 className="w-5 h-5 text-purple-600" />
@@ -1493,10 +1491,10 @@ const SalesReportsPage: React.FC = () => {
             </div>
 
             {/* Top Customers */}
-            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/50 shadow-sm">
+              <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Top Customers</h3>
+                    <h3 className="text-lg font-bold text-gray-900">Top Customers</h3>
                   <p className="text-sm text-gray-600">By total sales</p>
                 </div>
                 <User className="w-5 h-5 text-orange-600" />
@@ -1532,22 +1530,21 @@ const SalesReportsPage: React.FC = () => {
           </div>
         )}
 
-
         {/* Report Type Specific Views */}
         {selectedReport !== 'daily' && (
-          <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-sm mb-8">
-            <div className="p-6 border-b border-gray-200/50">
+            <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm mb-6">
+              <div className="mb-6">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-                  <TrendingUp className="w-6 h-6 text-indigo-600" />
+                  <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <TrendingUp className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900">
+                    <h3 className="text-xl font-bold text-gray-900">
                     {selectedReport === 'products' ? 'Product Performance' :
                      selectedReport === 'customers' ? 'Customer Analysis' :
                      selectedReport === 'payments' ? 'Payment Methods' : 'Report'}
                   </h3>
-                  <p className="text-gray-600">
+                    <p className="text-sm text-gray-600">
                     {selectedReport === 'products' ? 'Top performing products by sales' :
                      selectedReport === 'customers' ? 'Customer spending analysis' :
                      selectedReport === 'payments' ? 'Payment method breakdown' : 'Report data'}
@@ -1556,7 +1553,7 @@ const SalesReportsPage: React.FC = () => {
               </div>
             </div>
             
-            <div className="p-6">
+              <div>
 
           {(() => {
             const reportData = generateReportData();
@@ -1599,18 +1596,18 @@ const SalesReportsPage: React.FC = () => {
         )}
 
         {/* Sales List */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-sm">
-          <div className="p-6 border-b border-gray-200/50">
+      <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm">
+        <div className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center shadow-lg">
+                  <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
                   <CreditCard className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900">
+                    <h3 className="text-xl font-bold text-gray-900">
                     {selectedReport === 'daily' ? 'Sales Transactions' : 'Detailed Sales List'}
                   </h3>
-                  <p className="text-gray-600">
+                    <p className="text-sm text-gray-600">
                     {sales.length} transactions • {selectedPeriod === '1d' ? 'today' : 
                       selectedPeriod === '7d' ? 'last 7 days' :
                       selectedPeriod === '30d' ? 'last 30 days' :
@@ -1628,6 +1625,7 @@ const SalesReportsPage: React.FC = () => {
             </div>
           </div>
 
+        <div className="flex-1 overflow-y-auto px-6 py-6">
         {error ? (
           <div className="text-center py-8">
             <div className="text-red-500 text-lg mb-2">⚠️</div>
@@ -1672,7 +1670,7 @@ const SalesReportsPage: React.FC = () => {
                 <div
                   key={sale.id}
                   onClick={() => handleSaleClick(sale)}
-                  className="group bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-xl p-6 hover:bg-gradient-to-r hover:from-blue-50/80 hover:to-indigo-50/80 transition-all duration-200 cursor-pointer hover:shadow-md hover:border-blue-200/50"
+                  className="group bg-white border-2 border-gray-200 rounded-2xl p-6 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 cursor-pointer hover:shadow-md hover:border-blue-300"
                 >
                   <div className="flex items-center justify-between">
                     {/* Left Section - Transaction Info */}
@@ -1778,7 +1776,8 @@ const SalesReportsPage: React.FC = () => {
         )}
         </div>
       </div>
-
+        </div>
+      </div>
 
       {/* Sale Details Modal */}
       {selectedSale && (
@@ -1806,8 +1805,8 @@ const SalesReportsPage: React.FC = () => {
 
         {/* Daily Closing Confirmation Modal */}
         {showCloseConfirm && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-xl max-w-md w-full p-6">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-2xl max-w-md w-full p-6">
               <div className="text-center">
                 <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-orange-100 mb-6">
                   <CheckCircle className="h-8 w-8 text-orange-600" />

@@ -3,8 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { useBranch } from '../../../context/BranchContext';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
-import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import { EmployeeForm, AttendanceModal, ImportEmployeesFromUsersModal } from '../components';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { 
   Users, User, UserPlus, Calendar, Clock, TrendingUp, Award, 
   Plus, Edit, Trash2, CheckCircle, AlertTriangle, Filter,
@@ -363,24 +363,35 @@ const EmployeeManagementPage: React.FC = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Wrapper Container - Single rounded container */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section */}
+        <div className="p-8 border-b border-gray-200 flex-shrink-0">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <BackButton to="/dashboard" />
+            <div className="flex items-center gap-6">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <Users className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Employee Management</h1>
-            <p className="text-gray-600 mt-1">Manage your team, track attendance, and monitor performance</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Employee Management</h1>
+                <p className="text-sm text-gray-600">
+                  Manage your team, track attendance, and monitor performance
+                </p>
           </div>
         </div>
 
-        <div className="flex gap-2">
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-2">
           <button
             onClick={() => {
               setEditingEmployee(undefined);
               setShowCreateEmployee(true);
             }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl text-sm"
           >
             <Plus size={18} />
             New Employee
@@ -389,7 +400,7 @@ const EmployeeManagementPage: React.FC = () => {
           
           <button
             onClick={() => setShowImportFromUsers(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors text-sm"
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl text-sm"
             title="Import employees from existing users"
           >
             <UserPlus size={18} />
@@ -398,7 +409,7 @@ const EmployeeManagementPage: React.FC = () => {
           
           <button
             onClick={() => setShowAttendanceModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 transition-colors text-sm"
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl text-sm"
           >
             <Clock size={18} />
             <span className="hidden sm:inline">Attendance</span>
@@ -406,54 +417,65 @@ const EmployeeManagementPage: React.FC = () => {
           
           <button
             onClick={() => handleExportSelected()}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm"
+                className="flex items-center gap-2 px-4 py-2.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 rounded-xl font-semibold transition-all text-sm"
           >
             <Download size={18} />
             <span className="hidden sm:inline">Export</span>
           </button>
+            </div>
         </div>
       </div>
 
+        {/* Main Container - Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-6">
       {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-blue-50 rounded-lg p-5 hover:bg-blue-100 transition-colors">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <Users className="w-7 h-7 text-blue-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+                  <Users className="w-6 h-6 text-white" />
+                </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">Total Employees</p>
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Total Employees</p>
               <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
               <p className="text-xs text-gray-500 mt-1">{stats.active} active</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-green-50 rounded-lg p-5 hover:bg-green-100 transition-colors">
+            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <CheckCircle className="w-7 h-7 text-green-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-white" />
+                </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">Present Today</p>
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Present Today</p>
               <p className="text-2xl font-bold text-gray-900">{stats.todayPresent}</p>
               <p className="text-xs text-gray-500 mt-1">{stats.avgAttendance.toFixed(1)}% avg</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-purple-50 rounded-lg p-5 hover:bg-purple-100 transition-colors">
+            <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <Star className="w-7 h-7 text-purple-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
+                  <Star className="w-6 h-6 text-white" />
+                </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">Avg Performance</p>
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Avg Performance</p>
               <p className="text-2xl font-bold text-gray-900">{stats.avgPerformance.toFixed(1)}</p>
               <p className="text-xs text-gray-500 mt-1">out of 5.0</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-orange-50 rounded-lg p-5 hover:bg-orange-100 transition-colors">
+            <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <User className="w-7 h-7 text-orange-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center">
+                  <User className="w-6 h-6 text-white" />
+                </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">System Access</p>
+                  <p className="text-xs font-semibold text-gray-600 mb-1">System Access</p>
               <p className="text-2xl font-bold text-gray-900">{stats.withUserAccounts}</p>
               <p className="text-xs text-gray-500 mt-1">{stats.departments} depts, {branches.length} branches</p>
             </div>
@@ -462,7 +484,7 @@ const EmployeeManagementPage: React.FC = () => {
       </div>
 
       {/* Filters & Search */}
-      <GlassCard className="p-4">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm mb-6">
         <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
           {/* Search Bar */}
           <div className="relative flex-1 w-full lg:w-auto lg:min-w-[350px]">
@@ -472,7 +494,7 @@ const EmployeeManagementPage: React.FC = () => {
               placeholder="Search by name, position, department, email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
             />
             {searchQuery && (
               <button
@@ -579,10 +601,10 @@ const EmployeeManagementPage: React.FC = () => {
             </div>
           </div>
         )}
-      </GlassCard>
+          </div>
 
       {/* Employees List */}
-      <GlassCard className="overflow-hidden">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm overflow-hidden mb-6">
         {filteredEmployees.length === 0 ? (
           <div className="text-center py-12">
             <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -782,12 +804,12 @@ const EmployeeManagementPage: React.FC = () => {
             </div>
           </div>
         )}
-      </GlassCard>
+          </div>
 
       {/* Quick Stats by Department */}
       {filteredEmployees.length > 0 && (
-        <GlassCard className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Department Overview</h3>
+            <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Department Overview</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {departments.map(dept => {
               const deptEmployees = filteredEmployees.filter(e => e.department === dept);
@@ -816,8 +838,10 @@ const EmployeeManagementPage: React.FC = () => {
               );
             })}
           </div>
-        </GlassCard>
+            </div>
       )}
+        </div>
+      </div>
 
       {/* Modals */}
       <EmployeeForm

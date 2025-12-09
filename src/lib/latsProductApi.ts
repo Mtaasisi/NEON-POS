@@ -737,7 +737,7 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
     if (currentBranchId) {
       const { data: settings, error: branchError } = await supabase
         .from('store_locations')
-        .select('id, name, data_isolation_mode, share_products')
+        .select('id, name, data_isolation_mode, share_products, share_inventory')
         .eq('id', currentBranchId)
         .single();
       
@@ -979,7 +979,18 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
     } else if (currentBranchIdForVariants) {
       // Default: apply branch filter (safety fallback)
       variantQuery = variantQuery.eq('branch_id', currentBranchIdForVariants);
+      console.log(`🔒 [getProducts] Default branch filter applied - Only showing variants from branch ${currentBranchIdForVariants}`);
     }
+    
+    // 🔍 DIAGNOSTIC: Log query details before execution
+    console.log(`🔍 [getProducts] Variants query filters:`, {
+      productIdsCount: productIds.length,
+      currentBranchId: currentBranchIdForVariants,
+      branchSettings: branchSettings ? {
+        data_isolation_mode: branchSettings.data_isolation_mode,
+        share_inventory: branchSettings.share_inventory
+      } : 'not loaded'
+    });
     
     // Build images query
     const imagesQuery = productIds.length > 0
@@ -1006,6 +1017,12 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
     }
     if (variantsResult.error) {
       console.error('❌ Error fetching variants:', variantsResult.error);
+      console.error('❌ Variants query error details:', {
+        message: variantsResult.error.message,
+        details: variantsResult.error.details,
+        hint: variantsResult.error.hint,
+        code: variantsResult.error.code
+      });
     }
     if (imagesResult.error) {
       console.error('❌ Error fetching images:', imagesResult.error);
@@ -1048,6 +1065,57 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
     } else {
       console.warn('⚠️ [getProducts] No variants fetched! This might indicate a problem with the variants query.');
       console.warn('⚠️ [getProducts] Product IDs that should have variants:', productIds.slice(0, 10));
+      
+      // 🔍 DIAGNOSTIC: Check what variants actually exist in DB (without branch filtering)
+      if (productIds.length > 0) {
+        try {
+          const { data: allVariantsInDb, error: diagnosticError } = await supabase
+            .from('lats_product_variants')
+            .select('id, product_id, name, variant_name, branch_id, is_shared, is_active, parent_variant_id')
+            .in('product_id', productIds.slice(0, 10))
+            .eq('is_active', true);
+          
+          if (diagnosticError) {
+            console.error('❌ [getProducts] Diagnostic query error:', diagnosticError);
+          } else if (allVariantsInDb && allVariantsInDb.length > 0) {
+            console.log(`🔍 [getProducts] DIAGNOSTIC: Found ${allVariantsInDb.length} variants in DB for these products (ignoring branch filter)`);
+            console.log(`🔍 [getProducts] Variant branch_ids:`, {
+              withBranchId: allVariantsInDb.filter(v => v.branch_id).length,
+              withNullBranchId: allVariantsInDb.filter(v => !v.branch_id).length,
+              isShared: allVariantsInDb.filter(v => v.is_shared).length,
+              withParent: allVariantsInDb.filter(v => v.parent_variant_id).length,
+              withoutParent: allVariantsInDb.filter(v => !v.parent_variant_id).length
+            });
+            
+            // Show sample variants
+            const sampleVariants = allVariantsInDb.slice(0, 5);
+            console.log(`🔍 [getProducts] Sample variants from DB:`, sampleVariants.map(v => ({
+              id: v.id,
+              product_id: v.product_id,
+              name: v.variant_name || v.name,
+              branch_id: v.branch_id,
+              is_shared: v.is_shared,
+              parent_variant_id: v.parent_variant_id
+            })));
+            
+            // Check current branch settings
+            const currentBranchIdForVariants = localStorage.getItem('current_branch_id');
+            if (currentBranchIdForVariants) {
+              const { getBranchSettings } = await import('./branchAwareApi');
+              const branchSettings = await getBranchSettings(currentBranchIdForVariants);
+              console.log(`🔍 [getProducts] Current branch settings:`, {
+                branchId: currentBranchIdForVariants,
+                data_isolation_mode: branchSettings?.data_isolation_mode,
+                share_inventory: branchSettings?.share_inventory
+              });
+            }
+          } else {
+            console.warn('⚠️ [getProducts] DIAGNOSTIC: No variants found in DB at all for these products (even without branch filter)');
+          }
+        } catch (diagErr) {
+          console.error('❌ [getProducts] Error running diagnostic query:', diagErr);
+        }
+      }
     }
     
     // Create lookup maps

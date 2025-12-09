@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Upload, Download, AlertCircle, CheckCircle, UserPlus, FileText, Info, Shield, SkipForward, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { Customer } from '../../../types';
 import { toast } from 'react-hot-toast';
@@ -6,6 +7,7 @@ import { updateCustomerInDb, fetchAllCustomersSimple } from '../../../lib/custom
 import { useAuth } from '../../../context/AuthContext';
 import { formatTanzaniaPhoneNumber, formatTanzaniaWhatsAppNumber } from '../../../lib/phoneUtils';
 import { supabase } from '../../../lib/supabaseClient';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 interface CustomerUpdateImportModalProps {
   isOpen: boolean;
@@ -700,59 +702,77 @@ Jane Smith,jane@example.com,+255987654321,female,Arusha,+255987654321,Another cu
     return () => window.removeEventListener('resize', checkSidebarState);
   }, []);
 
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
+
+  // Additional scroll prevention for html element
+  useEffect(() => {
+    if (isOpen) {
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      document.documentElement.style.overflow = 'hidden';
+      
+      return () => {
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
+    }
+  }, [isOpen]);
+
   // Early return to prevent unnecessary renders
   if (!isOpen) {
     return null;
   }
 
-  return (
+  return createPortal(
     <>
-      {/* Backdrop - respects sidebar and topbar */}
       <div 
-        className="fixed bg-black/50"
+        className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]" 
+        style={{
+          top: 0, 
+          left: 0, 
+          right: 0,
+          bottom: 0,
+          overflow: 'hidden',
+          overscrollBehavior: 'none'
+        }}
+        role="dialog" 
+        aria-modal="true" 
+        aria-labelledby="customer-update-import-title"
         onClick={onClose}
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 35
-        }}
-      />
-      
-      {/* Modal Container */}
-      <div 
-        className="fixed flex items-center justify-center p-4"
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 50,
-          pointerEvents: 'none'
-        }}
       >
-      <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <RefreshCw className="w-5 h-5 text-blue-600" />
+        <div 
+          className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] flex flex-col overflow-hidden relative"
+          style={{ pointerEvents: 'auto' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Close Button */}
+            <button
+            type="button"
+            onClick={onClose}
+            disabled={isImporting}
+            className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50 disabled:opacity-50"
+            >
+            <X className="w-5 h-5" />
+            </button>
+
+          {/* Icon Header - Fixed */}
+          <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+            <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <RefreshCw className="w-8 h-8 text-white" />
               </div>
+              
+              {/* Text */}
               <div>
-                <h3 className="text-xl font-bold text-gray-900">Update Customers from CSV</h3>
-                <p className="text-xs text-gray-500">Update existing customer records with new data</p>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2" id="customer-update-import-title">
+                  Update Customers from CSV
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Update existing customer records with new data
+                </p>
               </div>
             </div>
-            <button
-              onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
           </div>
-        </div>
 
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
@@ -1061,9 +1081,10 @@ Jane Smith,jane@example.com,+255987654321,female,Arusha,+255987654321,Another cu
             </div>
           </div>
         </div>
+        </div>
       </div>
-      </div>
-    </>
+    </>,
+    document.body
   );
 });
 

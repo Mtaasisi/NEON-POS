@@ -1,21 +1,20 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../../context/AuthContext';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { PageErrorBoundary } from '../../shared/components/PageErrorBoundary';
 import { useErrorHandler } from '../../../hooks/useErrorHandler';
-import GlassButton from '../../shared/components/ui/GlassButton';
 import GlassSelect from '../../shared/components/ui/GlassSelect';
-import GlassBadge from '../../shared/components/ui/GlassBadge';
-import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassTabs from '../../shared/components/ui/GlassTabs';
 import SearchBar from '../../shared/components/ui/SearchBar';
 import { BackButton } from '../../shared/components/ui/BackButton';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { 
   CreditCard, RefreshCw, Download, Settings, ShoppingCart, Search, Filter, 
   Calendar, ChevronLeft, ChevronRight, CheckSquare, Square, MoreHorizontal,
   AlertTriangle, CheckCircle, Clock, XCircle, TrendingUp, TrendingDown, Eye,
   History, Copy, Printer, Share, Edit, Trash2, ArrowDownRight, X, User, Mail,
   Phone, Hash, DollarSign, Building2, FileText, CalendarDays, Banknote,
-  Wallet, Repeat, ArrowUpRight, ArrowRightLeft, List, LayoutGrid
+  Wallet, Repeat, ArrowUpRight, ArrowRightLeft, List, LayoutGrid, Plus
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
@@ -25,6 +24,7 @@ import PurchaseOrderPaymentDashboard from '../components/PurchaseOrderPaymentDas
 import PaymentAccountManagement from '../components/PaymentAccountManagement';
 import ExpenseManagement from '../components/ExpenseManagement';
 import RecurringExpenseManagement from '../components/RecurringExpenseManagement';
+import { financeAccountService } from '../../../lib/financeAccountService';
 import { PaymentTrackingService } from '../../lats/payments/PaymentTrackingService';
 import type { PaymentTransaction as PaymentHistoryTransaction } from '../../lats/payments/types';
 import { paymentTrackingService } from '../../../lib/paymentTrackingService';
@@ -34,7 +34,35 @@ import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 const EnhancedPaymentManagementPage: React.FC = () => {
   const { currentUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'providers' | 'purchase-orders' | 'history' | 'expenses' | 'recurring'>('providers');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  
+  // Initialize active tab from URL params or default to 'providers'
+  const getTabFromParams = () => {
+    const tab = searchParams.get('tab') || 'providers';
+    // Map old tab names to new ones
+    const tabMapping: Record<string, 'providers' | 'purchase-orders' | 'transactions'> = {
+      'history': 'transactions',
+      'expenses': 'transactions',
+      'recurring': 'transactions'
+    };
+    const mappedTab = tabMapping[tab] || tab;
+    if (mappedTab === 'providers' || mappedTab === 'purchase-orders' || mappedTab === 'transactions') {
+      return mappedTab;
+    }
+    return 'providers';
+  };
+
+  const [activeTab, setActiveTab] = useState<'providers' | 'purchase-orders' | 'transactions'>(getTabFromParams());
+  
+  // Update tab when URL changes
+  useEffect(() => {
+    const newTab = getTabFromParams();
+    if (newTab !== activeTab) {
+      setActiveTab(newTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // Error handling
@@ -50,9 +78,11 @@ const EnhancedPaymentManagementPage: React.FC = () => {
     setRefreshTrigger(prev => prev + 1);
   }, []);
 
-  // Payment History State
+  // Payment History and Expenses State
   const [historyTransactions, setHistoryTransactions] = useState<ComprehensivePaymentTransaction[]>([]);
+  const [expenses, setExpenses] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [expensesLoading, setExpensesLoading] = useState(false);
   const [historyFilter, setHistoryFilter] = useState({
     status: 'all',
     provider: 'all',
@@ -73,15 +103,13 @@ const EnhancedPaymentManagementPage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [historyViewMode, setHistoryViewMode] = useState<'timeline' | 'table'>('table');
   const [expandedHistoryTransaction, setExpandedHistoryTransaction] = useState<string | null>(null);
+  
+  // Expense modals state
+  const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
+  const [showRecurringExpenseModal, setShowRecurringExpenseModal] = useState(false);
 
   // Load payment history
-  useEffect(() => {
-    if (activeTab === 'history') {
-      loadPaymentHistory();
-    }
-  }, [activeTab, historyFilter]);
-
-  const loadPaymentHistory = async () => {
+  const loadPaymentHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
       console.log('📊 Loading comprehensive payment history from all sources...');
@@ -104,7 +132,6 @@ const EnhancedPaymentManagementPage: React.FC = () => {
       
       if (data && data.length > 0) {
         setHistoryTransactions(data);
-        toast.success(`Loaded ${data.length} transactions from all payment sources`);
       } else {
         setHistoryTransactions([]);
         console.warn('⚠️ No payment transactions found in database');
@@ -116,7 +143,79 @@ const EnhancedPaymentManagementPage: React.FC = () => {
     } finally {
       setHistoryLoading(false);
     }
-  };
+  }, []);
+
+  const loadExpenses = useCallback(async () => {
+    setExpensesLoading(true);
+    try {
+      console.log('📊 Loading expenses...');
+      
+      // Fetch expense transactions
+      const branchAccounts = await financeAccountService.getPaymentMethods();
+      const accountIdsForBranch = [...new Set(branchAccounts.map(a => a.id))];
+
+      if (accountIdsForBranch.length === 0) {
+        setExpenses([]);
+        setExpensesLoading(false);
+        return;
+      }
+
+      const { data: transactions, error } = await supabase
+        .from('account_transactions')
+        .select('*, finance_accounts!account_id(id, name, type, currency)')
+        .eq('transaction_type', 'expense')
+        .in('account_id', accountIdsForBranch)
+        .order('created_at', { ascending: false })
+        .limit(500);
+
+      if (error) throw error;
+
+      if (transactions && transactions.length > 0) {
+        // Convert expenses to transaction format for unified display
+        const expensesAsTransactions = transactions.map(expense => ({
+          id: expense.id,
+          transactionId: expense.reference_number || expense.id,
+          amount: Math.abs(expense.amount),
+          currency: expense.finance_accounts?.currency || 'TZS',
+          method: expense.metadata?.payment_method || 'Expense',
+          status: expense.metadata?.status || 'completed',
+          date: expense.created_at,
+          timestamp: expense.created_at,
+          source: 'expense',
+          customerName: expense.metadata?.vendor_name || expense.description || 'Expense',
+          reference: expense.reference_number || expense.id,
+          description: expense.description,
+          metadata: {
+            ...expense.metadata,
+            account_id: expense.account_id,
+            account_name: expense.finance_accounts?.name,
+            category: expense.metadata?.category
+          },
+          createdAt: expense.created_at
+        }));
+        
+        setExpenses(expensesAsTransactions);
+        console.log('📊 Loaded expenses:', expensesAsTransactions.length);
+      } else {
+        setExpenses([]);
+      }
+    } catch (error) {
+      console.error('❌ Error loading expenses:', error);
+      toast.error('Failed to load expenses');
+      setExpenses([]);
+    } finally {
+      setExpensesLoading(false);
+    }
+  }, []);
+
+  // Load payment history and expenses
+  useEffect(() => {
+    if (activeTab === 'transactions') {
+      loadPaymentHistory();
+      loadExpenses();
+    }
+  }, [activeTab, historyFilter, loadPaymentHistory, loadExpenses]);
+
 
   const getStatusBadgeVariant = (status: string) => {
     const normalizedStatus = status.toLowerCase();
@@ -181,7 +280,12 @@ const EnhancedPaymentManagementPage: React.FC = () => {
     }
   };
 
-  const filteredHistoryTransactions = historyTransactions
+  // Merge expenses with payment transactions
+  const allTransactions = useMemo(() => {
+    return [...historyTransactions, ...expenses];
+  }, [historyTransactions, expenses]);
+
+  const filteredTransactions = allTransactions
     .filter(transaction => {
       // Search query filter
       if (searchQuery) {
@@ -195,7 +299,10 @@ const EnhancedPaymentManagementPage: React.FC = () => {
           transaction.purchaseOrderNumber,
           transaction.status,
           transaction.source,
-          transaction.amount?.toString()
+          transaction.amount?.toString(),
+          transaction.description,
+          transaction.metadata?.category,
+          transaction.metadata?.vendor_name
         ].filter(Boolean).join(' ').toLowerCase();
         
         if (!searchableText.includes(query)) {
@@ -221,7 +328,7 @@ const EnhancedPaymentManagementPage: React.FC = () => {
         return false;
       }
       
-      // Source filter (POS, Device Payment, Purchase Order)
+      // Source filter (POS, Device Payment, Purchase Order, Expense)
       if (historyFilter.source !== 'all' && transaction.source !== historyFilter.source) {
         return false;
       }
@@ -230,8 +337,8 @@ const EnhancedPaymentManagementPage: React.FC = () => {
     })
     .sort((a, b) => {
       // Sort by date descending (most recent first)
-      const dateA = new Date(a.date || a.timestamp).getTime();
-      const dateB = new Date(b.date || b.timestamp).getTime();
+      const dateA = new Date(a.date || a.timestamp || a.createdAt).getTime();
+      const dateB = new Date(b.date || b.timestamp || b.createdAt).getTime();
       return dateB - dateA;
     });
 
@@ -451,12 +558,27 @@ Reference: ${transaction.reference || 'N/A'}`;
     }
   };
 
+  // Update URL when tab changes
+  const handleTabChange = useCallback((tabId: string) => {
+    const validTabs = ['providers', 'purchase-orders', 'transactions'];
+    if (validTabs.includes(tabId)) {
+      const newTab = tabId as 'providers' | 'purchase-orders' | 'transactions';
+      setActiveTab(newTab);
+      const newSearchParams = new URLSearchParams(searchParams);
+      newSearchParams.set('tab', newTab);
+      setSearchParams(newSearchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
   return (
     <PageErrorBoundary pageName="Payment Management" showDetails={true}>
-      <div className="p-6 flex justify-center">
-        <div className="w-full max-w-7xl">
-          {/* Header - Enhanced Modal Style */}
-          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-8 mb-6">
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+        {/* Combined Container - All sections in one */}
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+          {/* Fixed Header Section - Enhanced Modal Style */}
+          <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              {/* Left: Icon + Text */}
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
                 <Wallet className="w-8 h-8 text-white" />
@@ -465,11 +587,15 @@ Reference: ${transaction.reference || 'N/A'}`;
                 <h1 className="text-2xl font-bold text-gray-900 mb-1">Payment Management</h1>
                 <p className="text-sm text-gray-600">Manage payments, providers, and purchase orders</p>
               </div>
+              </div>
+
+              {/* Right: Back Button */}
+              <BackButton to="/dashboard" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
             </div>
           </div>
 
-        {/* Modern Tab Navigation */}
-        <div className="mb-6">
+          {/* Action Bar - Tab Navigation */}
+          <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
           <GlassTabs
             tabs={[
               {
@@ -483,30 +609,22 @@ Reference: ${transaction.reference || 'N/A'}`;
                 icon: <ShoppingCart size={20} />
               },
               {
-                id: 'history',
+                id: 'transactions',
                 label: 'Transactions',
                 icon: <History size={20} />
-              },
-              {
-                id: 'expenses',
-                label: 'Expenses',
-                icon: <TrendingDown size={20} />
-              },
-              {
-                id: 'recurring',
-                label: 'Recurring',
-                icon: <Repeat size={20} />
               }
             ]}
             activeTab={activeTab}
-            onTabChange={(tabId) => setActiveTab(tabId as 'providers' | 'purchase-orders' | 'history' | 'expenses' | 'recurring')}
+            onTabChange={handleTabChange}
             variant="modern"
             size="md"
           />
         </div>
 
+          {/* Main Content - Scrollable */}
+          <div className="flex-1 overflow-y-auto">
           {/* Tab Content */}
-          <div>
+            <div className="p-6">
             {activeTab === 'providers' && (
               <PaymentAccountManagement />
             )}
@@ -524,21 +642,43 @@ Reference: ${transaction.reference || 'N/A'}`;
                 }}
               />
             )}
-            {activeTab === 'expenses' && (
-              <ExpenseManagement />
-            )}
-            {activeTab === 'recurring' && (
-              <RecurringExpenseManagement />
-            )}
-            {activeTab === 'history' && (
-              <div>
-                <div className="mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Transactions</h2>
-                  <p className="text-gray-600">Track all payment transactions and their status</p>
+            {activeTab === 'transactions' && (
+              <div className="space-y-6">
+                {/* Action Buttons */}
+                <div className="flex gap-3 flex-wrap">
+                  <button
+                    onClick={() => setShowAddExpenseModal(true)}
+                    className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg hover:from-orange-600 hover:to-amber-700"
+                  >
+                    <Plus size={18} />
+                    <span>Add Expense</span>
+                  </button>
+                  <button
+                    onClick={() => setShowRecurringExpenseModal(true)}
+                    className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700"
+                  >
+                    <Repeat size={18} />
+                    <span>Recurring Expenses</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      loadPaymentHistory();
+                      loadExpenses();
+                    }}
+                    disabled={historyLoading || expensesLoading}
+                    className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 disabled:opacity-50 bg-white shadow-sm"
+                  >
+                    {(historyLoading || expensesLoading) ? (
+                      <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <RefreshCw size={18} />
+                    )}
+                    <span>Refresh</span>
+                  </button>
                 </div>
 
                 {/* Search and Filter Toggle */}
-                <GlassCard className="p-4 mb-4">
+                <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
                   <div className="flex flex-col sm:flex-row gap-3">
                     {/* Search Bar */}
                     <div className="flex-1 relative">
@@ -548,7 +688,7 @@ Reference: ${transaction.reference || 'N/A'}`;
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search by transaction ID, customer, amount, reference..."
-                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
+                        className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white text-sm font-medium"
                       />
                       {searchQuery && (
                         <button
@@ -563,26 +703,26 @@ Reference: ${transaction.reference || 'N/A'}`;
                     {/* Filter Toggle Button */}
                     <button
                       onClick={() => setShowFilters(!showFilters)}
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 ${
+                      className={`flex items-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm transition-all duration-200 border-2 ${
                         showFilters
-                          ? 'bg-blue-500 text-white shadow-md'
-                          : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                          ? 'bg-blue-500 text-white border-blue-600 shadow-lg'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                       }`}
                     >
                       <Filter className="w-4 h-4" />
                       Filters
                       {(historyFilter.status !== 'all' || historyFilter.provider !== 'all' || historyFilter.source !== 'all' || historyFilter.dateRange !== '30') && (
-                        <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+                        <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs font-semibold">
                           Active
                         </span>
                       )}
                     </button>
                   </div>
-                </GlassCard>
+                </div>
 
                 {/* Filters - Collapsible */}
                 {showFilters && (
-                  <GlassCard className="p-5 mb-6">
+                  <div className="bg-white rounded-2xl border-2 border-gray-200 p-5 mb-6 shadow-sm">
                   <div className="space-y-4">
                     {/* Source Filter */}
                     <div className="flex flex-wrap items-center gap-3">
@@ -592,7 +732,8 @@ Reference: ${transaction.reference || 'N/A'}`;
                           { value: 'all', label: 'All' },
                           { value: 'pos_sale', label: 'POS Sales' },
                           { value: 'device_payment', label: 'Device Repairs' },
-                          { value: 'purchase_order', label: 'Purchase Orders' }
+                          { value: 'purchase_order', label: 'Purchase Orders' },
+                          { value: 'expense', label: 'Expenses' }
                         ].map(option => (
                           <button
                             key={option.value}
@@ -724,9 +865,9 @@ Reference: ${transaction.reference || 'N/A'}`;
                 )}
 
                 {/* Transactions List */}
-                <GlassCard className="p-6">
+                <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-semibold">Transactions ({filteredHistoryTransactions.length})</h3>
+                    <h3 className="text-xl font-bold">All Transactions ({filteredTransactions.length})</h3>
                     <div className="flex items-center gap-3">
                       {/* View Toggle */}
                       <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
@@ -755,33 +896,50 @@ Reference: ${transaction.reference || 'N/A'}`;
                           <span className="text-sm font-medium">Table</span>
                         </button>
                       </div>
-                      <GlassButton onClick={loadPaymentHistory} disabled={historyLoading}>
-                        {historyLoading ? 'Loading...' : 'Refresh'}
-                      </GlassButton>
+                      <button
+                        onClick={() => {
+                          loadPaymentHistory();
+                          loadExpenses();
+                        }}
+                        disabled={historyLoading || expensesLoading}
+                        className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 disabled:opacity-50 bg-white shadow-sm"
+                      >
+                        {(historyLoading || expensesLoading) ? (
+                          <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <RefreshCw size={18} />
+                        )}
+                        <span>{(historyLoading || expensesLoading) ? 'Loading...' : 'Refresh'}</span>
+                      </button>
                     </div>
                   </div>
 
                   {historyLoading ? (
-                    <div className="text-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                      <p className="text-gray-600">Loading transactions...</p>
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <LoadingSpinner size="lg" color="blue" />
+                      <p className="mt-4 text-gray-600 font-medium">Loading transactions...</p>
                     </div>
-                  ) : filteredHistoryTransactions.length === 0 ? (
-                    <div className="text-center py-12">
-                      <div className="text-6xl mb-4">💳</div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No Transactions Found</h3>
-                      <p className="text-gray-600 mb-4">
-                        {historyTransactions.length === 0 
-                          ? 'No payment transactions have been recorded yet.'
+                  ) : filteredTransactions.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                        <CreditCard className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">No Transactions Found</h3>
+                      <p className="text-gray-600 mb-6">
+                        {allTransactions.length === 0 
+                          ? 'No transactions have been recorded yet.'
                           : 'No transactions match your current filters.'}
                       </p>
-                      {historyTransactions.length > 0 && (
-                        <GlassButton 
-                          onClick={() => setHistoryFilter({ status: 'all', provider: 'all', dateRange: '30', source: 'all' })}
-                          className="mt-4"
+                      {allTransactions.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setHistoryFilter({ status: 'all', provider: 'all', dateRange: '30', source: 'all' });
+                            setSearchQuery('');
+                          }}
+                          className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
                         >
-                          Clear Filters
-                        </GlassButton>
+                          <span>Clear Filters</span>
+                        </button>
                       )}
                     </div>
                   ) : historyViewMode === 'table' ? (
@@ -805,10 +963,10 @@ Reference: ${transaction.reference || 'N/A'}`;
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredHistoryTransactions.map((transaction, index) => {
+                          {filteredTransactions.map((transaction, index) => {
                             // Determine if it's income (incoming) or expense (outgoing)
                             const isIncome = transaction.source === 'pos_sale' || transaction.source === 'device_payment';
-                            const isExpense = transaction.source === 'purchase_order';
+                            const isExpense = transaction.source === 'purchase_order' || transaction.source === 'expense';
                             const isInstallment = transaction.method?.toLowerCase().includes('installment') || 
                                                  transaction.reference?.includes('INS-');
                             
@@ -854,10 +1012,12 @@ Reference: ${transaction.reference || 'N/A'}`;
                                 <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full font-medium ${
                                   transaction.source === 'pos_sale' ? 'bg-purple-100 text-purple-800' :
                                   transaction.source === 'device_payment' ? 'bg-green-100 text-green-800' :
+                                  transaction.source === 'expense' ? 'bg-red-100 text-red-800' :
                                   'bg-orange-100 text-orange-800'
                                 }`}>
                                   {transaction.source === 'pos_sale' ? '🛒 POS' :
                                    transaction.source === 'device_payment' ? '🔧 Repair' :
+                                   transaction.source === 'expense' ? '💰 Expense' :
                                    '📦 PO'}
                                 </span>
                               </td>
@@ -884,9 +1044,14 @@ Reference: ${transaction.reference || 'N/A'}`;
                                 </div>
                               </td>
                               <td className="py-3 px-4">
-                                <GlassBadge variant={getStatusBadgeVariant(transaction.status)} size="sm">
+                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                                  getStatusBadgeVariant(transaction.status) === 'success' ? 'bg-green-100 text-green-800' :
+                                  getStatusBadgeVariant(transaction.status) === 'error' ? 'bg-red-100 text-red-800' :
+                                  getStatusBadgeVariant(transaction.status) === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
                                   {normalizeStatus(transaction.status)}
-                                </GlassBadge>
+                                </span>
                               </td>
                               <td className="py-3 px-4">
                                 <div className="text-sm text-gray-600 font-mono">
@@ -902,9 +1067,9 @@ Reference: ${transaction.reference || 'N/A'}`;
                   ) : (
                     // Timeline View
                     <div className="space-y-3 pr-1">
-                      {filteredHistoryTransactions.map((transaction, index) => {
+                      {filteredTransactions.map((transaction, index) => {
                         const isIncome = transaction.source === 'pos_sale' || transaction.source === 'device_payment';
-                        const isExpense = transaction.source === 'purchase_order';
+                        const isExpense = transaction.source === 'purchase_order' || transaction.source === 'expense';
                         const isInstallment = transaction.method?.toLowerCase().includes('installment') || 
                                              transaction.reference?.includes('INS-');
                         const isExpanded = expandedHistoryTransaction === transaction.id;
@@ -976,10 +1141,12 @@ Reference: ${transaction.reference || 'N/A'}`;
                                     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase ${
                                       transaction.source === 'pos_sale' ? 'bg-purple-100 text-purple-800 border border-purple-200' :
                                       transaction.source === 'device_payment' ? 'bg-green-100 text-green-800 border border-green-200' :
+                                      transaction.source === 'expense' ? 'bg-red-100 text-red-800 border border-red-200' :
                                       'bg-orange-100 text-orange-800 border border-orange-200'
                                     }`}>
                                       {transaction.source === 'pos_sale' ? '🛒 POS' :
                                        transaction.source === 'device_payment' ? '🔧 Repair' :
+                                       transaction.source === 'expense' ? '💰 Expense' :
                                        '📦 PO'}
                                     </span>
                                     {isCompleted && (
@@ -1011,9 +1178,9 @@ Reference: ${transaction.reference || 'N/A'}`;
                             </div>
                             
                             {/* Connecting Line */}
-                            {index < filteredHistoryTransactions.length - 1 && (
+                            {index < filteredTransactions.length - 1 && (
                               <div className={`absolute left-7 top-full w-0.5 h-3 ${
-                                isIncome ? 'bg-green-300' : isExpense ? 'bg-red-300' : 'bg-gray-300'
+                                isIncome ? 'bg-green-300' : (isExpense || transaction.source === 'expense') ? 'bg-red-300' : 'bg-gray-300'
                               }`}></div>
                             )}
                           </div>
@@ -1021,10 +1188,14 @@ Reference: ${transaction.reference || 'N/A'}`;
                       })}
                     </div>
                   )}
-                </GlassCard>
+                </div>
               </div>
             )}
+            </div>
           </div>
+        </div>
+      </div>
+    </PageErrorBoundary>
 
         {/* Payment Detail Modal - Redesigned */}
         {selectedTransaction && (
@@ -1055,18 +1226,21 @@ Reference: ${transaction.reference || 'N/A'}`;
                 
                 {/* Status Badge in Header */}
                 <div className="relative mt-4">
-                  <GlassBadge variant={getStatusBadgeVariant(selectedTransaction.status)} size="lg">
-                    <span className="text-base font-semibold px-3 py-1 flex items-center gap-2">
-                      {selectedTransaction.status.toLowerCase() === 'success' || selectedTransaction.status.toLowerCase() === 'completed' ? (
-                        <CheckCircle className="w-4 h-4" />
-                      ) : selectedTransaction.status.toLowerCase() === 'pending' ? (
-                        <Clock className="w-4 h-4" />
-                      ) : (
-                        <XCircle className="w-4 h-4" />
-                      )}
-                      {normalizeStatus(selectedTransaction.status)}
-                    </span>
-                  </GlassBadge>
+                  <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-base font-semibold ${
+                    getStatusBadgeVariant(selectedTransaction.status) === 'success' ? 'bg-green-100 text-green-800' :
+                    getStatusBadgeVariant(selectedTransaction.status) === 'error' ? 'bg-red-100 text-red-800' :
+                    getStatusBadgeVariant(selectedTransaction.status) === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {selectedTransaction.status.toLowerCase() === 'success' || selectedTransaction.status.toLowerCase() === 'completed' ? (
+                      <CheckCircle className="w-4 h-4" />
+                    ) : selectedTransaction.status.toLowerCase() === 'pending' ? (
+                      <Clock className="w-4 h-4" />
+                    ) : (
+                      <XCircle className="w-4 h-4" />
+                    )}
+                    {normalizeStatus(selectedTransaction.status)}
+                  </span>
                 </div>
               </div>
 
@@ -1509,13 +1683,27 @@ Reference: ${transaction.reference || 'N/A'}`;
           onClose={() => setEditModalOpen(false)}
           title="Edit Transaction"
           footer={
-            <div className="flex justify-end gap-2">
-              <GlassButton variant="secondary" onClick={() => setEditModalOpen(false)}>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setEditModalOpen(false)}
+                className="px-4 py-2.5 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+              >
                 Cancel
-              </GlassButton>
-              <GlassButton onClick={handleSaveEdit} disabled={isProcessing}>
-                {isProcessing ? 'Saving...' : 'Save Changes'}
-              </GlassButton>
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={isProcessing}
+                className="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center gap-2"
+              >
+                {isProcessing ? (
+                  <>
+                    <LoadingSpinner size="sm" color="white" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Changes</span>
+                )}
+              </button>
             </div>
           }
         >
@@ -1592,7 +1780,68 @@ Reference: ${transaction.reference || 'N/A'}`;
           type="danger"
           loading={isProcessing}
         />
-        </div>
+
+        {/* Add Expense Modal */}
+        {showAddExpenseModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-orange-100 rounded-lg">
+                    <TrendingDown className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Expense Management</h3>
+                    <p className="text-sm text-gray-600">Track and manage business expenses</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowAddExpenseModal(false);
+                    loadExpenses(); // Refresh expenses when modal closes
+                  }}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6">
+                <ExpenseManagement />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Recurring Expenses Modal */}
+        {showRecurringExpenseModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Repeat className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Recurring Expenses</h3>
+                    <p className="text-sm text-gray-600">Manage automated recurring expenses</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowRecurringExpenseModal(false);
+                    loadExpenses(); // Refresh expenses when modal closes
+                  }}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6">
+                <RecurringExpenseManagement />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </PageErrorBoundary>
   );

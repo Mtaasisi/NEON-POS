@@ -3,15 +3,8 @@ import React, { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { LATS_CLASSES } from '../../../tokens';
-import GlassCard from '../../../shared/components/ui/GlassCard';
-import GlassInput from '../../../shared/components/ui/GlassInput';
-import GlassSelect from '../../../shared/components/ui/GlassSelect';
-import GlassButton from '../../../shared/components/ui/GlassButton';
-import GlassBadge from '../../../shared/components/ui/GlassBadge';
+import { Tag, X } from 'lucide-react';
 import EmojiPicker from '../../../shared/components/ui/EmojiPicker';
-import { t } from '../../lib/i18n/t';
-import { format } from '../../lib/format';
 
 // Validation schema
 const categoryFormSchema = z.object({
@@ -45,22 +38,29 @@ interface CategoryFormProps {
   category?: Category;
   parentCategories?: Category[];
   onSubmit: (data: CategoryFormData) => Promise<void>;
+  onDelete?: (categoryId: string) => Promise<void>;
   onCancel?: () => void;
   onClose?: () => void;
   loading?: boolean;
+  deleting?: boolean;
   className?: string;
+  renderActionsInModal?: boolean; // If true, don't render action buttons (modal will handle them)
 }
 
 const CategoryForm: React.FC<CategoryFormProps> = ({
   category,
   parentCategories = [],
   onSubmit,
+  onDelete,
   onCancel,
   onClose,
   loading = false,
-  className = ''
+  deleting = false,
+  className = '',
+  renderActionsInModal = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Form setup
   const {
@@ -118,12 +118,32 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     }
 
     if (isDirty) {
-      if (confirm(t('common.confirmDiscard'))) {
+      if (confirm('Are you sure you want to discard your changes?')) {
         reset();
         cancelHandler();
       }
     } else {
       cancelHandler();
+    }
+  };
+
+  // Handle delete
+  const handleDelete = async () => {
+    if (!category || !onDelete) return;
+
+    if (!showDeleteConfirm) {
+      setShowDeleteConfirm(true);
+      return;
+    }
+
+    try {
+      await onDelete(category.id);
+      setShowDeleteConfirm(false);
+      const cancelHandler = onCancel || onClose;
+      cancelHandler?.();
+    } catch (error) {
+      console.error('Category deletion error:', error);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -139,148 +159,209 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     { value: '#000000', label: 'Black', color: '#000000' }
   ];
 
-  // Icon options
-  const iconOptions = [
-    { value: 'box', label: 'Box' },
-    { value: 'package', label: 'Package' },
-    { value: 'cube', label: 'Cube' },
-    { value: 'tag', label: 'Tag' },
-    { value: 'folder', label: 'Folder' },
-    { value: 'star', label: 'Star' },
-    { value: 'heart', label: 'Heart' },
-    { value: 'bookmark', label: 'Bookmark' }
-  ];
-
   return (
-    <GlassCard className={`max-w-2xl mx-auto ${className}`}>
-      <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-lats-text">
-              {category ? t('common.edit') : t('common.add')} {t('common.category')}
-            </h2>
-            <p className="text-sm text-lats-text-secondary mt-1">
-              {category ? 'Update category information' : 'Create a new product category'}
-            </p>
-          </div>
-          <GlassBadge
-            variant={isActive ? 'success' : 'error'}
-            icon={
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d={isActive ? "M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" : "M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"} />
+    <form 
+      id="category-form"
+      onSubmit={handleSubmit(handleFormSubmit)} 
+      className={`space-y-6 ${className}`}
+    >
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && category && (
+        <div className="p-4 bg-red-50 border-2 border-red-200 rounded-xl">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0">
+              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
-            }
-          >
-            {isActive ? t('common.active') : t('common.inactive')}
-          </GlassBadge>
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-red-900 mb-1">Delete Category?</h4>
+              <p className="text-sm text-red-700 mb-3">
+                Are you sure you want to delete "{category.name}"? This action cannot be undone.
+                Products using this category will have their category set to null.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={loading || deleting}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {deleting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    'Yes, Delete'
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={loading || deleting}
+                  className="px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+      )}
 
-        {/* Basic Information */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-lats-text">Basic Information</h3>
-          
-          {/* Name */}
+      {/* Basic Information */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
+        
+        {/* Name */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Category Name <span className="text-red-500">*</span>
+          </label>
           <Controller
             name="name"
             control={control}
             render={({ field }) => (
-              <GlassInput
-                label={t('common.name')}
-                placeholder="Enter category name"
-                value={field.value}
-                onChange={field.onChange}
-                error={errors.name?.message}
-                required
-                maxLength={100}
-              />
+              <>
+                <input
+                  type="text"
+                  placeholder="Enter category name"
+                  value={field.value}
+                  onChange={field.onChange}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  maxLength={100}
+                />
+                {errors.name && (
+                  <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
+                )}
+              </>
             )}
           />
+        </div>
 
-          {/* Description */}
+        {/* Description */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Description <span className="text-gray-400 text-xs">(optional)</span>
+          </label>
           <Controller
             name="description"
             control={control}
             render={({ field }) => (
-              <GlassInput
-                label={t('common.description')}
-                placeholder="Enter category description (optional)"
-                value={field.value}
-                onChange={field.onChange}
-                error={errors.description?.message}
-                multiline
-                rows={3}
-                maxLength={500}
-                helperText={`${field.value?.length || 0}/500 characters`}
-              />
+              <>
+                <textarea
+                  placeholder="Enter category description"
+                  value={field.value || ''}
+                  onChange={field.onChange}
+                  rows={3}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors resize-none"
+                  maxLength={500}
+                />
+                <div className="flex items-center justify-between mt-1">
+                  {errors.description && (
+                    <p className="text-sm text-red-600">{errors.description.message}</p>
+                  )}
+                  <p className="text-xs text-gray-500 ml-auto">
+                    {field.value?.length || 0}/500 characters
+                  </p>
+                </div>
+              </>
             )}
           />
+        </div>
 
-          {/* Parent Category */}
-          {parentCategories.length > 0 && (
+        {/* Parent Category */}
+        {parentCategories.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Parent Category <span className="text-gray-400 text-xs">(optional)</span>
+            </label>
             <Controller
               name="parentId"
               control={control}
               render={({ field }) => (
-                <GlassSelect
-                  label="Parent Category"
-                  placeholder="Select parent category (optional)"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.parentId?.message}
-                  options={[
-                    { value: '', label: 'No parent (root category)' },
-                    ...parentCategories.map(cat => ({
-                      value: cat.id,
-                      label: cat.name
-                    }))
-                  ]}
-                  clearable
-                />
+                <>
+                  <select
+                    value={field.value || ''}
+                    onChange={field.onChange}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors bg-white"
+                  >
+                    <option value="">No parent (root category)</option>
+                    {parentCategories.map(cat => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.parentId && (
+                    <p className="mt-1 text-sm text-red-600">{errors.parentId.message}</p>
+                  )}
+                </>
               )}
             />
-          )}
-        </div>
+          </div>
+        )}
+      </div>
 
-        {/* Appearance */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-lats-text">Appearance</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Color */}
+      {/* Appearance */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900">Appearance</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Color */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Category Color
+            </label>
             <Controller
               name="color"
               control={control}
               render={({ field }) => (
-                <GlassSelect
-                  label="Category Color"
-                  placeholder="Select color"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.color?.message}
-                  options={colorOptions}
-
-                />
+                <>
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={field.value || '#3B82F6'}
+                      onChange={field.onChange}
+                      className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors bg-white"
+                    >
+                      {colorOptions.map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div
+                      className="w-12 h-12 rounded-lg border-2 border-gray-300"
+                      style={{ backgroundColor: field.value || '#3B82F6' }}
+                    />
+                  </div>
+                  {errors.color && (
+                    <p className="mt-1 text-sm text-red-600">{errors.color.message}</p>
+                  )}
+                </>
               )}
             />
+          </div>
 
-            {/* Icon */}
+          {/* Icon */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Category Icon
+            </label>
             <Controller
               name="icon"
               control={control}
               render={({ field }) => (
-                <div>
-                  <label className="block text-sm font-medium text-lats-text mb-2">
-                    Category Icon
-                  </label>
+                <>
                   <div className="flex items-center gap-3">
                     <div className="flex-1">
                       <input
                         type="text"
                         placeholder="Select an emoji icon"
-                        value={field.value}
+                        value={field.value || ''}
                         onChange={field.onChange}
-                        className="w-full py-3 px-4 bg-white/30 backdrop-blur-md border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                         maxLength={10}
                       />
                     </div>
@@ -289,7 +370,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                       trigger={
                         <button
                           type="button"
-                          className="p-3 bg-white/30 backdrop-blur-md border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                          className="px-4 py-3 border-2 border-gray-300 rounded-xl hover:bg-gray-50 transition-colors text-xl"
                         >
                           😊
                         </button>
@@ -299,73 +380,92 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                       <button
                         type="button"
                         onClick={() => field.onChange('')}
-                        className="p-3 bg-red-50 border-2 border-red-200 rounded-lg hover:bg-red-100 transition-colors text-red-600"
+                        className="px-4 py-3 bg-red-50 border-2 border-red-200 rounded-xl hover:bg-red-100 transition-colors text-red-600 font-medium"
                       >
                         Clear
                       </button>
                     )}
                   </div>
-                  {errors.icon?.message && (
+                  {field.value && (
+                    <p className="mt-2 text-sm text-gray-600">
+                      Preview: <span className="text-2xl">{field.value}</span>
+                    </p>
+                  )}
+                  {errors.icon && (
                     <p className="mt-1 text-sm text-red-600">{errors.icon.message}</p>
                   )}
-                  {field.value && (
-                    <p className="mt-1 text-sm text-gray-500">Preview: <span className="text-lg">{field.value}</span></p>
-                  )}
-                </div>
+                </>
               )}
             />
           </div>
         </div>
+      </div>
 
-        {/* Advanced Settings */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium text-lats-text">Advanced Settings</h3>
-            <GlassButton
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsExpanded(!isExpanded)}
-              icon={
-                <svg className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              }
+      {/* Advanced Settings */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900">Advanced Settings</h3>
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+          >
+            {isExpanded ? 'Hide' : 'Show'} Advanced
+            <svg 
+              className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
             >
-              {isExpanded ? 'Hide' : 'Show'} Advanced
-            </GlassButton>
-          </div>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
 
-          {isExpanded && (
-            <div className="space-y-4 p-4 bg-lats-surface/30 rounded-lats-radius-md border border-lats-glass-border">
-              {/* Sort Order */}
+        {isExpanded && (
+          <div className="space-y-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+            {/* Sort Order */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Sort Order
+              </label>
               <Controller
                 name="sortOrder"
                 control={control}
                 render={({ field }) => (
-                  <GlassInput
-                    label="Sort Order"
-                    placeholder="0"
-                    type="number"
-                    value={field.value}
-                    onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                    error={errors.sortOrder?.message}
-                    min={0}
-                    helperText="Lower numbers appear first"
-                  />
+                  <>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={field.value}
+                      onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                      min={0}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Lower numbers appear first</p>
+                    {errors.sortOrder && (
+                      <p className="mt-1 text-sm text-red-600">{errors.sortOrder.message}</p>
+                    )}
+                  </>
                 )}
               />
+            </div>
 
-              {/* Active Status */}
+            {/* Active Status */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Active Status
+              </label>
               <Controller
                 name="isActive"
                 control={control}
                 render={({ field }) => (
-                  <div className="flex items-center justify-between p-3 bg-lats-surface/50 rounded-lats-radius-md">
+                  <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200">
                     <div>
-                      <label className="text-sm font-medium text-lats-text">
-                        Active Status
-                      </label>
-                      <p className="text-xs text-lats-text-secondary">
+                      <p className="text-sm font-medium text-gray-900">
+                        {field.value ? 'Category is active' : 'Category is inactive'}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
                         Inactive categories won't appear in product selection
                       </p>
                     </div>
@@ -374,10 +474,10 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                         type="checkbox"
                         className="sr-only"
                         checked={field.value}
-                        onChange={field.onChange}
+                        onChange={(e) => field.onChange(e.target.checked)}
                       />
                       <div className={`w-11 h-6 rounded-full transition-colors ${
-                        field.value ? 'bg-lats-primary' : 'bg-lats-surface/50'
+                        field.value ? 'bg-indigo-600' : 'bg-gray-300'
                       }`}>
                         <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform ${
                           field.value ? 'translate-x-5' : 'translate-x-0'
@@ -388,33 +488,53 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                 )}
               />
             </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
 
-        {/* Form Actions */}
-        <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-lats-glass-border">
-          <GlassButton
+      {/* Form Actions - Only render if not in modal mode */}
+      {!renderActionsInModal && (
+        <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-gray-200">
+          <button
             type="submit"
-            variant="primary"
-            loading={loading}
-            disabled={!isDirty}
-            className="flex-1 sm:flex-none"
+            disabled={!isDirty || deleting || showDeleteConfirm || loading}
+            className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl font-semibold hover:from-indigo-600 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {loading ? 'Saving...' : category ? 'Update Category' : 'Create Category'}
-          </GlassButton>
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                Saving...
+              </>
+            ) : (
+              category ? 'Update Category' : 'Create Category'
+            )}
+          </button>
           
-          <GlassButton
+          {category && onDelete && !showDeleteConfirm && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={loading || deleting}
+              className="flex-1 px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-red-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete
+            </button>
+          )}
+          
+          <button
             type="button"
-            variant="secondary"
             onClick={handleCancel}
-            disabled={loading}
-            className="flex-1 sm:flex-none"
+            disabled={loading || deleting}
+            className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
-          </GlassButton>
+          </button>
         </div>
-      </form>
-    </GlassCard>
+      )}
+    </form>
   );
 };
 

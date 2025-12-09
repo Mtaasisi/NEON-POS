@@ -2,12 +2,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Search, Plus, X, Tag, Edit, Trash2, Folder, Info
+  Search, Plus, X, Tag, Edit, Trash2, Folder, Info, Package
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 import { useDialog } from '../../../shared/hooks/useDialog';
-import CategoryForm from './CategoryForm';
+import CategoryFormModal from './CategoryFormModal';
+import { useInventoryStore } from '../../stores/useInventoryStore';
+import { Product } from '../../types/inventory';
 
 interface Category {
   id: string;
@@ -42,7 +44,38 @@ const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { confirm } = useDialog();
+  
+  // Get products from store
+  const { products, loadProducts } = useInventoryStore();
+  
+  // Load products when modal opens
+  useEffect(() => {
+    if (isOpen && products.length === 0) {
+      loadProducts().catch(err => {
+        console.error('Error loading products:', err);
+      });
+    }
+  }, [isOpen, products.length, loadProducts]);
+  
+  // Group products by category
+  const productsByCategory = useMemo(() => {
+    const grouped: Record<string, Product[]> = {};
+    products.forEach(product => {
+      // Handle different category field formats
+      const categoryId = (product as any).categoryId || 
+                        (product as any).category_id || 
+                        (product.category as any)?.id ||
+                        'uncategorized';
+      
+      if (!grouped[categoryId]) {
+        grouped[categoryId] = [];
+      }
+      grouped[categoryId].push(product);
+    });
+    return grouped;
+  }, [products]);
 
   // Prevent body scroll when modal is open
   useBodyScrollLock(isOpen);
@@ -59,16 +92,20 @@ const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
     }
   }, [isOpen]);
 
-  // Filter and sort categories
+  // Filter and sort categories - always show in grid
   const filteredAndSortedCategories = useMemo(() => {
-    let filtered = categories.filter((category) => {
-      const matchesSearch =
-        !searchQuery ||
-        category.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        category.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    let filtered = categories;
 
-      return matchesSearch;
-    });
+    // Apply search filter
+    if (searchQuery) {
+      filtered = categories.filter((category) => {
+        const matchesSearch =
+          category.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          category.description?.toLowerCase().includes(searchQuery.toLowerCase());
+
+        return matchesSearch;
+      });
+    }
 
     // Sort by sort_order and then by name
     filtered.sort((a, b) => {
@@ -99,11 +136,44 @@ const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
       // Call delete API
       const { deleteCategory } = await import('../../../../lib/categoryApi');
       await deleteCategory(category.id);
+      
+      // Invalidate category cache to ensure fresh data
+      const { categoryService } = await import('../../lib/categoryService');
+      categoryService.invalidateCache();
+      
       toast.success('Category deleted successfully');
       onCategoryUpdate?.();
     } catch (error) {
       console.error('Error deleting category:', error);
       toast.error('Failed to delete category');
+    }
+  };
+
+  const handleDeleteCategoryFromForm = async (categoryId: string) => {
+    try {
+      setIsDeleting(true);
+      
+      // Call delete API
+      const { deleteCategory } = await import('../../../../lib/categoryApi');
+      await deleteCategory(categoryId);
+      
+      // Invalidate category cache to ensure fresh data
+      const { categoryService } = await import('../../lib/categoryService');
+      categoryService.invalidateCache();
+      
+      toast.success('Category deleted successfully');
+      
+      // Close form and reset
+      setShowCategoryForm(false);
+      setShowAddCategoryForm(false);
+      setEditingCategory(null);
+      onCategoryUpdate?.();
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      toast.error('Failed to delete category');
+      throw error; // Re-throw so form can handle it
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -123,6 +193,10 @@ const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
         toast.success('Category created successfully');
       }
       
+      // Invalidate category cache to ensure fresh data
+      const { categoryService } = await import('../../lib/categoryService');
+      categoryService.invalidateCache();
+      
       setShowCategoryForm(false);
       setShowAddCategoryForm(false);
       setEditingCategory(null);
@@ -135,10 +209,6 @@ const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
     }
   };
 
-  const handleViewDetails = (category: Category) => {
-    // For now, just edit - can be enhanced later with a detail view
-    handleEditCategory(category);
-  };
 
   return createPortal(
     <div 
@@ -214,57 +284,125 @@ const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
         {/* Scrollable Categories Grid */}
         <div className="flex-1 overflow-y-auto px-6 pb-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredAndSortedCategories.map((category) => (
-              <div
-                key={category.id}
-                onClick={() => handleViewDetails(category)}
-                className="bg-white border-2 border-gray-200 rounded-xl p-4 hover:border-indigo-400 hover:shadow-lg transition-all duration-200 flex flex-col cursor-pointer"
-              >
-                {/* Category Header */}
-                <div className="flex items-start gap-3 mb-3">
-                  <div 
-                    className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 text-2xl"
-                    style={{ backgroundColor: category.color ? `${category.color}20` : '#EEF2FF' }}
-                  >
-                    {category.icon || '📁'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-bold text-gray-900 text-sm truncate">{category.name}</h4>
-                      {category.is_active && (
-                        <span className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></span>
+            {filteredAndSortedCategories.map((category) => {
+              const categoryProducts = productsByCategory[category.id] || [];
+              const parent = categories.find(c => c.id === category.parent_id);
+              
+              return (
+                <div
+                  key={category.id}
+                  onClick={() => handleEditCategory(category)}
+                  className="bg-white border-2 border-gray-200 rounded-xl p-4 hover:border-indigo-400 hover:shadow-lg transition-all duration-200 flex flex-col cursor-pointer"
+                >
+                  {/* Category Header */}
+                  <div className="flex items-start gap-3 mb-3">
+                    <div 
+                      className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 text-2xl"
+                      style={{ backgroundColor: category.color ? `${category.color}20` : '#EEF2FF' }}
+                    >
+                      {category.icon || '📁'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-bold text-gray-900 text-sm truncate">{category.name}</h4>
+                        {category.is_active && (
+                          <span className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></span>
+                        )}
+                      </div>
+                      {parent && (
+                        <p className="text-xs text-indigo-600 mb-1">
+                          Parent: {parent.name}
+                        </p>
+                      )}
+                      {category.description && (
+                        <p className="text-xs text-gray-600 line-clamp-2">
+                          {category.description}
+                        </p>
                       )}
                     </div>
-                    {category.description && (
-                      <p className="text-xs text-gray-600 truncate">
-                        {category.description}
-                      </p>
-                    )}
                   </div>
-                </div>
 
-                {/* Category Stats */}
-                <div className="flex items-center justify-between text-xs text-gray-600 mb-3 pb-3 border-b border-gray-200">
-                  <div className="flex items-center gap-1">
-                    <Folder className="w-4 h-4" />
-                    <span>Products: <strong>{category.productsCount || 0}</strong></span>
-                  </div>
-                  {category.color && (
-                    <div className="flex items-center gap-2">
+                  {/* Category Stats */}
+                  <div className="flex items-center justify-between text-xs text-gray-600 mb-3 pb-3 border-b border-gray-200">
+                    <div className="flex items-center gap-1">
+                      <Package className="w-4 h-4" />
+                      <span>Products: <strong>{categoryProducts.length}</strong></span>
+                    </div>
+                    {category.color && (
                       <div 
                         className="w-4 h-4 rounded border border-gray-300"
                         style={{ backgroundColor: category.color }}
                       ></div>
+                    )}
+                  </div>
+
+                  {/* Products Preview */}
+                  {categoryProducts.length > 0 && (
+                    <div className="mb-3 space-y-1 max-h-32 overflow-y-auto">
+                      {categoryProducts.slice(0, 5).map((product) => (
+                        <div
+                          key={product.id}
+                          className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 rounded-lg p-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Could navigate to product or show product details
+                          }}
+                        >
+                          <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full flex-shrink-0"></div>
+                          <span className="truncate flex-1">{product.name}</span>
+                          {product.variants && product.variants.length > 0 && (
+                            <span className="text-gray-400 text-xs">
+                              {product.variants.length} var
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                      {categoryProducts.length > 5 && (
+                        <div className="text-xs text-gray-400 text-center pt-1">
+                          +{categoryProducts.length - 5} more products
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
 
-                {/* Sort Order */}
-                <div className="text-xs text-gray-500">
-                  Order: {category.sort_order}
+                  {/* Empty State */}
+                  {categoryProducts.length === 0 && (
+                    <div className="mb-3 text-center py-4 text-xs text-gray-400 bg-gray-50 rounded-lg">
+                      No products in this category
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-100">
+                    <div className="text-xs text-gray-500">
+                      Order: {category.sort_order}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditCategory(category);
+                        }}
+                        className="p-1.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                        title="Edit category"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCategory(category);
+                        }}
+                        className="p-1.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Delete category"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {filteredAndSortedCategories.length === 0 && (
@@ -294,24 +432,20 @@ const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
 
       {/* Category Form Modal */}
       {showCategoryForm && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[80]"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <CategoryForm
-              category={editingCategory || undefined}
-              parentCategories={categories}
-              onSubmit={handleSubmitCategory}
-              onCancel={() => {
-                setShowCategoryForm(false);
-                setShowAddCategoryForm(false);
-                setEditingCategory(null);
-              }}
-              loading={isSubmitting}
-            />
-          </div>
-        </div>
+        <CategoryFormModal
+          isOpen={showCategoryForm}
+          onClose={() => {
+            setShowCategoryForm(false);
+            setShowAddCategoryForm(false);
+            setEditingCategory(null);
+          }}
+          onSubmit={handleSubmitCategory}
+          onDelete={editingCategory ? handleDeleteCategoryFromForm : undefined}
+          parentCategories={categories}
+          loading={isSubmitting}
+          deleting={isDeleting}
+          editingCategory={editingCategory}
+        />
       )}
     </div>,
     document.body

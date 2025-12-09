@@ -2,14 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDevices } from '../../../context/DevicesContext';
 import { useAuth } from '../../../context/AuthContext';
-import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassButton from '../../shared/components/ui/GlassButton';
 import GlassTabs from '../../shared/components/ui/GlassTabs';
 import SearchBar from '../../shared/components/ui/SearchBar';
 import GlassSelect from '../../shared/components/ui/GlassSelect';
 import { BackButton } from '../../shared/components/ui/BackButton';
 import StatusBadge from '../../shared/components/ui/StatusBadge';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import {
   Wrench,
   Plus,
@@ -282,122 +281,126 @@ const RepairManagementPage: React.FC = () => {
     <div className="space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <GlassCard className="p-4">
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Active Repairs</p>
+              <p className="text-sm font-semibold text-gray-600">Active Repairs</p>
               <p className="text-2xl font-bold text-blue-600">{stats?.activeRepairs || 0}</p>
             </div>
-            <Wrench className="w-8 h-8 text-blue-500" />
+            <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+              <Wrench className="w-6 h-6 text-white" />
+            </div>
           </div>
-        </GlassCard>
+        </div>
 
-        <GlassCard className="p-4">
+        <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Completed Today</p>
+              <p className="text-sm font-semibold text-gray-600">Completed Today</p>
               <p className="text-2xl font-bold text-green-600">{stats?.completedToday || 0}</p>
             </div>
-            <CheckCircle className="w-8 h-8 text-green-500" />
+            <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
+              <CheckCircle className="w-6 h-6 text-white" />
+            </div>
           </div>
-        </GlassCard>
+        </div>
 
-        <GlassCard className="p-4">
+        <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Pending Parts</p>
+              <p className="text-sm font-semibold text-gray-600">Pending Parts</p>
               <p className="text-2xl font-bold text-orange-600">{stats?.pendingParts || 0}</p>
             </div>
-            <Package className="w-8 h-8 text-orange-500" />
+            <div className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center">
+              <Package className="w-6 h-6 text-white" />
+            </div>
           </div>
-        </GlassCard>
+        </div>
 
-        <GlassCard className="p-4">
+        <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Avg Repair Time</p>
+              <p className="text-sm font-semibold text-gray-600">Avg Repair Time</p>
               <p className="text-2xl font-bold text-purple-600">{stats?.averageRepairTime || 0}h</p>
             </div>
-            <Clock className="w-8 h-8 text-purple-500" />
+            <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
+              <Clock className="w-6 h-6 text-white" />
+            </div>
           </div>
-        </GlassCard>
+        </div>
       </div>
 
       {/* Quick Actions */}
-      <GlassCard className="p-6">
-        <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+      <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
+        <h3 className="text-lg font-bold mb-4">Quick Actions</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <GlassButton
+          <button
             onClick={() => navigate('/devices/new')}
-            className="flex items-center gap-2"
-            icon={<Plus className="w-4 h-4" />}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
           >
+            <Plus className="w-4 h-4" />
             New Repair Job
-          </GlassButton>
-          <GlassButton
+          </button>
+          <button
             onClick={() => navigate('/lats/inventory-spare-parts')}
-            variant="outline"
-            className="flex items-center gap-2"
-            icon={<Package className="w-4 h-4" />}
+            className="flex items-center justify-center gap-2 px-6 py-3 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 rounded-xl font-semibold transition-all"
           >
+            <Package className="w-4 h-4" />
             Manage Spare Parts
-          </GlassButton>
-          <GlassButton
+          </button>
+          <button
             onClick={() => setViewMode('analytics')}
-            variant="outline"
-            className="flex items-center gap-2"
-            icon={<BarChart3 className="w-4 h-4" />}
+            className="flex items-center justify-center gap-2 px-6 py-3 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 rounded-xl font-semibold transition-all"
           >
+            <BarChart3 className="w-4 h-4" />
             View Analytics
-          </GlassButton>
+          </button>
         </div>
-      </GlassCard>
+      </div>
 
       {/* Recent Devices */}
-      <GlassCard className="p-6">
+      <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Recent Repair Jobs</h3>
-          <GlassButton
-            variant="outline"
-            size="sm"
+          <h3 className="text-lg font-bold">Recent Repair Jobs</h3>
+          <button
             onClick={() => navigate('/devices')}
+            className="px-4 py-2 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 rounded-xl font-semibold text-sm transition-all"
           >
             View All
-          </GlassButton>
+          </button>
         </div>
         <div className="space-y-3">
           {filteredDevices.slice(0, 5).map((device) => (
-            <div key={device.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div key={device.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
               <div className="flex-1">
-                <div className="font-medium">{device.customerName}</div>
+                <div className="font-semibold text-gray-900">{device.customerName}</div>
                 <div className="text-sm text-gray-600">
                   {device.brand} {device.model} • {device.serialNumber}
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <StatusBadge status={device.status} />
-                <GlassButton
-                  variant="outline"
-                  size="sm"
+                <button
                   onClick={() => navigate(`/devices/${device.id}`)}
+                  className="p-2 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 rounded-lg transition-all"
                 >
                   <Eye className="w-4 h-4" />
-                </GlassButton>
+                </button>
               </div>
             </div>
           ))}
         </div>
-      </GlassCard>
+      </div>
     </div>
   );
 
   const renderTechnicians = () => (
     <div className="space-y-6">
-      <GlassCard className="p-6">
-        <h3 className="text-lg font-semibold mb-4">Technician Performance</h3>
+      <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
+        <h3 className="text-lg font-bold mb-4">Technician Performance</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {technicians.map((tech) => (
-            <GlassCard key={tech.id} className="p-4">
+            <div key={tech.id} className="bg-white border-2 border-gray-200 rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Users className="w-5 h-5 text-blue-500" />
@@ -418,10 +421,10 @@ const RepairManagementPage: React.FC = () => {
                   <span className="font-medium text-green-600">{tech.completedToday}</span>
                 </div>
               </div>
-            </GlassCard>
+            </div>
           ))}
         </div>
-      </GlassCard>
+      </div>
     </div>
   );
 
@@ -429,24 +432,24 @@ const RepairManagementPage: React.FC = () => {
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Status Distribution */}
-        <GlassCard className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Repair Status Distribution</h3>
+        <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
+          <h3 className="text-lg font-bold mb-4">Repair Status Distribution</h3>
           <div className="space-y-3">
             {Object.entries(statusDistribution).map(([status, count]) => (
               <div key={status} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <StatusBadge status={status as DeviceStatus} />
-                  <span className="text-sm capitalize">{status.replace('-', ' ')}</span>
+                  <span className="text-sm font-medium capitalize">{status.replace('-', ' ')}</span>
                 </div>
-                <span className="font-medium">{count}</span>
+                <span className="font-bold text-gray-900">{count}</span>
               </div>
             ))}
           </div>
-        </GlassCard>
+        </div>
 
         {/* Revenue Stats */}
-        <GlassCard className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Financial Overview</h3>
+        <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
+          <h3 className="text-lg font-bold mb-4">Financial Overview</h3>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -467,40 +470,55 @@ const RepairManagementPage: React.FC = () => {
               </span>
             </div>
           </div>
-        </GlassCard>
+        </div>
       </div>
     </div>
   );
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Wrapper Container - Single rounded container */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section */}
+        <div className="p-8 border-b border-gray-200 flex-shrink-0">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <BackButton />
+            <div className="flex items-center gap-6">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <Wrench className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
           <div>
-            <h1 className="text-2xl font-bold">Repair Management</h1>
-            <p className="text-gray-600">Comprehensive repair operations dashboard</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Repair Management</h1>
+                <p className="text-sm text-gray-600">
+                  Comprehensive repair operations dashboard
+                </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <GlassButton
-            variant="outline"
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3">
+              <button
             onClick={() => navigate('/devices')}
-            icon={<Smartphone className="w-4 h-4" />}
+                className="flex items-center gap-2 px-4 py-2.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 rounded-xl font-semibold transition-all"
           >
+                <Smartphone className="w-4 h-4" />
             All Devices
-          </GlassButton>
-          <GlassButton
+              </button>
+              <button
             onClick={() => navigate('/devices/new')}
-            icon={<Plus className="w-4 h-4" />}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
           >
+              <Plus className="w-4 h-4" />
             New Repair
-          </GlassButton>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Modern Navigation Tabs */}
+        {/* Action Bar - Tab Navigation */}
+        <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
       <GlassTabs
         tabs={[
           { id: 'overview', label: 'Overview', icon: <Wrench className="w-5 h-5" /> },
@@ -512,9 +530,12 @@ const RepairManagementPage: React.FC = () => {
         variant="modern"
         size="md"
       />
+        </div>
 
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-6">
       {/* Filters */}
-      <GlassCard className="p-4">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Search</label>
@@ -559,7 +580,7 @@ const RepairManagementPage: React.FC = () => {
             </GlassSelect>
           </div>
         </div>
-      </GlassCard>
+          </div>
 
       {/* Content based on view mode */}
       {viewMode === 'overview' && renderOverview()}
@@ -568,11 +589,13 @@ const RepairManagementPage: React.FC = () => {
 
       {/* Loading State */}
       {loading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Loading repair data...</span>
+            <div className="flex flex-col items-center justify-center py-12">
+              <LoadingSpinner size="lg" color="blue" />
+              <span className="mt-4 text-gray-600 font-medium">Loading repair data...</span>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

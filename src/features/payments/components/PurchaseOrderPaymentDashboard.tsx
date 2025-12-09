@@ -580,95 +580,89 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
   }
 
   return (
-    <div className="min-h-screen p-6 space-y-6" style={{ backgroundColor: 'transparent' }}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Purchase Orders</h2>
-          <p className="text-gray-600">Manage supplier payments and track purchase orders</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              fetchPurchaseOrders();
-              fetchRecentPayments();
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium"
-          >
-            <RefreshCw size={16} />
-            Refresh
-          </button>
-          <button
-            onClick={onExport}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
-          >
-            <Download size={16} />
-            Export
-          </button>
-        </div>
+    <div className="space-y-6">
+      {/* Action Buttons */}
+      <div className="flex gap-3 flex-wrap">
+        <button
+          onClick={() => {
+            fetchPurchaseOrders();
+            fetchRecentPayments();
+          }}
+          className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-blue-300 disabled:opacity-50 bg-white shadow-sm"
+        >
+          <RefreshCw size={18} />
+          <span>Refresh</span>
+        </button>
+        <button
+          onClick={onExport}
+          className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700"
+        >
+          <Download size={18} />
+          <span>Export</span>
+        </button>
       </div>
 
       {/* Summary Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <GlassCard className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-blue-600">Total Orders</p>
-              <p className="text-2xl font-bold text-blue-900">{summaryStats.totalOrders}</p>
-            </div>
-            <div className="p-3 bg-blue-500 rounded-lg">
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
               <Package className="w-6 h-6 text-white" />
             </div>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-6 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-green-600">Total Value</p>
-              <p className="text-2xl font-bold text-green-900">{formatMoney(summaryStats.totalAmount)}</p>
+              <p className="text-xs font-medium text-gray-600 mb-1">Total Orders</p>
+              <p className="text-2xl font-bold text-gray-900">{summaryStats.totalOrders}</p>
             </div>
-            <div className="p-3 bg-green-500 rounded-lg">
+          </div>
+        </div>
+
+        <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
               <DollarSign className="w-6 h-6 text-white" />
             </div>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-6 bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
-          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-yellow-600">Outstanding</p>
-              <p className="text-2xl font-bold text-yellow-900">{formatMoney(summaryStats.totalOutstanding)}</p>
+              <p className="text-xs font-medium text-gray-600 mb-1">Total Value</p>
+              <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.totalAmount)}</p>
             </div>
-            <div className="p-3 bg-yellow-500 rounded-lg">
+          </div>
+        </div>
+
+        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-5 hover:bg-yellow-100 hover:border-yellow-300 transition-all shadow-sm hover:shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
               <AlertCircle className="w-6 h-6 text-white" />
             </div>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-purple-600">Unpaid Orders</p>
-              <p className="text-2xl font-bold text-purple-900">{summaryStats.unpaidOrders}</p>
+              <p className="text-xs font-medium text-gray-600 mb-1">Outstanding</p>
+              <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.totalOutstanding)}</p>
             </div>
-            <div className="p-3 bg-purple-500 rounded-lg">
+          </div>
+        </div>
+
+        <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
               <Clock className="w-6 h-6 text-white" />
             </div>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-6 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-orange-600">Overpaid Orders</p>
-              <p className="text-2xl font-bold text-orange-900">{summaryStats.overpaidOrders}</p>
+              <p className="text-xs font-medium text-gray-600 mb-1">Unpaid Orders</p>
+              <p className="text-2xl font-bold text-gray-900">{summaryStats.unpaidOrders}</p>
             </div>
-            <div className="p-3 bg-orange-500 rounded-lg">
+          </div>
+        </div>
+
+        <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
               <AlertTriangle className="w-6 h-6 text-white" />
             </div>
+            <div>
+              <p className="text-xs font-medium text-gray-600 mb-1">Overpaid Orders</p>
+              <p className="text-2xl font-bold text-gray-900">{summaryStats.overpaidOrders}</p>
+            </div>
           </div>
-        </GlassCard>
+        </div>
       </div>
 
       {/* Filters */}
@@ -725,139 +719,130 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
           const isForeignCurrency = order.currency && order.currency !== 'TZS';
           
           return (
-            <GlassCard key={order.id} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div 
+              key={order.id} 
+              className="border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 hover:shadow-lg relative border-blue-500 shadow-xl"
+            >
               {/* Header */}
-              <div className="flex items-start justify-between mb-4">
+              <div className="flex items-start justify-between p-6">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <ShoppingCart className="w-5 h-5 text-blue-600" />
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
+                    <ShoppingCart className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">{order.poNumber}</h3>
-                    <p className="text-sm text-gray-600 flex items-center gap-1">
-                      <Building className="w-3 h-3" />
-                      {order.supplier?.name || 'Unknown Supplier'}
-                    </p>
+                    <h3 className="font-bold text-gray-900 text-sm">{order.poNumber}</h3>
+                    <p className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-2">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(order.paymentStatus || 'unpaid', remainingAmount)}`}>
-                    {order.paymentStatus || 'unpaid'}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {remainingAmount > 0 ? (
-                      <button
-                        onClick={() => handleMakePayment(order)}
-                        disabled={reversingOrderId === order.id}
-                        className="flex items-center gap-1 px-3 py-1 bg-green-600 hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-xs font-medium"
-                      >
-                        <Plus size={12} />
-                        Pay
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-500 rounded-lg text-xs font-medium cursor-not-allowed">
-                        <CheckCircle2 size={12} />
-                        {order.paymentStatus === 'overpaid' ? 'Overpaid' : 'Fully Paid'}
-                      </div>
-                    )}
-                    {totalPaidTZS > 0 && (
-                      <button
-                        onClick={() => handleUndoLastPayment(order)}
-                        disabled={reversingOrderId === order.id}
-                        className="flex items-center gap-1 px-3 py-1 bg-red-600 hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-xs font-medium"
-                      >
-                        <RotateCcw size={12} className={reversingOrderId === order.id ? 'animate-spin' : ''} />
-                        {reversingOrderId === order.id ? 'Undoing...' : 'Undo'}
-                      </button>
-                    )}
-                  </div>
-                </div>
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-sm ${
+                  order.paymentStatus === 'paid' 
+                    ? 'bg-green-600 text-white' 
+                    : order.paymentStatus === 'partial'
+                      ? 'bg-yellow-500 text-white'
+                      : remainingAmount < 0
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-red-500 text-white'
+                }`}>
+                  <span className="capitalize">{order.paymentStatus || 'unpaid'}</span>
+                </span>
               </div>
 
-              {/* Payment Progress */}
-              <div className="mb-4">
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600">Payment Progress</span>
-                  <div className="flex items-center gap-1">
-                    <span className="font-medium">{Math.round(paymentProgress)}%</span>
-                    {order.paymentStatus === 'overpaid' && (
-                      <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded-full">
-                        Overpaid
-                      </span>
-                    )}
+              {/* Payment Information */}
+              <div className="px-6 pb-6">
+                {/* Payment Progress */}
+                <div className="mb-4">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-gray-600">Payment Progress</span>
+                    <div className="flex items-center gap-1">
+                      <span className="font-medium">{Math.round(paymentProgress)}%</span>
+                    </div>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        order.paymentStatus === 'overpaid' || remainingAmount < 0
+                          ? 'bg-gradient-to-r from-orange-400 to-orange-600' 
+                          : paymentProgress === 100 
+                            ? 'bg-gradient-to-r from-green-400 to-green-600'
+                            : 'bg-gradient-to-r from-blue-400 to-blue-600'
+                      }`}
+                      style={{ width: `${Math.min(paymentProgress, 100)}%` }}
+                    ></div>
                   </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className={`h-2 rounded-full transition-all duration-300 ${
-                      order.paymentStatus === 'overpaid' 
-                        ? 'bg-gradient-to-r from-orange-400 to-orange-600' 
-                        : paymentProgress === 100 
-                          ? 'bg-gradient-to-r from-green-400 to-green-600'
-                          : 'bg-gradient-to-r from-blue-400 to-blue-600'
-                    }`}
-                    style={{ width: `${Math.min(paymentProgress, 100)}%` }}
-                  ></div>
-                </div>
-              </div>
 
-              {/* Financial Details */}
-              <div className="space-y-3 mb-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Total Amount</span>
-                  <div className="text-right">
-                    <span className="font-semibold text-gray-900">{formatMoney(totalAmountTZS)}</span>
-                    {isForeignCurrency && order.totalAmount && (
-                      <div className="text-xs text-gray-500">
-                        ({order.currency} {order.totalAmount.toLocaleString()})
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Paid</span>
-                  <div className="text-right">
-                    <span className="font-medium text-green-600 flex items-center gap-1">
-                      <ArrowUpRight className="w-3 h-3" />
-                      {formatMoney(totalPaidTZS)}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Remaining</span>
-                  <div className="text-right">
-                    <span className={`font-medium flex items-center gap-1 ${
-                      remainingAmount < 0 
-                        ? 'text-orange-600' 
-                        : remainingAmount === 0 
-                          ? 'text-green-600' 
-                          : 'text-red-600'
-                    }`}>
-                      {remainingAmount < 0 ? (
-                        <ArrowUpRight className="w-3 h-3" />
-                      ) : (
-                        <ArrowDownRight className="w-3 h-3" />
+                {/* Financial Summary */}
+                <div className="space-y-3 mb-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Total Amount</span>
+                    <div className="text-right">
+                      <span className="font-semibold text-gray-900">{formatMoney(totalAmountTZS)}</span>
+                      {isForeignCurrency && order.totalAmount && (
+                        <div className="text-xs text-gray-500">
+                          ({order.currency} {order.totalAmount.toLocaleString()})
+                        </div>
                       )}
-                      {formatMoney(Math.abs(remainingAmount))}
-                    </span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Paid</span>
+                    <div className="text-right">
+                      <span className="font-medium text-green-600 flex items-center gap-1">
+                        <ArrowUpRight className="w-3 h-3" />
+                        {formatMoney(totalPaidTZS)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Remaining</span>
+                    <div className="text-right">
+                      <span className={`font-medium flex items-center gap-1 ${
+                        remainingAmount < 0 
+                          ? 'text-orange-600' 
+                          : remainingAmount === 0 
+                            ? 'text-green-600' 
+                            : 'text-red-600'
+                      }`}>
+                        {remainingAmount < 0 ? (
+                          <ArrowUpRight className="w-3 h-3" />
+                        ) : (
+                          <ArrowDownRight className="w-3 h-3" />
+                        )}
+                        {formatMoney(Math.abs(remainingAmount))}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Footer */}
-              <div className="pt-4 border-t border-gray-100">
-                <div className="flex items-center justify-between text-xs text-gray-500">
-                  <div className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    Expected: {new Date(order.expectedDelivery).toLocaleDateString()}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {new Date(order.createdAt).toLocaleDateString()}
-                  </div>
+                {/* Action Button */}
+                <div className="pt-4 border-t border-gray-200">
+                  {remainingAmount > 0 ? (
+                    <button
+                      onClick={() => handleMakePayment(order)}
+                      disabled={reversingOrderId === order.id}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 disabled:cursor-not-allowed text-white rounded-xl transition-all shadow-md hover:shadow-lg text-sm font-semibold"
+                    >
+                      <Plus size={16} />
+                      Make Payment
+                    </button>
+                  ) : totalPaidTZS > 0 ? (
+                    <button
+                      onClick={() => handleUndoLastPayment(order)}
+                      disabled={reversingOrderId === order.id}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed text-white rounded-xl transition-all shadow-md hover:shadow-lg text-sm font-semibold"
+                    >
+                      <RotateCcw size={16} className={reversingOrderId === order.id ? 'animate-spin' : ''} />
+                      {reversingOrderId === order.id ? 'Undoing...' : 'Undo Last Payment'}
+                    </button>
+                  ) : (
+                    <div className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-500 rounded-xl text-sm font-semibold cursor-not-allowed">
+                      <CheckCircle2 size={16} />
+                      Fully Paid
+                    </div>
+                  )}
                 </div>
               </div>
-            </GlassCard>
+            </div>
           );
         })}
       </div>

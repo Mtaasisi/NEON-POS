@@ -70,8 +70,8 @@ const ReceivedItemsReport: React.FC<ReceivedItemsReportProps> = ({
         .from('inventory_items')
         .select(`
           *,
-          product:product_id (name),
-          variant:variant_id (name)
+          product!product_id (name),
+          variant!variant_id (name)
         `)
         .contains('metadata', { purchase_order_id: purchaseOrderId });
 

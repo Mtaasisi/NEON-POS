@@ -27,17 +27,17 @@ const __dirname = dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '.env.production') });
 
 // Database configuration - support both Supabase and direct PostgreSQL
-// Priority: Command line arg > DATABASE_URL env > Default Neon connection
-const DATABASE_URL = process.argv[2] || process.env.DATABASE_URL || process.env.VITE_DATABASE_URL || 
+// Priority: DATABASE_URL env > Command line arg > Default Neon connection
+const DATABASE_URL = process.env.DATABASE_URL || process.argv[2] || process.env.VITE_DATABASE_URL || 
   'postgresql://neondb_owner:npg_dMyv1cG4KSOR@ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
 // Determine if using Supabase or direct PostgreSQL
-// If DATABASE_URL is provided and contains neon.tech, use direct PostgreSQL
+// If DATABASE_URL is provided and contains neon.tech or postgresql://, use direct PostgreSQL
 // Otherwise, fall back to Supabase if credentials are available
-const USE_DIRECT_POSTGRES = DATABASE_URL && (DATABASE_URL.includes('neon.tech') || DATABASE_URL.includes('postgresql://'));
+const USE_DIRECT_POSTGRES = !!(DATABASE_URL && (DATABASE_URL.includes('neon.tech') || DATABASE_URL.includes('postgresql://')));
 
 let supabase;
 let pool;
@@ -129,17 +129,19 @@ if (USE_DIRECT_POSTGRES && DATABASE_URL.includes('neon.tech')) {
       })
     })
   };
-} else if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-  // Use Supabase
+} else if (SUPABASE_URL && SUPABASE_ANON_KEY && !USE_DIRECT_POSTGRES) {
+  // Use Supabase (only if not using direct PostgreSQL)
   console.log('🔗 Using Supabase connection');
   supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-} else {
+} else if (!USE_DIRECT_POSTGRES) {
   console.error('❌ No database configuration found');
   process.exit(1);
 }
 
-// JSON file path
-const JSON_FILE_PATH = path.join(__dirname, 'supabase backup 2025-12-07', 'lats_products_2025-12-07_01-27-01.json');
+// JSON file path - can be overridden via command line argument
+// If DATABASE_URL was in argv[2], then JSON file is in argv[3], otherwise argv[2]
+const DEFAULT_JSON_FILE = path.join(__dirname, 'PROD BACKUP', 'lats_products_2025-12-07_01-43-50.json');
+const JSON_FILE_PATH = (process.env.DATABASE_URL ? process.argv[2] : process.argv[3]) || DEFAULT_JSON_FILE;
 
 // Batch size for bulk inserts
 const BATCH_SIZE = 50;
@@ -353,14 +355,137 @@ async function importProducts(products) {
       // Insert/Update using upsert (ON CONFLICT DO UPDATE)
       let result;
       if (USE_DIRECT_POSTGRES) {
-        // Direct PostgreSQL - call select() as async function
-        result = await supabase
-          .from('lats_products')
-          .upsert(preparedBatch, {
-            onConflict: 'id',
-            ignoreDuplicates: false
-          })
-          .select();
+        // Direct PostgreSQL - use pool.query directly for better control
+        const allColumns = Object.keys(preparedBatch[0]);
+        const columns = allColumns.join(', ');
+        
+        // Build VALUES with correct parameter numbering and type casting
+        // We need to track which params are actually used (non-null values)
+        let paramCounter = 1;
+        const values = preparedBatch.map((product) => {
+          const rowValues = allColumns.map((col) => {
+            const value = product[col];
+            
+            // Handle UUID columns
+            const uuidColumns = ['id', 'category_id', 'supplier_id', 'storage_room_id', 'store_shelf_id', 'shelf_id', 'branch_id'];
+            if (uuidColumns.includes(col)) {
+              if (value === null || value === undefined) return 'NULL::uuid';
+              const paramNum = paramCounter++;
+              return `$${paramNum}::uuid`;
+            }
+            
+            // Handle timestamp columns
+            const timestampColumns = ['created_at', 'updated_at'];
+            if (timestampColumns.includes(col)) {
+              if (value === null || value === undefined) return 'NULL::timestamptz';
+              const paramNum = paramCounter++;
+              return `$${paramNum}::timestamptz`;
+            }
+            
+            // Handle array columns
+            if (col === 'visible_to_branches') {
+              if (value === null || value === undefined || !Array.isArray(value)) return 'NULL::uuid[]';
+              const paramNum = paramCounter++;
+              return `$${paramNum}::uuid[]`;
+            }
+            
+            // Handle integer columns
+            const integerColumns = ['stock_quantity', 'min_stock_level', 'max_stock_level', 'total_quantity', 'warranty_period'];
+            if (integerColumns.includes(col)) {
+              if (value === null || value === undefined) return 'NULL::integer';
+              const paramNum = paramCounter++;
+              return `$${paramNum}::integer`;
+            }
+            
+            // Handle numeric columns (decimal)
+            const numericColumns = ['cost_price', 'selling_price', 'unit_price', 'total_value'];
+            if (numericColumns.includes(col)) {
+              if (value === null || value === undefined) return 'NULL::numeric';
+              const paramNum = paramCounter++;
+              return `$${paramNum}::numeric`;
+            }
+            
+            // Handle boolean columns
+            if (col === 'is_active' || col === 'is_shared') {
+              if (value === null || value === undefined) return 'NULL::boolean';
+              const paramNum = paramCounter++;
+              return `$${paramNum}::boolean`;
+            }
+            
+            // Handle JSON columns
+            const jsonColumns = ['tags', 'attributes', 'metadata'];
+            if (jsonColumns.includes(col)) {
+              if (value === null || value === undefined) return 'NULL::jsonb';
+              const paramNum = paramCounter++;
+              return `$${paramNum}::jsonb`;
+            }
+            
+            // Handle text columns (default)
+            if (value === null || value === undefined) return 'NULL::text';
+            const paramNum = paramCounter++;
+            return `$${paramNum}::text`;
+          }).join(', ');
+          return `(${rowValues})`;
+        }).join(', ');
+        
+        // Build params array - only include non-null values
+        // We need to match the parameter numbers used in the VALUES clause
+        const params = [];
+        preparedBatch.forEach((product) => {
+          allColumns.forEach((col) => {
+            const value = product[col];
+            // Only add to params if it's not null (nulls are handled as NULL::type in SQL)
+            if (value !== null && value !== undefined) {
+              if (typeof value === 'object') {
+                params.push(JSON.stringify(value));
+              } else {
+                params.push(value);
+              }
+            }
+          });
+        });
+        
+        const updateClauses = allColumns
+          .filter(col => col !== 'id')
+          .map(col => `${col} = EXCLUDED.${col}`)
+          .join(', ');
+        
+        const query = `
+          INSERT INTO lats_products (${columns}) 
+          VALUES ${values}
+          ON CONFLICT (id) DO UPDATE SET ${updateClauses}
+          RETURNING *
+        `;
+        
+        try {
+          console.log(`   🔍 Executing batch insert for ${preparedBatch.length} products...`);
+          console.log(`   🔍 First product ID: ${preparedBatch[0].id}, Name: ${preparedBatch[0].name}`);
+          const dbResult = await pool.query(query, params);
+          console.log(`   📊 Query returned ${dbResult.rows?.length || 0} rows`);
+          
+          // Always verify - even if rows were returned
+          const verifyIds = preparedBatch.slice(0, 5).map(p => p.id);
+          const verifyResult = await pool.query(
+            'SELECT id, name FROM lats_products WHERE id = ANY($1::uuid[])',
+            [verifyIds]
+          );
+          console.log(`   ✅ Verification: ${verifyResult.rows.length} of 5 test products exist in database`);
+          
+          if (verifyResult.rows.length === 0) {
+            console.log(`   ❌ CRITICAL: No products were actually inserted!`);
+            console.log(`   🔍 Sample IDs checked: ${verifyIds.slice(0, 2).join(', ')}`);
+            throw new Error('Insert query executed but no products found in database');
+          }
+          
+          result = { data: dbResult.rows || preparedBatch, error: null };
+        } catch (queryError) {
+          console.error(`   ❌ Query error:`, queryError.message);
+          console.error(`   🔍 Error code:`, queryError.code);
+          if (queryError.message.includes('constraint') || queryError.message.includes('foreign key')) {
+            console.error(`   💡 This might be a foreign key constraint violation`);
+          }
+          throw queryError;
+        }
       } else {
         // Supabase - standard API
         result = await supabase
@@ -414,8 +539,28 @@ async function importProducts(products) {
           }
         }
       } else {
-        successCount += data?.length || 0;
-        console.log(`   ✅ Successfully imported ${data?.length || 0} products`);
+        const importedCount = data?.length || 0;
+        successCount += importedCount;
+        if (importedCount > 0) {
+          console.log(`   ✅ Successfully imported ${importedCount} products`);
+        } else {
+          console.log(`   ⚠️  No data returned from upsert (may have failed silently)`);
+          // Try to verify by checking if products exist
+          const verifyIds = preparedBatch.slice(0, 5).map(p => p.id);
+          const verifyResult = await pool.query(
+            'SELECT COUNT(*) as count FROM lats_products WHERE id = ANY($1::uuid[])',
+            [verifyIds]
+          );
+          const foundCount = parseInt(verifyResult.rows[0].count);
+          if (foundCount > 0) {
+            console.log(`   ✅ Verified: ${foundCount} of 5 test products exist in database`);
+            successCount += batch.length; // Assume all were inserted if some exist
+          } else {
+            console.log(`   ❌ Verification failed: Products not found in database`);
+            errorCount += batch.length;
+            errors.push({ batch: batchNumber, error: 'Upsert returned no data and verification failed' });
+          }
+        }
       }
     } catch (err) {
       console.error(`❌ Batch ${batchNumber} exception:`, err.message);

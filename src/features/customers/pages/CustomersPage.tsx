@@ -15,14 +15,14 @@ import {
   Star, UserCheck, Tag, Download, MessageSquare, Trash2, Plus, Grid, List, Filter, SortAsc,
   AlertCircle, UserPlus, FileSpreadsheet, Users, DollarSign, Activity, MessageCircle, BarChart3, Award,
   Clock, Phone, Mail, Edit, Eye, CheckCircle, XCircle, BarChart2, Crown, Calendar, RotateCcw, RefreshCw,
-  ChevronLeft, ChevronRight, Gift, CalendarDays, Clock3, UserPlus2, AlertTriangle, X, Upload
+  ChevronLeft, ChevronRight, Gift, CalendarDays, Clock3, UserPlus2, AlertTriangle, X, Upload, Search,
+  ChevronDown, ChevronUp, Building, ShoppingBag, Settings, Zap
 } from 'lucide-react';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { toast } from 'react-hot-toast';
 import BulkSMSModal from '../../reports/components/BulkSMSModal';
-import ExcelImportModal from '../../reports/components/ExcelImportModal';
-import CustomerUpdateImportModal from '../components/CustomerUpdateImportModal';
 import CustomerDetailModal from '../components/CustomerDetailModal';
-import DropdownPortal from '../../../features/shared/components/ui/DropdownPortal';
+import CustomerImportExportModal from '../components/CustomerImportExportModal';
 import { smsService } from '../../../services/smsService';
 import { fetchAllCustomers, fetchCustomersPaginated, searchCustomers, searchCustomersFast, searchCustomersBackground, getBackgroundSearchManager, fetchAllAppointments } from '../../../lib/customerApi';
 import { formatCurrency } from '../../../lib/customerApi';
@@ -39,6 +39,7 @@ import { createAppointment, updateAppointment, CreateAppointmentData, UpdateAppo
 import { useSuccessModal } from '../../../hooks/useSuccessModal';
 import SuccessModal from '../../../components/ui/SuccessModal';
 import { useDialog } from '../../shared/hooks/useDialog';
+import KeyboardShortcutsModal from '../components/KeyboardShortcutsModal';
 
 // Helper to escape CSV fields
 function escapeCSVField(field: any) {
@@ -86,14 +87,12 @@ const CustomersPage = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(prefs.viewMode ?? 'grid');
   const [showBulkSMS, setShowBulkSMS] = useState(false);
   const [sendingSMS, setSendingSMS] = useState(false);
-  const [showExcelImport, setShowExcelImport] = useState(false);
-  const [showCustomerUpdateImport, setShowCustomerUpdateImport] = useState(false);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
-  const [showImportMenu, setShowImportMenu] = useState(false);
   const [showCustomerDetailModal, setShowCustomerDetailModal] = useState(false);
-  const importButtonRef = useRef<HTMLDivElement>(null);
+  const [showImportExportModal, setShowImportExportModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [expandedCustomerId, setExpandedCustomerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -167,8 +166,9 @@ const CustomersPage = () => {
   const [showBirthdayNotification, setShowBirthdayNotification] = useState(true);
   const [showBirthdayMessageSender, setShowBirthdayMessageSender] = useState(false);
       const [showBirthdayCalendar, setShowBirthdayCalendar] = useState(false);
-    const [showBirthdayRewards, setShowBirthdayRewards] = useState(false);
-    const [showAllBirthdays, setShowAllBirthdays] = useState(false);
+  const [showBirthdayRewards, setShowBirthdayRewards] = useState(false);
+  const [showAllBirthdays, setShowAllBirthdays] = useState(false);
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
 
   // Appointment modal state
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
@@ -360,8 +360,6 @@ const CustomersPage = () => {
 
   // Reset modal states on component mount
   useEffect(() => {
-    setShowCustomerUpdateImport(false);
-    setShowExcelImport(false);
     setShowAddCustomerModal(false);
     setShowBulkSMS(false);
   }, []);
@@ -405,6 +403,72 @@ const CustomersPage = () => {
     
     fetchAppointments();
   }, []);
+
+  // Keyboard shortcuts for better UX
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input/textarea
+      const target = e.target as HTMLElement;
+      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      
+      // ? - Show keyboard shortcuts help
+      if (e.key === '?' && !isTyping) {
+        e.preventDefault();
+        setShowKeyboardShortcuts(true);
+        return;
+      }
+
+      // Ctrl/Cmd + N: New Customer
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n' && !isTyping) {
+        e.preventDefault();
+        setShowAddCustomerModal(true);
+        return;
+      }
+
+      // Ctrl/Cmd + K or Ctrl/Cmd + F: Focus search
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'f') && !isTyping) {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[type="text"][placeholder*="Search"], input[type="text"][placeholder*="search"]') as HTMLInputElement;
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
+        return;
+      }
+
+      // Ctrl/Cmd + E: Export
+      if ((e.ctrlKey || e.metaKey) && e.key === 'e' && !isTyping) {
+        e.preventDefault();
+        handleBulkExport();
+        return;
+      }
+
+      // Ctrl/Cmd + I: Import Excel (admin only)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'i' && !isTyping) {
+        if (['admin', 'customer-care'].includes(currentUser?.role || '')) {
+          e.preventDefault();
+          setShowExcelImport(true);
+        }
+        return;
+      }
+
+      // Esc: Clear search or close modals
+      if (e.key === 'Escape' && !isTyping) {
+        if (searchQuery) {
+          setSearchQuery('');
+        }
+        // Close any open modals
+        if (showAddCustomerModal) setShowAddCustomerModal(false);
+        if (showBulkSMS) setShowBulkSMS(false);
+        if (showCustomerDetailModal) setShowCustomerDetailModal(false);
+        if (showAppointmentModal) setShowAppointmentModal(false);
+        if (showKeyboardShortcuts) setShowKeyboardShortcuts(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [searchQuery, currentUser, showAddCustomerModal, showBulkSMS, showCustomerDetailModal, showAppointmentModal, showKeyboardShortcuts]);
 
   // Fetch total devices count from devices table
   useEffect(() => {
@@ -992,35 +1056,47 @@ const CustomersPage = () => {
     }
   };
 
-  // Handle bulk export to CSV
+  // Handle bulk export to CSV - Enhanced
   const handleBulkExport = () => {
     try {
-      const selectedCustomerData = customers.filter(c => selectedCustomers.includes(c.id));
+      // If customers are selected, export only those; otherwise export all filtered customers
+      const customersToExport = selectedCustomers.length > 0 
+        ? customers.filter(c => selectedCustomers.includes(c.id))
+        : filteredCustomers;
       
-      // CSV Headers
+      if (customersToExport.length === 0) {
+        toast.error('No customers to export');
+        return;
+      }
+      
+      // CSV Headers - Enhanced
       const headers = [
-        'Name', 'Phone', 'Email', 'Gender', 'Address', 'City', 'Birthday',
-        'Loyalty Level', 'Loyalty Points', 'Total Spent', 'Total Purchases',
-        'Tags', 'Notes', 'Status', 'Created At'
+        'Name', 'Phone', 'Email', 'Gender', 'City', 'WhatsApp',
+        'Loyalty Level', 'Points', 'Total Spent', 'Orders',
+        'Color Tag', 'Status', 'Branch', 'Referral Source',
+        'Birth Month', 'Birth Day', 'Join Date', 'Last Visit'
       ];
       
-      // CSV Rows
-      const rows = selectedCustomerData.map(customer => [
-        escapeCSVField(customer.name || customer.full_name),
+      // CSV Rows - Enhanced
+      const rows = customersToExport.map(customer => [
+        escapeCSVField(customer.name),
         escapeCSVField(customer.phone),
-        escapeCSVField(customer.email),
-        escapeCSVField(customer.gender),
-        escapeCSVField(customer.address),
-        escapeCSVField(customer.city),
-        escapeCSVField(customer.birthday),
-        escapeCSVField(customer.loyalty_level),
-        escapeCSVField(customer.loyalty_points),
-        escapeCSVField(customer.total_spent),
-        escapeCSVField(customer.total_purchases),
-        escapeCSVField(customer.tags?.join(', ')),
-        escapeCSVField(customer.notes),
-        escapeCSVField(customer.is_active ? 'Active' : 'Inactive'),
-        escapeCSVField(customer.created_at)
+        escapeCSVField(customer.email || ''),
+        escapeCSVField(customer.gender || ''),
+        escapeCSVField(customer.city || ''),
+        escapeCSVField(customer.whatsapp || ''),
+        escapeCSVField(customer.loyaltyLevel || ''),
+        escapeCSVField(customer.points?.toString() || '0'),
+        escapeCSVField(getCustomerTotalSpent(customer.id).toString()),
+        escapeCSVField(customer.orders?.toString() || '0'),
+        escapeCSVField(customer.colorTag || ''),
+        escapeCSVField(customer.isActive ? 'Active' : 'Inactive'),
+        escapeCSVField(customer.branchName || ''),
+        escapeCSVField(customer.referralSource || ''),
+        escapeCSVField(customer.birthMonth || ''),
+        escapeCSVField(customer.birthDay?.toString() || ''),
+        escapeCSVField(customer.joinDate ? new Date(customer.joinDate).toLocaleDateString() : ''),
+        escapeCSVField(customer.lastVisit ? new Date(customer.lastVisit).toLocaleDateString() : '')
       ]);
       
       // Create CSV content
@@ -1040,8 +1116,10 @@ const CustomersPage = () => {
       link.click();
       document.body.removeChild(link);
       
-      toast.success(`Exported ${selectedCustomers.length} customers to CSV`);
-      setSelectedCustomers([]);
+      toast.success(`Exported ${customersToExport.length} customer${customersToExport.length !== 1 ? 's' : ''} to CSV`);
+      if (selectedCustomers.length > 0) {
+        setSelectedCustomers([]);
+      }
     } catch (error) {
       console.error('Export error:', error);
       toast.error('Failed to export customers');
@@ -1151,22 +1229,6 @@ const CustomersPage = () => {
     }
   };
 
-  const handleExcelImportComplete = (importedCustomers: Customer[]) => {
-    setCustomers(prev => [...prev, ...importedCustomers]);
-    setShowExcelImport(false);
-    toast.success(`Successfully imported ${importedCustomers.length} customers`);
-  };
-
-  const handleCustomerUpdateImportComplete = (updatedCustomers: Customer[]) => {
-    setCustomers(prev => 
-      prev.map(customer => {
-        const updatedCustomer = updatedCustomers.find(uc => uc.id === customer.id);
-        return updatedCustomer || customer;
-      })
-    );
-    setShowCustomerUpdateImport(false);
-    toast.success(`Successfully updated ${updatedCustomers.length} customers`);
-  };
 
   // Handle appointment creation
   const handleCreateAppointment = async (data: CreateAppointmentData) => {
@@ -1369,374 +1431,396 @@ const CustomersPage = () => {
 
   // Show skeleton while loading initial data
   if (loading && customers.length === 0) {
-    return <CustomerListSkeleton rows={10} />;
+    return (
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+          <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                  <Users className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900 mb-1">Customer Management</h1>
+                  <p className="text-sm text-gray-600">Manage your customer relationships, track loyalty, and schedule appointments</p>
+                </div>
+              </div>
+              <BackButton to="/dashboard" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto flex items-center justify-center py-12">
+            <LoadingSpinner size="sm" color="blue" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
+  // Format date helper
+  const formatDate = (date: string | Date) => {
+    const d = new Date(date);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       {isOffline && (
-        <div style={{ background: '#fbbf24', color: 'black', padding: '8px', textAlign: 'center' }}>
+        <div style={{ background: '#fbbf24', color: 'black', padding: '8px', textAlign: 'center', marginBottom: '1rem', borderRadius: '0.5rem' }}>
           You are offline. Data is loaded from cache.
         </div>
       )}
-      {/* Header Section */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <BackButton to="/dashboard" />
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Customer Management</h1>
-            <p className="text-gray-600 mt-1">Manage your customer relationships, track loyalty, and schedule appointments</p>
+      {/* Combined Container - All sections in one */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section - Enhanced Modal Style */}
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            {/* Left: Icon + Text */}
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                <Users className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">Customer Management</h1>
+                <p className="text-sm text-gray-600">Manage your customer relationships, track loyalty, and schedule appointments</p>
+              </div>
+            </div>
+
+            {/* Right: Back Button */}
+            <BackButton to="/dashboard" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          {activeTab === 'customers' ? (
-            <>
-              <GlassButton
-                onClick={() => setShowAddCustomerModal(true)}
-                icon={<UserPlus size={18} />}
-                className="bg-gradient-to-r from-blue-500 to-purple-600 text-white"
-              >
-                New Customer
-              </GlassButton>
-              {['admin', 'customer-care'].includes(currentUser?.role || '') && (
-                <>
-                  <GlassButton
-                    onClick={() => setShowExcelImport(true)}
-                    icon={<FileSpreadsheet size={18} />}
-                    className="bg-gradient-to-r from-green-500 to-emerald-600 text-white"
-                  >
-                    Import Excel
-                  </GlassButton>
-                  <div className="relative">
-                  <div ref={importButtonRef}>
-                    <GlassButton
-                      onClick={() => setShowImportMenu(!showImportMenu)}
-                      icon={<Download size={18} />}
-                      variant="secondary"
+        {/* Action Bar - Enhanced Design */}
+        <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
+          <div className="flex gap-3 flex-wrap">
+            {activeTab === 'customers' ? (
+              <>
+                <button
+                  onClick={() => setShowAddCustomerModal(true)}
+                  className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 group relative"
+                  title="Add new customer (Ctrl/Cmd + N)"
+                >
+                  <UserPlus size={18} />
+                  <span>New Customer</span>
+                  <span className="hidden group-hover:inline-block absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                    Ctrl/Cmd + N
+                  </span>
+                </button>
+                {['admin', 'customer-care'].includes(currentUser?.role || '') && (
+                  <>
+                    <button
+                      onClick={() => setShowImportExportModal(true)}
+                      className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700 group relative"
+                      title="Import/Export customers (Ctrl/Cmd + I)"
                     >
-                      More Actions
-                      <ChevronRight 
-                        size={16} 
-                        className={`ml-1 transition-transform ${showImportMenu ? 'rotate-90' : ''}`} 
-                      />
-                    </GlassButton>
-                  </div>
-                  
-                  <DropdownPortal
-                    open={showImportMenu}
-                    onClose={() => setShowImportMenu(false)}
-                    anchorRef={importButtonRef}
-                  >
-                    <div className="py-1 min-w-[200px]">
-                      <button
-                        onClick={() => {
-                          setShowCustomerUpdateImport(true);
-                          setShowImportMenu(false);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                      >
-                        <RefreshCw size={16} />
-                        Update Existing Customers
-                      </button>
-                    </div>
-                  </DropdownPortal>
-                </div>
+                      <Upload size={18} />
+                      <span>Import/Export</span>
+                      <span className="hidden group-hover:inline-block absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                        Ctrl/Cmd + I
+                      </span>
+                    </button>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => {
+                    setAppointmentModalMode('create');
+                    setSelectedAppointment(null);
+                    setShowAppointmentModal(true);
+                  }}
+                  className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700"
+                >
+                  <UserPlus2 size={18} />
+                  <span>New Appointment</span>
+                </button>
+                <button
+                  onClick={() => navigate('/appointments')}
+                  className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg hover:from-purple-600 hover:to-indigo-700"
+                >
+                  <CalendarDays size={18} />
+                  <span>Calendar View</span>
+                </button>
               </>
             )}
-          </>
-          ) : (
-            <>
-              <GlassButton
-                onClick={() => {
-                  setAppointmentModalMode('create');
-                  setSelectedAppointment(null);
-                  setShowAppointmentModal(true);
-                }}
-                icon={<UserPlus2 size={18} />}
-                className="bg-gradient-to-r from-green-500 to-emerald-600 text-white"
-              >
-                New Appointment
-              </GlassButton>
-              <GlassButton
-                onClick={() => navigate('/appointments')}
-                icon={<CalendarDays size={18} />}
-                className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white"
-              >
-                Calendar View
-              </GlassButton>
-            </>
-          )}
+          </div>
         </div>
-      </div>
 
-      {/* Tab Navigation */}
-      <div className="flex space-x-1 bg-gray-100 p-1 rounded-xl">
-        <button
-          onClick={() => setActiveTab('customers')}
-          className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
-            activeTab === 'customers'
-              ? 'bg-white text-blue-600 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-          }`}
-        >
-          <Users size={18} />
-          Customers ({stats.totalCustomers})
-        </button>
-        <button
-          onClick={() => setActiveTab('appointments')}
-          className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
-            activeTab === 'appointments'
-              ? 'bg-white text-blue-600 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-          }`}
-        >
-          <CalendarDays size={18} />
-          Appointments ({appointmentStats.totalAppointments})
-        </button>
-      </div>
+        {/* Main Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Tab Navigation */}
+          <div className="p-6 pb-0 flex-shrink-0">
+            <div className="flex space-x-1 bg-gray-100 p-1 rounded-xl border-2 border-gray-200">
+              <button
+                onClick={() => setActiveTab('customers')}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold transition-all duration-200 ${
+                  activeTab === 'customers'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <Users size={18} />
+                Customers ({stats.totalCustomers})
+              </button>
+              <button
+                onClick={() => setActiveTab('appointments')}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold transition-all duration-200 ${
+                  activeTab === 'appointments'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <CalendarDays size={18} />
+                Appointments ({appointmentStats.totalAppointments})
+              </button>
+            </div>
+          </div>
 
       {/* Conditional Content Based on Active Tab */}
       {activeTab === 'customers' ? (
-        <>
-          {/* Statistics Dashboard Header */}
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Customer Statistics</h2>
-            <button
-              onClick={async () => {
-                try {
-                  setDbStatsLoading(true);
-                  const stats = await fetchCustomerStats();
-                  setDbStats(stats);
-                } catch (error) {
-                  console.error('Error refreshing statistics:', error);
-                  toast.error('Failed to refresh statistics');
-                } finally {
-                  setDbStatsLoading(false);
-                }
-              }}
-              disabled={dbStatsLoading}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RefreshCw className={`w-4 h-4 ${dbStatsLoading ? 'animate-spin' : ''}`} />
-              Refresh Stats
-            </button>
-          </div>
-          
-          {/* Statistics Dashboard */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <GlassCard className="bg-gradient-to-br from-blue-50 to-blue-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-blue-600">Total Customers</p>
-                  {dbStatsLoading ? (
-                    <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                      <p className="text-2xl font-bold text-blue-900">Loading...</p>
+        <React.Fragment>
+              {/* Fixed Statistics Section */}
+              <div className="p-6 pb-0 flex-shrink-0">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-gray-900">Customer Statistics</h2>
+                  <button
+                    onClick={async () => {
+                      try {
+                        setDbStatsLoading(true);
+                        const stats = await fetchCustomerStats();
+                        setDbStats(stats);
+                      } catch (error) {
+                        console.error('Error refreshing statistics:', error);
+                        toast.error('Failed to refresh statistics');
+                      } finally {
+                        setDbStatsLoading(false);
+                      }
+                    }}
+                    disabled={dbStatsLoading}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${dbStatsLoading ? 'animate-spin' : ''}`} />
+                    Refresh Stats
+                  </button>
+                </div>
+                
+                <div 
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
+                    gap: '1rem'
+                  }}
+                >
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                        <Users className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-1">Total Customers</p>
+                        {dbStatsLoading ? (
+                          <LoadingSpinner size="sm" color="blue" />
+                        ) : (
+                          <p className="text-2xl font-bold text-gray-900">{stats.totalCustomers}</p>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    <p className="text-2xl font-bold text-blue-900">{stats.totalCustomers}</p>
-                  )}
-                </div>
-                <div className="p-3 bg-blue-50/20 rounded-full">
-                  <Users className="w-6 h-6 text-blue-600" />
-                </div>
-              </div>
-            </GlassCard>
+                  </div>
 
-            <GlassCard className="bg-gradient-to-br from-green-50 to-green-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-green-600">Active Customers</p>
-                  {dbStatsLoading ? (
-                    <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
-                      <p className="text-2xl font-bold text-green-900">Loading...</p>
+                  <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                        <UserCheck className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-1">Active Customers</p>
+                        {dbStatsLoading ? (
+                          <LoadingSpinner size="sm" color="green" />
+                        ) : (
+                          <p className="text-2xl font-bold text-gray-900">{stats.activeCustomers}</p>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    <p className="text-2xl font-bold text-green-900">{stats.activeCustomers}</p>
-                  )}
-                </div>
-                <div className="p-3 bg-green-50/20 rounded-full">
-                  <UserCheck className="w-6 h-6 text-green-600" />
-                </div>
-              </div>
-            </GlassCard>
+                  </div>
 
-            <GlassCard className="bg-gradient-to-br from-purple-50 to-purple-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-purple-600">Total Revenue</p>
-                  {dbStatsLoading ? (
-                    <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
-                      <p className="text-2xl font-bold text-purple-900">Loading...</p>
+                  <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                        <DollarSign className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-1">Total Revenue</p>
+                        {dbStatsLoading ? (
+                          <LoadingSpinner size="sm" color="purple" />
+                        ) : (
+                          <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalRevenue)}</p>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    <p className="text-2xl font-bold text-purple-900">{formatCurrency(stats.totalRevenue)}</p>
-                  )}
-                </div>
-                <div className="p-3 bg-purple-50/20 rounded-full">
-                  <DollarSign className="w-6 h-6 text-purple-600" />
-                </div>
-              </div>
-            </GlassCard>
+                  </div>
 
-            <GlassCard className="bg-gradient-to-br from-amber-50 to-amber-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-amber-600">Total Devices</p>
-                  {dbStatsLoading ? (
-                    <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-amber-600"></div>
-                      <p className="text-2xl font-bold text-amber-900">Loading...</p>
+                  <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5 hover:bg-amber-100 hover:border-amber-300 transition-all shadow-sm hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-amber-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                        <Activity className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-1">Total Devices</p>
+                        {dbStatsLoading ? (
+                          <LoadingSpinner size="sm" color="orange" />
+                        ) : (
+                          <p className="text-2xl font-bold text-gray-900">{stats.totalDevices}</p>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    <p className="text-2xl font-bold text-amber-900">{stats.totalDevices}</p>
-                  )}
-                </div>
-                <div className="p-3 bg-amber-50/20 rounded-full">
-                  <Activity className="w-6 h-6 text-amber-600" />
-                </div>
-              </div>
-            </GlassCard>
+                  </div>
 
-            <GlassCard 
-              className="bg-gradient-to-br from-pink-50 to-pink-100 cursor-pointer hover:shadow-xl hover:scale-[1.02] transition-all duration-300"
-              onClick={() => setShowAllBirthdays(true)}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-pink-600">Today's Birthdays</p>
-                  {dbStatsLoading ? (
-                    <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-pink-600"></div>
-                      <p className="text-2xl font-bold text-pink-900">Loading...</p>
+                  <div 
+                    className="bg-pink-50 border-2 border-pink-200 rounded-2xl p-5 hover:bg-pink-100 hover:border-pink-300 transition-all shadow-sm hover:shadow-md cursor-pointer"
+                    onClick={() => setShowAllBirthdays(true)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-pink-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                        <Gift className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-1">Today's Birthdays</p>
+                        {dbStatsLoading ? (
+                          <LoadingSpinner size="sm" color="purple" />
+                        ) : (
+                          <p className="text-2xl font-bold text-gray-900">{stats.todaysBirthdays}</p>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    <p className="text-2xl font-bold text-pink-900">{stats.todaysBirthdays}</p>
-                  )}
-                </div>
-                <div className="p-3 bg-pink-50/20 rounded-full">
-                  <Gift className="w-6 h-6 text-pink-600" />
+                  </div>
                 </div>
               </div>
-            </GlassCard>
-          </div>
-        </>
+        </React.Fragment>
       ) : (
-        <>
-          {/* Appointments Statistics Dashboard */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <GlassCard className="bg-gradient-to-br from-blue-50 to-blue-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-blue-600">Total Appointments</p>
-                  <p className="text-2xl font-bold text-blue-900">{appointmentStats.totalAppointments}</p>
-                </div>
-                <div className="p-3 bg-blue-50/20 rounded-full">
-                  <CalendarDays className="w-6 h-6 text-blue-600" />
-                </div>
-              </div>
-            </GlassCard>
-
-            <GlassCard className="bg-gradient-to-br from-green-50 to-green-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-green-600">Confirmed</p>
-                  <p className="text-2xl font-bold text-green-900">{appointmentStats.confirmedAppointments}</p>
-                </div>
-                <div className="p-3 bg-green-50/20 rounded-full">
-                                          <CheckCircle className="w-6 h-6 text-green-600" />
-                </div>
-              </div>
-            </GlassCard>
-
-            <GlassCard className="bg-gradient-to-br from-yellow-50 to-yellow-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-yellow-600">Pending</p>
-                  <p className="text-2xl font-bold text-yellow-900">{appointmentStats.pendingAppointments}</p>
-                </div>
-                <div className="p-3 bg-yellow-50/20 rounded-full">
-                  <Clock3 className="w-6 h-6 text-yellow-600" />
-                </div>
-              </div>
-            </GlassCard>
-
-            <GlassCard className="bg-gradient-to-br from-purple-50 to-purple-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-purple-600">Today's</p>
-                  <p className="text-2xl font-bold text-purple-900">{appointmentStats.todaysAppointments}</p>
-                </div>
-                <div className="p-3 bg-purple-50/20 rounded-full">
-                  <Calendar className="w-6 h-6 text-purple-600" />
-                </div>
-              </div>
-            </GlassCard>
-
-            <GlassCard className="bg-gradient-to-br from-pink-50 to-pink-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-pink-600">Birthdays</p>
-                  <p className="text-2xl font-bold text-pink-900">{todaysBirthdays.length}</p>
-                </div>
-                <div className="p-3 bg-pink-50/20 rounded-full">
-                  <Gift className="w-6 h-6 text-pink-600" />
-                </div>
-              </div>
-            </GlassCard>
-          </div>
-
-          {/* Appointments Filters */}
-          <GlassCard className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                <select
-                  value={appointmentFilters.status}
-                  onChange={(e) => setAppointmentFilters(prev => ({ ...prev, status: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        <React.Fragment>
+              {/* Appointments Statistics Dashboard */}
+              <div className="p-6 pb-0 flex-shrink-0">
+                <div 
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
+                    gap: '1rem'
+                  }}
                 >
-                  <option value="all">All Status</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="pending">Pending</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-                <select
-                  value={appointmentFilters.date}
-                  onChange={(e) => setAppointmentFilters(prev => ({ ...prev, date: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="all">All Dates</option>
-                  <option value="today">Today</option>
-                  <option value="tomorrow">Tomorrow</option>
-                  <option value="this-week">This Week</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Customer</label>
-                <select
-                  value={appointmentFilters.customer}
-                  onChange={(e) => setAppointmentFilters(prev => ({ ...prev, customer: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="all">All Customers</option>
-                  {customers.slice(0, 10).map(customer => (
-                    <option key={customer.id} value={customer.id}>{customer.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </GlassCard>
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                        <CalendarDays className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-1">Total Appointments</p>
+                        <p className="text-2xl font-bold text-gray-900">{appointmentStats.totalAppointments}</p>
+                      </div>
+                    </div>
+                  </div>
 
-          {/* Appointments List */}
-          <GlassCard>
+                  <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                        <CheckCircle className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-1">Confirmed</p>
+                        <p className="text-2xl font-bold text-gray-900">{appointmentStats.confirmedAppointments}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-5 hover:bg-yellow-100 hover:border-yellow-300 transition-all shadow-sm hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-yellow-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                        <Clock3 className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-1">Pending</p>
+                        <p className="text-2xl font-bold text-gray-900">{appointmentStats.pendingAppointments}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                        <Calendar className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-1">Today's</p>
+                        <p className="text-2xl font-bold text-gray-900">{appointmentStats.todaysAppointments}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-pink-50 border-2 border-pink-200 rounded-2xl p-5 hover:bg-pink-100 hover:border-pink-300 transition-all shadow-sm hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-pink-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                        <Gift className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-1">Birthdays</p>
+                        <p className="text-2xl font-bold text-gray-900">{todaysBirthdays.length}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Appointments Filters */}
+              <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
+                <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                      <select
+                        value={appointmentFilters.status}
+                        onChange={(e) => setAppointmentFilters(prev => ({ ...prev, status: e.target.value }))}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 bg-white font-medium"
+                      >
+                        <option value="all">All Status</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="pending">Pending</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                      <select
+                        value={appointmentFilters.date}
+                        onChange={(e) => setAppointmentFilters(prev => ({ ...prev, date: e.target.value }))}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 bg-white font-medium"
+                      >
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="tomorrow">Tomorrow</option>
+                        <option value="this-week">This Week</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Customer</label>
+                      <select
+                        value={appointmentFilters.customer}
+                        onChange={(e) => setAppointmentFilters(prev => ({ ...prev, customer: e.target.value }))}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 bg-white font-medium"
+                      >
+                        <option value="all">All Customers</option>
+                        {customers.slice(0, 10).map(customer => (
+                          <option key={customer.id} value={customer.id}>{customer.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Appointments List */}
+              <div className="flex-1 overflow-y-auto px-6 py-6 border-t border-gray-100">
+                <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -1841,25 +1925,33 @@ const CustomersPage = () => {
             </div>
             
             {filteredAppointments.length === 0 && (
-              <div className="text-center py-12">
-                <CalendarDays className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No appointments found</h3>
-                <p className="text-gray-600 mb-4">Try adjusting your filters or create a new appointment</p>
-                <GlassButton
-                  onClick={() => {/* TODO: Add new appointment modal */}}
-                  icon={<UserPlus2 size={18} />}
-                >
-                  Create Appointment
-                </GlassButton>
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                        <CalendarDays className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">No appointments found</h3>
+                      <p className="text-gray-600 mb-6">Try adjusting your filters or create a new appointment</p>
+                      <button
+                        onClick={() => {
+                          setAppointmentModalMode('create');
+                          setSelectedAppointment(null);
+                          setShowAppointmentModal(true);
+                        }}
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
+                      >
+                        <UserPlus2 className="w-4 h-4" />
+                        <span>Create Appointment</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </GlassCard>
-        </>
+        </React.Fragment>
       )}
 
       {/* Customer-specific content - only show when customers tab is active */}
       {activeTab === 'customers' && (
-        <>
+        <React.Fragment>
           {/* Daily Birthday Card - DISABLED */}
           {/* {todaysBirthdays.length > 0 && (
             <div className="relative overflow-hidden">
@@ -1867,673 +1959,765 @@ const CustomersPage = () => {
             </div>
           )} */}
 
-          {/* Revenue Breakdown */}
-          {(stats.deviceRevenue > 0 || stats.posRevenue > 0) && (
-        <GlassCard className="bg-gradient-to-br from-blue-50 to-indigo-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Breakdown</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center justify-between p-3 bg-blue-50/50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-                <div>
-                  <p className="text-sm font-medium text-blue-700">Device Repairs</p>
-                  <p className="text-xs text-blue-600">Repair payments</p>
-                </div>
-              </div>
-              <p className="text-lg font-bold text-blue-900">{formatCurrency(stats.deviceRevenue)}</p>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-green-50/50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-                <div>
-                  <p className="text-sm font-medium text-green-700">POS Sales</p>
-                  <p className="text-xs text-green-600">Product sales</p>
-                </div>
-              </div>
-              <p className="text-lg font-bold text-green-900">{formatCurrency(stats.posRevenue)}</p>
-            </div>
-          </div>
-        </GlassCard>
-      )}
-
-      {/* Additional Statistics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <GlassCard>
-          <h3 className="text-lg font-semibold text-gray-900">Loyalty Distribution</h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                <span className="text-sm font-medium">Platinum</span>
-              </div>
-              <span className="text-sm text-gray-600">{stats.platinumCustomers} customers</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
-                <span className="text-sm font-medium">Gold</span>
-              </div>
-              <span className="text-sm text-gray-600">{stats.goldCustomers} customers</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
-                <span className="text-sm font-medium">Silver</span>
-              </div>
-              <span className="text-sm text-gray-600">{stats.silverCustomers} customers</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                <span className="text-sm font-medium">Bronze</span>
-              </div>
-              <span className="text-sm text-gray-600">{stats.bronzeCustomers} customers</span>
-            </div>
-          </div>
-        </GlassCard>
-
-        <GlassCard>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <GlassButton
-              variant="secondary"
-              icon={<MessageCircle size={16} />}
-              onClick={() => setShowBulkSMS(true)}
-              className="text-sm"
-            >
-              Send SMS
-            </GlassButton>
-            <GlassButton
-              variant="secondary"
-              icon={<BarChart3 size={16} />}
-              onClick={() => navigate('/customer-analytics')}
-              className="text-sm"
-            >
-              Analytics
-            </GlassButton>
-            <GlassButton
-              variant="secondary"
-              icon={<Award size={16} />}
-              onClick={() => navigate('/finance/payments')}
-              className="text-sm"
-            >
-              Points
-            </GlassButton>
-            <GlassButton
-              variant="secondary"
-              icon={<Calendar size={16} />}
-              onClick={() => navigate('/customer-events')}
-              className="text-sm"
-            >
-              Events
-            </GlassButton>
-          </div>
-        </GlassCard>
-      </div>
-
-      {/* New Filter Component */}
-      <CustomerFilters
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        loyaltyFilter={loyaltyFilterMulti}
-        onLoyaltyFilterChange={setLoyaltyFilterMulti}
-        statusFilter={statusFilterMulti}
-        onStatusFilterChange={setStatusFilterMulti}
-        tagFilter={tagFilterMulti}
-        onTagFilterChange={setTagFilterMulti}
-        referralFilter={referralFilterMulti}
-        onReferralFilterChange={setReferralFilterMulti}
-        birthdayFilter={birthdayFilter}
-        onBirthdayFilterChange={setBirthdayFilter}
-        whatsappFilter={whatsappFilter}
-        onWhatsappFilterChange={setWhatsappFilter}
-        showInactive={showInactive}
-        onShowInactiveChange={setShowInactive}
-        sortBy={sortBy}
-        onSortByChange={setSortBy}
-        customers={customers}
-        searchLoading={searchLoading}
-        filteredCount={filteredCustomers.length}
-        // New filters
-        genderFilter={genderFilter}
-        onGenderFilterChange={setGenderFilter}
-        minSpent={minSpent}
-        onMinSpentChange={setMinSpent}
-        maxSpent={maxSpent}
-        onMaxSpentChange={setMaxSpent}
-        minPoints={minPoints}
-        onMinPointsChange={setMinPoints}
-        maxPoints={maxPoints}
-        onMaxPointsChange={setMaxPoints}
-        cityFilter={cityFilter}
-        onCityFilterChange={setCityFilter}
-        minPurchases={minPurchases}
-        onMinPurchasesChange={setMinPurchases}
-        maxPurchases={maxPurchases}
-        onMaxPurchasesChange={setMaxPurchases}
-        // Date range filters
-        joinDateFrom={joinDateFrom}
-        onJoinDateFromChange={setJoinDateFrom}
-        joinDateTo={joinDateTo}
-        onJoinDateToChange={setJoinDateTo}
-        lastVisitFrom={lastVisitFrom}
-        onLastVisitFromChange={setLastVisitFrom}
-        lastVisitTo={lastVisitTo}
-        onLastVisitToChange={setLastVisitTo}
-      />
-
-      {/* Beautiful Search Progress Bar */}
-      {isBackgroundSearching && (
-        <div className="mb-4">
-          <BackgroundSearchIndicator
-            isSearching={isBackgroundSearching}
-            searchStatus={searchStatus}
-            searchProgress={searchProgress}
-            resultCount={totalCount}
-            onCancel={() => {
-              if (currentSearchJobId) {
-                const searchManager = getBackgroundSearchManager();
-                searchManager.cancelSearchJob(currentSearchJobId);
-                setIsBackgroundSearching(false);
-                setCurrentSearchJobId(null);
-              }
-            }}
-          />
-        </div>
-      )}
-
-      {/* Bulk Actions */}
-      {selectedCustomers.length > 0 && (
-        <GlassCard className="bg-blue-50 border-blue-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-blue-600" />
-              <span className="text-sm font-medium text-blue-900">
-                {selectedCustomers.length} customer{selectedCustomers.length !== 1 ? 's' : ''} selected
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <GlassButton
-                variant="secondary"
-                icon={<MessageCircle size={16} />}
-                onClick={() => handleBulkAction('message')}
-                className="text-sm"
-              >
-                Send Message
-              </GlassButton>
-              <GlassButton
-                variant="secondary"
-                icon={<Download size={16} />}
-                onClick={() => handleBulkAction('export')}
-                className="text-sm"
-              >
-                Export
-              </GlassButton>
-              <GlassButton
-                variant="secondary"
-                icon={<XCircle size={16} />}
-                onClick={() => setSelectedCustomers([])}
-                className="text-sm text-red-600"
-              >
-                Clear
-              </GlassButton>
-            </div>
-          </div>
-        </GlassCard>
-      )}
-        </>
-      )}
-
-      {/* Customers Display */}
-      {viewMode === 'list' ? (
-        <GlassCard>
-          {pageLoading && (
-            <div className="flex items-center justify-center py-4">
-              <div className="flex items-center gap-2 text-gray-500 text-sm opacity-70">
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Loading...</span>
-              </div>
-            </div>
-          )}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200/50">
-                  <th className="text-left py-4 px-4 font-medium text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={selectedCustomers.length === filteredCustomers.length && filteredCustomers.length > 0}
-                      onChange={toggleSelectAll}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                  </th>
-                  <th className="text-left py-4 px-4 font-medium text-gray-700">Customer</th>
-                  <th className="text-left py-4 px-4 font-medium text-gray-700">Contact</th>
-                  <th className="text-left py-4 px-4 font-medium text-gray-700">Branch</th>
-                  <th className="text-left py-4 px-4 font-medium text-gray-700">Devices</th>
-                  <th className="text-right py-4 px-4 font-medium text-gray-700">Total Spent</th>
-                  <th className="text-center py-4 px-4 font-medium text-gray-700">Loyalty</th>
-                  <th className="text-right py-4 px-4 font-medium text-gray-700">Points</th>
-                  <th className="text-center py-4 px-4 font-medium text-gray-700">Status</th>
-                  <th className="text-center py-4 px-4 font-medium text-gray-700">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCustomers.map(customer => {
-                  const deviceInfo = getCustomerDeviceInfo(customer.id);
-                  return (
-                    <tr
-                      key={customer.id}
-                      className="border-b border-gray-200/30 hover:bg-blue-50 cursor-pointer transition-colors"
-                      onClick={() => {
-                        setSelectedCustomer(customer);
-                        setShowCustomerDetailModal(true);
-                        markCustomerAsRead(customer.id);
-                      }}
-                    >
-                      <td className="py-4 px-4">
-                        <input
-                          type="checkbox"
-                          checked={selectedCustomers.includes(customer.id)}
-                          onChange={e => { e.stopPropagation(); toggleCustomerSelection(customer.id); }}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-                            {customer.name.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">{customer.name}</p>
-                            <p className="text-sm text-gray-600">{customer.city}</p>
+              {/* Revenue Breakdown */}
+              {(stats.deviceRevenue > 0 || stats.posRevenue > 0) && (
+                <div className="p-6 pb-0 flex-shrink-0">
+                  <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Revenue Breakdown</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                              <Activity className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-gray-600 mb-1">Device Repairs</p>
+                              <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.deviceRevenue)}</p>
+                            </div>
                           </div>
                         </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-sm">
-                            <Phone className="w-3 h-3 text-blue-500" />
-                            <span className="text-blue-600 font-medium">{customer.phone}</span>
+                      </div>
+                      <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                              <ShoppingBag className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-gray-600 mb-1">POS Sales</p>
+                              <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.posRevenue)}</p>
+                            </div>
                           </div>
-
-                          {customer.referralSource && (
-                            <div className="flex items-center gap-1 text-xs text-purple-600">
-                              <Tag className="w-3 h-3" />
-                              <span>{customer.referralSource}</span>
-                            </div>
-                          )}
-                          {(customer.birthMonth || customer.birthDay) && (
-                            <div className="flex items-center gap-1 text-xs text-pink-600">
-                              <Calendar className="w-3 h-3" />
-                              <span>{customer.birthMonth} {customer.birthDay}</span>
-                            </div>
-                          )}
                         </div>
-                      </td>
-                      <td className="py-4 px-4">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Additional Statistics */}
+              <div className="p-6 pb-0 flex-shrink-0">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                      <Crown className="w-5 h-5 text-purple-600" />
+                      Loyalty Distribution
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex items-center justify-between p-3 bg-purple-50 rounded-xl border border-purple-200">
                         <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                          <span className="text-sm text-gray-700 font-medium">
-                            {customer.branchName}
-                          </span>
+                          <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
+                          <span className="text-sm font-semibold text-gray-900">Platinum</span>
                         </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="space-y-1">
-                          <p className="text-gray-900 font-semibold">{deviceInfo.count} device{deviceInfo.count !== 1 ? 's' : ''}</p>
-                          <p className="text-sm text-gray-600">Last: {deviceInfo.lastActivity}</p>
+                        <span className="text-sm font-bold text-purple-600">{stats.platinumCustomers} customers</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-200">
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 bg-amber-500 rounded-full"></div>
+                          <span className="text-sm font-semibold text-gray-900">Gold</span>
                         </div>
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        <p className="text-gray-900 font-semibold">{formatCurrency(getCustomerTotalSpent(customer.id))}</p>
-                        {(() => {
-                          const devicePayments = customer.payments?.filter(p => p.source === 'device_payment' && p.status === 'completed') || [];
-                          const deviceTotal = devicePayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-                          
-                          if (deviceTotal > 0) {
-                            return (
-                              <div className="text-xs text-gray-500 mt-1">
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="w-1 h-1 bg-blue-500 rounded-full"></span>
-                                  <span>Repairs: {formatCurrency(deviceTotal)}</span>
-                                </span>
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
-                        {/* Purchase Summary for List View */}
-                        {(() => {
-                          const purchaseSummary = getCustomerPurchaseSummary(customer.id);
-                          if (purchaseSummary.totalPurchases > 0) {
-                            return (
-                              <div className="text-xs text-gray-500 mt-1">
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="w-1 h-1 bg-green-500 rounded-full"></span>
-                                  <span>{purchaseSummary.totalPurchases} purchase{purchaseSummary.totalPurchases !== 1 ? 's' : ''} • {purchaseSummary.totalItems} items</span>
-                                </span>
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className={`
-                          inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm border
-                          ${getLoyaltyStyle(customer.loyaltyLevel)}
-                        `}>
-                          <Star size={14} />
-                          <span className="capitalize">{customer.loyaltyLevel}</span>
+                        <span className="text-sm font-bold text-amber-600">{stats.goldCustomers} customers</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 bg-gray-400 rounded-full"></div>
+                          <span className="text-sm font-semibold text-gray-900">Silver</span>
                         </div>
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        <p className="text-gray-900 font-semibold">{customer.points}</p>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className={`
-                          inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm border
-                          ${getColorTagStyle(customer.colorTag)}
-                        `}>
-                          {!customer.isActive && <Clock size={14} />}
-                          <span className="capitalize">{customer.colorTag}</span>
+                        <span className="text-sm font-bold text-gray-600">{stats.silverCustomers} customers</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-orange-50 rounded-xl border border-orange-200">
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 bg-orange-500 rounded-full"></div>
+                          <span className="text-sm font-semibold text-gray-900">Bronze</span>
                         </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={e => { 
-                              e.stopPropagation(); 
-                              setSelectedCustomer(customer);
-                              setShowCustomerDetailModal(true);
-                              markCustomerAsRead(customer.id);
-                              markCustomerAsRead(customer.id);
-                            }}
-                            className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-                            title="View Details"
-                          >
-                            <Eye size={16} />
-                          </button>
-                                            <button
-                    onClick={e => { e.stopPropagation(); setSelectedCustomer(customer); setShowCustomerDetailModal(true); markCustomerAsRead(customer.id); }}
-                    className="p-1 text-gray-500 hover:text-green-600 transition-colors"
-                    title="View Customer"
-                  >
-                    <Edit size={16} />
-                  </button>
-                          <button
-                            onClick={e => { e.stopPropagation(); navigate(`/sms-control?customer=${customer.id}`); }}
-                            className="p-1 text-gray-500 hover:text-purple-600 transition-colors"
-                            title="Send Message"
-                          >
-                            <MessageCircle size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </GlassCard>
-      ) : (
-        /* Grid View */
-        <div>
-          {pageLoading && (
-            <div className="flex items-center justify-center py-4">
-              <div className="flex items-center gap-2 text-gray-500 text-sm opacity-70">
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Loading...</span>
-              </div>
-            </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredCustomers.map(customer => {
-            const deviceInfo = getCustomerDeviceInfo(customer.id);
-            return (
-              <GlassCard
-                key={customer.id}
-                onClick={() => {
-                  setSelectedCustomer(customer);
-                  setShowCustomerDetailModal(true);
-                  markCustomerAsRead(customer.id);
-                }}
-                className="cursor-pointer hover:scale-105 transition-transform duration-300"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-lg">
-                    {customer.name.charAt(0)}
+                        <span className="text-sm font-bold text-orange-600">{stats.bronzeCustomers} customers</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className={`
-                    px-2 py-1 rounded-full text-xs border
-                    ${getColorTagStyle(customer.colorTag)}
-                  `}>
-                    {customer.colorTag}
-                  </div>
-                </div>
-                <h3 className="font-semibold text-gray-900">{customer.name}</h3>
-                <p className="text-sm text-gray-600 mb-1">{customer.city}</p>
-                <div className="flex items-center gap-1 text-xs text-gray-600 mb-1">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span>{customer.branchName}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm mb-1">
-                  <Phone className="w-4 h-4 text-blue-500" />
-                  <span className="text-blue-600 font-medium">{customer.phone}</span>
-                </div>
-                
 
-                
-                {customer.referralSource && (
-                  <div className="flex items-center gap-2 text-xs text-purple-600 mb-1">
-                    <Tag className="w-3 h-3" />
-                    <span>From: {customer.referralSource}</span>
+                  <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                      <Zap className="w-5 h-5 text-blue-600" />
+                      Quick Actions
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => {
+                          if (selectedCustomers.length > 0) {
+                            setShowBulkSMS(true);
+                          } else {
+                            toast.error('Please select customers first');
+                          }
+                        }}
+                        className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all shadow-sm hover:shadow-md font-semibold text-sm border-2 border-blue-200"
+                      >
+                        <MessageCircle size={16} />
+                        Send SMS
+                        {selectedCustomers.length > 0 && (
+                          <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                            {selectedCustomers.length}
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleBulkExport()}
+                        className="flex items-center justify-center gap-2 px-4 py-3 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-all shadow-sm hover:shadow-md font-semibold text-sm border-2 border-green-200"
+                      >
+                        <Download size={16} />
+                        Export CSV
+                      </button>
+                      <button
+                        onClick={() => navigate('/customer-analytics')}
+                        className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-50 text-purple-600 rounded-xl hover:bg-purple-100 transition-all shadow-sm hover:shadow-md font-semibold text-sm border-2 border-purple-200"
+                      >
+                        <BarChart3 size={16} />
+                        Analytics
+                      </button>
+                      <button
+                        onClick={() => {
+                          setActiveTab('appointments');
+                          setAppointmentModalMode('create');
+                          setSelectedAppointment(null);
+                          setShowAppointmentModal(true);
+                        }}
+                        className="flex items-center justify-center gap-2 px-4 py-3 bg-orange-50 text-orange-600 rounded-xl hover:bg-orange-100 transition-all shadow-sm hover:shadow-md font-semibold text-sm border-2 border-orange-200"
+                      >
+                        <CalendarDays size={16} />
+                        New Appointment
+                      </button>
+                    </div>
                   </div>
-                )}
-                
-                {/* Birthday Information */}
-                {(customer.birthMonth || customer.birthDay) && (
-                  <div className="flex items-center gap-2 text-xs text-pink-600 mb-1">
-                    <Calendar className="w-3 h-3" />
-                    <span>
-                      {customer.birthMonth} {customer.birthDay}
-                    </span>
-                  </div>
-                )}
-                
-                {/* Email hidden for privacy */}
-                <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                  <span>{deviceInfo.count} device{deviceInfo.count !== 1 ? 's' : ''}</span>
-                  <span>•</span>
-                  <span>Last: {deviceInfo.lastActivity}</span>
                 </div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className={`
-                    inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border
-                    ${getLoyaltyStyle(customer.loyaltyLevel)}
-                  `}>
-                    <Star size={12} />
-                    <span className="capitalize">{customer.loyaltyLevel}</span>
-                  </div>
-                  <span className="text-xs font-semibold text-gray-900">{customer.points} pts</span>
+              </div>
+
+              {/* Fixed Search and Filters Section - Enhanced */}
+              <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
+                <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
+                  <CustomerFilters
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    loyaltyFilter={loyaltyFilterMulti}
+                    onLoyaltyFilterChange={setLoyaltyFilterMulti}
+                    statusFilter={statusFilterMulti}
+                    onStatusFilterChange={setStatusFilterMulti}
+                    tagFilter={tagFilterMulti}
+                    onTagFilterChange={setTagFilterMulti}
+                    referralFilter={referralFilterMulti}
+                    onReferralFilterChange={setReferralFilterMulti}
+                    birthdayFilter={birthdayFilter}
+                    onBirthdayFilterChange={setBirthdayFilter}
+                    whatsappFilter={whatsappFilter}
+                    onWhatsappFilterChange={setWhatsappFilter}
+                    showInactive={showInactive}
+                    onShowInactiveChange={setShowInactive}
+                    sortBy={sortBy}
+                    onSortByChange={setSortBy}
+                    customers={customers}
+                    searchLoading={searchLoading}
+                    filteredCount={filteredCustomers.length}
+                    // New filters
+                    genderFilter={genderFilter}
+                    onGenderFilterChange={setGenderFilter}
+                    minSpent={minSpent}
+                    onMinSpentChange={setMinSpent}
+                    maxSpent={maxSpent}
+                    onMaxSpentChange={setMaxSpent}
+                    minPoints={minPoints}
+                    onMinPointsChange={setMinPoints}
+                    maxPoints={maxPoints}
+                    onMaxPointsChange={setMaxPoints}
+                    cityFilter={cityFilter}
+                    onCityFilterChange={setCityFilter}
+                    minPurchases={minPurchases}
+                    onMinPurchasesChange={setMinPurchases}
+                    maxPurchases={maxPurchases}
+                    onMaxPurchasesChange={setMaxPurchases}
+                    // Date range filters
+                    joinDateFrom={joinDateFrom}
+                    onJoinDateFromChange={setJoinDateFrom}
+                    joinDateTo={joinDateTo}
+                    onJoinDateToChange={setJoinDateTo}
+                    lastVisitFrom={lastVisitFrom}
+                    onLastVisitFromChange={setLastVisitFrom}
+                    lastVisitTo={lastVisitTo}
+                    onLastVisitToChange={setLastVisitTo}
+                  />
                 </div>
-                <div className="flex items-center justify-between text-xs mb-2">
-                  <span className="text-gray-600">Total Spent:</span>
-                  <span className="font-semibold text-gray-900">{formatCurrency(getCustomerTotalSpent(customer.id))}</span>
+              </div>
+
+              {/* Beautiful Search Progress Bar */}
+              {isBackgroundSearching && (
+                <div className="p-6 pb-0">
+                  <BackgroundSearchIndicator
+                    isSearching={isBackgroundSearching}
+                    searchStatus={searchStatus}
+                    searchProgress={searchProgress}
+                    resultCount={totalCount}
+                    onCancel={() => {
+                      if (currentSearchJobId) {
+                        const searchManager = getBackgroundSearchManager();
+                        searchManager.cancelSearchJob(currentSearchJobId);
+                        setIsBackgroundSearching(false);
+                        setCurrentSearchJobId(null);
+                      }
+                    }}
+                  />
                 </div>
-                {/* Payment Sources Breakdown */}
-                {(() => {
-                  if (!customer?.payments?.length) return null;
-                  
-                  const devicePayments = customer.payments.filter(p => p.source === 'device_payment' && p.status === 'completed');
-                  const deviceTotal = devicePayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-                  
-                  if (deviceTotal > 0) {
-                    return (
-                      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                        <span className="flex items-center gap-1">
-                          <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                          <span>Repairs: {formatCurrency(deviceTotal)}</span>
+              )}
+
+              {/* Bulk Actions */}
+              {selectedCustomers.length > 0 && (
+                <div className="p-6 pb-0">
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-5 h-5 text-blue-600" />
+                        <span className="text-sm font-semibold text-blue-900">
+                          {selectedCustomers.length} customer{selectedCustomers.length !== 1 ? 's' : ''} selected
                         </span>
                       </div>
-                    );
-                  }
-                  return null;
-                })()}
-                {/* Purchase Summary */}
-                {(() => {
-                  const purchaseSummary = getCustomerPurchaseSummary(customer.id);
-                  if (purchaseSummary.totalPurchases > 0) {
-                    return (
-                      <div className="text-xs text-gray-500 mb-2">
-                        <div className="flex items-center gap-1 mb-1">
-                          <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                          <span>{purchaseSummary.totalPurchases} purchase{purchaseSummary.totalPurchases !== 1 ? 's' : ''}</span>
-                          <span>•</span>
-                          <span>{purchaseSummary.totalItems} item{purchaseSummary.totalItems !== 1 ? 's' : ''}</span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleBulkAction('message')}
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-all shadow-sm hover:shadow-md"
+                        >
+                          <MessageCircle size={16} />
+                          Send Message
+                        </button>
+                        <button
+                          onClick={() => handleBulkAction('export')}
+                          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition-all shadow-sm hover:shadow-md"
+                        >
+                          <Download size={16} />
+                          Export
+                        </button>
+                        <button
+                          onClick={() => setSelectedCustomers([])}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 transition-all shadow-sm hover:shadow-md"
+                        >
+                          <XCircle size={16} />
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+          {/* Scrollable Customers List */}
+          <div className="flex-1 overflow-y-auto px-6 py-6 border-t border-gray-100">
+            {/* Customers Display */}
+            {viewMode === 'list' ? (
+              <div className="space-y-3">
+                {pageLoading && (
+                  <div className="flex items-center justify-center py-12">
+                    <LoadingSpinner size="sm" color="blue" />
+                  </div>
+                )}
+                {filteredCustomers.map(customer => {
+                  const deviceInfo = getCustomerDeviceInfo(customer.id);
+                  const isExpanded = expandedCustomerId === customer.id;
+                  
+                  return (
+                    <div
+                      key={customer.id}
+                      className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 hover:shadow-lg ${
+                        isExpanded ? 'border-purple-500 shadow-xl' : 'border-gray-200 hover:border-blue-400'
+                      }`}
+                    >
+                      {/* Desktop Card View */}
+                      <div className="hidden md:block w-full">
+                        <div 
+                          className="flex items-start justify-between p-6 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedCustomerId(isExpanded ? null : customer.id);
+                          }}
+                        >
+                          <div className="flex items-start gap-3 flex-1 min-w-0">
+                            {/* Checkbox */}
+                            <input
+                              type="checkbox"
+                              checked={selectedCustomers.includes(customer.id)}
+                              onChange={e => { e.stopPropagation(); toggleCustomerSelection(customer.id); }}
+                              className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              onClick={e => e.stopPropagation()}
+                            />
+                            
+                            {/* Main Content */}
+                            <div className="flex-1 min-w-0">
+                              {/* Customer Name and Tier Row */}
+                              <div className="flex items-center gap-3 mb-4 flex-wrap">
+                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
+                                  {customer.name.charAt(0)}
+                                </div>
+                                <h3 className="text-2xl font-bold text-gray-900 truncate">{customer.name}</h3>
+                                
+                                {/* Loyalty Badge */}
+                                <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-base font-bold ${getLoyaltyStyle(customer.loyaltyLevel)} flex items-center gap-2 flex-shrink-0`}>
+                                  <Star className="w-5 h-5" />
+                                  <span className="capitalize">{customer.loyaltyLevel}</span>
+                                </span>
+                              </div>
+                              
+                              {/* Info Badges Row */}
+                              <div className="flex items-center gap-3 flex-wrap">
+                                {/* Contact Badge */}
+                                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0">
+                                  <Phone className="w-5 h-5" />
+                                  <span className="text-base font-semibold">{customer.phone}</span>
+                                </div>
+
+                                {/* Total Spent */}
+                                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-50 text-green-700 border border-green-200">
+                                  <DollarSign className="w-5 h-5" />
+                                  <span className="text-base font-semibold">{formatCurrency(getCustomerTotalSpent(customer.id))}</span>
+                                </div>
+
+                                {/* Devices & Points Combined Card */}
+                                <div className="inline-flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-50 border border-gray-200">
+                                  <div className="flex items-center gap-2">
+                                    <Activity className="w-5 h-5 text-teal-600" />
+                                    <span className="text-base font-semibold text-teal-700">{deviceInfo.count}</span>
+                                    <span className="text-sm text-teal-600 font-medium">devices</span>
+                                  </div>
+                                  <div className="w-px h-5 bg-gray-300"></div>
+                                  <div className="flex items-center gap-2">
+                                    <Award className="w-5 h-5 text-pink-600" />
+                                    <span className="text-base font-semibold text-pink-700">{customer.points}</span>
+                                    <span className="text-sm text-pink-600 font-medium">points</span>
+                                  </div>
+                                </div>
+
+                                {/* Branch Badge */}
+                                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-50 text-purple-700 border border-purple-200">
+                                  <Building className="w-5 h-5" />
+                                  <span className="text-sm font-medium">{customer.branchName}</span>
+                                </div>
+
+                                {/* Status Badge */}
+                                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${
+                                  customer.isActive 
+                                    ? 'bg-green-50 text-green-700 border border-green-200' 
+                                    : 'bg-gray-50 text-gray-700 border border-gray-200'
+                                }`}>
+                                  <CheckCircle className="w-5 h-5" />
+                                  <span className="text-sm font-medium capitalize">{customer.colorTag}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Points Display Card */}
+                          <div className="ml-4 flex-shrink-0">
+                            <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 shadow-lg min-w-[140px]">
+                              <p className="text-xs font-medium text-purple-100 mb-1">Points Balance</p>
+                              <p className="text-2xl font-bold text-white">{customer.points.toLocaleString()}</p>
+                            </div>
+                          </div>
+                          
+                          {/* Expand/Collapse Icon */}
+                          <div className="ml-4 flex-shrink-0">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
+                              isExpanded ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              <ChevronDown className={`w-5 h-5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                            </div>
+                          </div>
                         </div>
-                        {purchaseSummary.lastPurchase && (
-                          <div className="text-xs text-gray-400">
-                            Last: {new Date(purchaseSummary.lastPurchase.date).toLocaleDateString()}
+                        
+                        {/* Expanded Content */}
+                        {isExpanded && (
+                          <div className="px-6 pb-6 border-t border-gray-200 pt-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                              <div className="space-y-4">
+                                <h4 className="font-semibold text-gray-900">Customer Information</h4>
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <Phone className="w-4 h-4 text-gray-400" />
+                                    <span className="text-sm text-gray-600">{customer.phone}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Calendar className="w-4 h-4 text-gray-400" />
+                                    <span className="text-sm text-gray-600">
+                                      Joined: {customer.joinedDate ? new Date(customer.joinedDate).toLocaleDateString() : 'N/A'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-4 h-4 text-gray-400" />
+                                    <span className="text-sm text-gray-600">
+                                      Last Purchase: {customer.lastVisit ? new Date(customer.lastVisit).toLocaleDateString() : 'Never'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="space-y-4">
+                                <h4 className="font-semibold text-gray-900">Statistics</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                    <p className="text-xs text-gray-600 mb-1">Total Orders</p>
+                                    <p className="text-lg font-bold text-gray-900">{customer.orders || 0}</p>
+                                  </div>
+                                  <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                                    <p className="text-xs text-gray-600 mb-1">Total Spent</p>
+                                    <p className="text-lg font-bold text-gray-900">{formatCurrency(getCustomerTotalSpent(customer.id))}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Action Buttons - Styled like Products */}
+                            <div className="flex flex-wrap items-center gap-3">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // Handle adjust points
+                                  const points = prompt('Enter points to add (positive) or subtract (negative):');
+                                  if (points !== null) {
+                                    const pointsNum = parseInt(points);
+                                    if (!isNaN(pointsNum)) {
+                                      // Add your points adjustment logic here
+                                      toast.success(`Points adjustment: ${pointsNum > 0 ? '+' : ''}${pointsNum}`);
+                                    }
+                                  }
+                                }}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm shadow-sm"
+                                title="Adjust Points"
+                              >
+                                <Zap className="w-4 h-4" />
+                                <span>Adjust Points</span>
+                              </button>
+                              
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedCustomer(customer);
+                                  setShowBulkSMS(true);
+                                }}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm shadow-sm"
+                                title="Send SMS"
+                              >
+                                <Phone className="w-4 h-4" />
+                                <span>SMS</span>
+                              </button>
+                              
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/customer-analytics?customer=${customer.id}`);
+                                }}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm shadow-sm"
+                                title="View Analytics"
+                              >
+                                <BarChart2 className="w-4 h-4" />
+                                <span>Analytics</span>
+                              </button>
+                              
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // Handle redeem points
+                                  toast.info('Redeem functionality coming soon');
+                                }}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors font-medium text-sm shadow-sm"
+                                title="Redeem Points"
+                              >
+                                <Gift className="w-4 h-4" />
+                                <span>Redeem</span>
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
-                    );
-                  }
-                  return null;
-                })()}
-                <div className="flex items-center justify-end gap-2 mt-2">
-                          <button
-                            onClick={e => { 
-                              e.stopPropagation(); 
-                              setSelectedCustomer(customer);
-                              setShowCustomerDetailModal(true);
-                              markCustomerAsRead(customer.id);
-                            }}
-                            className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-                            title="View Details"
-                          >
-                            <Eye size={16} />
-                          </button>
-                          <button
-                            onClick={e => { e.stopPropagation(); setSelectedCustomer(customer); setShowCustomerDetailModal(true); markCustomerAsRead(customer.id); }}
-                            className="p-1 text-gray-500 hover:text-green-600 transition-colors"
-                            title="Edit Customer"
-                          >
-                            <Edit size={16} />
-                          </button>
-                  <button
-                    onClick={e => { e.stopPropagation(); navigate(`/sms-control?customer=${customer.id}`); }}
-                    className="p-1 text-gray-500 hover:text-purple-600 transition-colors"
-                    title="Send Message"
-                  >
-                    <MessageCircle size={16} />
-                  </button>
-                </div>
-              </GlassCard>
+                      
+                      {/* Mobile Card View */}
+                      <div className="md:hidden p-4">
+                        <div className="space-y-3">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedCustomers.includes(customer.id)}
+                                onChange={e => { e.stopPropagation(); toggleCustomerSelection(customer.id); }}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                onClick={e => e.stopPropagation()}
+                              />
+                              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold shadow-md">
+                                {customer.name.charAt(0)}
+                              </div>
+                              <div>
+                                <h3 className="font-bold text-gray-900 text-sm">{customer.name}</h3>
+                                <p className="text-xs text-gray-500">{customer.phone}</p>
+                              </div>
+                            </div>
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-sm ${getLoyaltyStyle(customer.loyaltyLevel)}`}>
+                              <Star size={12} />
+                              <span className="capitalize">{customer.loyaltyLevel}</span>
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs text-gray-600">Total Spent</p>
+                              <p className="text-lg font-bold text-gray-900">{formatCurrency(getCustomerTotalSpent(customer.id))}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-gray-600">Points</p>
+                              <p className="text-lg font-bold text-gray-900">{customer.points}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 pt-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCustomer(customer);
+                                setShowCustomerDetailModal(true);
+                                markCustomerAsRead(customer.id);
+                              }}
+                              className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 bg-blue-600 text-white rounded-xl transition-all shadow-md hover:shadow-lg text-xs font-semibold"
+                            >
+                              <Eye className="w-4 h-4" />
+                              <span>View</span>
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/sms-control?customer=${customer.id}`);
+                              }}
+                              className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 bg-green-600 text-white rounded-xl transition-all shadow-md hover:shadow-lg text-xs font-semibold"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                              <span>Message</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* Grid View */
+              <div>
+                {pageLoading && (
+                  <div className="flex items-center justify-center py-12">
+                    <LoadingSpinner size="sm" color="blue" />
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {filteredCustomers.map(customer => {
+                    const deviceInfo = getCustomerDeviceInfo(customer.id);
+                    return (
+                      <div
+                        key={customer.id}
+                        onClick={() => {
+                          setSelectedCustomer(customer);
+                          setShowCustomerDetailModal(true);
+                          markCustomerAsRead(customer.id);
+                        }}
+                        className="border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 hover:shadow-lg cursor-pointer border-gray-200 hover:border-blue-400"
+                      >
+                        <div className="p-4">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
+                              {customer.name.charAt(0)}
+                            </div>
+                            <div className={`
+                              px-3 py-1.5 rounded-xl text-xs font-semibold border-2
+                              ${getColorTagStyle(customer.colorTag)}
+                            `}>
+                              {customer.colorTag}
+                            </div>
+                          </div>
+                          
+                          <h3 className="font-bold text-gray-900 text-lg mb-1">{customer.name}</h3>
+                          <p className="text-sm text-gray-600 mb-3">{customer.city}</p>
+                          
+                          <div className="space-y-2 mb-4">
+                            <div className="flex items-center gap-2 text-sm">
+                              <Phone className="w-4 h-4 text-blue-500" />
+                              <span className="text-blue-600 font-semibold">{customer.phone}</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 text-sm">
+                              <Building className="w-4 h-4 text-gray-500" />
+                              <span className="text-gray-700 font-medium">{customer.branchName}</span>
+                            </div>
+                            
+                            {customer.referralSource && (
+                              <div className="flex items-center gap-2 text-xs text-purple-600">
+                                <Tag className="w-3 h-3" />
+                                <span>From: {customer.referralSource}</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-2 mb-4">
+                            <div className="bg-blue-50 p-2 rounded-lg border border-blue-200">
+                              <p className="text-xs text-gray-600 mb-1">Devices</p>
+                              <p className="text-sm font-bold text-gray-900">{deviceInfo.count}</p>
+                            </div>
+                            <div className="bg-green-50 p-2 rounded-lg border border-green-200">
+                              <p className="text-xs text-gray-600 mb-1">Spent</p>
+                              <p className="text-sm font-bold text-gray-900">{formatCurrency(getCustomerTotalSpent(customer.id))}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center justify-between mb-3">
+                            <div className={`
+                              inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border-2
+                              ${getLoyaltyStyle(customer.loyaltyLevel)}
+                            `}>
+                              <Star size={14} />
+                              <span className="capitalize">{customer.loyaltyLevel}</span>
+                            </div>
+                            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl px-3 py-1.5 shadow-md">
+                              <p className="text-xs font-medium text-blue-100 mb-0.5">Points</p>
+                              <p className="text-base font-bold text-white">{customer.points}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 pt-3 border-t border-gray-200">
+                            <button
+                              onClick={e => { 
+                                e.stopPropagation(); 
+                                setSelectedCustomer(customer);
+                                setShowCustomerDetailModal(true);
+                                markCustomerAsRead(customer.id);
+                              }}
+                              className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-blue-600 text-white rounded-xl transition-all shadow-md hover:shadow-lg text-xs font-semibold"
+                              title="View Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                              <span>View</span>
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); navigate(`/sms-control?customer=${customer.id}`); }}
+                              className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-green-600 text-white rounded-xl transition-all shadow-md hover:shadow-lg text-xs font-semibold"
+                              title="Send Message"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                              <span>Message</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
             );
           })}
-        </div>
-        </div>
-      )}
-
-      {/* Infinite Scroll Loading Indicator */}
-      {filteredCustomers.length > 0 && (
-        <div className="mt-6 text-center space-y-4">
-          {/* Progress Counter */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-full border border-gray-200">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-sm font-medium text-gray-700">
-                Showing {filteredCustomers.length.toLocaleString()} of {totalCount.toLocaleString()}
-              </span>
-            </div>
-            {(hasNextPage || filteredCustomers.length < totalCount) && (
-              <span className="text-xs text-gray-500">
-                • Scroll for more
-              </span>
+                </div>
+              </div>
             )}
-          </div>
-          
-          {/* Load More Button - Show when there are more customers to load */}
-          {!isLoadingMore && (hasNextPage || filteredCustomers.length < totalCount) && filteredCustomers.length > 0 && (
-            <div className="flex flex-col items-center gap-3 py-6 bg-gradient-to-b from-transparent via-blue-50/30 to-transparent">
-              {/* Prominent Load More button */}
-              <button
-                onClick={() => {
-                  if (!isLoadingMore) {
-                    setIsLoadingMore(true);
-                    setCurrentPage(prev => prev + 1);
-                  }
-                }}
-                className="group relative px-10 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-2xl hover:from-blue-600 hover:to-blue-700 transition-all duration-300 text-lg font-bold shadow-2xl hover:shadow-blue-500/50 transform hover:scale-110 flex items-center gap-3 border-2 border-blue-400/50"
-              >
-                <span>Load More Customers</span>
-                <svg 
-                  className="w-6 h-6 group-hover:translate-y-1 transition-transform duration-300" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
+
+          {/* Infinite Scroll Loading Indicator */}
+          {filteredCustomers.length > 0 && (
+            <div className="mt-6 text-center space-y-4">
+              {/* Progress Counter */}
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-full border border-gray-200">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                  <span className="text-sm font-medium text-gray-700">
+                    Showing {filteredCustomers.length.toLocaleString()} of {totalCount.toLocaleString()}
+                  </span>
+                </div>
+                {(hasNextPage || filteredCustomers.length < totalCount) && (
+                  <span className="text-xs text-gray-500">
+                    • Scroll for more
+                  </span>
+                )}
+              </div>
+              
+              {/* Load More Button - Show when there are more customers to load */}
+              {!isLoadingMore && (hasNextPage || filteredCustomers.length < totalCount) && filteredCustomers.length > 0 && (
+                <div className="flex flex-col items-center gap-3 py-6 bg-gradient-to-b from-transparent via-blue-50/30 to-transparent">
+                  {/* Prominent Load More button */}
+                  <button
+                    onClick={() => {
+                      if (!isLoadingMore) {
+                        setIsLoadingMore(true);
+                        setCurrentPage(prev => prev + 1);
+                      }
+                    }}
+                    className="group relative px-10 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-2xl hover:from-blue-600 hover:to-blue-700 transition-all duration-300 text-lg font-bold shadow-2xl hover:shadow-blue-500/50 transform hover:scale-110 flex items-center gap-3 border-2 border-blue-400/50"
+                  >
+                    <span>Load More Customers</span>
+                    <svg 
+                      className="w-6 h-6 group-hover:translate-y-1 transition-transform duration-300" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  <div className="text-sm font-medium text-gray-600">
+                    Click to load {Math.min(100, totalCount - filteredCustomers.length)} more customers
+                  </div>
+                </div>
+              )}
+
+              {/* Loading State */}
+              {isLoadingMore && (
+                <div className="flex flex-col items-center justify-center gap-3 py-6">
+                  <div className="relative">
+                    <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
+                    <div className="absolute inset-0 bg-blue-400 blur-lg opacity-30 animate-pulse" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-gray-700">Loading more customers...</p>
+                    <p className="text-xs text-gray-500 mt-1">Please wait</p>
+                  </div>
+                </div>
+              )}
+
+              {/* All Loaded State */}
+              {!isLoadingMore && !hasNextPage && filteredCustomers.length > 0 && (
+                <div className="flex flex-col items-center gap-2 py-6">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-full border border-green-200">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-700">
+                      All {totalCount.toLocaleString()} customers loaded
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">You've reached the end of the list</p>
+                </div>
+              )}
+
+              {/* Loader element for intersection observer - Hidden but needed for auto-scroll */}
+              <div ref={loaderRef} className="h-1"></div>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {filteredCustomers.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <Users className="w-8 h-8 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">No customers found</h3>
+              <p className="text-gray-600 mb-6">
+                {searchQuery || loyaltyFilterMulti.length > 0 || statusFilterMulti.length > 0
+                  ? 'Try adjusting your search or filters'
+                  : 'Get started by adding your first customer'
+                }
+              </p>
+              {!searchQuery && loyaltyFilterMulti.length === 0 && statusFilterMulti.length === 0 && (
+                <button
+                  onClick={() => setShowAddCustomerModal(true)}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              <div className="text-sm font-medium text-gray-600">
-                Click to load {Math.min(100, totalCount - filteredCustomers.length)} more customers
-              </div>
+                  <UserPlus className="w-4 h-4" />
+                  <span>Add Your First Customer</span>
+                </button>
+              )}
             </div>
           )}
-
-          {/* Loading State */}
-          {isLoadingMore && (
-            <div className="flex flex-col items-center justify-center gap-3 py-6">
-              <div className="relative">
-                <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
-                <div className="absolute inset-0 bg-blue-400 blur-lg opacity-30 animate-pulse" />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-medium text-gray-700">Loading more customers...</p>
-                <p className="text-xs text-gray-500 mt-1">Please wait</p>
-              </div>
-            </div>
-          )}
-
-          {/* All Loaded State */}
-          {!isLoadingMore && !hasNextPage && filteredCustomers.length > 0 && (
-            <div className="flex flex-col items-center gap-2 py-6">
-              <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-full border border-green-200">
-                <CheckCircle className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-medium text-green-700">
-                  All {totalCount.toLocaleString()} customers loaded
-                </span>
-              </div>
-              <p className="text-xs text-gray-500">You've reached the end of the list</p>
-            </div>
-          )}
-
-          {/* Loader element for intersection observer - Hidden but needed for auto-scroll */}
-          <div ref={loaderRef} className="h-1"></div>
+          </div>
+        </React.Fragment>
+      )}
         </div>
-      )}
-
-      {/* Empty State */}
-      {filteredCustomers.length === 0 && (
-        <GlassCard className="text-center py-12">
-          <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No customers found</h3>
-          <p className="text-gray-600 mb-4">Try adjusting your search or filter criteria</p>
-          <GlassButton
-            onClick={() => setShowAddCustomerModal(true)}
-            icon={<UserPlus size={18} />}
-          >
-            Add Your First Customer
-          </GlassButton>
-        </GlassCard>
-      )}
-
-
+      </div>
 
       {/* Add Customer Modal */}
       <AddCustomerModal
@@ -2578,17 +2762,6 @@ const CustomersPage = () => {
         sending={sendingSMS}
       />
 
-      <ExcelImportModal
-        isOpen={showExcelImport}
-        onClose={() => setShowExcelImport(false)}
-        onImportComplete={handleExcelImportComplete}
-      />
-
-      <CustomerUpdateImportModal
-        isOpen={showCustomerUpdateImport}
-        onClose={() => setShowCustomerUpdateImport(false)}
-        onImportComplete={handleCustomerUpdateImportComplete}
-      />
 
       <AppointmentModal
         isOpen={showAppointmentModal}
@@ -2600,6 +2773,22 @@ const CustomersPage = () => {
         appointment={appointmentModalMode === 'edit' ? (selectedAppointment || undefined) : undefined}
         onSave={handleAppointmentSave}
         mode={appointmentModalMode}
+      />
+
+      <CustomerImportExportModal
+        isOpen={showImportExportModal}
+        onClose={() => setShowImportExportModal(false)}
+        onImportComplete={(importedCustomers) => {
+          setCustomers(prev => [...prev, ...importedCustomers]);
+        }}
+        onUpdateComplete={(updatedCustomers) => {
+          setCustomers(prev => 
+            prev.map(customer => {
+              const updatedCustomer = updatedCustomers.find(uc => uc.id === customer.id);
+              return updatedCustomer || customer;
+            })
+          );
+        }}
       />
 
       {/* Birthday Components */}
@@ -2621,25 +2810,29 @@ const CustomersPage = () => {
       {showBirthdayCalendar && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-            <GlassCard className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Birthday Calendar</h2>
-                <button
-                  onClick={() => setShowBirthdayCalendar(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+            <div className="bg-white rounded-2xl shadow-2xl border-2 border-gray-200 overflow-hidden">
+              <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-gray-900">Birthday Calendar</h2>
+                  <button
+                    onClick={() => setShowBirthdayCalendar(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
               </div>
-              <BirthdayCalendar
-                customers={customers}
-                onCustomerClick={(customer) => {
-                  setSelectedCustomer(customer);
-                  setShowCustomerDetailModal(true);
-                  markCustomerAsRead(customer.id);
-                }}
-              />
-            </GlassCard>
+              <div className="p-6">
+                <BirthdayCalendar
+                  customers={customers}
+                  onCustomerClick={(customer) => {
+                    setSelectedCustomer(customer);
+                    setShowCustomerDetailModal(true);
+                    markCustomerAsRead(customer.id);
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -2647,24 +2840,27 @@ const CustomersPage = () => {
       {showBirthdayRewards && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <GlassCard className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Birthday Rewards</h2>
-                <button
-                  onClick={() => setShowBirthdayRewards(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+            <div className="bg-white rounded-2xl shadow-2xl border-2 border-gray-200 overflow-hidden">
+              <div className="p-6 bg-gradient-to-r from-pink-50 to-rose-50 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-gray-900">Birthday Rewards</h2>
+                  <button
+                    onClick={() => setShowBirthdayRewards(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
               </div>
-              <BirthdayRewards
-                todaysBirthdays={todaysBirthdays}
-                onApplyReward={(customerId, rewardType) => {
-
-                  toast.success('Birthday reward applied successfully!');
-                }}
-              />
-            </GlassCard>
+              <div className="p-6">
+                <BirthdayRewards
+                  todaysBirthdays={todaysBirthdays}
+                  onApplyReward={(customerId, rewardType) => {
+                    toast.success('Birthday reward applied successfully!');
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -2673,24 +2869,27 @@ const CustomersPage = () => {
       {showAllBirthdays && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-            <GlassCard className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-rose-500 to-fuchsia-600 rounded-xl flex items-center justify-center shadow-lg">
-                    <Gift size={24} className="text-white" />
+            <div className="bg-white rounded-2xl shadow-2xl border-2 border-gray-200 overflow-hidden">
+              <div className="p-6 bg-gradient-to-r from-pink-50 to-rose-50 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-gradient-to-br from-rose-500 to-fuchsia-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <Gift size={24} className="text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">All Birthday Customers</h2>
+                      <p className="text-sm text-gray-600">{todaysBirthdays.length} customers celebrating today</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">All Birthday Customers</h2>
-                    <p className="text-sm text-gray-600">{todaysBirthdays.length} customers celebrating today</p>
-                  </div>
+                  <button
+                    onClick={() => setShowAllBirthdays(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setShowAllBirthdays(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <X className="w-6 h-6" />
-                </button>
               </div>
+              <div className="p-6">
               
               {/* All Birthday Customers Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -2801,11 +3000,11 @@ const CustomersPage = () => {
                   </div>
                 </div>
               </div>
-            </GlassCard>
+            </div>
           </div>
         </div>
+        </div>
       )}
-
 
       {/* Customer Detail Modal */}
       {selectedCustomer && (
@@ -2825,6 +3024,12 @@ const CustomersPage = () => {
 
       {/* Success Modal */}
       <SuccessModal {...successModal.props} />
+
+      {/* Keyboard Shortcuts Modal */}
+      <KeyboardShortcutsModal
+        isOpen={showKeyboardShortcuts}
+        onClose={() => setShowKeyboardShortcuts(false)}
+      />
     </div>
   );
 };

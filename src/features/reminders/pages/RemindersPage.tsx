@@ -7,8 +7,8 @@ import { useBranch } from '../../../context/BranchContext';
 import { reminderApi } from '../../../lib/reminderApi';
 import { Reminder, CreateReminderInput } from '../../../types/reminder';
 import { BackButton } from '../../shared/components/ui/BackButton';
-import GlassCard from '../../shared/components/ui/GlassCard';
 import SmartAutocomplete from '../../shared/components/ui/SmartAutocomplete';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import QuickActionButtons, { commonQuickActions } from '../../shared/components/ui/QuickActionButtons';
 import { useKeyboardShortcuts } from '../../../hooks/useKeyboardShortcuts';
 import { useFormDraft } from '../../../hooks/useFormDraft';
@@ -264,24 +264,34 @@ const RemindersPage: React.FC = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <BackButton to="/dashboard" />
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {/* Wrapper Container - Single rounded container */}
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Fixed Header Section */}
+        <div className="p-8 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <Bell className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Reminders</h1>
-            <p className="text-gray-600 mt-1">Smart reminder system with auto-complete and templates</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Reminders</h1>
+                <p className="text-sm text-gray-600">
+                  Smart reminder system with auto-complete and templates
+                </p>
           </div>
         </div>
 
-        <div className="flex gap-2">
+            {/* Action Button */}
           <button
             onClick={() => {
               setSelectedReminder(null);
               setShowCreateModal(true);
             }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl text-sm"
           >
             <Plus size={18} />
             New Reminder
@@ -290,43 +300,54 @@ const RemindersPage: React.FC = () => {
         </div>
       </div>
 
+        {/* Main Container - Scrollable Content */}
+        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto px-6 py-6">
       {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-blue-50 rounded-lg p-5 hover:bg-blue-100 transition-colors">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <Bell className="w-7 h-7 text-blue-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+                  <Bell className="w-6 h-6 text-white" />
+                </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">Total</p>
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Total</p>
               <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-orange-50 rounded-lg p-5 hover:bg-orange-100 transition-colors">
+            <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <Clock className="w-7 h-7 text-orange-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center">
+                  <Clock className="w-6 h-6 text-white" />
+                </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">Pending</p>
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Pending</p>
               <p className="text-2xl font-bold text-gray-900">{stats.pending}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-red-50 rounded-lg p-5 hover:bg-red-100 transition-colors">
+            <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 hover:bg-red-100 hover:border-red-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <AlertCircle className="w-7 h-7 text-red-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center">
+                  <AlertCircle className="w-6 h-6 text-white" />
+                </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">Overdue</p>
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Overdue</p>
               <p className="text-2xl font-bold text-gray-900">{stats.overdue}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-green-50 rounded-lg p-5 hover:bg-green-100 transition-colors">
+            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
           <div className="flex items-center gap-3">
-            <Check className="w-7 h-7 text-green-600 flex-shrink-0" />
+                <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
+                  <Check className="w-6 h-6 text-white" />
+                </div>
             <div>
-              <p className="text-xs text-gray-600 mb-1">Completed</p>
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Completed</p>
               <p className="text-2xl font-bold text-gray-900">{stats.completed}</p>
             </div>
           </div>
@@ -334,7 +355,7 @@ const RemindersPage: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <GlassCard className="p-4">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm mb-6">
         <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
           {/* Search Bar */}
           <div className="relative flex-1 w-full md:w-auto min-w-[300px]">
@@ -344,7 +365,7 @@ const RemindersPage: React.FC = () => {
               placeholder="Search reminders by title, customer, device, category, priority..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
             />
             {searchQuery && (
               <button
@@ -393,22 +414,24 @@ const RemindersPage: React.FC = () => {
             </div>
           </div>
         </div>
-      </GlassCard>
+          </div>
 
       {/* Reminders List */}
-      <GlassCard className="p-6">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-sm">
         {filteredReminders.length === 0 ? (
-          <div className="text-center py-12">
-            <Bell className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No reminders found</h3>
-            <p className="text-gray-500 mb-6">
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <Bell className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">No reminders found</h3>
+                <p className="text-gray-600 mb-6">
               {filterStatus === 'all' 
                 ? 'Create your first reminder to get started' 
                 : `No ${filterStatus} reminders`}
             </p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors mx-auto"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
             >
               <Plus size={18} />
               Add Reminder
@@ -542,7 +565,10 @@ const RemindersPage: React.FC = () => {
             })}
           </div>
         )}
-      </GlassCard>
+          </div>
+        </div>
+      </div>
+    </div>
 
       {/* Enhanced Create/Edit Modal */}
       {showCreateModal && (
