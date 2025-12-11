@@ -188,8 +188,16 @@ const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
             {receiptData.items.map((item) => (
               <div key={item.id} className="flex items-start justify-between text-sm">
                 <div className="flex-1 min-w-0">
-                  <div className="text-lats-text font-medium truncate">
+                  <div className="text-lats-text font-medium truncate flex items-center gap-2">
+                    {(item as any).itemType === 'spare-part' && (
+                      <span className="text-orange-600" title="Spare Part">🔧</span>
+                    )}
                     {item.productName}
+                    {(item as any).itemType === 'spare-part' && (
+                      <GlassBadge variant="warning" size="xs" className="ml-1 bg-orange-100 text-orange-700 border-orange-300">
+                        Spare Part
+                      </GlassBadge>
+                    )}
                     {item.isExternal && (
                       <GlassBadge variant="warning" size="xs" className="ml-1">
                         External
@@ -197,8 +205,13 @@ const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
                     )}
                   </div>
                   <div className="text-lats-text-secondary text-xs font-mono">
-                    {item.sku}
+                    {(item as any).partNumber || item.sku}
                   </div>
+                  {(item as any).itemType === 'spare-part' && (item as any).partNumber && (
+                    <div className="text-lats-text-secondary text-xs mt-0.5">
+                      Part Number: {(item as any).partNumber}
+                    </div>
+                  )}
                   {/* Serial Numbers */}
                   {item.serialNumbers && item.serialNumbers.length > 0 && (
                     <div className="mt-1 space-y-0.5">

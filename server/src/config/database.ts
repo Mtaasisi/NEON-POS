@@ -8,8 +8,8 @@ import { createClient } from '@supabase/supabase-js';
 // Get database configuration from environment
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
-// Default to production Supabase database if not set
-const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
+// Default to production Neon database if not set
+const databaseUrl = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_tHAqPdo2x0LR@ep-aged-pond-adays3pg-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
 
 /**
  * Create database client

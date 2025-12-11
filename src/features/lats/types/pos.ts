@@ -18,6 +18,9 @@ export interface CartItem {
   selectedSerialNumbers?: any[];
   costPrice?: number;
   profit?: number;
+  // Spare parts support
+  itemType?: 'product' | 'spare-part';
+  partNumber?: string;
 }
 
 export interface Cart {

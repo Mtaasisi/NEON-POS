@@ -30,6 +30,7 @@
     "setup": "./setup-full-system.sh",
     "validate": "node validate-all-products.mjs",
     "fix": "node fix-all-products.mjs",
+    "fetch:data": "node fetch-all-data.mjs",
     "test:pos": "node auto-test-pos-cart.mjs",
     "test:full": "node test-all-features.mjs",
     "branch:dev": "bash switch-to-dev.sh",

@@ -127,7 +127,7 @@ const POSProductGrid: React.FC<POSProductGridProps> = memo(({
             gridAutoRows: '1fr'
           }}
         >
-          {products.map((product) => (
+          {products.map((product, index) => (
             <VariantProductCard
               key={product.id}
               product={product}
@@ -135,6 +135,7 @@ const POSProductGrid: React.FC<POSProductGridProps> = memo(({
               compact={true}
               realTimeStockData={realTimeStockData}
               className="w-full h-full"
+              isLastItem={index === products.length - 1}
             />
           ))}
         </div>

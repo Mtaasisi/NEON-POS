@@ -12,13 +12,13 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Correct database configuration - PRODUCTION SUPABASE DATABASE
+// Correct database configuration - PRODUCTION NEON DATABASE
 const CORRECT_DB_CONFIG = {
-  host: 'aws-0-eu-north-1.pooler.supabase.com',
-  user: 'postgres.jxhzveborezjhsmzsgbc',
-  password: '%40SMASIKA1010',
-  database: 'postgres',
-  connectionString: 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres'
+  host: 'ep-aged-pond-adays3pg-pooler.c-2.us-east-1.aws.neon.tech',
+  user: 'neondb_owner',
+  password: 'npg_tHAqPdo2x0LR',
+  database: 'neondb',
+  connectionString: 'postgresql://neondb_owner:npg_tHAqPdo2x0LR@ep-aged-pond-adays3pg-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
 };
 
 function verifyEnvFile(filePath, isProduction = false) {
@@ -68,7 +68,7 @@ function fixProductionEnv() {
 NODE_ENV=production
 VITE_APP_ENV=production
 
-# Production Supabase Database
+# Production Neon Database
 VITE_DATABASE_URL=${CORRECT_DB_CONFIG.connectionString}
 DATABASE_URL=${CORRECT_DB_CONFIG.connectionString}
 
@@ -91,10 +91,7 @@ function main() {
   const envPath = join(projectRoot, '.env');
   const prodEnvPath = join(projectRoot, '.env.production');
 
-  // Check .env file
-  const envOk = verifyEnvFile(envPath, false);
-  
-  // Check .env.production file
+  // Check .env.production file (required for production builds)
   const prodEnvOk = verifyEnvFile(prodEnvPath, true);
 
   if (!prodEnvOk) {
@@ -104,14 +101,10 @@ function main() {
     process.exit(0);
   }
 
-  if (envOk && prodEnvOk) {
-    console.log('\n✅ All database configurations are correct!');
-    console.log('✅ Ready to build: npm run build:prod');
-    process.exit(0);
-  } else {
-    console.error('\n❌ Configuration issues found. Please check your .env files.');
-    process.exit(1);
-  }
+  // For production builds, only .env.production is required
+  console.log('\n✅ Production database configuration is correct!');
+  console.log('✅ Ready to build: npm run build:prod');
+  process.exit(0);
 }
 
 main();

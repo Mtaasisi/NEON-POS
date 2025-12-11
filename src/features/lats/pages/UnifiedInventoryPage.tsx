@@ -8,7 +8,7 @@ import ErrorState from '../components/ui/ErrorState';
 import { 
   Package, Plus, Download, Upload,
   Trash2, Star, Settings, RefreshCw, AlertTriangle, ShoppingCart, Tag, Truck,
-  FileText, ArrowUp, ArrowDown, X
+  FileText, ArrowUp, ArrowDown, X, Wrench, CheckCircle, DollarSign, TrendingUp
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -59,14 +59,14 @@ const UnifiedInventoryPage: React.FC = () => {
   const { 
     products, 
     categories, 
-
+    spareParts,
     suppliers,
     stockMovements,
     sales,
     isLoading,
     loadProducts,
     loadCategories,
-
+    loadSpareParts,
     loadSuppliers,
     loadStockMovements,
     loadSales,
@@ -202,6 +202,19 @@ const UnifiedInventoryPage: React.FC = () => {
             }).catch(err => {
               console.error('❌ Failed to load suppliers:', err);
               setLoadingProgress(prev => ({ ...prev, suppliers: true })); // Mark as complete even on error
+            }),
+            loadSpareParts().then(() => {
+              const sparePartsData = useInventoryStore.getState().spareParts;
+              console.log('✅ [UnifiedInventory] Spare parts loaded:', {
+                count: sparePartsData?.length || 0,
+                sample: sparePartsData?.slice(0, 3).map(sp => ({
+                  name: sp.name,
+                  quantity: sp.quantity,
+                  hasVariants: !!(sp.variants && sp.variants.length > 0)
+                }))
+              });
+            }).catch(err => {
+              console.error('❌ Failed to load spare parts:', err);
             })
           ];
 
@@ -427,22 +440,7 @@ const UnifiedInventoryPage: React.FC = () => {
 
   // Calculate metrics (use live data when available, fallback to cached data)
   const metrics = useMemo(() => {
-    // Use live metrics if available, otherwise calculate from cached products
-    if (liveMetrics) {
-      return {
-        totalItems: liveMetrics.totalProducts,
-        lowStockItems: liveMetrics.lowStockItems,
-        outOfStockItems: liveMetrics.outOfStockItems,
-        reorderAlerts: liveMetrics.reorderAlerts,
-        totalValue: liveMetrics.totalValue,
-        retailValue: liveMetrics.retailValue || 0, // Add retail value from live metrics
-        activeProducts: liveMetrics.activeProducts,
-        featuredProducts: products.filter(p => p.isFeatured).length, // Still use cached for featured
-        lastUpdated: liveMetrics.lastUpdated
-      };
-    }
-
-    // Fallback to cached data calculation
+    // Calculate from cached products first (always available)
     const totalItems = products.length;
     const lowStockItems = products.filter(product => {
       const totalStock = product.variants?.reduce((sum, variant) => sum + (variant.quantity || 0), 0) || 0;
@@ -457,28 +455,209 @@ const UnifiedInventoryPage: React.FC = () => {
       const totalStock = product.variants?.reduce((sum, variant) => sum + (variant.quantity || 0), 0) || 0;
       return mainVariant?.minQuantity && totalStock <= mainVariant.minQuantity;
     }).length;
+    
+    // Calculate spare parts reorder alerts (quantity <= min_quantity)
+    const sparePartsReorderAlerts = (spareParts || []).filter(sp => {
+      let totalQuantity = 0;
+      let minQuantity = 0;
+      
+      // If spare part has variants, check each variant
+      if (sp.variants && sp.variants.length > 0) {
+        // Check if any variant needs reordering
+        return sp.variants.some(variant => {
+          const qty = variant.quantity || 0;
+          const minQty = variant.min_quantity || 0;
+          return minQty > 0 && qty <= minQty;
+        });
+      } else {
+        // Use spare part level quantity and min_quantity
+        totalQuantity = sp.quantity || 0;
+        minQuantity = sp.min_quantity || 0;
+        return minQuantity > 0 && totalQuantity <= minQuantity;
+      }
+    }).length;
+    
     const totalValue = products.reduce((sum, product) => {
       // Calculate value using ALL variants (consistent with LiveInventoryService)
-      const productValue = product.variants?.reduce((variantSum, variant) => {
-        const costPrice = variant.costPrice || 0;
-        const quantity = variant.quantity || 0;
-        return variantSum + (costPrice * quantity);
-      }, 0) || 0;
+      let productValue = 0;
+      
+      if (product.variants && product.variants.length > 0) {
+        // Product has variants - calculate from variants
+        productValue = product.variants.reduce((variantSum, variant) => {
+          // Try multiple field name variations
+          const costPrice = variant.costPrice || 
+                           (variant as any).cost_price || 
+                           (variant as any).unit_cost ||
+                           0;
+          const quantity = variant.quantity || 
+                          (variant as any).stock_quantity ||
+                          (variant as any).stockQuantity ||
+                          0;
+          const variantValue = costPrice * quantity;
+          
+          // Debug first few products in development
+          if (import.meta.env.MODE === 'development' && products.indexOf(product) < 3 && variantValue > 0) {
+            console.log(`💰 [UnifiedInventoryPage] ${product.name} - Variant: ${quantity} × ${costPrice} = ${variantValue}`);
+          }
+          
+          return variantSum + variantValue;
+        }, 0);
+      } else {
+        // Product has no variants - use product-level stock and cost
+        const productStock = product.stockQuantity || 
+                            (product as any).stock_quantity || 
+                            (product as any).total_quantity ||
+                            0;
+        const productCost = product.costPrice || 
+                           (product as any).cost_price || 
+                           (product as any).unit_cost ||
+                           0;
+        productValue = productStock * productCost;
+        
+        // Debug first few products in development
+        if (import.meta.env.MODE === 'development' && products.indexOf(product) < 3 && productValue > 0) {
+          console.log(`💰 [UnifiedInventoryPage] ${product.name} - Product-level: ${productStock} × ${productCost} = ${productValue}`);
+        }
+      }
+      
       return sum + productValue;
     }, 0);
     
     const retailValue = products.reduce((sum, product) => {
       // Calculate retail value using ALL variants
-      const productRetailValue = product.variants?.reduce((variantSum, variant) => {
-        const sellingPrice = variant.sellingPrice || variant.price || 0;
-        const quantity = variant.quantity || 0;
+      let productRetailValue = 0;
+      
+      if (product.variants && product.variants.length > 0) {
+        // Product has variants - calculate from variants
+        productRetailValue = product.variants.reduce((variantSum, variant) => {
+          // Try multiple field name variations
+          const sellingPrice = variant.sellingPrice || 
+                              variant.price || 
+                              (variant as any).selling_price || 
+                              (variant as any).unit_price ||
+                              0;
+          const quantity = variant.quantity || 
+                          (variant as any).stock_quantity ||
+                          (variant as any).stockQuantity ||
+                          0;
         return variantSum + (sellingPrice * quantity);
-      }, 0) || 0;
+        }, 0);
+      } else {
+        // Product has no variants - use product-level stock and selling price
+        const productStock = product.stockQuantity || 
+                            (product as any).stock_quantity || 
+                            (product as any).total_quantity ||
+                            0;
+        const productSellingPrice = product.sellingPrice || 
+                                   product.price || 
+                                   (product as any).selling_price || 
+                                   (product as any).unit_price ||
+                                   0;
+        productRetailValue = productStock * productSellingPrice;
+      }
+      
       return sum + productRetailValue;
     }, 0);
-    const activeProducts = products.length; // All products are automatically active
-    const featuredProducts = products.filter(p => p.isFeatured).length;
-
+    
+    // Calculate spare parts in stock (quantity > 0, not out of stock)
+    // Match the same logic as products: totalItems - lowStockItems - outOfStockItems
+    // Handle both spare parts with variants and without variants
+    const sparePartsTotal = (spareParts || []).length;
+    const sparePartsLowStock = (spareParts || []).filter(sp => {
+      let totalQuantity = 0;
+      
+      // If spare part has variants, sum up variant quantities
+      if (sp.variants && sp.variants.length > 0) {
+        totalQuantity = sp.variants.reduce((sum, variant) => {
+          return sum + (variant.quantity || 0);
+        }, 0);
+      } else {
+        // Use spare part level quantity
+        totalQuantity = sp.quantity || 0;
+      }
+      
+      // Low stock: quantity > 0 and <= 10
+      return totalQuantity > 0 && totalQuantity <= 10;
+    }).length;
+    
+    const sparePartsOutOfStock = (spareParts || []).filter(sp => {
+      let totalQuantity = 0;
+      
+      // If spare part has variants, sum up variant quantities
+      if (sp.variants && sp.variants.length > 0) {
+        totalQuantity = sp.variants.reduce((sum, variant) => {
+          return sum + (variant.quantity || 0);
+        }, 0);
+      } else {
+        // Use spare part level quantity
+        totalQuantity = sp.quantity || 0;
+      }
+      
+      // Out of stock: quantity <= 0
+      return totalQuantity <= 0;
+    }).length;
+    
+    // In stock = total - low stock - out of stock (same logic as products)
+    const sparePartsInStock = sparePartsTotal - sparePartsLowStock - sparePartsOutOfStock;
+    
+    // Total spare parts count
+    const sparePartsTotalCount = (spareParts || []).length;
+    
+    // Debug spare parts calculation
+    if (import.meta.env.MODE === 'development' || true) { // Always log for debugging
+      console.log('🔧 [UnifiedInventoryPage] Spare Parts Debug:', {
+        totalSpareParts: sparePartsTotal,
+        sparePartsLowStock,
+        sparePartsOutOfStock,
+        sparePartsInStock,
+        calculation: `${sparePartsTotal} - ${sparePartsLowStock} - ${sparePartsOutOfStock} = ${sparePartsInStock}`,
+        sparePartsDetails: (spareParts || []).slice(0, 5).map(sp => {
+          let totalQty = 0;
+          if (sp.variants && sp.variants.length > 0) {
+            totalQty = sp.variants.reduce((sum: number, v: any) => sum + (v.quantity || 0), 0);
+          } else {
+            totalQty = sp.quantity || 0;
+          }
+          const isLow = totalQty > 0 && totalQty <= 10;
+          const isOut = totalQty <= 0;
+          const isInStock = !isLow && !isOut;
+          return {
+            name: sp.name,
+            quantity: sp.quantity,
+            totalQuantity: totalQty,
+            status: isOut ? 'out' : isLow ? 'low' : 'in stock',
+            isInStock
+          };
+        })
+      });
+    }
+    
+    // Use live metrics if available AND has valid values, otherwise use calculated
+    if (liveMetrics && liveMetrics.totalValue > 0) {
+      return {
+        totalItems: liveMetrics.totalProducts,
+        lowStockItems: liveMetrics.lowStockItems,
+        outOfStockItems: liveMetrics.outOfStockItems,
+        reorderAlerts: liveMetrics.reorderAlerts,
+        totalValue: liveMetrics.totalValue,
+        retailValue: liveMetrics.retailValue || retailValue, // Use calculated if live is 0
+        activeProducts: liveMetrics.activeProducts,
+        featuredProducts: products.filter(p => p.isFeatured).length,
+        sparePartsInStock, // Add spare parts in stock count
+        sparePartsReorderAlerts, // Add spare parts reorder alerts count
+        sparePartsTotal: sparePartsTotalCount, // Add total spare parts count
+        lastUpdated: liveMetrics.lastUpdated
+      };
+    }
+    
+    // Use calculated metrics (fallback or when liveMetrics is 0)
+    // Calculate active products count
+    const activeProducts = products.filter(product => product.isActive !== false).length;
+    
+    // Debug total in development
+    if (import.meta.env.MODE === 'development') {
+      console.log(`💰 [UnifiedInventoryPage] Using calculated metrics - Total Value: ${totalValue}, Retail Value: ${retailValue} from ${products.length} products`);
+    }
 
     return {
       totalItems,
@@ -488,10 +667,13 @@ const UnifiedInventoryPage: React.FC = () => {
       totalValue,
       retailValue,
       activeProducts,
-      featuredProducts,
+      featuredProducts: products.filter(p => p.isFeatured).length,
+      sparePartsInStock, // Add spare parts in stock count
+      sparePartsReorderAlerts, // Add spare parts reorder alerts count
+      sparePartsTotal: sparePartsTotalCount, // Add total spare parts count
       lastUpdated: new Date().toISOString()
     };
-  }, [products, liveMetrics]);
+  }, [products, spareParts, liveMetrics]);
 
   // Filter products based on active tab and filters
   const filteredProducts = useMemo(() => {
@@ -610,6 +792,23 @@ const UnifiedInventoryPage: React.FC = () => {
 
   // Format money
   const formatMoney = (amount: number) => {
+    return format.money(amount);
+  };
+
+  // Format money with K/M abbreviations for large amounts
+  const formatMoneyCompact = (amount: number): string => {
+    if (!amount || isNaN(amount) || !isFinite(amount)) return 'TSh 0';
+    
+    const absAmount = Math.abs(amount);
+    
+    if (absAmount >= 1000000) {
+      const millions = amount / 1000000;
+      return `TSh ${millions.toFixed(1).replace(/\.0$/, '')}M`;
+    }
+    if (absAmount >= 1000) {
+      const thousands = amount / 1000;
+      return `TSh ${thousands.toFixed(1).replace(/\.0$/, '')}K`;
+    }
     return format.money(amount);
   };
 
@@ -890,6 +1089,195 @@ const UnifiedInventoryPage: React.FC = () => {
               {/* Right: Back Button */}
               <BackButton to="/dashboard" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
             </div>
+            
+            {/* Inventory Summary - Statistics Cards */}
+            <div className="mt-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <div 
+                  className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md relative group"
+                  onMouseEnter={(e) => {
+                    const tooltip = e.currentTarget.querySelector('.value-tooltip') as HTMLElement;
+                    if (tooltip) {
+                      tooltip.style.opacity = '1';
+                      tooltip.style.visibility = 'visible';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    const tooltip = e.currentTarget.querySelector('.value-tooltip') as HTMLElement;
+                    if (tooltip) {
+                      tooltip.style.opacity = '0';
+                      tooltip.style.visibility = 'hidden';
+                    }
+                  }}
+                >
+                  <div className="absolute top-3 right-3 w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg">
+                    <Package className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-600 mb-1">Total Products</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {metrics.totalItems}
+                      {metrics.sparePartsTotal !== undefined && ` / ${metrics.sparePartsTotal}`}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">{metrics.activeProducts} active</p>
+                  </div>
+                  {/* Tooltip */}
+                  <div className="value-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 opacity-0 invisible transition-all duration-200 pointer-events-none z-50">
+                    <div className="bg-gray-900 text-white text-sm rounded-xl shadow-2xl px-4 py-3 whitespace-nowrap border border-gray-700">
+                      <div className="flex flex-col items-center gap-1.5">
+                        <span className="text-xs text-gray-400 font-medium">Breakdown</span>
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="text-xs text-gray-300">Products: <span className="font-bold text-white">{metrics.totalItems}</span></span>
+                          {metrics.sparePartsTotal !== undefined && (
+                            <span className="text-xs text-gray-300">Spare Parts: <span className="font-bold text-white">{metrics.sparePartsTotal}</span></span>
+                          )}
+                          <span className="text-xs text-gray-300">Active: <span className="font-bold text-white">{metrics.activeProducts}</span></span>
+                        </div>
+                      </div>
+                      {/* Arrow */}
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-gray-900"></div>
+                    </div>
+                  </div>
+            </div>
+            
+                <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md relative">
+                  <div className="absolute top-3 right-3 w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center shadow-lg">
+                    <CheckCircle className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-600 mb-1">In Stock</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {metrics.totalItems - metrics.lowStockItems - metrics.outOfStockItems}
+                      {metrics.sparePartsInStock !== undefined && ` / ${metrics.sparePartsInStock}`}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">{metrics.lowStockItems} low, {metrics.outOfStockItems} out</p>
+                  </div>
+                </div>
+                
+                <div 
+                  className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 hover:bg-red-100 hover:border-red-300 transition-all shadow-sm hover:shadow-md relative group"
+                  onMouseEnter={(e) => {
+                    const tooltip = e.currentTarget.querySelector('.value-tooltip') as HTMLElement;
+                    if (tooltip) {
+                      tooltip.style.opacity = '1';
+                      tooltip.style.visibility = 'visible';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    const tooltip = e.currentTarget.querySelector('.value-tooltip') as HTMLElement;
+                    if (tooltip) {
+                      tooltip.style.opacity = '0';
+                      tooltip.style.visibility = 'hidden';
+                    }
+                  }}
+                >
+                  <div className="absolute top-3 right-3 w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center shadow-lg">
+                    <AlertTriangle className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-600 mb-1">Reorder Alerts</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {metrics.reorderAlerts}
+                      {metrics.sparePartsReorderAlerts !== undefined && ` / ${metrics.sparePartsReorderAlerts}`}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">Need attention</p>
+                  </div>
+                  {/* Tooltip */}
+                  <div className="value-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 opacity-0 invisible transition-all duration-200 pointer-events-none z-50">
+                    <div className="bg-gray-900 text-white text-sm rounded-xl shadow-2xl px-4 py-3 whitespace-nowrap border border-gray-700">
+                      <div className="flex flex-col items-center gap-1.5">
+                        <span className="text-xs text-gray-400 font-medium">Alert Breakdown</span>
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="text-xs text-gray-300">Products: <span className="font-bold text-white">{metrics.reorderAlerts}</span></span>
+                          {metrics.sparePartsReorderAlerts !== undefined && (
+                            <span className="text-xs text-gray-300">Spare Parts: <span className="font-bold text-white">{metrics.sparePartsReorderAlerts}</span></span>
+                          )}
+                          <span className="text-xs text-gray-400 mt-1">Items need reordering</span>
+                        </div>
+                      </div>
+                      {/* Arrow */}
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-gray-900"></div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div 
+                  className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md relative group"
+                  onMouseEnter={(e) => {
+                    const tooltip = e.currentTarget.querySelector('.value-tooltip') as HTMLElement;
+                    if (tooltip) {
+                      tooltip.style.opacity = '1';
+                      tooltip.style.visibility = 'visible';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    const tooltip = e.currentTarget.querySelector('.value-tooltip') as HTMLElement;
+                    if (tooltip) {
+                      tooltip.style.opacity = '0';
+                      tooltip.style.visibility = 'hidden';
+                    }
+                  }}
+                >
+                  <div className="absolute top-3 right-3 w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center shadow-lg">
+                    <DollarSign className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-600 mb-1">Total Value</p>
+                    <p className="text-2xl font-bold text-gray-900">{formatMoneyCompact(metrics.totalValue)}</p>
+                    <p className="text-xs text-gray-500 mt-1">Cost</p>
+                  </div>
+                  {/* Tooltip */}
+                  <div className="value-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 opacity-0 invisible transition-all duration-200 pointer-events-none z-50">
+                    <div className="bg-gray-900 text-white text-sm rounded-xl shadow-2xl px-4 py-3 whitespace-nowrap border border-gray-700">
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-xs text-gray-400 font-medium">Full Amount</span>
+                        <span className="text-base font-bold">{formatMoney(metrics.totalValue)}</span>
+                      </div>
+                      {/* Arrow */}
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-gray-900"></div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div 
+                  className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md relative group"
+                  onMouseEnter={(e) => {
+                    const tooltip = e.currentTarget.querySelector('.value-tooltip') as HTMLElement;
+                    if (tooltip) {
+                      tooltip.style.opacity = '1';
+                      tooltip.style.visibility = 'visible';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    const tooltip = e.currentTarget.querySelector('.value-tooltip') as HTMLElement;
+                    if (tooltip) {
+                      tooltip.style.opacity = '0';
+                      tooltip.style.visibility = 'hidden';
+                    }
+                  }}
+                >
+                  <div className="absolute top-3 right-3 w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center shadow-lg">
+                    <TrendingUp className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-600 mb-1">Retail Value</p>
+                    <p className="text-2xl font-bold text-gray-900">{formatMoneyCompact(metrics.retailValue || 0)}</p>
+                    <p className="text-xs text-gray-500 mt-1">Selling</p>
+                  </div>
+                  {/* Tooltip */}
+                  <div className="value-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 opacity-0 invisible transition-all duration-200 pointer-events-none z-50">
+                    <div className="bg-gray-900 text-white text-sm rounded-xl shadow-2xl px-4 py-3 whitespace-nowrap border border-gray-700">
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-xs text-gray-400 font-medium">Full Amount</span>
+                        <span className="text-base font-bold">{formatMoney(metrics.retailValue || 0)}</span>
+                      </div>
+                      {/* Arrow */}
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-gray-900"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Action Bar - Enhanced Design */}
@@ -899,9 +1287,10 @@ const UnifiedInventoryPage: React.FC = () => {
               <button
                 onClick={() => setShowManageCategoriesModal(true)}
                 className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg hover:from-indigo-600 hover:to-purple-700"
+                title="Manage Categories"
               >
                 <Tag size={18} />
-                <span>Manage Categories</span>
+                <span>Categories</span>
               </button>
               
               {/* Add Product Button */}
@@ -918,18 +1307,40 @@ const UnifiedInventoryPage: React.FC = () => {
               <button
                 onClick={() => setShowOrderManagementModal(true)}
                 className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg hover:from-purple-600 hover:to-purple-700"
+                title="Manage Orders"
               >
                 <ShoppingCart size={18} />
-                <span>Manage Orders</span>
+                <span>Orders</span>
+              </button>
+
+              {/* Spare Parts Button */}
+              <button
+                onClick={() => navigate('/lats/spare-parts')}
+                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg hover:from-orange-600 hover:to-orange-700"
+                title="Manage spare parts inventory"
+              >
+                <Wrench size={18} />
+                <span>Spare Parts</span>
+              </button>
+
+              {/* POS Button */}
+              <button
+                onClick={() => navigate('/pos')}
+                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg hover:from-emerald-600 hover:to-emerald-700"
+                title="Point of Sale"
+              >
+                <ShoppingCart size={18} />
+                <span>POS</span>
               </button>
 
               {/* Import/Export Excel Button */}
               <button
                 onClick={handleImport}
                 className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700"
+                title="Import / Export"
               >
                 <Upload size={18} />
-                <span>Import / Export</span>
+                <span>Import</span>
               </button>
 
               {/* Refresh Data Button */}

@@ -1,10 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useNavigate } from 'react-router-dom';
 import { toast } from '../../../lib/toastUtils';
 import { SimpleBackButton as BackButton } from '../../../features/shared/components/ui/SimpleBackButton';
-import { ArrowLeft, User, Smartphone, Tag, Layers, Hash, FileText, DollarSign, Key, Phone, Mail, MapPin, Calendar, Clock, ChevronDown, Battery, Camera as CameraIcon, Wifi, Bluetooth, Plug, Volume2, Mic, Speaker, Vibrate, Cpu, HardDrive, Droplet, Shield, Wrench, AlertTriangle as AlertIcon, Eye, Edit, MessageCircle, Users, Star, UserPlus, Brain, Zap, Lightbulb, Search, Sparkles, Package, RefreshCw, WifiOff, Store, CheckSquare, X, QrCode, StickyNote } from 'lucide-react';
+import { ArrowLeft, User, Smartphone, Tag, Layers, Hash, FileText, DollarSign, Key, Phone, Mail, MapPin, Calendar, Clock, ChevronDown, Battery, Camera as CameraIcon, Wifi, Bluetooth, Plug, Volume2, Mic, Speaker, Vibrate, Cpu, HardDrive, Droplet, Shield, Wrench, AlertTriangle as AlertIcon, Eye, Edit, MessageCircle, Users, Star, UserPlus, Brain, Zap, Lightbulb, Search, Sparkles, Package, RefreshCw, WifiOff, Store, CheckSquare, X, QrCode, StickyNote, CheckCircle } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import Modal from '../../../features/shared/components/ui/Modal';
 import { useCustomers } from '../../../context/CustomersContext';
@@ -968,17 +968,51 @@ IMPORTANT INSTRUCTIONS:
     );
   };
 
-  // Filter spare parts for display
-  const filteredSpareParts = spareParts.filter(part => {
-    const matchesSearch = part.name.toLowerCase().includes(sparePartsSearchTerm.toLowerCase()) ||
-                         part.part_number.toLowerCase().includes(sparePartsSearchTerm.toLowerCase()) ||
-                         part.brand?.toLowerCase().includes(sparePartsSearchTerm.toLowerCase());
-    const matchesCategory = sparePartsCategory === 'all' || part.category_id === sparePartsCategory;
-    const hasStock = part.quantity > 0;
-    const isActive = part.is_active;
+  // Filter spare parts for display with compatibility check
+  const filteredSpareParts = useMemo(() => {
+    const deviceModel = formData.model?.toLowerCase() || '';
+    const deviceBrand = formData.brand?.toLowerCase() || '';
+    const deviceIdentifier = `${deviceBrand} ${deviceModel}`.trim().toLowerCase();
     
-    return matchesSearch && matchesCategory && hasStock && isActive;
-  });
+    return spareParts.filter(part => {
+      const matchesSearch = !sparePartsSearchTerm || 
+        part.name.toLowerCase().includes(sparePartsSearchTerm.toLowerCase()) ||
+        part.part_number?.toLowerCase().includes(sparePartsSearchTerm.toLowerCase()) ||
+        part.brand?.toLowerCase().includes(sparePartsSearchTerm.toLowerCase());
+      const matchesCategory = sparePartsCategory === 'all' || part.category_id === sparePartsCategory;
+      const hasStock = part.quantity > 0;
+      const isActive = part.is_active;
+      
+      // Check compatibility if device model/brand is specified
+      let matchesCompatibility = true;
+      if (deviceIdentifier && part.compatible_devices) {
+        const compatibleDevices = part.compatible_devices.toLowerCase();
+        matchesCompatibility = compatibleDevices.includes(deviceModel) || 
+                              compatibleDevices.includes(deviceBrand) ||
+                              compatibleDevices.includes(deviceIdentifier) ||
+                              !part.compatible_devices.trim(); // Show all if no compatibility specified
+      }
+      
+      return matchesSearch && matchesCategory && hasStock && isActive && matchesCompatibility;
+    });
+  }, [spareParts, sparePartsSearchTerm, sparePartsCategory, formData.model, formData.brand]);
+  
+  // Get compatible parts (prioritized) - parts that match the device
+  const compatibleSpareParts = useMemo(() => {
+    const deviceModel = formData.model?.toLowerCase() || '';
+    const deviceBrand = formData.brand?.toLowerCase() || '';
+    const deviceIdentifier = `${deviceBrand} ${deviceModel}`.trim().toLowerCase();
+    
+    if (!deviceIdentifier) return [];
+    
+    return spareParts.filter(part => {
+      if (!part.compatible_devices || !part.is_active || part.quantity === 0) return false;
+      const compatibleDevices = part.compatible_devices.toLowerCase();
+      return compatibleDevices.includes(deviceModel) || 
+             compatibleDevices.includes(deviceBrand) ||
+             compatibleDevices.includes(deviceIdentifier);
+    });
+  }, [spareParts, formData.model, formData.brand]);
 
   // Calculate total spare parts cost
   const totalSparePartsCost = selectedSpareParts.reduce((total, part) => total + part.total_cost, 0);
@@ -2357,11 +2391,51 @@ IMPORTANT INSTRUCTIONS:
                             </div>
                           </div>
 
+                          {/* Compatible Parts Section - Show if device model is specified */}
+                          {compatibleSpareParts.length > 0 && formData.model && (
+                            <div className="mb-4 border-2 border-green-200 rounded-md bg-green-50">
+                              <div className="p-3 bg-green-100 border-b border-green-200">
+                                <h4 className="font-medium text-green-900 flex items-center gap-2">
+                                  <CheckCircle className="w-4 h-4" />
+                                  Compatible Parts for {formData.brand} {formData.model} ({compatibleSpareParts.length})
+                                </h4>
+                                <p className="text-xs text-green-700 mt-1">These parts are compatible with the device model</p>
+                              </div>
+                              <div className="divide-y divide-green-200 max-h-40 overflow-y-auto">
+                                {compatibleSpareParts.map((part) => (
+                                  <div key={part.id} className="p-3 hover:bg-green-100">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <h5 className="font-medium text-gray-900">{part.name}</h5>
+                                          <span className="text-xs bg-green-200 text-green-800 px-2 py-1 rounded">Compatible</span>
+                                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                                            {part.part_number}
+                                          </span>
+                                        </div>
+                                        <p className="text-sm text-gray-600">
+                                          {part.brand} • Stock: {part.quantity} • Price: {formatCurrency(part.selling_price)}
+                                        </p>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => addSparePart(part)}
+                                        className="ml-4 px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors"
+                                      >
+                                        Add
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                           {/* Available Spare Parts */}
                           <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-md">
                             <div className="p-3 bg-gray-50 border-b border-gray-200">
                               <h4 className="font-medium text-gray-900">
-                                Available Parts ({filteredSpareParts.length})
+                                All Available Parts ({filteredSpareParts.length})
                                 {inventoryLoading && (
                                   <span className="ml-2 text-sm text-blue-600">Loading...</span>
                                 )}

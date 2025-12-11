@@ -40,9 +40,9 @@ let DATABASE_URL = import.meta.env.VITE_DATABASE_URL || import.meta.env.DATABASE
 
 // Fallback to production Supabase database if not configured
 if (!DATABASE_URL) {
-  // PRODUCTION SUPABASE DATABASE - Default fallback
-  DATABASE_URL = 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
-  console.log('⚠️  Using production Supabase database (VITE_DATABASE_URL not set)');
+  // PRODUCTION NEON DATABASE - Default fallback
+  DATABASE_URL = 'postgresql://neondb_owner:npg_tHAqPdo2x0LR@ep-aged-pond-adays3pg-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+  console.log('⚠️  Using production Neon database (VITE_DATABASE_URL not set)');
 }
 
 // Detect Supabase EARLY - before pool initialization
@@ -802,6 +802,13 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
   private joins: Array<{ table: string; alias: string; on: string; columns: string[] }> = [];
 
   constructor(tableName: string) {
+    // SAFETY CHECK: Prevent using foreign key column names as table names
+    // This prevents SQL errors like "relation 'customer_id' does not exist"
+    if (tableName.endsWith('_id') && tableName !== 'id') {
+      console.error(`❌ [NeonQueryBuilder] Invalid table name "${tableName}" - names ending with _id are foreign key columns, not table names`);
+      throw new Error(`Invalid table name: "${tableName}". Names ending with _id are foreign key columns, not table names.`);
+    }
+    
     this.tableName = tableName;
     // Initialize operation flags
     (this as any).isInsert = false;
@@ -888,6 +895,14 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
       
       while ((match = explicitPattern.exec(workingFields)) !== null) {
         const [startMatch, alias, table, foreignKeyOrJoinType] = match;
+        
+        // CRITICAL: Skip if table or alias name ends with _id - these are ALWAYS foreign key columns, never table names
+        if ((table.endsWith('_id') && table !== 'id') || (alias.endsWith('_id') && alias !== 'id')) {
+          console.log(`⏭️ [Pattern 1] Skipping ${alias}:${table}!${foreignKeyOrJoinType}( - names ending with _id are foreign key columns, not table names`);
+          explicitPattern.lastIndex = 0;
+          continue;
+        }
+        
         const openParenIdx = match.index + startMatch.length - 1;
         const closeParenIdx = findMatchingParen(workingFields, openParenIdx);
         
@@ -937,6 +952,13 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         
         console.log(`🔍 [Pattern 1.5] Found match: ${startMatch}, table: ${table}, FK: ${foreignKeyOrJoinType}`);
         
+        // CRITICAL: Skip if table name ends with _id - these are ALWAYS foreign key columns, never table names
+        if (table.endsWith('_id') && table !== 'id') {
+          console.log(`⏭️ [Pattern 1.5] Skipping ${table}!${foreignKeyOrJoinType} - table name ending with _id is a foreign key column, not a table`);
+          tableExplicitPattern.lastIndex = 0;
+          continue;
+        }
+        
         // Skip if already processed as explicit relationship with alias
         if (relationships.some(r => r.table === table && r.foreignKey === foreignKeyOrJoinType)) {
           console.log(`⏭️ [Pattern 1.5] Skipping duplicate: ${table}!${foreignKeyOrJoinType}`);
@@ -983,8 +1005,22 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         
         // Remove this relationship from working fields
         // Use a more robust replacement that handles the full match including any whitespace
-        const matchToRemove = workingFields.substring(match.index, closeParenIdx + 1);
-        workingFields = workingFields.replace(matchToRemove, '');
+        const matchStart = match.index;
+        const matchEnd = closeParenIdx + 1;
+        const matchToRemove = workingFields.substring(matchStart, matchEnd);
+        
+        // Remove the match and clean up surrounding commas
+        const beforeMatch = workingFields.substring(0, matchStart);
+        const afterMatch = workingFields.substring(matchEnd);
+        
+        // Remove trailing comma from beforeMatch if present
+        const cleanedBefore = beforeMatch.replace(/,\s*$/, '');
+        // Remove leading comma from afterMatch if present
+        const cleanedAfter = afterMatch.replace(/^\s*,/, '');
+        
+        // Reconstruct workingFields, adding comma only if both parts exist
+        workingFields = (cleanedBefore + (cleanedBefore && cleanedAfter ? ',' : '') + cleanedAfter).trim();
+        
         console.log(`🗑️ [Pattern 1.5] Removed: ${matchToRemove.substring(0, 50)}...`);
         
         // Reset regex index after modifying the string
@@ -997,6 +1033,13 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
       
       while ((match = inferredPattern.exec(workingFields)) !== null) {
         const [startMatch, alias, table] = match;
+        
+        // CRITICAL: Skip if table or alias name ends with _id - these are ALWAYS foreign key columns, never table names
+        if ((table.endsWith('_id') && table !== 'id') || (alias.endsWith('_id') && alias !== 'id')) {
+          console.log(`⏭️ [Pattern 2] Skipping ${alias}:${table}( - names ending with _id are foreign key columns, not table names`);
+          inferredPattern.lastIndex = 0;
+          continue;
+        }
         
         // Skip if already processed as explicit relationship
         if (relationships.some(r => r.alias === alias && r.table === table)) {
@@ -1072,7 +1115,16 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         const [startMatch, tableName] = match;
         
         // Skip if already processed
-        if (relationships.some(r => r.alias === tableName)) {
+        if (relationships.some(r => r.alias === tableName || r.table === tableName)) {
+          simplePattern.lastIndex = 0;
+          continue;
+        }
+        
+        // CRITICAL FIX: Skip if tableName ends with _id - these are ALWAYS foreign key columns, never table names
+        // Foreign key columns like customer_id, user_id, branch_id, etc. should NEVER be treated as table names
+        // The only exception is the literal "id" which is a valid table column name
+        if (tableName.endsWith('_id') && tableName !== 'id') {
+          console.log(`⏭️ [Pattern 3] Skipping ${tableName}( - names ending with _id are foreign key columns, not table names`);
           simplePattern.lastIndex = 0;
           continue;
         }
@@ -1098,7 +1150,8 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         
         // Also check if the tableName contains an underscore and there's a word before it with !
         // This catches cases like "customers!customer_id" where Pattern 1.5 should have matched
-        const wordBeforeMatch = workingFields.substring(Math.max(0, match.index - 30), match.index);
+        // Increase lookback to catch cases where the pattern was partially removed
+        const wordBeforeMatch = workingFields.substring(Math.max(0, match.index - 50), match.index);
         const tableExclamationPattern = /([a-zA-Z][a-zA-Z0-9_]*)!([a-zA-Z][a-zA-Z0-9_]*)\s*\(/;
         if (tableExclamationPattern.test(wordBeforeMatch + startMatch)) {
           console.log(`⏭️ [Pattern 3] Skipping ${tableName}( - detected table!foreign_key pattern`);
@@ -1111,6 +1164,13 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         
         if (closeParenIdx === -1) {
           console.warn(`⚠️ [Simple Syntax] Could not find matching parenthesis for: ${startMatch}`);
+          simplePattern.lastIndex = 0;
+          continue;
+        }
+        
+        // CRITICAL: Skip if tableName ends with _id - these are ALWAYS foreign key columns, never table names
+        if (tableName.endsWith('_id') && tableName !== 'id') {
+          console.log(`⏭️ [Pattern 3] Skipping ${tableName}( - names ending with _id are foreign key columns, not table names`);
           simplePattern.lastIndex = 0;
           continue;
         }
@@ -1163,12 +1223,28 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         .trim();
       
       // Build JOIN clauses with additional validation
-      this.joins = relationships.map(rel => ({
-        table: rel.table,
-        alias: rel.alias,
-        on: rel.foreignKey,
-        columns: rel.columns.filter(c => c && typeof c === 'string' && c.length > 0 && c !== 'undefined')
-      }));
+      this.joins = relationships
+        .filter(rel => {
+          // CRITICAL: Filter out any relationships where table name ends with _id
+          // These are foreign key columns (like customer_id, user_id, branch_id), not table names
+          if (rel.table.endsWith('_id') && rel.table !== 'id') {
+            console.warn(`⚠️ [buildJoins] Filtering out invalid relationship - "${rel.table}" is a foreign key column, not a table name`);
+            console.warn(`⚠️ [buildJoins] This likely means a query is using "${rel.table}" incorrectly. Check the select() call.`);
+            return false;
+          }
+          // Also check alias
+          if (rel.alias.endsWith('_id') && rel.alias !== 'id') {
+            console.warn(`⚠️ [buildJoins] Filtering out invalid relationship - alias "${rel.alias}" ends with _id (foreign key column, not table name)`);
+            return false;
+          }
+          return true;
+        })
+        .map(rel => ({
+          table: rel.table,
+          alias: rel.alias,
+          on: rel.foreignKey,
+          columns: rel.columns.filter(c => c && typeof c === 'string' && c.length > 0 && c !== 'undefined')
+        }));
       
       // Build SELECT fields
       if (workingFields && workingFields !== '*' && workingFields.length > 0) {
@@ -1384,6 +1460,15 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
     
     // Add JOIN clauses
     for (const join of this.joins) {
+      // SAFETY CHECK: Skip any join where table name ends with _id (these are foreign key columns, not tables)
+      // This prevents SQL errors like "relation 'customer_id' does not exist"
+      // Also check if table name is exactly a common foreign key column name
+      const commonFKColumns = ['customer_id', 'user_id', 'branch_id', 'product_id', 'variant_id', 'supplier_id', 'category_id'];
+      if ((join.table.endsWith('_id') && join.table !== 'id') || commonFKColumns.includes(join.table)) {
+        console.warn(`⚠️ [buildQuery] Skipping invalid JOIN - table name "${join.table}" is a foreign key column, not a table`);
+        continue;
+      }
+      
       // Determine if this is a child table relationship
       // Child tables (variants, items, details, lines, payments, etc.) have the FK referencing the parent
       const knownChildPatterns = ['variants', 'items', 'details', 'lines', 'payments', 'images', 'transactions', 'orders', 'sales'];
@@ -2218,7 +2303,14 @@ export const supabase: SupabaseClient = isSupabaseDatabase ? {
     signIn: mockAuth.signIn,
   }
 } as any : {
-  from: (table: string) => new NeonQueryBuilder(table),
+  from: (table: string) => {
+    // SAFETY CHECK: Prevent using foreign key column names as table names
+    if (table.endsWith('_id') && table !== 'id') {
+      console.error(`❌ [supabase.from] Invalid table name "${table}" - names ending with _id are foreign key columns, not table names`);
+      throw new Error(`Invalid table name: "${table}". Names ending with _id are foreign key columns, not table names.`);
+    }
+    return new NeonQueryBuilder(table);
+  },
   auth: mockAuth,
   storage: mockStorage,
   rpc: rpcCall,

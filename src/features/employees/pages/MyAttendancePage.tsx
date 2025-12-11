@@ -267,7 +267,6 @@ const MyAttendancePage: React.FC = () => {
       </div>
 
         {/* Main Container - Scrollable Content */}
-        <div className="flex-1 overflow-y-auto">
         <div className="flex-1 overflow-y-auto px-6 py-6">
       {/* Main Check-in/out Card */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -490,7 +489,7 @@ const MyAttendancePage: React.FC = () => {
             </div>
           )}
         </div>
-          </div>
+      </div>
 
       {/* Performance Insights */}
       {stats.attendanceRate >= 95 && stats.performance >= 4 && (

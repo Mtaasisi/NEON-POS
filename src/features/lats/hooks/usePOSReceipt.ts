@@ -170,7 +170,16 @@ export const usePOSReceipt = () => {
     content += '-'.repeat(40) + '\n';
     
     receipt.items.forEach(item => {
-      const itemName = item.variantName ? `${item.name} (${item.variantName})` : item.name;
+      let itemName = item.variantName ? `${item.name} (${item.variantName})` : item.name;
+      
+      // Add spare part identification
+      if ((item as any).itemType === 'spare-part') {
+        itemName = `🔧 ${itemName} [Spare Part]`;
+        if ((item as any).partNumber) {
+          itemName += ` (Part: ${(item as any).partNumber})`;
+        }
+      }
+      
       content += `${item.quantity}x ${itemName}\n`;
       content += `  ${formatMoney(item.unitPrice)} each\n`;
       content += `  ${formatMoney(item.totalPrice)}\n\n`;

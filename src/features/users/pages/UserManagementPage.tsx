@@ -944,7 +944,6 @@ const UserManagementPage: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
 
       {/* Modals */}
       <CreateUserModal

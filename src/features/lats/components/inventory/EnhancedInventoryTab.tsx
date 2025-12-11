@@ -16,7 +16,7 @@ import {
   Package, Grid, List, Star, CheckCircle, XCircle,
   Download, Edit, Eye, Trash2, DollarSign, TrendingUp,
   AlertTriangle, Calculator, Printer, QrCode, X, MoreVertical, ArrowRightLeft, Copy,
-  CheckSquare, XSquare, Files, ShoppingCart, Plus, Search, ChevronDown, ChevronUp, ChevronRight
+  CheckSquare, XSquare, Files, ShoppingCart, Plus, Search, ChevronDown, ChevronUp, ChevronRight, Filter
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { validateProductsBatch } from '../../lib/productUtils';
@@ -312,296 +312,189 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   );
   return (
     <div className="space-y-0">
-      {/* Fixed Statistics Section - Matching PurchaseOrdersPage */}
-      <div className="p-6 pb-0 flex-shrink-0">
-        <div 
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
-            gap: '1rem'
-          }}
-        >
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md relative">
-            <div className="absolute top-3 right-3 w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg">
-              <Package className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Total Products</p>
-              <p className="text-2xl font-bold text-gray-900">{metrics.totalItems}</p>
-              <p className="text-xs text-gray-500 mt-1">{metrics.activeProducts} active</p>
-            </div>
-          </div>
-          
-          <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md relative">
-            <div className="absolute top-3 right-3 w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center shadow-lg">
-              <CheckCircle className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">In Stock</p>
-              <p className="text-2xl font-bold text-gray-900">{metrics.totalItems - metrics.lowStockItems - metrics.outOfStockItems}</p>
-              <p className="text-xs text-gray-500 mt-1">{metrics.lowStockItems} low, {metrics.outOfStockItems} out</p>
-            </div>
-          </div>
-          
-          <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 hover:bg-red-100 hover:border-red-300 transition-all shadow-sm hover:shadow-md relative">
-            <div className="absolute top-3 right-3 w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center shadow-lg">
-              <AlertTriangle className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Reorder Alerts</p>
-              <p className="text-2xl font-bold text-gray-900">{metrics.reorderAlerts}</p>
-              <p className="text-xs text-gray-500 mt-1">Need attention</p>
-            </div>
-          </div>
-          
-          <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 hover:bg-purple-100 hover:border-purple-300 transition-all shadow-sm hover:shadow-md relative">
-            <div className="absolute top-3 right-3 w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center shadow-lg">
-              <DollarSign className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Total Value</p>
-              <p className="text-2xl font-bold text-gray-900">{formatShortMoney(metrics.totalValue)}</p>
-              <p className="text-xs text-gray-500 mt-1">Cost</p>
-            </div>
-          </div>
-          
-          <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md relative">
-            <div className="absolute top-3 right-3 w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center shadow-lg">
-              <TrendingUp className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Retail Value</p>
-              <p className="text-2xl font-bold text-gray-900">{formatShortMoney(metrics.retailValue || 0)}</p>
-              <p className="text-xs text-gray-500 mt-1">Selling</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Fixed Search and Filters Section - Matching PurchaseOrdersPage */}
-      <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
-        <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
-          <div className="flex flex-col gap-4">
-            {/* Search Bar and Buttons Row */}
-            <div className="flex flex-col lg:flex-row gap-3 items-start lg:items-center">
-              {/* Bigger Search Bar - Takes most space */}
-              <div className="flex-1 w-full lg:w-auto">
-                <div className="relative">
+      {/* Fixed Search and Filters Section - Matching RemindersPage Design */}
+      <div className="px-6 py-4 flex-shrink-0">
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+            {/* Search Bar */}
+            <div className="relative flex-1 w-full md:w-auto min-w-[300px]">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search products, SKU, brand, category..."
-                    className="w-full py-4 pl-14 pr-12 text-lg border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 bg-white font-medium"
+                className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
                   />
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
-                    <Search size={24} />
-                  </span>
                   {searchQuery && (
                     <button
-                      type="button"
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none p-2"
-                      aria-label="Clear search"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     >
-                      <X size={20} />
+                  <X className="w-4 h-4" />
                     </button>
                   )}
+            </div>
+            
+            {/* Status Filter Tabs */}
+            <div className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Status:</span>
+              <div className="flex rounded-full bg-gray-100 p-1 gap-1">
+                {['all', 'in-stock', 'low-stock', 'out-of-stock'].map((status) => {
+                  const getStatusStyles = () => {
+                    if (selectedStatus !== status) {
+                      return 'text-gray-600 hover:text-gray-900';
+                    }
+                    switch (status) {
+                      case 'all':
+                        return 'bg-blue-500 text-white';
+                      case 'in-stock':
+                        return 'bg-green-500 text-white';
+                      case 'low-stock':
+                        return 'bg-amber-500 text-white';
+                      case 'out-of-stock':
+                        return 'bg-red-500 text-white';
+                      default:
+                        return 'bg-white text-gray-900 shadow-sm';
+                    }
+                  };
+                  
+                  return (
+                    <button
+                      key={status}
+                      onClick={() => setSelectedStatus(status)}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors capitalize ${getStatusStyles()}`}
+                    >
+                      {status.replace('-', ' ')}
+                    </button>
+                  );
+                })}
                 </div>
               </div>
 
-              {/* Right Side: Filters Button and View Controls */}
-              <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap">
                 {/* Filters Toggle Button */}
+            <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowFilters(!showFilters)}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-xl border-2 transition-all font-medium whitespace-nowrap ${
-                    showFilters
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-sm flex items-center gap-2 ${
+                  showFilters || selectedCategory !== 'all' || showLowStockOnly || showFeaturedOnly
+                    ? 'bg-blue-600 text-white border-blue-600'
                       : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:bg-blue-50'
                   }`}
+                title="Toggle filters"
                 >
+                <Filter className="w-4 h-4" />
                   <span>Filters</span>
-                  {showFilters ? (
-                    <ChevronUp size={18} />
-                  ) : (
-                    <ChevronDown size={18} />
-                  )}
-                  {/* Active filters count badge */}
-                  {(selectedCategory !== 'all' || selectedStatus !== 'all' || showLowStockOnly || showFeaturedOnly) && (
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                      showFilters ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
-                    }`}>
+                {(selectedCategory !== 'all' || showLowStockOnly || showFeaturedOnly) && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold bg-white text-blue-600">
                       {[
                         selectedCategory !== 'all' && '1',
-                        selectedStatus !== 'all' && '1',
                         showLowStockOnly && '1',
                         showFeaturedOnly && '1'
                       ].filter(Boolean).length}
                     </span>
                   )}
                 </button>
+            </div>
 
-                {/* View Toggle */}
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-2">
                 <button
                   onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                  className={`px-4 py-3 rounded-xl border-2 transition-all font-medium whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-sm ${
                     viewMode === 'list'
-                      ? 'bg-gray-600 text-white border-gray-600 shadow-md'
+                    ? 'bg-gray-600 text-white border-gray-600'
                       : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400 hover:bg-gray-50'
                   }`}
                   title={`Switch to ${viewMode === 'grid' ? 'list' : 'grid'} view`}
                 >
                   {viewMode === 'grid' ? <List size={18} /> : <Grid size={18} />}
                 </button>
-
-
               </div>
             </div>
 
-            {/* Active filters summary (when collapsed) - Below search bar */}
-            {!showFilters && (selectedCategory !== 'all' || selectedStatus !== 'all' || showLowStockOnly || showFeaturedOnly) && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {selectedCategory !== 'all' && (
-                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-xs font-medium">
-                    {selectedCategory.length > 15 ? selectedCategory.substring(0, 15) + '...' : selectedCategory}
-                  </span>
-                )}
-                {selectedStatus !== 'all' && (
-                  <span className="px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs font-medium capitalize">
-                    {selectedStatus.replace('-', ' ')}
-                  </span>
-                )}
-                {showLowStockOnly && (
-                  <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-md text-xs font-medium">
-                    Low
-                  </span>
-                )}
-                {showFeaturedOnly && (
-                  <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-md text-xs font-medium">
-                    ⭐
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Filters Panel */}
-            <div className="w-full">
-
-              {/* Expanded Filters Panel - Compact Inline Layout */}
-              {showFilters && (
-                <div className="mt-3 p-3 bg-gray-50 rounded-xl border-2 border-gray-200">
-                  {/* Compact Inline Layout - All filters in one row when possible */}
-                  <div className="space-y-3">
-                    {/* Row 1: Status, Sort, Quick Filters - Inline */}
-                    <div className="flex flex-wrap items-center gap-3">
-                      {/* Status Filter */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-gray-600 whitespace-nowrap">Status:</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {['all', 'in-stock', 'low-stock', 'out-of-stock'].map((status) => (
+          {/* Expanded Filters Panel - Show when filters button is clicked or filters are active */}
+          {(showFilters || selectedCategory !== 'all' || showLowStockOnly || showFeaturedOnly) && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="space-y-4">
+                {/* Category Filter - Full list when expanded */}
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm font-medium text-gray-700">Category:</span>
+                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
                             <button
-                              key={status}
-                              onClick={() => setSelectedStatus(status)}
-                              className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-xs capitalize whitespace-nowrap ${
-                                selectedStatus === status
-                                  ? 'bg-green-600 text-white border-green-600 shadow-sm'
-                                  : 'bg-white text-gray-700 border-gray-300 hover:border-green-300 hover:bg-green-50'
-                              }`}
-                            >
-                              {status.replace('-', ' ')}
+                      onClick={() => setSelectedCategory('all')}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                        selectedCategory === 'all'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      All
+                            </button>
+                    {categories.slice(0, 50).map((category) => (
+                            <button
+                        key={category.id}
+                        onClick={() => setSelectedCategory(category.name)}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors whitespace-nowrap ${
+                          selectedCategory === category.name
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        {category.name}
                             </button>
                           ))}
                         </div>
                       </div>
-
-                      {/* Divider */}
-                      <div className="h-6 w-px bg-gray-300"></div>
-
-                      {/* Sort Filter */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-gray-600 whitespace-nowrap">Sort:</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[
-                            { value: 'name', label: 'Name' },
-                            { value: 'price', label: 'Price' },
-                            { value: 'stock', label: 'Stock' },
-                            { value: 'created', label: 'Newest' },
-                            { value: 'updated', label: 'Updated' }
-                          ].map((option) => (
-                            <button
-                              key={option.value}
-                              onClick={() => setSortBy(option.value)}
-                              className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-xs whitespace-nowrap ${
-                                sortBy === option.value
-                                  ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
-                                  : 'bg-white text-gray-700 border-gray-300 hover:border-purple-300 hover:bg-purple-50'
-                              }`}
-                            >
-                              {option.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Divider */}
-                      <div className="h-6 w-px bg-gray-300"></div>
 
                       {/* Quick Filters */}
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-gray-600 whitespace-nowrap">Quick:</span>
-                        <div className="flex flex-wrap gap-1.5">
+                  <span className="text-sm font-medium text-gray-700">Quick:</span>
+                  <div className="flex rounded-full bg-gray-100 p-1 gap-1">
                           <button
                             onClick={() => setShowLowStockOnly(!showLowStockOnly)}
-                            className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-xs whitespace-nowrap ${
+                      className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
                               showLowStockOnly
-                                ? 'bg-orange-600 text-white border-orange-600 shadow-sm'
-                                : 'bg-white text-gray-700 border-gray-300 hover:border-orange-300 hover:bg-orange-50'
+                          ? 'bg-amber-500 text-white'
+                          : 'text-gray-600 hover:text-gray-900'
                             }`}
                           >
                             Low Stock
                           </button>
                           <button
                             onClick={() => setShowFeaturedOnly(!showFeaturedOnly)}
-                            className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-xs whitespace-nowrap ${
+                      className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
                               showFeaturedOnly
-                                ? 'bg-yellow-600 text-white border-yellow-600 shadow-sm'
-                                : 'bg-white text-gray-700 border-gray-300 hover:border-yellow-300 hover:bg-yellow-50'
+                          ? 'bg-yellow-500 text-white'
+                          : 'text-gray-600 hover:text-gray-900'
                             }`}
                           >
                             Featured
                           </button>
-                        </div>
                       </div>
                     </div>
 
-                    {/* Row 2: Category Filter - Compact Inline */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-semibold text-gray-600 whitespace-nowrap">
-                        Category <span className="text-gray-400 font-normal">({categories.length}):</span>
-                      </span>
-                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-2 flex-1">
+                {/* Sort Filter */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700">Sort:</span>
+                  <div className="flex rounded-full bg-gray-100 p-1 gap-1">
+                    {[
+                      { value: 'name', label: 'Name' },
+                      { value: 'price', label: 'Price' },
+                      { value: 'stock', label: 'Stock' },
+                      { value: 'created', label: 'Newest' },
+                      { value: 'updated', label: 'Updated' }
+                    ].map((option) => (
                         <button
-                          onClick={() => setSelectedCategory('all')}
-                          className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-xs flex-shrink-0 whitespace-nowrap ${
-                            selectedCategory === 'all'
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-blue-300 hover:bg-blue-50'
-                          }`}
-                        >
-                          All
-                        </button>
-                        {categories.slice(0, 40).map((category) => (
-                          <button
-                            key={category.id}
-                            onClick={() => setSelectedCategory(category.name)}
-                            className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-xs flex-shrink-0 whitespace-nowrap ${
-                              selectedCategory === category.name
-                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-300 hover:bg-blue-50'
-                            }`}
-                          >
-                            {category.name}
+                        key={option.value}
+                        onClick={() => setSortBy(option.value)}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                          sortBy === option.value
+                            ? 'bg-purple-500 text-white'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        {option.label}
                           </button>
                         ))}
                       </div>
@@ -609,9 +502,6 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                   </div>
                 </div>
               )}
-            </div>
-          </div>
-        </div>
       </div>
 
 
@@ -785,7 +675,31 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                 return 0;
               };
 
+              // Get best available cost price from all variants or product level
+              const getBestCostPrice = () => {
+                // First, try mainVariant cost price
+                if (mainVariant) {
+                  if (mainVariant.costPrice > 0) return mainVariant.costPrice;
+                  if ((mainVariant as any).cost_price > 0) return (mainVariant as any).cost_price;
+                }
+
+                // Try all variants to find any with a cost price
+                if (product.variants && product.variants.length > 0) {
+                  for (const variant of product.variants) {
+                    if (variant.costPrice > 0) return variant.costPrice;
+                    if ((variant as any).cost_price > 0) return (variant as any).cost_price;
+                  }
+                }
+
+                // Fallback to product-level cost price
+                if (product.costPrice > 0) return product.costPrice;
+                if ((product as any).cost_price > 0) return (product as any).cost_price;
+
+                return 0;
+              };
+
               const displayPrice = getBestPrice();
+              const displayCostPrice = getBestCostPrice();
 
               // Calculate stock: Use variant stock if product HAS variants, otherwise use product-level stock
               // 🐛 FIX: Don't fallback to product stock when variants exist but have 0 stock
@@ -1092,9 +1006,9 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                                   <span className="text-gray-400 italic">No price set</span>
                                 )}
                               </span>
-                              {(mainVariant?.costPrice || product.costPrice) > 0 && (
+                              {displayCostPrice > 0 && (
                                 <span className="text-sm text-gray-600">
-                                  (Cost: {formatMoney(mainVariant?.costPrice || product.costPrice || 0)})
+                                  (Cost: {formatMoney(displayCostPrice)})
                                 </span>
                               )}
                             </div>

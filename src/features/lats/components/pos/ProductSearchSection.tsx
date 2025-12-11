@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Package, QrCode, X, MoreHorizontal, Grid, List, DollarSign } from 'lucide-react';
+import { Search, Package, QrCode, X, MoreHorizontal, Grid, List, DollarSign, Wrench } from 'lucide-react';
 import GlassCard from '../../../../features/shared/components/ui/GlassCard';
 import VariantProductCard from './VariantProductCard';
 import { toast } from 'react-hot-toast';
@@ -12,6 +12,8 @@ import { useTranslation } from '../../lib/i18n/useTranslation';
 import { getProductTotalStock } from '../../lib/productUtils';
 import { searchIMEIVariants } from '../../lib/imeiVariantService';
 import { useBranch } from '../../../../context/BranchContext';
+import { SparePart } from '../../types/spareParts';
+import { StockLevelIndicator } from '../shared/StockLevelIndicator';
 
 interface Product {
   id: string;
@@ -62,6 +64,7 @@ interface ProductSearchSectionProps {
   categories: string[];
   brands: string[];
   onAddToCart: (product: Product, variant?: any) => void;
+  onAddSparePartToCart?: (sparePart: SparePart) => void;
   onAddExternalProduct: () => void;
   onSearch: (query: string) => void;
   onScanQrCode?: () => void;
@@ -69,6 +72,7 @@ interface ProductSearchSectionProps {
   setCurrentPage: (page: number) => void;
   totalPages: number;
   productsPerPage: number;
+  spareParts?: SparePart[]; // Spare parts from unified search
 }
 
 const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
@@ -93,13 +97,15 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
   categories,
   brands,
   onAddToCart,
+  onAddSparePartToCart,
   onAddExternalProduct,
   onSearch,
   onScanQrCode,
   currentPage,
   setCurrentPage,
   totalPages,
-  productsPerPage
+  productsPerPage,
+  spareParts = []
 }) => {
   const { currentUser } = useAuth();
   const userRole = currentUser?.role as UserRole;
@@ -983,6 +989,97 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                     gridAutoRows: '1fr'
                   }}
                 >
+                  {/* Spare Parts Section */}
+                  {spareParts.length > 0 && searchQuery.trim() && (
+                    <>
+                      <div style={{ gridColumn: '1 / -1', marginBottom: '1rem' }}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Wrench className="w-5 h-5 text-orange-600" />
+                          <h3 className="text-lg font-semibold text-gray-700">Spare Parts ({spareParts.length})</h3>
+                        </div>
+                      </div>
+                      {spareParts.map((sparePart) => (
+                        <div
+                          key={`spare-${sparePart.id}`}
+                          className="bg-white rounded-lg border-2 border-orange-200 hover:border-orange-400 shadow-md hover:shadow-lg transition-all p-4"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-gray-900 text-sm mb-1 line-clamp-2">
+                                {sparePart.name}
+                              </h4>
+                              {sparePart.part_number && (
+                                <p className="text-xs text-gray-500 mb-2">Part: {sparePart.part_number}</p>
+                              )}
+                            </div>
+                            <div className="ml-2">
+                              <Wrench className="w-5 h-5 text-orange-600" />
+                            </div>
+                          </div>
+                          
+                          {sparePart.images && sparePart.images.length > 0 && (
+                            <div className="w-full h-32 bg-gray-100 rounded-lg mb-2 overflow-hidden">
+                              <img
+                                src={sparePart.images[0]}
+                                alt={sparePart.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            </div>
+                          )}
+                          
+                          <div className="mb-2">
+                            <StockLevelIndicator
+                              quantity={sparePart.quantity || 0}
+                              minLevel={sparePart.min_quantity || 0}
+                              size="sm"
+                            />
+                          </div>
+                          
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <p className="text-xs text-gray-500">Price</p>
+                              <p className="text-lg font-bold text-gray-900">
+                                ${(sparePart.selling_price || 0).toFixed(2)}
+                              </p>
+                            </div>
+                            {sparePart.cost_price && (
+                              <div className="text-right">
+                                <p className="text-xs text-gray-500">Cost</p>
+                                <p className="text-sm text-gray-600">
+                                  ${sparePart.cost_price.toFixed(2)}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {onAddSparePartToCart && (
+                            <button
+                              onClick={() => {
+                                playClickSound();
+                                onAddSparePartToCart(sparePart);
+                              }}
+                              disabled={(sparePart.quantity || 0) === 0}
+                              className="w-full py-2 px-4 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium text-sm"
+                            >
+                              {(sparePart.quantity || 0) > 0 ? 'Add to Cart' : 'Out of Stock'}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {displayProducts.length > 0 && (
+                        <div style={{ gridColumn: '1 / -1', marginTop: '1rem', marginBottom: '1rem' }}>
+                          <div className="flex items-center gap-2">
+                            <Package className="w-5 h-5 text-blue-600" />
+                            <h3 className="text-lg font-semibold text-gray-700">Products ({displayProducts.length})</h3>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  
                   {displayProducts.map((product) => (
                     <VariantProductCard
                       key={product.id}

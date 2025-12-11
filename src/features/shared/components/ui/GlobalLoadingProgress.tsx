@@ -58,7 +58,7 @@ const GlobalLoadingProgress: React.FC<GlobalLoadingProgressProps> = ({
       
       {/* Minimal spinning loader - with pointer events only on itself */}
       <div 
-        className={`fixed top-4 right-4 z-[9999] pointer-events-auto animate-in fade-in duration-200 ${className}`}
+        className={`fixed top-20 right-4 z-[9999] pointer-events-auto animate-in fade-in duration-200 ${className}`}
         title={jobs.length > 0 ? `${jobs.length} operation${jobs.length !== 1 ? 's' : ''} running` : 'Loading'}
       >
         <div className="relative">

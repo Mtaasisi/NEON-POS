@@ -74,6 +74,7 @@ const SalesReportsPage: React.FC = () => {
   const { businessInfo } = useBusinessInfo();
   const [selectedPeriod, setSelectedPeriod] = useState('1d'); // Default to today for customer care
   const [selectedReport, setSelectedReport] = useState('daily');
+  const [itemTypeFilter, setItemTypeFilter] = useState<'all' | 'product' | 'spare-part'>('all'); // Filter by item type
   const [dateRange, setDateRange] = useState({ 
     start: new Date().toISOString().split('T')[0], 
     end: new Date().toISOString().split('T')[0] 
@@ -170,9 +171,24 @@ const SalesReportsPage: React.FC = () => {
   const summaryMetrics = useMemo(() => {
     // Filter for today's sales only when in Daily Sales mode
     const today = new Date().toISOString().split('T')[0];
-    const filteredSales = selectedReport === 'daily' && selectedPeriod === '1d'
+    let filteredSales = selectedReport === 'daily' && selectedPeriod === '1d'
       ? sales.filter(sale => new Date(sale.created_at).toISOString().split('T')[0] === today)
       : sales;
+    
+    // Filter by item type if specified
+    if (itemTypeFilter !== 'all') {
+      filteredSales = filteredSales.filter(sale => {
+        const items = sale.lats_sale_items || [];
+        if (itemTypeFilter === 'spare-part') {
+          // Sale contains at least one spare part
+          return items.some((item: any) => item.item_type === 'spare-part' || item.part_number);
+        } else if (itemTypeFilter === 'product') {
+          // Sale contains only products (no spare parts)
+          return items.every((item: any) => !item.item_type || item.item_type === 'product');
+        }
+        return true;
+      });
+    }
 
     // ⚠️ FIX: Ensure total_amount is always a valid number
     const totalSales = filteredSales.reduce((sum, sale) => {
@@ -212,7 +228,7 @@ const SalesReportsPage: React.FC = () => {
       totalProfit,
       profitMargin
     };
-  }, [sales, canViewProfit, selectedReport, selectedPeriod]);
+  }, [sales, canViewProfit, selectedReport, selectedPeriod, itemTypeFilter]);
 
   // Chart data calculations
   const chartData = useMemo(() => {
@@ -447,10 +463,10 @@ const SalesReportsPage: React.FC = () => {
 
         const saleIds = salesResult.data.map(sale => sale.id);
 
-        // Single batch query for ALL sale items
+        // Single batch query for ALL sale items (include item_type and part_number if available)
         const { data: allItems, error: itemsError } = await supabase
           .from('lats_sale_items')
-          .select('id, sale_id, quantity, total_price, cost_price')
+          .select('id, sale_id, quantity, total_price, cost_price, item_type, part_number, product_name, variant_name')
           .in('sale_id', saleIds);
 
         if (itemsError) {
@@ -1201,6 +1217,19 @@ const SalesReportsPage: React.FC = () => {
                     <option value="30d">📅 Last 30 Days</option>
                     <option value="90d">📅 Last 90 Days</option>
                     <option value="custom">🗓️ Custom Range</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Item Type</label>
+                  <select
+                    value={itemTypeFilter}
+                    onChange={(e) => setItemTypeFilter(e.target.value as any)}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white transition-all duration-200 text-sm font-medium"
+                  >
+                    <option value="all">📦 All Items</option>
+                    <option value="product">📱 Products Only</option>
+                    <option value="spare-part">🔧 Spare Parts Only</option>
                   </select>
                 </div>
 

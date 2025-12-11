@@ -43,6 +43,8 @@ interface ShareReceiptModalProps {
       unitPrice: number;
       totalPrice: number;
       image?: string;
+      itemType?: 'product' | 'spare-part';
+      partNumber?: string;
       selectedSerialNumbers?: Array<{ 
         id?: string; 
         serial_number?: string; 
@@ -1474,12 +1476,26 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
   <div class="items">
     <h3>Items:</h3>
     ${receiptData.items?.map(item => {
-      const productName = item.variantName && item.variantName !== 'Default' 
+      let productName = item.variantName && item.variantName !== 'Default' 
         ? `${item.productName} - ${item.variantName}`
         : item.productName;
+      
+      // Add spare part identification
+      if (item.itemType === 'spare-part') {
+        productName = `🔧 ${productName} [Spare Part]`;
+        if (item.partNumber) {
+          productName += ` (Part: ${item.partNumber})`;
+        }
+      }
+      
       let itemHtml = `
       <div class="item">
         <div style="font-weight: bold;">${productName} (x${item.quantity}) - ${item.totalPrice.toLocaleString()} TZS</div>`;
+      
+      // Add part number for spare parts
+      if (item.itemType === 'spare-part' && item.partNumber) {
+        itemHtml += `<div style="font-size: 0.85em; color: #666; margin-top: 2px; font-family: monospace;">Part Number: ${item.partNumber}</div>`;
+      }
       
       
       if (item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0) {

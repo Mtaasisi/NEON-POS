@@ -5,7 +5,8 @@ export interface SparePart {
   id: string;
   name: string;
   part_number: string;
-  category_id: string;
+  category_id: string; // Kept for backward compatibility but not used
+  spare_type?: string | null; // Replaces category - stores the spare type label directly
   brand?: string;
   supplier_id?: string;
   condition?: 'new' | 'used' | 'refurbished';
@@ -34,7 +35,7 @@ export interface SparePart {
   };
   
   // Joined data (not in database)
-  category?: Category;
+  category?: Category; // Kept for backward compatibility but not used
   supplier?: Supplier;
   created_by_user?: User;
   updated_by_user?: User;
@@ -52,6 +53,7 @@ export interface SparePartVariant {
   attributes?: Record<string, any>;
   image_url?: string;
   image_file?: File;
+  compatible_devices?: string[]; // Array of device names
   created_at?: string;
   updated_at?: string;
 }

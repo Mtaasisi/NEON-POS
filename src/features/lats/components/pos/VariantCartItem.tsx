@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Package, Tag, Minus, Plus, Edit, X, AlertTriangle } from 'lucide-react';
+import { Trash2, Package, Tag, Minus, Plus, Edit, X, AlertTriangle, Wrench } from 'lucide-react';
 import GlassCard from '../../../shared/components/ui/GlassCard';
 import GlassButton from '../../../shared/components/ui/GlassButton';
 import GlassBadge from '../../../shared/components/ui/GlassBadge';
@@ -104,6 +104,9 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
   // Calculate totals
   const subtotal = item.unitPrice * item.quantity;
   const availableStock = item.availableQuantity;
+  
+  // Check if this is a spare part
+  const isSparePart = item.itemType === 'spare-part';
 
   // Get stock status
   const getStockStatus = () => {
@@ -323,13 +326,17 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
   if (variant === 'compact') {
     return (
       <div className={`bg-white border-2 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 ${className} ${
-        isExpanded
-          ? 'border-blue-500 shadow-xl'
-          : stockStatus === 'insufficient' 
-            ? 'border-red-300' 
-            : stockStatus === 'low'
-              ? 'border-orange-300'
-              : 'border-gray-200 hover:border-gray-300'
+        isSparePart
+          ? isExpanded
+            ? 'border-orange-500 shadow-xl'
+            : 'border-orange-300 hover:border-orange-400'
+          : isExpanded
+            ? 'border-blue-500 shadow-xl'
+            : stockStatus === 'insufficient'
+              ? 'border-red-300'
+              : stockStatus === 'low'
+                ? 'border-orange-300'
+                : 'border-gray-200 hover:border-gray-300'
       }`}>
         {/* Item Header - Clickable */}
         <div 
@@ -354,7 +361,7 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
                 </svg>
               </div>
               
-              {/* Product Icon - Styled like SetPricingModal */}
+              {/* Product/Spare Part Icon - Styled like SetPricingModal */}
               {thumbnail ? (
                 <div className="w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 overflow-hidden">
                   <SafeImage
@@ -365,19 +372,40 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
                   />
                 </div>
               ) : (
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-md flex items-center justify-center flex-shrink-0">
-                  <Package className="w-6 h-6 text-white" />
+                <div className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${
+                  isSparePart 
+                    ? 'bg-gradient-to-br from-orange-500 to-orange-600' 
+                    : 'bg-gradient-to-br from-blue-500 to-indigo-600'
+                }`}>
+                  {isSparePart ? (
+                    <Wrench className="w-6 h-6 text-white" />
+                  ) : (
+                    <Package className="w-6 h-6 text-white" />
+                  )}
                 </div>
               )}
               
-              {/* Product Details */}
+              {/* Product/Spare Part Details */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1 min-w-0">
                   <h3 className="font-bold text-gray-900 truncate text-base flex-1 min-w-0 max-w-full">
                     {item.productName}
                   </h3>
+                  {isSparePart && (
+                    <div className="flex-shrink-0">
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-medium border border-orange-200">
+                        <Wrench className="w-3 h-3" />
+                        <span>Spare Part</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                {item.variantName !== 'Default' && (
+                {isSparePart && (item as any).partNumber && (
+                  <div className="flex items-center gap-2 text-xs text-gray-600 mt-1">
+                    <span className="text-orange-600 font-semibold">Part: {(item as any).partNumber}</span>
+                  </div>
+                )}
+                {!isSparePart && item.variantName !== 'Default' && (
                   <div className="flex items-center gap-2 text-xs text-gray-600 mt-1">
                     <span className="text-blue-600 font-semibold">{item.variantName}</span>
                   </div>

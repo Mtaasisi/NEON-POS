@@ -178,46 +178,76 @@ export class LiveInventoryService {
         }
 
         // Calculate total stock for this product
-        const productStock = variants.reduce((sum: number, variant: any) => {
-          return sum + (variant.quantity || 0);
-        }, 0);
+        let productStock = 0;
+        if (variants.length > 0) {
+          productStock = variants.reduce((sum: number, variant: any) => {
+            return sum + (variant.quantity || 0);
+          }, 0);
+        } else {
+          // Product has no variants - use product-level stock
+          productStock = product.total_quantity || product.quantity || 0;
+        }
 
         totalStock += productStock;
 
         // Calculate total value for this product (using cost price)
-        const productValue = variants.reduce((sum: number, variant: any) => {
-          const costPrice = variant.cost_price || 0;
-          const quantity = variant.quantity || 0;
-          const variantValue = costPrice * quantity;
-          
-          // Debug logging for each variant (only in development mode)
-          if (import.meta.env.MODE === 'development' && variantValue > 0) {
-            console.log(`💰 [LiveInventoryService] ${product.name} - ${variant.name || 'Default'}: ${quantity} × ${costPrice} = ${variantValue}`);
-          }
-          
-          return sum + variantValue;
-        }, 0);
+        let productValue = 0;
+        if (variants.length > 0) {
+          // Product has variants - calculate from variants
+          productValue = variants.reduce((sum: number, variant: any) => {
+            const costPrice = variant.cost_price || 0;
+            const quantity = variant.quantity || 0;
+            const variantValue = costPrice * quantity;
+            
+            // Debug logging for each variant (only in development mode)
+            if (import.meta.env.MODE === 'development' && variantValue > 0) {
+              console.log(`💰 [LiveInventoryService] ${product.name} - ${variant.name || 'Default'}: ${quantity} × ${costPrice} = ${variantValue}`);
+            }
+            
+            return sum + variantValue;
+          }, 0);
 
-        // Debug logging for product total if multiple variants (only in development mode)
-        if (import.meta.env.MODE === 'development' && variants.length > 1) {
-          console.log(`📊 [LiveInventoryService] ${product.name} - Total from ${variants.length} variants: ${productValue}`);
+          // Debug logging for product total if multiple variants (only in development mode)
+          if (import.meta.env.MODE === 'development' && variants.length > 1) {
+            console.log(`📊 [LiveInventoryService] ${product.name} - Total from ${variants.length} variants: ${productValue}`);
+          }
+        } else {
+          // Product has no variants - use product-level stock and cost
+          const productCost = product.cost_price || 0;
+          productValue = productStock * productCost;
+          
+          if (import.meta.env.MODE === 'development' && productValue > 0) {
+            console.log(`💰 [LiveInventoryService] ${product.name} - Product-level: ${productStock} × ${productCost} = ${productValue}`);
+          }
         }
 
         totalValue += productValue;
 
         // Calculate retail value for this product
-        const productRetailValue = variants.reduce((sum: number, variant: any) => {
-          const sellingPrice = variant.selling_price || 0;
-          const quantity = variant.quantity || 0;
-          const variantRetailValue = sellingPrice * quantity;
+        let productRetailValue = 0;
+        if (variants.length > 0) {
+          // Product has variants - calculate from variants
+          productRetailValue = variants.reduce((sum: number, variant: any) => {
+            const sellingPrice = variant.selling_price || 0;
+            const quantity = variant.quantity || 0;
+            const variantRetailValue = sellingPrice * quantity;
+            
+            // Debug logging for each variant retail value (only in development mode)
+            if (import.meta.env.MODE === 'development' && variantRetailValue > 0) {
+              console.log(`💰 [LiveInventoryService] ${product.name} - ${variant.name || 'Default'} (Retail): ${quantity} × ${sellingPrice} = ${variantRetailValue}`);
+            }
+            
+            return sum + variantRetailValue;
+          }, 0);
+        } else {
+          // Product has no variants - use product-level stock and selling price
+          const productSellingPrice = product.selling_price || product.unit_price || 0;
+          productRetailValue = productStock * productSellingPrice;
           
-          // Debug logging for each variant retail value (only in development mode)
-          if (import.meta.env.MODE === 'development' && variantRetailValue > 0) {
-            console.log(`💰 [LiveInventoryService] ${product.name} - ${variant.name || 'Default'} (Retail): ${quantity} × ${sellingPrice} = ${variantRetailValue}`);
+          if (import.meta.env.MODE === 'development' && productRetailValue > 0) {
+            console.log(`💰 [LiveInventoryService] ${product.name} - Product-level (Retail): ${productStock} × ${productSellingPrice} = ${productRetailValue}`);
           }
-          
-          return sum + variantRetailValue;
-        }, 0);
+        }
 
         retailValue += productRetailValue;
 

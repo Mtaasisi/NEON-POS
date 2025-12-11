@@ -861,7 +861,7 @@ Reference: ${transaction.reference || 'N/A'}`;
                       </div>
                     </div>
                   </div>
-                </GlassCard>
+                </div>
                 )}
 
                 {/* Transactions List */}
@@ -1195,10 +1195,9 @@ Reference: ${transaction.reference || 'N/A'}`;
           </div>
         </div>
       </div>
-    </PageErrorBoundary>
 
-        {/* Payment Detail Modal - Redesigned */}
-        {selectedTransaction && (
+      {/* Payment Detail Modal - Redesigned */}
+      {selectedTransaction && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 pt-16 animate-fadeIn">
             <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[85vh] overflow-hidden animate-slideUp">
               {/* Modal Header - Gradient */}
@@ -1842,7 +1841,6 @@ Reference: ${transaction.reference || 'N/A'}`;
             </div>
           </div>
         )}
-      </div>
     </PageErrorBoundary>
   );
 };

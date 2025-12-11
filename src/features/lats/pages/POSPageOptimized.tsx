@@ -93,7 +93,8 @@ import { usePOSClickSounds } from '../hooks/usePOSClickSounds';
 import { useDeviceDetection } from '../../../hooks/useDeviceDetection';
 import MobilePOSWrapper from '../components/pos/MobilePOSWrapper';
 import InvoiceTemplate from '../../../components/templates/InvoiceTemplate';
-import { FileText, Printer } from 'lucide-react';
+import { FileText, Printer, Wrench } from 'lucide-react';
+import { useUnifiedSearch } from '../hooks/useUnifiedSearch';
 
 
 // Import lazy-loaded modal wrappers
@@ -282,6 +283,9 @@ const POSPageOptimized: React.FC = () => {
   // Get current branch
   const { currentBranch, loading: branchLoading } = useBranch();
   
+  // Unified search for products and spare parts
+  const { search: unifiedSearch, results: unifiedSearchResults, isSearching: isUnifiedSearching } = useUnifiedSearch();
+  
   // Success modal for sale completion
   const successModal = useSuccessModal();
   
@@ -352,7 +356,9 @@ const POSPageOptimized: React.FC = () => {
     loadProducts,
     loadCategories,
     loadSuppliers,
-    loadSales
+    loadSales,
+    loadSpareParts,
+    spareParts
   } = useInventoryStore();
 
   // Unified loading system for non-blocking loading indicators
@@ -862,9 +868,11 @@ const POSPageOptimized: React.FC = () => {
         
         // Simple approach: just call loadProducts and loadCategories like customer portal does
         // The loadProducts function handles cache internally, so we don't need to check it here
+        // Also load spare parts for POS functionality
         await Promise.allSettled([
           loadProducts({ page: 1, limit: 200 }, false),
-          loadCategories()
+          loadCategories(),
+          loadSpareParts() // Load spare parts for POS search and stock validation
         ]);
         
         const finalProductCount = useInventoryStore.getState().products.length;
@@ -942,20 +950,20 @@ const POSPageOptimized: React.FC = () => {
   if (!currentUser || !canAccessPOS) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-orange-50">
-        <div className="text-center p-8">
-          <div className="text-red-600 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="text-center p-[2rem] sm:p-[3rem] md:p-[4rem]">
+          <div className="text-red-600 mb-[1rem]">
+            <svg className="w-[5vw] h-[5vw] min-w-[3rem] max-w-[4rem] min-h-[3rem] max-h-[4rem] mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
           </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">Access Denied</h3>
-          <p className="text-gray-600 mb-4">You don't have permission to access the POS system.</p>
+          <h3 className="text-[clamp(1rem,2.5vw,1.25rem)] font-semibold text-gray-900 mb-[0.5rem]">Access Denied</h3>
+          <p className="text-[clamp(0.875rem,2vw,1rem)] text-gray-600 mb-[1rem]">You don't have permission to access the POS system.</p>
           <button
             onClick={() => {
               playClickSound();
               navigate('/dashboard');
             }}
-            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            className="px-[1.5rem] py-[0.5rem] sm:px-[2rem] sm:py-[0.75rem] bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-[clamp(0.875rem,2vw,1rem)]"
           >
             Go to Dashboard
           </button>
@@ -1138,8 +1146,8 @@ const POSPageOptimized: React.FC = () => {
   };
 
 
-  const handleUnifiedSearch = (query: string) => {
-    const jobId = startLoading('Searching products...');
+  const handleUnifiedSearch = async (query: string) => {
+    const jobId = startLoading('Searching products and spare parts...');
     
     try {
       // Check if it's a barcode
@@ -1149,8 +1157,14 @@ const POSPageOptimized: React.FC = () => {
         startQrCodeScanner();
         completeLoading(jobId);
       } else {
-        // Regular search
-        updateProgress(jobId, 50);
+        // Regular search - now includes spare parts
+        updateProgress(jobId, 30);
+        await unifiedSearch(query, {
+          includeProducts: true,
+          includeSpareParts: true,
+          inStockOnly: false
+        });
+        updateProgress(jobId, 70);
         setShowSearchResults(true);
         updateProgress(jobId, 100);
         completeLoading(jobId);
@@ -1923,6 +1937,97 @@ const POSPageOptimized: React.FC = () => {
     }
   }, [canAddToCart, cartItems, checkForIMEIVariants, stockAdjustments]);
 
+  // Add spare part to cart
+  const addSparePartToCart = useCallback(async (sparePart: any, quantity: number = 1) => {
+    try {
+      // Check permissions
+      if (!canAddToCart) {
+        toast.error('You do not have permission to add items to cart');
+        return;
+      }
+
+      // Validate spare part
+      if (!sparePart || !sparePart.id) {
+        toast.error('Invalid spare part. Please try again.');
+        return;
+      }
+
+      // Check stock - use latest from store if available, otherwise use sparePart data
+      const { spareParts: storeSpareParts } = useInventoryStore.getState();
+      const latestSparePart = storeSpareParts.find(sp => sp.id === sparePart.id) || sparePart;
+      const availableStock = latestSparePart.quantity || sparePart.quantity || 0;
+      
+      if (availableStock < quantity) {
+        toast.error(`${sparePart.name}: Insufficient stock. Available: ${availableStock}, Requested: ${quantity}`);
+        return;
+      }
+
+      // Validate price
+      const price = sparePart.selling_price || sparePart.unit_price || 0;
+      if (!price || price <= 0) {
+        toast.error('Invalid spare part price. Please contact support.');
+        return;
+      }
+
+      // Check if already in cart
+      const existingItem = cartItems.find(item => 
+        item.productId === sparePart.id && item.itemType === 'spare-part'
+      );
+
+      if (existingItem) {
+        const totalRequested = existingItem.quantity + quantity;
+        // Re-check stock from store for latest data
+        const currentAvailableStock = latestSparePart.quantity || sparePart.quantity || 0;
+        
+        if (totalRequested > currentAvailableStock) {
+          toast.error(`Only ${currentAvailableStock} units available for ${sparePart.name}. You already have ${existingItem.quantity} in cart.`);
+          return;
+        }
+
+        const newQuantity = existingItem.quantity + quantity;
+        const newTotalPrice = newQuantity * price;
+
+        setCartItems(prev => prev.map(item => 
+          item.id === existingItem.id 
+            ? { ...item, quantity: newQuantity, totalPrice: newTotalPrice }
+            : item
+        ));
+
+        toast.success(`${sparePart.name} quantity updated to ${newQuantity}`);
+      } else {
+        // Extract image
+        let partImage: string | undefined;
+        if (sparePart.images && Array.isArray(sparePart.images) && sparePart.images.length > 0) {
+          partImage = sparePart.images[0];
+        }
+
+        const newItem = {
+          id: `spare-${sparePart.id}-${Date.now()}`,
+          productId: sparePart.id,
+          variantId: sparePart.id, // Use spare part ID as variant ID
+          productName: sparePart.name,
+          variantName: sparePart.part_number || 'Spare Part',
+          sku: sparePart.part_number || 'N/A',
+          quantity: quantity,
+          unitPrice: price,
+          totalPrice: price * quantity,
+          availableQuantity: availableStock,
+          image: partImage,
+          itemType: 'spare-part' as const,
+          partNumber: sparePart.part_number,
+          costPrice: sparePart.cost_price || 0,
+          attributes: {}
+        };
+
+        setCartItems(prev => [...prev, newItem]);
+        toast.success(`${quantity}x ${sparePart.name} added to cart`);
+      }
+    } catch (error) {
+      console.error('❌ Error adding spare part to cart:', error);
+      toast.error('Failed to add spare part to cart. Please try again.');
+    }
+  }, [canAddToCart, cartItems]);
+
   const updateCartItemQuantity = useCallback(async (itemId: string, quantity: number) => {
     try {
       // Validate inputs
@@ -2187,8 +2292,11 @@ const POSPageOptimized: React.FC = () => {
       }
 
       // Validate IMEI Variants are selected for items that require them
+      // Skip IMEI validation for spare parts
       const itemsRequiringIMEIVariants = await Promise.all(
-        cartItems.map(async (item) => {
+        cartItems
+          .filter(item => item.itemType !== 'spare-part') // Skip spare parts
+          .map(async (item) => {
           try {
             console.log('🔍 Checking IMEI requirement for item:', {
               productName: item.productName,
@@ -2320,7 +2428,8 @@ const POSPageOptimized: React.FC = () => {
         loadProducts({ page: 1, limit: 500 }, true), // force = true to skip cache
         loadSales(),
         loadCategories(),
-        loadSuppliers()
+        loadSuppliers(),
+        loadSpareParts() // Refresh spare parts data
       ]);
       
       toast.success('Data refreshed from database successfully');
@@ -2708,7 +2817,7 @@ const POSPageOptimized: React.FC = () => {
               setCurrentReceipt(testReceipt);
               setShowReceiptModal(true);
             }}
-            className="fixed bottom-4 right-4 z-50 px-4 py-2 bg-purple-600 text-white rounded-lg shadow-lg hover:bg-purple-700 transition-colors font-semibold"
+            className="fixed bottom-[1rem] right-[1rem] sm:bottom-[0.75rem] sm:right-[0.75rem] z-50 px-[1rem] sm:px-[0.75rem] py-[0.5rem] sm:py-[0.375rem] bg-purple-600 text-white rounded-lg shadow-lg hover:bg-purple-700 transition-colors font-semibold text-[clamp(0.75rem,1.5vw,0.875rem)]"
             title="Test Receipt Modal (Dev Only)"
           >
             🧪 Test Receipt
@@ -2800,13 +2909,17 @@ const POSPageOptimized: React.FC = () => {
                   variantId: item.variantId,
                   productName: item.productName,
                   variantName: item.variantName,
+                  itemType: item.itemType || 'product', // Include item type for spare parts
+                  partNumber: (item as any).partNumber || null, // Include part number for spare parts
                   sku: item.sku,
                   quantity: item.quantity,
                   unitPrice: item.unitPrice,
                   totalPrice: item.totalPrice,
                   costPrice: 0,
                   profit: 0,
-                  selectedSerialNumbers: item.selectedSerialNumbers || [] // Pass serial numbers
+                  selectedSerialNumbers: item.selectedSerialNumbers || [], // Pass serial numbers
+                  itemType: item.itemType || 'product', // Include item type for spare parts
+                  partNumber: (item as any).partNumber || null // Include part number for spare parts
                 })),
                 subtotal: totalAmount,
                 tax: taxAmount,
@@ -3114,9 +3227,9 @@ const POSPageOptimized: React.FC = () => {
 
   // Render Desktop UI
   return (
-    <div className="flex flex-col h-screen pos-auto-scale" data-pos-page="true">
+    <div className="flex flex-col h-screen pos-auto-scale" data-pos-page="true" style={{ fontSize: 'clamp(14px, 1.2vw, 18px)' }}>
       {/* Breadcrumb */}
-      <div className="flex-shrink-0 px-4 sm:px-6 py-2">
+      <div className="flex-shrink-0 px-[1rem] sm:px-[1.5rem] py-[0.5rem] sm:py-[0.375rem]">
         <LATSBreadcrumb />
       </div>
 
@@ -3150,6 +3263,20 @@ const POSPageOptimized: React.FC = () => {
               taxId: (selectedCustomer as any).taxId || ''
             },
             items: cartItems.map(item => {
+              // Handle spare parts differently
+              if (item.itemType === 'spare-part') {
+                return {
+                  description: `${item.productName}${(item as any).partNumber ? ` (Part: ${(item as any).partNumber})` : ''}`,
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                  total: item.totalPrice,
+                  specifications: {
+                    type: 'spare-part',
+                    partNumber: (item as any).partNumber || ''
+                  }
+                };
+              }
+              
               // Find product and variant to get specifications
               const product = products.find(p => p.id === item.productId);
               const variant = product?.variants?.find((v: any) => v.id === item.variantId);
@@ -3241,12 +3368,34 @@ const POSPageOptimized: React.FC = () => {
       />
       </div>
 
+      {/* Quick Actions Bar */}
+      <div className="flex-shrink-0 px-[1rem] sm:px-[1.5rem] py-[0.5rem] bg-gray-50 border-b border-gray-200">
+        <div className="flex items-center gap-[0.5rem]">
+          <button
+            onClick={() => navigate('/lats/spare-parts')}
+            className="flex items-center gap-[0.5rem] px-[1rem] py-[0.5rem] sm:px-[0.75rem] sm:py-[0.375rem] bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-[clamp(0.75rem,1.5vw,0.875rem)] font-medium"
+            title="Manage Spare Parts"
+          >
+            <Wrench size={parseInt(getComputedStyle(document.documentElement).fontSize) * 0.06 || 16} className="w-[5vw] h-[5vw] min-w-[0.875rem] min-h-[0.875rem] max-w-[1rem] max-h-[1rem]" />
+            <span>Spare Parts</span>
+          </button>
+          <button
+            onClick={() => navigate('/lats/unified-inventory')}
+            className="flex items-center gap-[0.5rem] px-[1rem] py-[0.5rem] sm:px-[0.75rem] sm:py-[0.375rem] bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-[clamp(0.75rem,1.5vw,0.875rem)] font-medium"
+            title="View Inventory"
+          >
+            <Package size={parseInt(getComputedStyle(document.documentElement).fontSize) * 0.06 || 16} className="w-[5vw] h-[5vw] min-w-[0.875rem] min-h-[0.875rem] max-w-[1rem] max-h-[1rem]" />
+            <span>Inventory</span>
+          </button>
+        </div>
+      </div>
+
       {/* Temporary Migration Button - Remove after migration is applied */}
       {/* {currentUser?.role === 'admin' && (
-        <div className="fixed top-20 right-4 z-50">
+        <div className="fixed top-[5rem] right-[1rem] sm:top-[6rem] sm:right-[1.5rem] z-50">
           <button
             onClick={handleApplyMigration}
-            className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-[0.75rem] py-[0.5rem] sm:px-[1rem] sm:py-[0.625rem] bg-blue-600 text-white text-[clamp(0.75rem,1.5vw,0.875rem)] rounded-lg hover:bg-blue-700 transition-colors"
           >
             Apply DB Migration
           </button>
@@ -3254,8 +3403,8 @@ const POSPageOptimized: React.FC = () => {
       )} */}
 
       {/* Main Content Area - Takes remaining space */}
-      <div className="flex-1 min-h-0 p-4 sm:p-6 max-w-full mx-auto pos-page-container overflow-hidden">
-        <div className="flex flex-col lg:flex-row gap-6 h-full">
+      <div className="flex-1 min-h-0 p-[1rem] sm:p-[1.5rem] max-w-full mx-auto pos-page-container overflow-hidden">
+        <div className="flex flex-col lg:flex-row gap-[1.5rem] sm:gap-[1rem] h-full">
           {/* Product Search Section - Fixed height to prevent layout shift */}
           <div className="flex-1 min-h-0 relative h-full">
             {!dataLoaded && products.length === 0 ? (
@@ -3269,7 +3418,7 @@ const POSPageOptimized: React.FC = () => {
             
             {/* Debug info - shows product counts */}
             {import.meta.env.DEV && (
-              <div className="fixed bottom-4 left-4 bg-black/80 text-white p-2 rounded text-xs z-50 font-mono">
+              <div className="fixed bottom-[1rem] left-[1rem] bg-black/80 text-white p-[0.5rem] rounded text-[clamp(0.625rem,1.2vw,0.75rem)] z-50 font-mono">
                 Products: {products.length} | dbProducts: {dbProducts.length} | Loaded: {dataLoaded ? 'Y' : 'N'}
               </div>
             )}
@@ -3296,6 +3445,7 @@ const POSPageOptimized: React.FC = () => {
               categories={categories?.map(cat => cat.name) || []}
               brands={[]}
               onAddToCart={addToCart}
+              onAddSparePartToCart={addSparePartToCart}
               onAddExternalProduct={() => setShowAddExternalProductModal(true)}
               onSearch={handleUnifiedSearch}
               onScanQrCode={startQrCodeScanner}
@@ -3303,6 +3453,7 @@ const POSPageOptimized: React.FC = () => {
               setCurrentPage={setCurrentPage}
               totalPages={totalPages}
               productsPerPage={productsPerPageFromSettings}
+              spareParts={unifiedSearchResults.spareParts}
             />
           </div>
 
@@ -3521,6 +3672,8 @@ const POSPageOptimized: React.FC = () => {
                 variantId: item.variantId,
                 productName: item.productName, // Fixed: was item.name
                 variantName: item.variantName, // Fixed: was item.name
+                itemType: item.itemType || 'product', // Include item type for spare parts
+                partNumber: (item as any).partNumber || null, // Include part number for spare parts
                 sku: item.sku,
                 quantity: item.quantity,
                 unitPrice: item.unitPrice, // Fixed: was item.price
@@ -3862,31 +4015,31 @@ const POSPageOptimized: React.FC = () => {
 
       {/* POS Sale Summary Modal */}
       {showPOSSummaryModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col relative">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-[1rem] sm:p-[1.5rem]">
+          <div className="bg-white rounded-2xl w-full max-w-[90vw] sm:max-w-[80vw] md:max-w-[48rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col relative">
             {/* Close Button */}
                 <button
               type="button"
                   onClick={() => setShowPOSSummaryModal(false)}
-              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+              className="absolute top-[1rem] right-[1rem] sm:top-[1.25rem] sm:right-[1.25rem] w-[clamp(2rem,5vw,2.25rem)] h-[clamp(2rem,5vw,2.25rem)] min-w-[2rem] min-h-[2rem] flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-[clamp(1rem,2.5vw,1.25rem)] h-[clamp(1rem,2.5vw,1.25rem)]" />
                 </button>
 
             {/* Icon Header - Fixed */}
-            <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
-              <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+            <div className="p-[1.5rem] sm:p-[2rem] md:p-[2.5rem] bg-white border-b border-gray-200 flex-shrink-0">
+              <div className="grid grid-cols-[auto,1fr] gap-[1rem] sm:gap-[1.5rem] md:gap-[2rem] items-center">
                 {/* Icon */}
-                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
-                  <ShoppingCart className="w-8 h-8 text-white" />
+                <div className="w-[clamp(3rem,8vw,4rem)] h-[clamp(3rem,8vw,4rem)] bg-blue-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                  <ShoppingCart className="w-[clamp(1.5rem,4vw,2rem)] h-[clamp(1.5rem,4vw,2rem)] text-white" />
               </div>
                 
                 {/* Text */}
                 <div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  <h3 className="text-[clamp(1.125rem,3vw,1.5rem)] font-bold text-gray-900 mb-[0.5rem]">
                 Complete Sale
                   </h3>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-[clamp(0.75rem,1.8vw,0.875rem)] text-gray-600">
                     Review your sale details before processing payment
                   </p>
                 </div>
@@ -3894,48 +4047,48 @@ const POSPageOptimized: React.FC = () => {
             </div>
 
             {/* Summary Content - Scrollable */}
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="space-y-6">
+            <div className="flex-1 overflow-y-auto p-[1.5rem] sm:p-[1rem]">
+              <div className="space-y-[1.5rem] sm:space-y-[1rem]">
                 {/* Customer & Sale Information - Combined */}
                 <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <User className="w-5 h-5 text-blue-600" />
+                    <h3 className="text-[clamp(1rem,2.2vw,1.125rem)] font-semibold text-gray-900 mb-[1rem] sm:mb-[0.75rem] flex items-center gap-[0.5rem]">
+                      <User className="w-[5vw] h-[5vw] min-w-[1rem] min-h-[1rem] max-w-[1.25rem] max-h-[1.25rem] text-blue-600" />
                     Sale Information
                     </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-[0.75rem] sm:gap-[0.5rem]">
                     {selectedCustomer && (
                       <>
-                        <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
-                          <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                            <User className="w-5 h-5 text-blue-600" />
+                        <div className="flex items-start gap-[0.75rem] sm:gap-[0.5rem] p-[0.75rem] sm:p-[0.5rem] bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
+                          <div className="flex-shrink-0 w-[2.5rem] h-[2.5rem] sm:w-[2rem] sm:h-[2rem] rounded-lg bg-blue-50 flex items-center justify-center">
+                            <User className="w-[5vw] h-[5vw] min-w-[1rem] min-h-[1rem] max-w-[1.25rem] max-h-[1.25rem] text-blue-600" />
                       </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs text-gray-500 mb-1">Customer Name</p>
-                            <p className="font-semibold text-gray-900 truncate">{selectedCustomer.name}</p>
+                            <p className="text-[clamp(0.625rem,1.2vw,0.75rem)] text-gray-500 mb-[0.25rem]">Customer Name</p>
+                            <p className="font-semibold text-[clamp(0.875rem,1.8vw,1rem)] text-gray-900 truncate">{selectedCustomer.name}</p>
                       </div>
                     </div>
-                        <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
-                          <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
+                        <div className="flex items-start gap-[0.75rem] sm:gap-[0.5rem] p-[0.75rem] sm:p-[0.5rem] bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
+                          <div className="flex-shrink-0 w-[2.5rem] h-[2.5rem] sm:w-[2rem] sm:h-[2rem] rounded-lg bg-green-50 flex items-center justify-center">
                             {selectedCustomer.phone ? (
-                              <Phone className="w-5 h-5 text-green-600" />
+                              <Phone className="w-[5vw] h-[5vw] min-w-[1rem] min-h-[1rem] max-w-[1.25rem] max-h-[1.25rem] text-green-600" />
                             ) : (
-                              <Mail className="w-5 h-5 text-green-600" />
+                              <Mail className="w-[5vw] h-[5vw] min-w-[1rem] min-h-[1rem] max-w-[1.25rem] max-h-[1.25rem] text-green-600" />
                             )}
                   </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs text-gray-500 mb-1">Contact</p>
-                            <p className="font-semibold text-gray-900 truncate">{selectedCustomer.phone || selectedCustomer.email || 'N/A'}</p>
+                            <p className="text-[clamp(0.625rem,1.2vw,0.75rem)] text-gray-500 mb-[0.25rem]">Contact</p>
+                            <p className="font-semibold text-[clamp(0.875rem,1.8vw,1rem)] text-gray-900 truncate">{selectedCustomer.phone || selectedCustomer.email || 'N/A'}</p>
                           </div>
                         </div>
                       </>
                     )}
-                    <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
-                      <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
-                        <Calendar className="w-5 h-5 text-purple-600" />
+                    <div className="flex items-start gap-[0.75rem] sm:gap-[0.5rem] p-[0.75rem] sm:p-[0.5rem] bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
+                      <div className="flex-shrink-0 w-[2.5rem] h-[2.5rem] sm:w-[2rem] sm:h-[2rem] rounded-lg bg-purple-50 flex items-center justify-center">
+                        <Calendar className="w-[5vw] h-[5vw] min-w-[1rem] min-h-[1rem] max-w-[1.25rem] max-h-[1.25rem] text-purple-600" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-gray-500 mb-1">Sale Date</p>
-                        <p className="font-semibold text-gray-900 text-sm">{new Date().toLocaleDateString('en-US', { 
+                        <p className="text-[clamp(0.625rem,1.2vw,0.75rem)] text-gray-500 mb-[0.25rem]">Sale Date</p>
+                        <p className="font-semibold text-[clamp(0.75rem,1.5vw,0.875rem)] text-gray-900">{new Date().toLocaleDateString('en-US', { 
                           weekday: 'long', 
                           year: 'numeric', 
                           month: 'long', 
@@ -3946,13 +4099,13 @@ const POSPageOptimized: React.FC = () => {
                       </div>
                     </div>
                     {currentUser && (
-                      <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
-                        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center">
-                          <UserCircle className="w-5 h-5 text-orange-600" />
+                      <div className="flex items-start gap-[0.75rem] sm:gap-[0.5rem] p-[0.75rem] sm:p-[0.5rem] bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
+                        <div className="flex-shrink-0 w-[2.5rem] h-[2.5rem] sm:w-[2rem] sm:h-[2rem] rounded-lg bg-orange-50 flex items-center justify-center">
+                          <UserCircle className="w-[5vw] h-[5vw] min-w-[1rem] min-h-[1rem] max-w-[1.25rem] max-h-[1.25rem] text-orange-600" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs text-gray-500 mb-1">Cashier</p>
-                          <p className="font-semibold text-gray-900 truncate">{currentUser.fullName || currentUser.email}</p>
+                          <p className="text-[clamp(0.625rem,1.2vw,0.75rem)] text-gray-500 mb-[0.25rem]">Cashier</p>
+                          <p className="font-semibold text-[clamp(0.875rem,1.8vw,1rem)] text-gray-900 truncate">{currentUser.fullName || currentUser.email}</p>
                         </div>
                       </div>
                     )}
@@ -3960,32 +4113,32 @@ const POSPageOptimized: React.FC = () => {
                 </div>
 
                 {/* Separator */}
-                <div className="border-b-2 border-gray-300 my-4"></div>
+                <div className="border-b-2 border-gray-300 my-[1rem] sm:my-[0.75rem]"></div>
 
                 {/* Items Summary - With Thumbnails */}
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Package className="w-5 h-5 text-purple-600" />
+                  <h3 className="text-[clamp(1rem,2.2vw,1.125rem)] font-semibold text-gray-900 mb-[1rem] sm:mb-[0.75rem] flex items-center gap-[0.5rem]">
+                    <Package className="w-[5vw] h-[5vw] min-w-[1rem] min-h-[1rem] max-w-[1.25rem] max-h-[1.25rem] text-purple-600" />
                     Sale Items ({cartItems.length})
                   </h3>
                   
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-[0.75rem] sm:gap-[0.5rem]">
                     {cartItems.map((item) => (
                       <div
                         key={item.id}
-                        className="p-3 cursor-pointer flex flex-col h-full bg-white rounded-xl border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all duration-200 shadow-sm relative"
+                        className="p-[0.75rem] sm:p-[0.5rem] cursor-pointer flex flex-col h-full bg-white rounded-xl border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all duration-200 shadow-sm relative"
                       >
                         {/* Quantity Badge */}
-                        <div className="absolute -top-2 -right-2 p-1.5 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-20 min-w-[2rem] min-h-[2rem] bg-gradient-to-r from-blue-500 to-blue-600">
-                          <span className="text-xs font-bold text-white whitespace-nowrap px-1">
+                        <div className="absolute -top-[0.5rem] -right-[0.5rem] sm:-top-[0.375rem] sm:-right-[0.375rem] p-[0.375rem] sm:p-[0.25rem] rounded-full border-2 border-white shadow-lg flex items-center justify-center z-20 min-w-[2rem] min-h-[2rem] sm:min-w-[1.5rem] sm:min-h-[1.5rem] bg-gradient-to-r from-blue-500 to-blue-600">
+                          <span className="text-[clamp(0.625rem,1.2vw,0.75rem)] font-bold text-white whitespace-nowrap px-[0.25rem]">
                             {item.quantity}
                           </span>
                         </div>
                         
-                        <div className="flex items-start gap-2 md:gap-3">
+                        <div className="flex items-start gap-[0.5rem] sm:gap-[0.375rem]">
                           {/* Thumbnail */}
                           {item.image ? (
-                            <div className="relative w-16 h-16 md:w-20 md:h-20 rounded-md flex items-center justify-center flex-shrink-0 overflow-hidden">
+                            <div className="relative w-[4rem] h-[4rem] sm:w-[3rem] sm:h-[3rem] rounded-md flex items-center justify-center flex-shrink-0 overflow-hidden">
                               <SafeImage
                                 src={item.image}
                                 alt={item.productName}
@@ -3994,27 +4147,27 @@ const POSPageOptimized: React.FC = () => {
                               />
                             </div>
                           ) : (
-                            <div className="relative w-16 h-16 md:w-20 md:h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-md flex items-center justify-center flex-shrink-0">
-                              <Package className="w-8 h-8 md:w-10 md:h-10 text-gray-400" />
+                            <div className="relative w-[4rem] h-[4rem] sm:w-[3rem] sm:h-[3rem] bg-gradient-to-br from-gray-100 to-gray-200 rounded-md flex items-center justify-center flex-shrink-0">
+                              <Package className="w-[2rem] h-[2rem] sm:w-[1.5rem] sm:h-[1.5rem] text-gray-400" />
                             </div>
                           )}
                   
                           <div className="flex-1 min-w-0 flex flex-col justify-between">
                             <div>
-                              <div className="font-medium text-gray-800 truncate text-sm md:text-base leading-tight" title={item.productName}>
+                              <div className="font-medium text-gray-800 truncate text-[clamp(0.75rem,1.5vw,0.875rem)] sm:text-[clamp(0.875rem,1.8vw,1rem)] leading-tight" title={item.productName}>
                                 {item.productName}
                     </div>
                               {item.variantName && item.variantName !== 'Default' && (
-                                <p className="text-xs text-gray-500 mt-0.5 font-medium">
+                                <p className="text-[clamp(0.625rem,1.2vw,0.75rem)] text-gray-500 mt-[0.125rem] font-medium">
                                   {item.variantName}
                       </p>
                               )}
                     </div>
-                            <div className="mt-2">
-                              <div className="text-lg md:text-xl text-gray-700 font-bold">
+                            <div className="mt-[0.5rem] sm:mt-[0.375rem]">
+                              <div className="text-[clamp(1rem,2.2vw,1.125rem)] sm:text-[clamp(1.125rem,2.5vw,1.25rem)] text-gray-700 font-bold">
                                 {format.money(item.totalPrice)}
                     </div>
-                              <div className="text-xs text-gray-500 mt-0.5">
+                              <div className="text-[clamp(0.625rem,1.2vw,0.75rem)] text-gray-500 mt-[0.125rem]">
                                 {format.money(item.unitPrice)} each
                               </div>
                             </div>
@@ -4026,52 +4179,52 @@ const POSPageOptimized: React.FC = () => {
                 </div>
 
                 {/* Separator */}
-                <div className="border-b-2 border-gray-300 my-4"></div>
+                <div className="border-b-2 border-gray-300 my-[1rem] sm:my-[0.75rem]"></div>
 
                 {/* Payment Summary - All totals here */}
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <DollarSign className="w-5 h-5 text-blue-600" />
+                  <h3 className="text-[clamp(1rem,2.2vw,1.125rem)] font-semibold text-gray-900 mb-[1rem] sm:mb-[0.75rem] flex items-center gap-[0.5rem]">
+                    <DollarSign className="w-[5vw] h-[5vw] min-w-[1rem] min-h-[1rem] max-w-[1.25rem] max-h-[1.25rem] text-blue-600" />
                     Payment Summary
                   </h3>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-4 pb-3 border-b border-gray-200">
+                  <div className="space-y-[0.75rem] sm:space-y-[0.5rem]">
+                    <div className="grid grid-cols-2 gap-[1rem] sm:gap-[0.75rem] pb-[0.75rem] sm:pb-[0.5rem] border-b border-gray-200">
                       <div>
-                        <p className="text-sm text-gray-500">Total Items</p>
-                        <p className="text-xl font-bold text-gray-900">{cartItems.length}</p>
+                        <p className="text-[clamp(0.75rem,1.5vw,0.875rem)] text-gray-500">Total Items</p>
+                        <p className="text-[clamp(1.125rem,2.5vw,1.25rem)] font-bold text-gray-900">{cartItems.length}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-gray-500">Total Quantity</p>
-                        <p className="text-xl font-bold text-blue-600">
+                        <p className="text-[clamp(0.75rem,1.5vw,0.875rem)] text-gray-500">Total Quantity</p>
+                        <p className="text-[clamp(1.125rem,2.5vw,1.25rem)] font-bold text-blue-600">
                           {cartItems.reduce((sum, item) => sum + item.quantity, 0)}
                         </p>
                       </div>
                     </div>
-                    <div className="flex justify-between items-center pt-2">
-                      <span className="text-gray-700">Subtotal</span>
-                      <span className="font-semibold text-gray-900">{format.money(totalAmount)}</span>
+                    <div className="flex justify-between items-center pt-[0.5rem] sm:pt-[0.375rem]">
+                      <span className="text-[clamp(0.875rem,1.8vw,1rem)] text-gray-700">Subtotal</span>
+                      <span className="font-semibold text-[clamp(0.875rem,1.8vw,1rem)] text-gray-900">{format.money(totalAmount)}</span>
                     </div>
                     {discountAmount > 0 && (
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">Discount</span>
-                        <span className="font-semibold text-red-600">-{format.money(discountAmount)}</span>
+                        <span className="text-[clamp(0.875rem,1.8vw,1rem)] text-gray-700">Discount</span>
+                        <span className="font-semibold text-[clamp(0.875rem,1.8vw,1rem)] text-red-600">-{format.money(discountAmount)}</span>
                       </div>
                     )}
                     {tradeInDiscount > 0 && (
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">Trade-In Credit</span>
-                        <span className="font-semibold text-green-600">-{format.money(tradeInDiscount)}</span>
+                        <span className="text-[clamp(0.875rem,1.8vw,1rem)] text-gray-700">Trade-In Credit</span>
+                        <span className="font-semibold text-[clamp(0.875rem,1.8vw,1rem)] text-green-600">-{format.money(tradeInDiscount)}</span>
                       </div>
                     )}
                     {taxAmount > 0 && (
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">Tax</span>
-                        <span className="font-semibold text-gray-900">{format.money(taxAmount)}</span>
+                        <span className="text-[clamp(0.875rem,1.8vw,1rem)] text-gray-700">Tax</span>
+                        <span className="font-semibold text-[clamp(0.875rem,1.8vw,1rem)] text-gray-900">{format.money(taxAmount)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
-                      <span className="text-lg font-semibold text-gray-900">Total Amount</span>
-                      <span className="text-2xl font-bold text-blue-600">
+                    <div className="flex justify-between items-center pt-[0.75rem] sm:pt-[0.5rem] border-t-2 border-gray-300">
+                      <span className="text-[clamp(1rem,2.2vw,1.125rem)] font-semibold text-gray-900">Total Amount</span>
+                      <span className="text-[clamp(1.25rem,3vw,1.5rem)] font-bold text-blue-600">
                         {format.money(tradeInDiscount > 0 ? finalAmount - tradeInDiscount : finalAmount)}
                       </span>
                     </div>
@@ -4081,20 +4234,20 @@ const POSPageOptimized: React.FC = () => {
             </div>
 
             {/* Action Buttons - Fixed Footer */}
-            <div className="flex gap-3 pt-4 border-t border-gray-200 flex-shrink-0 bg-white px-6 pb-6">
+            <div className="flex gap-[0.75rem] sm:gap-[0.5rem] pt-[1rem] sm:pt-[0.75rem] border-t border-gray-200 flex-shrink-0 bg-white px-[1.5rem] sm:px-[1rem] pb-[1.5rem] sm:pb-[1rem]">
               <button
                 type="button"
                 onClick={() => setShowPOSSummaryModal(false)}
-                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                className="flex-1 px-[1rem] py-[0.75rem] sm:px-[0.75rem] sm:py-[0.5rem] border-2 border-gray-300 rounded-xl text-[clamp(0.875rem,1.8vw,1rem)] text-gray-700 font-medium hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmSaleSummary}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                className="flex-1 px-[1rem] py-[0.75rem] sm:px-[0.75rem] sm:py-[0.5rem] bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-[0.5rem] text-[clamp(0.875rem,1.8vw,1rem)]"
               >
-                <CheckCircle className="w-5 h-5" />
+                <CheckCircle className="w-[5vw] h-[5vw] min-w-[1rem] min-h-[1rem] max-w-[1.25rem] max-h-[1.25rem]" />
                 Proceed to Payment
               </button>
             </div>
@@ -4156,6 +4309,20 @@ const POSPageOptimized: React.FC = () => {
             // Validate cart items before processing - filter out invalid items
             const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
             const validCartItems = cartItems.filter(item => {
+              // Spare parts use their own ID as variantId, so skip UUID validation for them
+              if (item.itemType === 'spare-part') {
+                // For spare parts, variantId should be the spare part ID
+                if (!item.variantId || !item.productId) {
+                  console.error('❌ Invalid spare part in cart:', {
+                    itemId: item.id,
+                    productName: item.productName
+                  });
+                  return false;
+                }
+                return true;
+              }
+              
+              // For regular products, validate variantId is a valid UUID
               if (!item.variantId || !UUID_REGEX.test(item.variantId)) {
                 console.error('❌ Invalid cart item detected, removing:', {
                   itemId: item.id,
@@ -4190,7 +4357,11 @@ const POSPageOptimized: React.FC = () => {
             console.log('🔍 Pre-payment stock validation for', validCartItems.length, 'items...');
             
             // ✅ OPTIMIZED: Use batch stock check instead of sequential checks
-            const stockCheckItems = validCartItems.map(item => ({
+            // Separate products and spare parts for stock validation
+            const productItems = validCartItems.filter(item => item.itemType !== 'spare-part');
+            const sparePartItems = validCartItems.filter(item => item.itemType === 'spare-part');
+            
+            const stockCheckItems = productItems.map(item => ({
               variantId: item.variantId,
               quantity: item.quantity
             }));
@@ -4198,7 +4369,8 @@ const POSPageOptimized: React.FC = () => {
             const stockCheckResults = await saleProcessingService.checkStockAvailabilityBatch(stockCheckItems);
             const stockValidationErrors: string[] = [];
             
-            for (const item of validCartItems) {
+            // Validate product stock
+            for (const item of productItems) {
               const stockCheck = stockCheckResults.get(item.variantId);
               
               if (!stockCheck || !stockCheck.available) {
@@ -4212,6 +4384,26 @@ const POSPageOptimized: React.FC = () => {
                   availableStock: stockCheck?.availableStock || 0,
                   error: stockCheck?.error
                 });
+              }
+            }
+            
+            // Validate spare parts stock (check against spare parts inventory)
+            if (sparePartItems.length > 0) {
+              const { spareParts } = useInventoryStore.getState();
+              
+              for (const item of sparePartItems) {
+                const sparePart = spareParts.find(sp => sp.id === item.productId);
+                
+                if (!sparePart) {
+                  stockValidationErrors.push(`${item.productName}: Spare part not found`);
+                  continue;
+                }
+                
+                if ((sparePart.quantity || 0) < item.quantity) {
+                  stockValidationErrors.push(
+                    `${item.productName}: Insufficient stock. Available: ${sparePart.quantity}, Requested: ${item.quantity}`
+                  );
+                }
               }
             }
             
@@ -4252,6 +4444,8 @@ const POSPageOptimized: React.FC = () => {
                 variantId: item.variantId,
                 productName: item.productName, // Fixed: was item.name
                 variantName: item.variantName, // Fixed: was item.name
+                itemType: item.itemType || 'product', // Include item type for spare parts
+                partNumber: (item as any).partNumber || null, // Include part number for spare parts
                 sku: item.sku,
                 quantity: item.quantity,
                 unitPrice: item.unitPrice, // Fixed: was item.price
@@ -4484,7 +4678,9 @@ const POSPageOptimized: React.FC = () => {
                     sku: item.sku,
                     image: item.image,
                     selectedSerialNumbers: item.selectedSerialNumbers || [],
-                    attributes: attributes
+                    attributes: attributes,
+                    itemType: item.itemType || 'product', // Include item type for spare parts
+                    partNumber: (item as any).partNumber || null // Include part number for spare parts
                   };
                 }),
                 customerName: selectedCustomer?.name || null,
@@ -4823,29 +5019,29 @@ const POSPageOptimized: React.FC = () => {
 
       {/* QrCode Scanner Modal */}
       {showQrCodeScanner && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">QrCode Scanner</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-[1rem] sm:p-[0.75rem]">
+          <div className="bg-white rounded-lg p-[1.5rem] sm:p-[1rem] max-w-[90vw] sm:max-w-md w-full mx-[1rem] sm:mx-[0.75rem]">
+            <h3 className="text-[clamp(1rem,2.2vw,1.125rem)] font-semibold mb-[1rem] sm:mb-[0.75rem]">QrCode Scanner</h3>
             <div className="text-center">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                <div className="text-blue-600 text-2xl mb-2">📱</div>
-                <p className="text-blue-800 font-medium">External QrCode Scanner</p>
-                <p className="text-blue-600 text-sm mt-1">Use your connected barcode scanner device to scan product barcodes</p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-[1rem] sm:p-[0.75rem] mb-[1rem] sm:mb-[0.75rem]">
+                <div className="text-blue-600 text-[clamp(1.5rem,4vw,2rem)] mb-[0.5rem] sm:mb-[0.375rem]">📱</div>
+                <p className="text-blue-800 font-medium text-[clamp(0.875rem,1.8vw,1rem)]">External QrCode Scanner</p>
+                <p className="text-blue-600 text-[clamp(0.75rem,1.5vw,0.875rem)] mt-[0.25rem] sm:mt-[0.125rem]">Use your connected barcode scanner device to scan product barcodes</p>
               </div>
-              <p className="text-gray-600 mb-4">Scanner is ready and waiting for input</p>
+              <p className="text-gray-600 mb-[1rem] sm:mb-[0.75rem] text-[clamp(0.875rem,1.8vw,1rem)]">Scanner is ready and waiting for input</p>
             </div>
             {scannerError && (
-              <div className="bg-red-50 border border-red-200 rounded p-3 mb-4">
-                <p className="text-red-600 text-sm">{scannerError}</p>
+              <div className="bg-red-50 border border-red-200 rounded p-[0.75rem] sm:p-[0.5rem] mb-[1rem] sm:mb-[0.75rem]">
+                <p className="text-red-600 text-[clamp(0.75rem,1.5vw,0.875rem)]">{scannerError}</p>
               </div>
             )}
-            <div className="flex gap-2 justify-end">
+            <div className="flex gap-[0.5rem] sm:gap-[0.375rem] justify-end">
               <button
                 onClick={() => {
                   playClickSound();
                   stopQrCodeScanner();
                 }}
-                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                className="px-[1rem] sm:px-[0.75rem] py-[0.5rem] sm:py-[0.375rem] bg-gray-500 text-white rounded hover:bg-gray-600 text-[clamp(0.875rem,1.8vw,1rem)] transition-colors"
               >
                 Stop Scanner
               </button>
@@ -5044,19 +5240,19 @@ const POSPageOptimized: React.FC = () => {
 
       {/* Loyalty Points Modal - Only if feature is enabled */}
       {isLoyaltyEnabled() && showLoyaltyPoints && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Add Loyalty Points</h3>
-            <div className="space-y-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-[1rem] sm:p-[0.75rem]">
+          <div className="bg-white rounded-lg p-[1.5rem] sm:p-[1rem] max-w-[90vw] sm:max-w-md w-full mx-[1rem] sm:mx-[0.75rem]">
+            <h3 className="text-[clamp(1rem,2.2vw,1.125rem)] font-semibold mb-[1rem] sm:mb-[0.75rem]">Add Loyalty Points</h3>
+            <div className="space-y-[1rem] sm:space-y-[0.75rem]">
               <div>
-                <label className="block text-sm font-medium mb-2">Customer</label>
+                <label className="block text-[clamp(0.75rem,1.5vw,0.875rem)] font-medium mb-[0.5rem] sm:mb-[0.375rem]">Customer</label>
                 <select
                   value={selectedCustomer?.id || ''}
                   onChange={(e) => {
                     const customer = customers.find(c => c.id === e.target.value);
                     setSelectedCustomer(customer || null);
                   }}
-                  className="w-full p-3 border border-gray-300 rounded-lg"
+                  className="w-full p-[0.75rem] sm:p-[0.5rem] border border-gray-300 rounded-lg text-[clamp(0.875rem,1.8vw,1rem)]"
                 >
                   <option value="">Select a customer</option>
                   {customers.map((customer) => (
@@ -5069,35 +5265,35 @@ const POSPageOptimized: React.FC = () => {
               {selectedCustomer && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Points to Add</label>
+                    <label className="block text-[clamp(0.75rem,1.5vw,0.875rem)] font-medium mb-[0.5rem] sm:mb-[0.375rem]">Points to Add</label>
                     <input
                       type="number"
                       value={pointsToAdd}
                       onChange={(e) => setPointsToAdd(e.target.value)}
                       placeholder="Enter points to add"
-                      className="w-full p-3 border border-gray-300 rounded-lg"
+                      className="w-full p-[0.75rem] sm:p-[0.5rem] border border-gray-300 rounded-lg text-[clamp(0.875rem,1.8vw,1rem)]"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Reason</label>
+                    <label className="block text-[clamp(0.75rem,1.5vw,0.875rem)] font-medium mb-[0.5rem] sm:mb-[0.375rem]">Reason</label>
                     <input
                       type="text"
                       value={pointsReason}
                       onChange={(e) => setPointsReason(e.target.value)}
                       placeholder="Enter reason for points"
-                      className="w-full p-3 border border-gray-300 rounded-lg"
+                      className="w-full p-[0.75rem] sm:p-[0.5rem] border border-gray-300 rounded-lg text-[clamp(0.875rem,1.8vw,1rem)]"
                     />
                   </div>
                 </>
               )}
             </div>
-            <div className="flex gap-2 justify-end mt-6">
+            <div className="flex gap-[0.5rem] sm:gap-[0.375rem] justify-end mt-[1.5rem] sm:mt-[1rem]">
               <button
                 onClick={() => {
                   playClickSound();
                   setShowLoyaltyPoints(false);
                 }}
-                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                className="px-[1rem] sm:px-[0.75rem] py-[0.5rem] sm:py-[0.375rem] bg-gray-500 text-white rounded hover:bg-gray-600 text-[clamp(0.875rem,1.8vw,1rem)] transition-colors"
               >
                 Cancel
               </button>
@@ -5111,7 +5307,7 @@ const POSPageOptimized: React.FC = () => {
                     );
                   }
                 }}
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                className="px-[1rem] sm:px-[0.75rem] py-[0.5rem] sm:py-[0.375rem] bg-green-600 text-white rounded hover:bg-green-700 text-[clamp(0.875rem,1.8vw,1rem)] transition-colors"
               >
                 Add Points
               </button>
@@ -5122,10 +5318,10 @@ const POSPageOptimized: React.FC = () => {
 
       {/* Receipt History Modal */}
       {showReceiptHistory && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[80vh]">
-            <h3 className="text-lg font-semibold mb-4">Receipt History</h3>
-            <div className="overflow-y-auto max-h-96">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-[1rem] sm:p-[0.75rem]">
+          <div className="bg-white rounded-lg p-[1.5rem] sm:p-[1rem] max-w-[90vw] sm:max-w-4xl w-full mx-[1rem] sm:mx-[0.75rem] max-h-[80vh]">
+            <h3 className="text-[clamp(1rem,2.2vw,1.125rem)] font-semibold mb-[1rem] sm:mb-[0.75rem]">Receipt History</h3>
+            <div className="overflow-y-auto max-h-[60vh] sm:max-h-[50vh]">
               {receiptHistory.length > 0 ? (
                 <div className="space-y-2">
                   {receiptHistory.map((receipt) => (
@@ -5225,13 +5421,13 @@ const POSPageOptimized: React.FC = () => {
       {/* Invoice Preview Modal */}
       {showInvoicePreview && createdInvoice && createPortal(
         <div 
-          className="fixed bg-black/60 flex items-center justify-center p-4 z-[100000]" 
+          className="fixed bg-black/60 flex items-center justify-center p-[1rem] sm:p-[0.75rem] z-[100000]" 
           style={{ top: 0, left: 0, right: 0, bottom: 0 }}
           role="dialog" 
           aria-modal="true" 
           aria-labelledby="invoice-modal-title"
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-[95vw] max-w-[1400px] max-h-[90vh] flex flex-col overflow-hidden relative">
+          <div className="bg-white rounded-2xl shadow-2xl w-[95vw] max-w-[90vw] sm:max-w-[85vw] lg:max-w-[1400px] max-h-[90vh] flex flex-col overflow-hidden relative">
             {/* Close Button */}
             <button
               onClick={() => {
@@ -5255,42 +5451,42 @@ const POSPageOptimized: React.FC = () => {
                 });
                 setShowAdditionalInfoForm(false);
               }}
-              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+              className="absolute top-[1rem] right-[1rem] sm:top-[0.75rem] sm:right-[0.75rem] w-[2.25rem] h-[2.25rem] sm:w-[1.75rem] sm:h-[1.75rem] flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
             >
-              <X className="w-5 h-5" />
+              <X className="w-[5vw] h-[5vw] min-w-[1rem] min-h-[1rem] max-w-[1.25rem] max-h-[1.25rem]" />
             </button>
 
             {/* Icon Header - Fixed */}
-            <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
-              <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+            <div className="p-[2rem] sm:p-[1.5rem] bg-white border-b border-gray-200 flex-shrink-0">
+              <div className="grid grid-cols-[auto,1fr] gap-[1.5rem] sm:gap-[1rem] items-center">
                 {/* Icon */}
-                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
-                  <FileText className="w-8 h-8 text-white" />
+                <div className="w-[4rem] h-[4rem] sm:w-[3rem] sm:h-[3rem] bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                  <FileText className="w-[2rem] h-[2rem] sm:w-[1.5rem] sm:h-[1.5rem] text-white" />
                 </div>
                 
                 {/* Text */}
                 <div>
-                  <h3 id="invoice-modal-title" className="text-2xl font-bold text-gray-900 mb-3">
+                  <h3 id="invoice-modal-title" className="text-[clamp(1.25rem,3vw,1.5rem)] font-bold text-gray-900 mb-[0.75rem] sm:mb-[0.5rem]">
                     {createdInvoice.invoiceNumber.startsWith('PREVIEW') ? 'Invoice Preview' : 'Invoice'}
                   </h3>
                   {createdInvoice.invoiceNumber.startsWith('PREVIEW') && (
-                    <p className="text-sm text-blue-600">Review prices before payment</p>
+                    <p className="text-[clamp(0.75rem,1.8vw,0.875rem)] text-blue-600">Review prices before payment</p>
                   )}
                 </div>
               </div>
             </div>
 
             {/* Scrollable Content Section */}
-            <div className="flex-1 overflow-y-auto px-4 py-6">
+            <div className="flex-1 overflow-y-auto px-[1rem] sm:px-[0.75rem] py-[1.5rem] sm:py-[1rem]">
               {/* Additional Information Form - Collapsible */}
-              <div className="mb-4 border border-gray-200 rounded-xl bg-gray-50">
+              <div className="mb-[1rem] sm:mb-[0.75rem] border border-gray-200 rounded-xl bg-gray-50">
                 <button
                   onClick={() => setShowAdditionalInfoForm(!showAdditionalInfoForm)}
-                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-100 transition-colors rounded-t-xl"
+                  className="w-full px-[1rem] sm:px-[0.75rem] py-[0.75rem] sm:py-[0.5rem] flex items-center justify-between hover:bg-gray-100 transition-colors rounded-t-xl"
                 >
-                  <span className="font-semibold text-gray-700">Additional Information</span>
+                  <span className="font-semibold text-[clamp(0.875rem,1.8vw,1rem)] text-gray-700">Additional Information</span>
                   <svg
-                    className={`w-5 h-5 text-gray-600 transition-transform ${showAdditionalInfoForm ? 'rotate-180' : ''}`}
+                    className={`w-[5vw] h-[5vw] min-w-[1rem] min-h-[1rem] max-w-[1.25rem] max-h-[1.25rem] text-gray-600 transition-transform ${showAdditionalInfoForm ? 'rotate-180' : ''}`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -5300,57 +5496,57 @@ const POSPageOptimized: React.FC = () => {
                 </button>
                 
                 {showAdditionalInfoForm && (
-                  <div className="p-4 space-y-4 border-t border-gray-200">
+                  <div className="p-[1rem] sm:p-[0.75rem] space-y-[1rem] sm:space-y-[0.75rem] border-t border-gray-200">
                     {/* Additional Customer Information */}
                     <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Customer/Receiver Information</h4>
-                      <div className="grid grid-cols-2 gap-4">
+                      <h4 className="text-[clamp(0.75rem,1.5vw,0.875rem)] font-semibold text-gray-700 mb-[0.75rem] sm:mb-[0.5rem]">Customer/Receiver Information</h4>
+                      <div className="grid grid-cols-2 gap-[1rem] sm:gap-[0.75rem]">
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Company Name</label>
+                          <label className="block text-[clamp(0.625rem,1.2vw,0.75rem)] font-medium text-gray-600 mb-[0.25rem]">Company Name</label>
                           <input
                             type="text"
                             value={additionalCustomerInfo.companyName}
                             onChange={(e) => setAdditionalCustomerInfo({ ...additionalCustomerInfo, companyName: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-[0.75rem] sm:px-[0.5rem] py-[0.5rem] sm:py-[0.375rem] border border-gray-300 rounded-lg text-[clamp(0.75rem,1.5vw,0.875rem)] focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Optional"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Receiver Name</label>
+                          <label className="block text-[clamp(0.625rem,1.2vw,0.75rem)] font-medium text-gray-600 mb-[0.25rem]">Receiver Name</label>
                           <input
                             type="text"
                             value={additionalCustomerInfo.receiverName}
                             onChange={(e) => setAdditionalCustomerInfo({ ...additionalCustomerInfo, receiverName: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-[0.75rem] sm:px-[0.5rem] py-[0.5rem] sm:py-[0.375rem] border border-gray-300 rounded-lg text-[clamp(0.75rem,1.5vw,0.875rem)] focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="If different from customer"
                           />
                         </div>
                         <div className="col-span-2">
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Receiver Address</label>
+                          <label className="block text-[clamp(0.625rem,1.2vw,0.75rem)] font-medium text-gray-600 mb-[0.25rem]">Receiver Address</label>
                           <textarea
                             value={additionalCustomerInfo.receiverAddress}
                             onChange={(e) => setAdditionalCustomerInfo({ ...additionalCustomerInfo, receiverAddress: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-[0.75rem] sm:px-[0.5rem] py-[0.5rem] sm:py-[0.375rem] border border-gray-300 rounded-lg text-[clamp(0.75rem,1.5vw,0.875rem)] focus:outline-none focus:ring-2 focus:ring-blue-500"
                             rows={2}
                             placeholder="If different from customer address"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Receiver Phone</label>
+                          <label className="block text-[clamp(0.625rem,1.2vw,0.75rem)] font-medium text-gray-600 mb-[0.25rem]">Receiver Phone</label>
                           <input
                             type="text"
                             value={additionalCustomerInfo.receiverPhone}
                             onChange={(e) => setAdditionalCustomerInfo({ ...additionalCustomerInfo, receiverPhone: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-[0.75rem] sm:px-[0.5rem] py-[0.5rem] sm:py-[0.375rem] border border-gray-300 rounded-lg text-[clamp(0.75rem,1.5vw,0.875rem)] focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Optional"
                           />
                         </div>
                         <div className="col-span-2">
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Additional Notes</label>
+                          <label className="block text-[clamp(0.625rem,1.2vw,0.75rem)] font-medium text-gray-600 mb-[0.25rem]">Additional Notes</label>
                           <textarea
                             value={additionalCustomerInfo.additionalNotes}
                             onChange={(e) => setAdditionalCustomerInfo({ ...additionalCustomerInfo, additionalNotes: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-[0.75rem] sm:px-[0.5rem] py-[0.5rem] sm:py-[0.375rem] border border-gray-300 rounded-lg text-[clamp(0.75rem,1.5vw,0.875rem)] focus:outline-none focus:ring-2 focus:ring-blue-500"
                             rows={2}
                             placeholder="Any additional information about the customer"
                           />
@@ -5360,14 +5556,14 @@ const POSPageOptimized: React.FC = () => {
 
                     {/* Payment Information */}
                     <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Payment Information</h4>
-                      <div className="grid grid-cols-2 gap-4">
+                      <h4 className="text-[clamp(0.75rem,1.5vw,0.875rem)] font-semibold text-gray-700 mb-[0.75rem] sm:mb-[0.5rem]">Payment Information</h4>
+                      <div className="grid grid-cols-2 gap-[1rem] sm:gap-[0.75rem]">
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Payment Method</label>
+                          <label className="block text-[clamp(0.625rem,1.2vw,0.75rem)] font-medium text-gray-600 mb-[0.25rem]">Payment Method</label>
                           <select
                             value={paymentInfo.paymentMethod}
                             onChange={(e) => setPaymentInfo({ ...paymentInfo, paymentMethod: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-[0.75rem] sm:px-[0.5rem] py-[0.5rem] sm:py-[0.375rem] border border-gray-300 rounded-lg text-[clamp(0.75rem,1.5vw,0.875rem)] focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             <option value="">Select method</option>
                             <option value="Cash">Cash</option>
@@ -5380,51 +5576,51 @@ const POSPageOptimized: React.FC = () => {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Payment Date</label>
+                          <label className="block text-[clamp(0.625rem,1.2vw,0.75rem)] font-medium text-gray-600 mb-[0.25rem]">Payment Date</label>
                           <input
                             type="date"
                             value={paymentInfo.paymentDate}
                             onChange={(e) => setPaymentInfo({ ...paymentInfo, paymentDate: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-[0.75rem] sm:px-[0.5rem] py-[0.5rem] sm:py-[0.375rem] border border-gray-300 rounded-lg text-[clamp(0.75rem,1.5vw,0.875rem)] focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Payment Reference</label>
+                          <label className="block text-[clamp(0.625rem,1.2vw,0.75rem)] font-medium text-gray-600 mb-[0.25rem]">Payment Reference</label>
                           <input
                             type="text"
                             value={paymentInfo.paymentReference}
                             onChange={(e) => setPaymentInfo({ ...paymentInfo, paymentReference: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-[0.75rem] sm:px-[0.5rem] py-[0.5rem] sm:py-[0.375rem] border border-gray-300 rounded-lg text-[clamp(0.75rem,1.5vw,0.875rem)] focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Reference number"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Transaction ID</label>
+                          <label className="block text-[clamp(0.625rem,1.2vw,0.75rem)] font-medium text-gray-600 mb-[0.25rem]">Transaction ID</label>
                           <input
                             type="text"
                             value={paymentInfo.transactionId}
                             onChange={(e) => setPaymentInfo({ ...paymentInfo, transactionId: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-[0.75rem] sm:px-[0.5rem] py-[0.5rem] sm:py-[0.375rem] border border-gray-300 rounded-lg text-[clamp(0.75rem,1.5vw,0.875rem)] focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Transaction ID"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Paid Amount (TZS)</label>
+                          <label className="block text-[clamp(0.625rem,1.2vw,0.75rem)] font-medium text-gray-600 mb-[0.25rem]">Paid Amount (TZS)</label>
                           <input
                             type="number"
                             value={paymentInfo.paidAmount || ''}
                             onChange={(e) => setPaymentInfo({ ...paymentInfo, paidAmount: parseFloat(e.target.value) || 0 })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-[0.75rem] sm:px-[0.5rem] py-[0.5rem] sm:py-[0.375rem] border border-gray-300 rounded-lg text-[clamp(0.75rem,1.5vw,0.875rem)] focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="0"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Balance (TZS)</label>
+                          <label className="block text-[clamp(0.625rem,1.2vw,0.75rem)] font-medium text-gray-600 mb-[0.25rem]">Balance (TZS)</label>
                           <input
                             type="number"
                             value={paymentInfo.balance || ''}
                             onChange={(e) => setPaymentInfo({ ...paymentInfo, balance: parseFloat(e.target.value) || 0 })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-[0.75rem] sm:px-[0.5rem] py-[0.5rem] sm:py-[0.375rem] border border-gray-300 rounded-lg text-[clamp(0.75rem,1.5vw,0.875rem)] focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="0"
                           />
                         </div>
@@ -5452,8 +5648,8 @@ const POSPageOptimized: React.FC = () => {
             </div>
 
             {/* Fixed Action Buttons Footer */}
-            <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
-              <div className="flex gap-4">
+            <div className="p-[1.5rem] sm:p-[1rem] pt-[1rem] sm:pt-[0.75rem] border-t border-gray-200 bg-white flex-shrink-0">
+              <div className="flex gap-[1rem] sm:gap-[0.75rem]">
               <button
                 onClick={() => {
                   setShowInvoicePreview(false);
@@ -5476,15 +5672,15 @@ const POSPageOptimized: React.FC = () => {
                   });
                   setShowAdditionalInfoForm(false);
                 }}
-                className="flex-1 px-6 py-3.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 rounded-xl transition-colors font-semibold"
+                className="flex-1 px-[1.5rem] sm:px-[1rem] py-[0.875rem] sm:py-[0.625rem] border-2 border-gray-300 text-[clamp(0.875rem,1.8vw,1rem)] text-gray-700 hover:bg-gray-100 rounded-xl transition-colors font-semibold"
               >
                 Close
               </button>
                 <button
                   onClick={() => window.print()}
-                  className="flex-1 px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors font-semibold shadow-lg flex items-center justify-center gap-2"
+                  className="flex-1 px-[1.5rem] sm:px-[1rem] py-[0.875rem] sm:py-[0.625rem] bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors font-semibold shadow-lg flex items-center justify-center gap-[0.5rem] text-[clamp(0.875rem,1.8vw,1rem)]"
                 >
-                  <Printer className="w-5 h-5" />
+                  <Printer className="w-[5vw] h-[5vw] min-w-[1rem] min-h-[1rem] max-w-[1.25rem] max-h-[1.25rem]" />
                   Print Invoice
                 </button>
               </div>

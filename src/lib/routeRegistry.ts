@@ -107,15 +107,6 @@ export const APP_ROUTES: RouteDefinition[] = [
     allowedRoles: ['admin']
   },
   {
-    id: 'inventory-management',
-    path: '/lats/inventory-management',
-    title: 'Inventory Management',
-    description: 'Advanced inventory management',
-    icon: '📦',
-    category: 'lats',
-    allowedRoles: ['admin']
-  },
-  {
     id: 'storage-rooms',
     path: '/lats/storage-rooms',
     title: 'Storage Rooms',

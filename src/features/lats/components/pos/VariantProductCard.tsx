@@ -1206,7 +1206,7 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                                   {children.map((child: any, childIndex: number) => (
                                     <div
                                       key={child.id || `child-${childIndex}`}
-                                      className="p-2 bg-purple-50 rounded-lg border border-purple-200 hover:bg-purple-100 transition-colors"
+                                      className="group p-2 bg-purple-50 rounded-lg border border-purple-200 hover:bg-purple-100 transition-colors"
                                     >
                                       <div className="flex items-center justify-between">
                                         <div className="flex-1 min-w-0">
@@ -1217,7 +1217,7 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                                             </span>
                                           </div>
                                           {child.sku && child.sku !== child.identifier && (
-                                            <div className="text-xs text-gray-500 mt-1 ml-6">SKU: {child.sku}</div>
+                                            <div className="hidden group-hover:block text-xs text-gray-500 mt-1 ml-6 transition-opacity duration-200">SKU: {child.sku}</div>
                                           )}
                                         </div>
                                         <div className="flex items-center gap-3 ml-2">

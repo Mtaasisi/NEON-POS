@@ -13,8 +13,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 dotenv.config({ path: join(__dirname, '../../.env') });
 
-// Get database URL from environment or use development database as default
-const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
+// Get database URL from environment or use production Neon database as default
+const databaseUrl = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_tHAqPdo2x0LR@ep-aged-pond-adays3pg-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
 
 // Create connection with pooling (only if DATABASE_URL is set)
 // This allows the server to start for SMS proxy functionality without a database

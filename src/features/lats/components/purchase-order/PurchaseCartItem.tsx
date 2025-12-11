@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Package, Minus, Plus, XCircle, ChevronDown, ChevronUp, 
-  Coins, Truck, Calendar, Hash, Tag, AlertTriangle 
+  Coins, Truck, Calendar, Hash, Tag, AlertTriangle, Wrench
 } from 'lucide-react';
 import { SafeImage } from '../../../../components/SafeImage';
 import SimpleImageDisplay from '../../../../components/SimpleImageDisplay';
@@ -23,6 +23,11 @@ interface PurchaseCartItem {
   currentStock?: number;
   category?: string;
   images?: string[];
+  itemType?: 'product' | 'spare-part'; // Add item type
+  partNumber?: string; // For spare parts
+  sellingPrice?: number; // Store selling price
+  minimumOrderQty?: number; // Minimum order quantity
+  notes?: string; // Notes for the item
 }
 
 interface PurchaseCartItemProps {
@@ -171,7 +176,11 @@ const PurchaseCartItem: React.FC<PurchaseCartItemProps> = ({
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {/* Product Image/Avatar */}
             <div className="relative w-12 h-12 rounded-xl overflow-hidden">
-              {generalSettings?.show_product_images && productImages.length > 0 ? (
+              {item.itemType === 'spare-part' ? (
+                <div className="w-full h-full bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-lg font-bold text-white">
+                  <Wrench className="w-6 h-6" />
+                </div>
+              ) : generalSettings?.show_product_images && productImages.length > 0 ? (
                 <SimpleImageDisplay
                   images={productImages}
                   productName={item.name}
@@ -187,10 +196,20 @@ const PurchaseCartItem: React.FC<PurchaseCartItemProps> = ({
 
             {/* Product Info */}
             <div className="flex-1 min-w-0">
-              <div className="font-medium text-gray-800 truncate text-lg leading-tight">
-                {item.name}
+              <div className="flex items-center gap-2">
+                <div className="font-medium text-gray-800 truncate text-lg leading-tight">
+                  {item.name}
+                </div>
+                {item.itemType === 'spare-part' && (
+                  <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-medium rounded flex-shrink-0">
+                    Spare Part
+                  </span>
+                )}
               </div>
-              {item.variantName && item.variantName !== 'Default' && (
+              {item.itemType === 'spare-part' && item.partNumber && (
+                <div className="text-sm text-gray-600">Part: {item.partNumber}</div>
+              )}
+              {item.variantName && item.variantName !== 'Default' && item.itemType !== 'spare-part' && (
                 <div className="text-sm text-gray-600">{item.variantName}</div>
               )}
               <div className="text-lg text-orange-600 mt-1 font-bold">
@@ -241,11 +260,19 @@ const PurchaseCartItem: React.FC<PurchaseCartItemProps> = ({
             {/* Product Details Grid */}
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Hash className="w-4 h-4 text-gray-500" />
-                  <span className="text-gray-600">SKU:</span>
-                  <span className="font-medium">{item.sku}</span>
-                </div>
+                {item.itemType === 'spare-part' && item.partNumber ? (
+                  <div className="flex items-center gap-2">
+                    <Wrench className="w-4 h-4 text-orange-500" />
+                    <span className="text-gray-600">Part Number:</span>
+                    <span className="font-medium">{item.partNumber}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Hash className="w-4 h-4 text-gray-500" />
+                    <span className="text-gray-600">SKU:</span>
+                    <span className="font-medium">{item.sku}</span>
+                  </div>
+                )}
                 {item.category && (
                   <div className="flex items-center gap-2">
                     <Tag className="w-4 h-4 text-gray-500" />

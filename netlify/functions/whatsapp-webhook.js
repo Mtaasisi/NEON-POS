@@ -13,12 +13,12 @@ const { Pool } = require('pg');
 
 // Database connection configuration
 const getDatabaseConfig = () => {
-  // PRODUCTION DATABASE - Supabase PostgreSQL (default)
-  // Priority: 1. DATABASE_URL env var (if set in Netlify), 2. Production Supabase database (default)
-  const productionDbUrl = 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
+  // PRODUCTION DATABASE - Neon PostgreSQL (default)
+  // Priority: 1. DATABASE_URL env var (if set in Netlify), 2. Production Neon database (default)
+  const productionDbUrl = 'postgresql://neondb_owner:npg_tHAqPdo2x0LR@ep-aged-pond-adays3pg-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
   
-  // Fallback to old Neon database if needed (for backward compatibility)
-  const fallbackDbUrl = 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
+  // Fallback to production Neon database if needed (for backward compatibility)
+  const fallbackDbUrl = 'postgresql://neondb_owner:npg_tHAqPdo2x0LR@ep-aged-pond-adays3pg-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
   
   // Check for environment variable override (allows Netlify env vars to override)
   const dbUrl = process.env.DATABASE_URL || productionDbUrl;

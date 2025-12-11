@@ -150,6 +150,7 @@ const POcreate = lazy(() => import('./features/lats/pages/POcreate'));
 const PurchaseOrderDetailPage = lazy(() => import('./features/lats/pages/PurchaseOrderDetailPage'));
 const TestSetPricingModal = lazy(() => import('./features/lats/pages/TestSetPricingModal'));
 const InventorySparePartsPage = lazy(() => import('./features/lats/pages/InventorySparePartsPage'));
+const SparePartsAnalyticsPage = lazy(() => import('./features/lats/pages/SparePartsAnalyticsPage'));
 const StockTransferPage = lazy(() => import('./features/lats/pages/StockTransferPage'));
 
 // Trade-In Module Pages
@@ -169,7 +170,6 @@ const UnifiedInventoryPage = lazy(() => import('./features/lats/pages/UnifiedInv
 
 const POSPage = createSafeLazyComponent(() => import('./features/lats/pages/POSPageOptimized'), 'POSPage');
 
-const InventoryManagementPage = lazy(() => import('./features/lats/pages/InventoryManagementPage'));
 const StorageRoomManagementPage = lazy(() => import('./features/lats/pages/StorageRoomManagementPage'));
 const StorageRoomDetailPage = lazy(() => import('./features/lats/pages/StorageRoomDetailPage'));
 const BluetoothPrinterPage = lazy(() => import('./pages/BluetoothPrinterPage'));
@@ -894,15 +894,6 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           {/* Primary Unified Inventory Route */}
           <Route path="/lats/unified-inventory" element={<RoleProtectedRoute allowedRoles={['admin']}><DynamicImportErrorBoundary><Suspense fallback={<DynamicPageLoader />}><UnifiedInventoryPage /></Suspense></DynamicImportErrorBoundary></RoleProtectedRoute>} />
           
-          {/* Inventory Management Route */}
-          <Route path="/lats/inventory-management" element={
-            <RoleProtectedRoute allowedRoles={['admin']}>
-              <Suspense fallback={<DynamicPageLoader />}>
-                <InventoryManagementPage />
-              </Suspense>
-            </RoleProtectedRoute>
-          } />
-          
           {/* Storage Room Management Route */}
           <Route path="/lats/storage-rooms" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><StorageRoomManagementPage /></Suspense></RoleProtectedRoute>} />
           
@@ -948,6 +939,13 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
                 </Suspense>
               </RoleProtectedRoute>
             </UrlValidatedRoute>
+          } />
+          <Route path="/lats/spare-parts/analytics" element={
+            <RoleProtectedRoute allowedRoles={['admin', 'technician']}>
+              <Suspense fallback={<DynamicPageLoader />}>
+                <SparePartsAnalyticsPage />
+              </Suspense>
+            </RoleProtectedRoute>
           } />
           
           {/* Trade-In Module Routes */}

@@ -77,7 +77,7 @@ const AdminManagementPage: React.FC = () => {
       title: 'Storage Room Management',
       description: 'Manage storage rooms and capacity',
       icon: <Building size={24} />,
-      path: '/lats/inventory-management?storage-room',
+      path: '/lats/storage-rooms',
       color: 'from-purple-500 to-purple-600',
       category: 'inventory'
     },

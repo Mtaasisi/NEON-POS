@@ -437,7 +437,6 @@ const CustomerImportExportPage: React.FC = () => {
             </div>
           )}
         </div>
-        </div>
       </div>
 
       {/* Import Modal */}

@@ -1,20 +1,27 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 // import { useAuth } from '../../../context/AuthContext'; // Unused import
 import SearchBar from '../../../features/shared/components/ui/SearchBar';
 import GlassSelect from '../../../features/shared/components/ui/GlassSelect';
+import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { 
   Package, Plus, Grid, List, SortAsc, AlertCircle, Edit, Eye, Trash2, 
-  RefreshCw, Wrench, Minus, CheckCircle, XCircle, Search
+  RefreshCw, Wrench, Minus, CheckCircle, XCircle, Search, BarChart3, ChevronDown, ChevronUp,
+  Battery, Monitor, Zap, Camera, Speaker, Mic, MousePointer, Power, Volume2,
+  Cpu, HardDrive, Cable, Radio, Headphones, Smartphone, Laptop, Tablet, Upload
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 // Import spare parts forms
 import SparePartAddEditForm from '../components/inventory/SparePartAddEditForm';
-import SparePartFormSteps from '../components/inventory/SparePartFormSteps';
 import SparePartUsageModal from '../components/inventory/SparePartUsageModal';
 import SparePartDetailsModal from '../components/spare-parts/SparePartDetailsModal';
+import SparePartStockAdjustModal from '../components/inventory/SparePartStockAdjustModal';
+import SparePartTransferModal from '../components/inventory/SparePartTransferModal';
+import Modal from '../../shared/components/ui/Modal';
+import { SimpleImageUpload } from '../../../components/SimpleImageUpload';
 
 // Import database functionality
 import { useInventoryStore } from '../stores/useInventoryStore';
@@ -23,19 +30,23 @@ import { SparePart } from '../types/spareParts';
 import { SafeImage } from '../../../components/SafeImage';
 import { useDialog } from '../../shared/hooks/useDialog';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { InventoryQuickLinks } from '../components/shared/InventoryQuickLinks';
 
 const InventorySparePartsPage: React.FC = () => {
   // const { currentUser } = useAuth(); // Unused variable
   const { confirm } = useDialog();
+  const navigate = useNavigate();
   
   // Database state management
   const { 
     spareParts, 
     categories,
+    suppliers,
     isLoading,
     error,
     loadSpareParts,
     loadCategories,
+    loadSuppliers,
     createOrUpdateSparePart,
     updateSparePart,
     deleteSparePart,
@@ -49,19 +60,31 @@ const InventorySparePartsPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'name' | 'quantity' | 'cost' | 'selling'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [brandFilter, setBrandFilter] = useState<string>('all'); // Advanced filter
+  const [supplierFilter, setSupplierFilter] = useState<string>('all'); // Advanced filter
   
   // Bulk operations state
   const [selectedSpareParts, setSelectedSpareParts] = useState<string[]>([]);
   const [isMobile, setIsMobile] = useState(false);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [expandedChildrenVariants, setExpandedChildrenVariants] = useState<string | null>(null);
+  const [expandedCompatibleDevices, setExpandedCompatibleDevices] = useState<Set<string>>(new Set());
+  const [hoveredSingleDevice, setHoveredSingleDevice] = useState<string | null>(null);
+  const [isStockAlertsExpanded, setIsStockAlertsExpanded] = useState(false);
 
   // Form state
   const [showSparePartForm, setShowSparePartForm] = useState(false);
-  const [showSparePartFormSteps, setShowSparePartFormSteps] = useState(false);
   const [showUsageModal, setShowUsageModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showStockAdjustModal, setShowStockAdjustModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
   const [editingSparePart, setEditingSparePart] = useState<SparePart | null>(null);
   const [selectedSparePartForUsage, setSelectedSparePartForUsage] = useState<SparePart | null>(null);
   const [selectedSparePartForDetail, setSelectedSparePartForDetail] = useState<SparePart | null>(null);
+  const [selectedSparePartForAdjust, setSelectedSparePartForAdjust] = useState<SparePart | null>(null);
+  const [selectedSparePartForTransfer, setSelectedSparePartForTransfer] = useState<SparePart | null>(null);
+  const [selectedVariantForImage, setSelectedVariantForImage] = useState<{ part: SparePart; variant: any } | null>(null);
 
   // Performance optimization state
   const [dataCache, setDataCache] = useState({
@@ -89,9 +112,10 @@ const InventorySparePartsPage: React.FC = () => {
       
       try {
         // Load data in parallel for better performance
-        const [sparePartsResult, categoriesResult] = await Promise.allSettled([
+        const [sparePartsResult, categoriesResult, suppliersResult] = await Promise.allSettled([
           loadSpareParts(),
-          loadCategories()
+          loadCategories(),
+          loadSuppliers()
         ]);
 
         const endTime = performance.now();
@@ -151,6 +175,46 @@ const InventorySparePartsPage: React.FC = () => {
     };
   }, [loadSpareParts]);
 
+  // Low stock notifications
+  useEffect(() => {
+    if (spareParts.length > 0 && !isInitialLoad) {
+      const lowStockParts = spareParts.filter(part => {
+        const totalStock = getTotalStock(part);
+        const totalMin = getTotalMinQuantity(part);
+        return totalStock <= totalMin && totalStock > 0;
+      });
+      const outOfStockParts = spareParts.filter(part => getTotalStock(part) === 0);
+      
+      if (lowStockParts.length > 0 || outOfStockParts.length > 0) {
+        const totalAlerts = lowStockParts.length + outOfStockParts.length;
+        if (totalAlerts > 0) {
+          toast(
+            (t) => (
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-orange-600" />
+                <div>
+                  <div className="font-semibold text-gray-900">
+                    Stock Alert: {totalAlerts} part{totalAlerts !== 1 ? 's' : ''} need attention
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {outOfStockParts.length > 0 && `${outOfStockParts.length} out of stock`}
+                    {outOfStockParts.length > 0 && lowStockParts.length > 0 && ' • '}
+                    {lowStockParts.length > 0 && `${lowStockParts.length} low stock`}
+                  </div>
+                </div>
+              </div>
+            ),
+            {
+              duration: 8000,
+              icon: '⚠️',
+              id: 'spare-parts-stock-alert'
+            }
+          );
+        }
+      }
+    }
+  }, [spareParts, isInitialLoad]);
+
   // Bulk operations handlers
   const handleSelectAll = () => {
     if (selectedSpareParts.length === filteredSpareParts.length) {
@@ -166,6 +230,45 @@ const InventorySparePartsPage: React.FC = () => {
         ? prev.filter(id => id !== partId)
         : [...prev, partId]
     );
+  };
+
+  // Bulk edit handler
+  const handleBulkEdit = async () => {
+    if (selectedSpareParts.length === 0) {
+      toast.error('Please select spare parts to edit');
+      return;
+    }
+
+    // For now, show a message - can be enhanced with a modal
+    toast(`Bulk edit for ${selectedSpareParts.length} parts - Feature coming soon!`, { icon: 'ℹ️' });
+  };
+
+  // Bulk update quantity
+  const handleBulkUpdateQuantity = async (newQuantity: number) => {
+    if (selectedSpareParts.length === 0) {
+      toast.error('Please select spare parts');
+      return;
+    }
+
+    try {
+      const updates = selectedSpareParts.map(async (partId) => {
+        const part = spareParts.find(p => p.id === partId);
+        if (!part) return;
+
+        return updateSparePart(partId, {
+          ...part,
+          quantity: newQuantity
+        });
+      });
+
+      await Promise.all(updates);
+      toast.success(`Updated quantity for ${selectedSpareParts.length} parts`);
+      setSelectedSpareParts([]);
+      loadSpareParts();
+    } catch (error) {
+      console.error('Bulk update error:', error);
+      toast.error('Failed to update parts');
+    }
   };
 
   const handleBulkDelete = async () => {
@@ -192,7 +295,7 @@ const InventorySparePartsPage: React.FC = () => {
       .map(part => ({
         name: part.name,
         partNumber: part.part_number || '',
-        category: getCategoryName(part.category_id),
+        spareType: getSpareTypeName(part.spare_type),
         quantity: part.quantity,
         minQuantity: part.min_quantity,
         costPrice: part.cost_price,
@@ -219,15 +322,46 @@ const InventorySparePartsPage: React.FC = () => {
 
   // Calculate stock alerts with reorder suggestions
   const stockAlerts = React.useMemo(() => {
-    const lowStock = spareParts.filter(part => part.quantity <= part.min_quantity && part.quantity > 0);
-    const outOfStock = spareParts.filter(part => part.quantity === 0);
+    const lowStock = spareParts.filter(part => {
+      if (part.variants && part.variants.length > 0) {
+        const totalStock = part.variants.reduce((sum: number, v: any) => sum + (v.quantity || 0), 0);
+        const totalMin = part.variants.reduce((sum: number, v: any) => sum + (v.min_quantity || 0), 0);
+        return totalStock <= totalMin && totalStock > 0;
+      }
+      return part.quantity <= part.min_quantity && part.quantity > 0;
+    });
+    const outOfStock = spareParts.filter(part => {
+      if (part.variants && part.variants.length > 0) {
+        const totalStock = part.variants.reduce((sum: number, v: any) => sum + (v.quantity || 0), 0);
+        return totalStock === 0;
+      }
+      return part.quantity === 0;
+    });
     const reorderSuggestions = spareParts
-      .filter(part => part.quantity <= part.min_quantity)
-      .map(part => ({
-        ...part,
-        suggestedReorder: Math.max(part.min_quantity * 2, 10), // Suggest 2x min quantity or 10, whichever is higher
-        urgency: part.quantity === 0 ? 'critical' : part.quantity <= part.min_quantity * 0.5 ? 'high' : 'medium'
-      }));
+      .filter(part => {
+        if (part.variants && part.variants.length > 0) {
+          const totalStock = part.variants.reduce((sum: number, v: any) => sum + (v.quantity || 0), 0);
+          const totalMin = part.variants.reduce((sum: number, v: any) => sum + (v.min_quantity || 0), 0);
+          return totalStock <= totalMin;
+        }
+        return part.quantity <= part.min_quantity;
+      })
+      .map(part => {
+        if (part.variants && part.variants.length > 0) {
+          const totalStock = part.variants.reduce((sum: number, v: any) => sum + (v.quantity || 0), 0);
+          const totalMin = part.variants.reduce((sum: number, v: any) => sum + (v.min_quantity || 0), 0);
+          return {
+            ...part,
+            suggestedReorder: Math.max(totalMin * 2, 10),
+            urgency: totalStock === 0 ? 'critical' : totalStock <= totalMin * 0.5 ? 'high' : 'medium'
+          };
+        }
+        return {
+          ...part,
+          suggestedReorder: Math.max(part.min_quantity * 2, 10),
+          urgency: part.quantity === 0 ? 'critical' : part.quantity <= part.min_quantity * 0.5 ? 'high' : 'medium'
+        };
+      });
     
     return { 
       lowStock, 
@@ -242,26 +376,38 @@ const InventorySparePartsPage: React.FC = () => {
     const filtered = spareParts.filter(part => {
       // Note: Showing ALL products including test/sample products as per user preference
 
-      const matchesSearch = part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           part.part_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           part.description?.toLowerCase().includes(searchTerm.toLowerCase());
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = searchTerm.trim() === '' || 
+                           part.name.toLowerCase().includes(searchLower) ||
+                           part.part_number?.toLowerCase().includes(searchLower) ||
+                           part.description?.toLowerCase().includes(searchLower) ||
+                           part.brand?.toLowerCase().includes(searchLower) ||
+                           part.location?.toLowerCase().includes(searchLower) ||
+                           part.compatible_devices?.toLowerCase().includes(searchLower);
       
-      const matchesCategory = selectedCategory === 'all' || part.category_id === selectedCategory;
+      // Filter by spare type instead of category
+      const matchesCategory = selectedCategory === 'all' || part.spare_type === selectedCategory;
+      
+      const matchesBrand = brandFilter === 'all' || part.brand === brandFilter;
+      
+      const matchesSupplier = supplierFilter === 'all' || part.supplier_id === supplierFilter;
       
       let matchesStock = true;
       switch (stockFilter) {
         case 'in-stock':
-          matchesStock = part.quantity > part.min_quantity;
+          matchesStock = getTotalStock(part) > getTotalMinQuantity(part);
           break;
         case 'low-stock':
-          matchesStock = part.quantity <= part.min_quantity && part.quantity > 0;
+          const totalStock = getTotalStock(part);
+          const totalMin = getTotalMinQuantity(part);
+          matchesStock = totalStock <= totalMin && totalStock > 0;
           break;
         case 'out-of-stock':
-          matchesStock = part.quantity === 0;
+          matchesStock = getTotalStock(part) === 0;
           break;
       }
       
-      return matchesSearch && matchesCategory && matchesStock;
+      return matchesSearch && matchesCategory && matchesStock && matchesBrand && matchesSupplier;
     });
 
     // Sort
@@ -274,8 +420,8 @@ const InventorySparePartsPage: React.FC = () => {
           bValue = b.name;
           break;
         case 'quantity':
-          aValue = a.quantity;
-          bValue = b.quantity;
+          aValue = getTotalStock(a);
+          bValue = getTotalStock(b);
           break;
         case 'cost':
           aValue = a.cost_price;
@@ -300,33 +446,30 @@ const InventorySparePartsPage: React.FC = () => {
     return filtered;
   }, [spareParts, searchTerm, selectedCategory, stockFilter, sortBy, sortOrder]);
 
-  // Transform form data for API
+  // Transform form data for API - Only include required fields from the form
   const transformSparePartData = (formData: Record<string, unknown>) => {
+    // Only include fields that are in the specified information list:
+    // Part Name, Spare Type, Brand, Supplier, Condition, Description, Variants (with all their fields), Images
     const transformedData: Record<string, unknown> = {
       name: formData.name,
-      partNumber: formData.partNumber,
-      categoryId: formData.categoryId,
-      brand: formData.brand,
-      supplierId: formData.supplierId,
-      condition: formData.condition,
-      description: formData.description,
-      costPrice: formData.costPrice,
-      sellingPrice: formData.sellingPrice,
-      quantity: formData.quantity,
-      minQuantity: formData.minQuantity,
-      location: formData.location,
-      compatibleDevices: formData.compatibleDevices
+      spareType: formData.spareType || null, // Include spare type
+      brand: formData.brand || null,
+      supplierId: formData.supplierId || null,
+      condition: formData.condition || 'new',
+      description: formData.description || null,
+      compatibleDevices: formData.compatibleDevices || null, // Main compatible devices (stored as string)
+      // Variants include: name, sku, cost_price, selling_price, quantity, min_quantity, compatible_devices, childrenVariants, images
+      useVariants: formData.useVariants !== undefined ? formData.useVariants : true, // Always use variants
+      variants: Array.isArray(formData.variants) ? formData.variants : []
     };
 
-    // Add optional fields if they exist
-    if (formData.storageRoomId) transformedData.storageRoomId = formData.storageRoomId;
-    if (formData.shelfId) transformedData.shelfId = formData.shelfId;
-    if (Array.isArray(formData.images) && formData.images.length > 0) transformedData.images = formData.images;
-    if (formData.partType) transformedData.partType = formData.partType;
-    if (formData.primaryDeviceType) transformedData.primaryDeviceType = formData.primaryDeviceType;
-    if (formData.searchTags) transformedData.searchTags = formData.searchTags;
-    if (formData.useVariants !== undefined) transformedData.useVariants = formData.useVariants;
-    if (Array.isArray(formData.variants) && formData.variants.length > 0) transformedData.variants = formData.variants;
+    // Add images if they exist
+    if (Array.isArray(formData.images) && formData.images.length > 0) {
+      transformedData.images = formData.images;
+    }
+    
+    // Removed: partNumber, categoryId, costPrice, sellingPrice, quantity, minQuantity, location, 
+    // storageRoomId, shelfId, partType, primaryDeviceType, searchTags - these are not in the specified list
     
     return transformedData;
   };
@@ -393,7 +536,6 @@ const InventorySparePartsPage: React.FC = () => {
         if (response.ok) {
           toast.success('Spare part updated successfully');
           setShowSparePartForm(false);
-          setShowSparePartFormSteps(false);
           setEditingSparePart(null);
           await loadSpareParts();
         } else {
@@ -531,21 +673,1080 @@ const InventorySparePartsPage: React.FC = () => {
     }
   };
 
+  // Handle printing spare part
+  const handlePrintSparePart = (part: SparePart) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Please allow popups to print');
+      return;
+    }
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Spare Part - ${part.name}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            .header { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+            .section { margin-bottom: 15px; }
+            .label { font-weight: bold; color: #666; }
+            .value { margin-left: 10px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Spare Part Information</h1>
+            <p>Printed: ${new Date().toLocaleString()}</p>
+          </div>
+          <div class="section">
+            <span class="label">Name:</span>
+            <span class="value">${part.name}</span>
+          </div>
+          <div class="section">
+            <span class="label">Part Number:</span>
+            <span class="value">${part.part_number || 'N/A'}</span>
+          </div>
+          <div class="section">
+            <span class="label">Category:</span>
+            <span class="value">${getSpareTypeName(part.spare_type)}</span>
+          </div>
+          <div class="section">
+            <span class="label">Quantity:</span>
+            <span class="value">${part.quantity} / Min: ${part.min_quantity}</span>
+          </div>
+          <div class="section">
+            <span class="label">Cost Price:</span>
+            <span class="value">${format.currency(part.cost_price)}</span>
+          </div>
+          <div class="section">
+            <span class="label">Selling Price:</span>
+            <span class="value">${format.currency(part.selling_price)}</span>
+          </div>
+          ${part.description ? `
+          <div class="section">
+            <span class="label">Description:</span>
+            <div class="value">${part.description}</div>
+          </div>
+          ` : ''}
+          ${part.location ? `
+          <div class="section">
+            <span class="label">Location:</span>
+            <span class="value">${part.location}</span>
+          </div>
+          ` : ''}
+          ${part.brand ? `
+          <div class="section">
+            <span class="label">Brand:</span>
+            <span class="value">${part.brand}</span>
+          </div>
+          ` : ''}
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+  };
+
+  // Handle duplicating spare part
+  const handleDuplicateSparePart = async (part: SparePart) => {
+    try {
+      const duplicateData = {
+        name: `${part.name} (Copy)`,
+        partNumber: part.part_number ? `${part.part_number}-COPY` : undefined,
+        categoryId: part.category_id,
+        brand: part.brand,
+        supplierId: part.supplier_id,
+        condition: part.condition,
+        description: part.description,
+        costPrice: part.cost_price,
+        sellingPrice: part.selling_price,
+        quantity: 0, // Start with 0 quantity for duplicate
+        minQuantity: part.min_quantity,
+        location: part.location,
+        compatibleDevices: part.compatible_devices,
+        images: part.images || []
+      };
+
+      const response = await createOrUpdateSparePart(duplicateData);
+      if (response.ok) {
+        toast.success('Spare part duplicated successfully');
+        await loadSpareParts();
+      } else {
+        toast.error(response.message || 'Failed to duplicate spare part');
+      }
+    } catch (error) {
+      console.error('Error duplicating spare part:', error);
+      toast.error('An unexpected error occurred while duplicating');
+    }
+  };
+
+  // Handle stock adjustment
+  const handleStockAdjustment = async (adjustmentType: 'in' | 'out' | 'set', quantity: number, reason: string, notes?: string) => {
+    if (!selectedSparePartForAdjust) return;
+    
+    try {
+      let newQuantity = selectedSparePartForAdjust.quantity;
+      
+      if (adjustmentType === 'in') {
+        newQuantity = selectedSparePartForAdjust.quantity + quantity;
+      } else if (adjustmentType === 'out') {
+        newQuantity = Math.max(0, selectedSparePartForAdjust.quantity - quantity);
+      } else if (adjustmentType === 'set') {
+        newQuantity = quantity;
+      }
+
+      const response = await updateSparePart(selectedSparePartForAdjust.id, {
+        ...selectedSparePartForAdjust,
+        quantity: newQuantity
+      });
+
+      if (response.ok) {
+        toast.success(`Stock ${adjustmentType === 'in' ? 'increased' : adjustmentType === 'out' ? 'decreased' : 'set'} successfully`);
+        setShowStockAdjustModal(false);
+        setSelectedSparePartForAdjust(null);
+        await loadSpareParts();
+      } else {
+        toast.error(response.message || 'Failed to adjust stock');
+      }
+    } catch (error) {
+      console.error('Error adjusting stock:', error);
+      toast.error('An unexpected error occurred while adjusting stock');
+    }
+  };
+
+  // Handle opening stock adjustment modal
+  const handleOpenStockAdjustModal = (part: SparePart) => {
+    setSelectedSparePartForAdjust(part);
+    setShowStockAdjustModal(true);
+  };
+
+  // Handle transferring spare part
+  const handleTransferSparePart = (part: SparePart) => {
+    setSelectedSparePartForTransfer(part);
+    setShowTransferModal(true);
+  };
+
+  // Handle transfer submission
+  const handleTransferSubmit = async (toLocation: string, quantity: number, notes?: string) => {
+    if (!selectedSparePartForTransfer) return;
+
+    if (quantity > selectedSparePartForTransfer.quantity) {
+      toast.error('Cannot transfer more than available quantity');
+      return;
+    }
+
+    try {
+      // Update source location quantity
+      const newQuantity = selectedSparePartForTransfer.quantity - quantity;
+      const response = await updateSparePart(selectedSparePartForTransfer.id, {
+        ...selectedSparePartForTransfer,
+        quantity: newQuantity
+      });
+
+      if (response.ok) {
+        toast.success(`Transferred ${quantity} units to ${toLocation}`);
+        setShowTransferModal(false);
+        setSelectedSparePartForTransfer(null);
+        await loadSpareParts();
+      } else {
+        toast.error(response.message || 'Failed to transfer spare part');
+      }
+    } catch (error) {
+      console.error('Error transferring spare part:', error);
+      toast.error('An unexpected error occurred while transferring');
+    }
+  };
+
   // Get category name by ID
-  const getCategoryName = (categoryId: string) => {
-    const category = categories.find(cat => cat.id === categoryId);
-    return category?.name || 'Unknown';
+  // Get spare type name (replaces category)
+  const getSpareTypeName = (spareType: string | null | undefined) => {
+    return spareType || 'Unknown';
+  };
+
+  // Get icon for spare type/category
+  const getSpareTypeIcon = (categoryName: string) => {
+    if (!categoryName || categoryName === 'Unknown') {
+      return Package;
+    }
+    
+    const name = categoryName.toLowerCase();
+    
+    // Map category names to icons
+    if (name.includes('battery') || name.includes('power')) return Battery;
+    if (name.includes('lcd') || name.includes('screen') || name.includes('display')) return Monitor;
+    if (name.includes('charging') || name.includes('port') || name.includes('cable')) return Zap;
+    if (name.includes('camera')) return Camera;
+    if (name.includes('speaker')) return Speaker;
+    if (name.includes('microphone') || name.includes('mic')) return Mic;
+    if (name.includes('button') || name.includes('home') || name.includes('power')) return MousePointer;
+    if (name.includes('volume')) return Volume2;
+    if (name.includes('board') || name.includes('motherboard') || name.includes('logic')) return Cpu;
+    if (name.includes('flex') || name.includes('cable') || name.includes('connector')) return Cable;
+    if (name.includes('antenna') || name.includes('wireless')) return Radio;
+    if (name.includes('headphone') || name.includes('jack')) return Headphones;
+    if (name.includes('phone') || name.includes('smartphone') || name.includes('iphone')) return Smartphone;
+    if (name.includes('laptop') || name.includes('macbook')) return Laptop;
+    if (name.includes('tablet') || name.includes('ipad')) return Tablet;
+    if (name.includes('cover') || name.includes('glass') || name.includes('case')) return Package;
+    if (name.includes('keyboard') || name.includes('touchpad')) return Package;
+    if (name.includes('sim') || name.includes('tray')) return Package;
+    if (name.includes('motor') || name.includes('vibration')) return Package;
+    if (name.includes('adapter')) return Zap;
+    
+    // Default icon
+    return Package;
+  };
+
+  // Get supplier name by ID
+  const getSupplierName = (supplierId?: string) => {
+    if (!supplierId) return 'Not set';
+    const supplier = suppliers.find(sup => sup.id === supplierId);
+    return supplier?.name || 'Unknown';
+  };
+
+  // Calculate total stock from variants
+  const getTotalStock = (part: SparePart): number => {
+    if (part.variants && part.variants.length > 0) {
+      return part.variants.reduce((total: number, variant: any) => total + (variant.quantity || 0), 0);
+    }
+    return part.quantity || 0;
+  };
+
+  // Calculate total min quantity from variants
+  const getTotalMinQuantity = (part: SparePart): number => {
+    if (part.variants && part.variants.length > 0) {
+      return part.variants.reduce((total: number, variant: any) => total + (variant.min_quantity || 0), 0);
+    }
+    return part.min_quantity || 0;
+  };
+
+  // Get first variant price (for display when main part has no price)
+  const getDisplayPrice = (part: SparePart): number => {
+    if (part.selling_price > 0) {
+      return part.selling_price;
+    }
+    // Check variants for price
+    if (part.variants && part.variants.length > 0) {
+      const firstVariantWithPrice = part.variants.find((v: any) => v.selling_price > 0);
+      if (firstVariantWithPrice) {
+        return firstVariantWithPrice.selling_price;
+      }
+    }
+    return 0;
+  };
+
+  // Get first variant cost price (for display when main part has no cost price)
+  const getDisplayCostPrice = (part: SparePart): number => {
+    if (part.cost_price > 0) {
+      return part.cost_price;
+    }
+    // Check variants for cost price
+    if (part.variants && part.variants.length > 0) {
+      const firstVariantWithCostPrice = part.variants.find((v: any) => v.cost_price > 0);
+      if (firstVariantWithCostPrice) {
+        return firstVariantWithCostPrice.cost_price;
+      }
+    }
+    return 0;
   };
 
   // Get stock status
   const getStockStatus = (part: SparePart) => {
-    if (part.quantity === 0) return { status: 'out-of-stock', color: 'text-red-500', bg: 'bg-red-100' };
-    if (part.quantity <= part.min_quantity) return { status: 'low-stock', color: 'text-yellow-500', bg: 'bg-yellow-100' };
+    const totalStock = getTotalStock(part);
+    const totalMinQuantity = getTotalMinQuantity(part);
+    if (totalStock === 0) return { status: 'out-of-stock', color: 'text-red-500', bg: 'bg-red-100' };
+    if (totalStock <= totalMinQuantity) return { status: 'low-stock', color: 'text-yellow-500', bg: 'bg-yellow-100' };
     return { status: 'in-stock', color: 'text-green-500', bg: 'bg-green-100' };
   };
 
+  // Toggle card expansion
+  const toggleCardExpansion = (partId: string) => {
+    setExpandedCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(partId)) {
+        newSet.delete(partId);
+        // Close compatible devices tooltip when card is collapsed
+        setExpandedCompatibleDevices(prevDevices => {
+          const newDevicesSet = new Set(prevDevices);
+          newDevicesSet.delete(partId);
+          return newDevicesSet;
+        });
+      } else {
+        newSet.add(partId);
+      }
+      return newSet;
+    });
+  };
+
+  // Render content based on loading and data state
+  const renderContent = () => {
+    if (isLoading || isInitialLoad) {
+      return (
+        <div className="px-8 py-6 flex-1 overflow-y-auto">
+          <GlassCard className="p-12">
+            <div className="flex items-center justify-center">
+              <RefreshCw className="w-8 h-8 animate-spin text-orange-500" />
+              <span className="ml-4 text-gray-700 font-medium">Loading spare parts...</span>
+            </div>
+          </GlassCard>
+        </div>
+      );
+    }
+
+    if (filteredSpareParts.length === 0) {
+      return (
+        <div className="px-8 py-6 flex-1 overflow-y-auto">
+          <GlassCard className="p-12 text-center">
+            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-gray-900 mb-2">No spare parts found</h3>
+            <p className="text-gray-600 mb-6">
+              {searchTerm || selectedCategory !== 'all' || stockFilter !== 'all' 
+                ? 'Try adjusting your search or filters'
+                : 'Get started by adding your first spare part'
+              }
+            </p>
+            {!searchTerm && selectedCategory === 'all' && stockFilter === 'all' && (
+              <button
+                onClick={() => {
+                  setEditingSparePart(null);
+                  setShowSparePartForm(true);
+                }}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Spare Part</span>
+              </button>
+            )}
+          </GlassCard>
+        </div>
+      );
+    }
+
+    return viewMode === 'grid' ? (
+      <div 
+        className="px-8 py-6 flex-1 overflow-y-auto"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 100%), 1fr))',
+          gap: 'clamp(1rem, 2vw, 1.5rem)',
+        }}
+      >
+        {filteredSpareParts.map((part) => {
+          const stockStatus = getStockStatus(part);
+          const isSelected = selectedSpareParts.includes(part.id);
+          const isExpanded = expandedCards.has(part.id);
+          const totalStock = getTotalStock(part);
+          const stockBadgeText = totalStock === 0 ? `${totalStock} out` : `${totalStock} in`;
+          
+          // Get price from first variant if main part price is not set
+          const displayPriceValue = getDisplayPrice(part);
+          const displayCostPriceValue = getDisplayCostPrice(part);
+          const priceDisplay = displayPriceValue > 0 ? format.currency(displayPriceValue) : 'TSh No price set';
+          const costPriceDisplay = displayCostPriceValue > 0 ? format.currency(displayCostPriceValue) : 'TSh No cost set';
+          
+          return (
+            <div key={part.id} className={`relative border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 w-full ${isExpanded ? 'border-blue-500 shadow-xl' : 'border-gray-200'}`}>
+              {/* Main Card Content */}
+              <div className="flex items-start justify-between p-6 cursor-pointer" onClick={() => toggleCardExpansion(part.id)}>
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  {/* Image */}
+                  <div 
+                    className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 relative group cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedVariantForImage({ part, variant: null }); // null variant means main part images
+                      setShowImageModal(true);
+                    }}
+                  >
+                    {part.images && part.images.length > 0 ? (
+                      <SafeImage
+                        src={part.images[0]}
+                        alt={part.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 text-gray-400">
+                        <path d="M16.5 9.4 7.55 4.24"></path>
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                        <polyline points="3.29 7 12 12 20.71 7"></polyline>
+                        <line x1="12" x2="12" y1="22" y2="12"></line>
+                      </svg>
+                    )}
+                    {/* Hover overlay */}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl z-10 flex items-center justify-center">
+                      <div className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg transition-all text-xs font-medium">
+                        <Upload className="w-3 h-3" />
+                        <span className="hidden sm:inline">Manage</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-4 flex-wrap">
+                      <h3 className="text-2xl font-bold text-gray-900 truncate">{part.name}</h3>
+                      <div className={`inline-flex items-center justify-center p-1.5 sm:p-2 rounded-full border-2 border-white shadow-lg z-30 min-w-[3.5rem] sm:min-w-[4rem] min-h-[2rem] sm:min-h-[2.5rem] transition-all duration-300 ${
+                        totalStock === 0 
+                          ? 'bg-gradient-to-r from-red-500 to-red-600' 
+                          : totalStock <= getTotalMinQuantity(part)
+                          ? 'bg-gradient-to-r from-orange-500 to-orange-600'
+                          : 'bg-gradient-to-r from-green-500 to-green-600'
+                      }`}>
+                        <span className="text-xs sm:text-sm font-bold text-white whitespace-nowrap px-1">{stockBadgeText}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center gap-3 flex-wrap relative">
+                        {(() => {
+                          const spareTypeName = getSpareTypeName(part.spare_type);
+                          const CategoryIcon = getSpareTypeIcon(spareTypeName);
+                          return (
+                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0">
+                              <CategoryIcon className="w-5 h-5" />
+                              <span className="text-base font-semibold truncate max-w-[140px]">{spareTypeName}</span>
+                            </div>
+                          );
+                        })()}
+                        <div className="inline-flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-50 border border-gray-200">
+                          <div className="flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-purple-600">
+                              <path d="M16.5 9.4 7.55 4.24"></path>
+                              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                              <polyline points="3.29 7 12 12 20.71 7"></polyline>
+                              <line x1="12" x2="12" y1="22" y2="12"></line>
+                            </svg>
+                            <span className="text-base font-semibold text-purple-700">{part.variants?.length || 0}</span>
+                            <span className="text-sm text-pink-600 font-medium">variant{part.variants?.length !== 1 ? 's' : ''}</span>
+                          </div>
+                        </div>
+                        {part.compatible_devices && (() => {
+                          const compatibleDevicesKey = part.id;
+                          const isCompatibleDevicesExpanded = expandedCompatibleDevices.has(compatibleDevicesKey);
+                          const devicesList = typeof part.compatible_devices === 'string' 
+                            ? part.compatible_devices.split(',').map(d => d.trim()).filter(Boolean)
+                            : Array.isArray(part.compatible_devices) 
+                            ? part.compatible_devices 
+                            : [];
+                          
+                          // If single compatible device, show inline without tooltip/expand
+                          const isSingleDevice = devicesList.length === 1;
+                          
+                          const toggleCompatibleDevices = (e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            setExpandedCompatibleDevices(prev => {
+                              const newSet = new Set(prev);
+                              if (newSet.has(compatibleDevicesKey)) {
+                                newSet.delete(compatibleDevicesKey);
+                                // Clear hover state when collapsing
+                                setHoveredSingleDevice(null);
+                              } else {
+                                newSet.add(compatibleDevicesKey);
+                                // Set hover state when expanding to keep tooltip visible
+                                setHoveredSingleDevice(compatibleDevicesKey);
+                              }
+                              return newSet;
+                            });
+                          };
+                          
+                          // Single device: show inline with hover tooltip
+                          if (isSingleDevice) {
+                            const isHovered = hoveredSingleDevice === compatibleDevicesKey;
+                            return (
+                              <div 
+                                className="relative inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-50 text-green-700 border border-green-200 flex-shrink-0 cursor-pointer hover:bg-green-100 transition-colors"
+                                onMouseEnter={() => setHoveredSingleDevice(compatibleDevicesKey)}
+                                onMouseLeave={() => setHoveredSingleDevice(null)}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                                  <rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect>
+                                  <path d="M12 18h.01"></path>
+                                </svg>
+                                <span className="text-base font-semibold truncate max-w-[200px]">
+                                  {devicesList[0]}
+                                </span>
+                                
+                                {/* Hover Tooltip for Single Device */}
+                                {isHovered && (
+                                  <div 
+                                    className="absolute bottom-full left-0 mb-2 z-[9999] min-w-[200px] max-w-md"
+                                    style={{ 
+                                      opacity: 1,
+                                      visibility: 'visible',
+                                      pointerEvents: 'none'
+                                    }}
+                                  >
+                                    {/* Arrow */}
+                                    <div className="absolute -bottom-2 left-6 w-4 h-4 bg-white border-r-2 border-b-2 border-green-300 rotate-45"></div>
+                                    
+                                    {/* Tooltip Content */}
+                                    <div className="bg-white border-2 border-green-300 rounded-xl shadow-2xl overflow-hidden">
+                                      {/* Header */}
+                                      <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-3">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-white">
+                                              <rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect>
+                                              <path d="M12 18h.01"></path>
+                                            </svg>
+                                            <h4 className="text-sm font-bold text-white">Compatible Model</h4>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Device Info */}
+                                      <div className="p-3">
+                                        <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-green-50 border border-green-200">
+                                          <div className="w-6 h-6 bg-green-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 text-green-700">
+                                              <rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect>
+                                              <path d="M12 18h.01"></path>
+                                            </svg>
+                                          </div>
+                                          <span className="text-sm font-medium text-gray-900">{devicesList[0]}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                          
+                          // Multiple devices: show expandable button with hover tooltip
+                          const isHoveredMultiple = hoveredSingleDevice === compatibleDevicesKey;
+                          const shouldShowTooltip = isCompatibleDevicesExpanded || isHoveredMultiple;
+                          
+                          return (
+                            <div className="relative">
+                              <div 
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-50 text-green-700 border border-green-200 flex-shrink-0 cursor-pointer hover:bg-green-100 transition-colors"
+                                onClick={toggleCompatibleDevices}
+                                onMouseEnter={() => setHoveredSingleDevice(compatibleDevicesKey)}
+                                onMouseLeave={() => {
+                                  // Only clear hover if not expanded (keep tooltip visible when expanded)
+                                  if (!isCompatibleDevicesExpanded) {
+                                    setHoveredSingleDevice(null);
+                                  }
+                                }}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                                  <rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect>
+                                  <path d="M12 18h.01"></path>
+                                </svg>
+                                <span className="text-base font-semibold truncate max-w-[200px]" title={part.compatible_devices}>
+                                  {part.compatible_devices.length > 30 
+                                    ? `${part.compatible_devices.substring(0, 30)}...` 
+                                    : part.compatible_devices}
+                                </span>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-4 h-4 transition-transform duration-200 ${isCompatibleDevicesExpanded ? 'rotate-180' : ''}`}>
+                                  <path d="m6 9 6 6 6-6"></path>
+                                </svg>
+                              </div>
+                              
+                              {/* Tooltip-style Popover - Show on hover OR when expanded */}
+                              {shouldShowTooltip && devicesList.length > 0 && (
+                                <div 
+                                  className="absolute top-full left-0 mt-2 z-[9999] min-w-[320px] max-w-md"
+                                  style={{ 
+                                    opacity: 1,
+                                    visibility: 'visible',
+                                    pointerEvents: isCompatibleDevicesExpanded ? 'auto' : 'none'
+                                  }}
+                                  onMouseEnter={() => setHoveredSingleDevice(compatibleDevicesKey)}
+                                  onMouseLeave={() => {
+                                    if (!isCompatibleDevicesExpanded) {
+                                      setHoveredSingleDevice(null);
+                                    }
+                                  }}
+                                >
+                                  {/* Arrow */}
+                                  <div className="absolute -top-2 left-6 w-4 h-4 bg-white border-l-2 border-t-2 border-green-300 rotate-45"></div>
+                                  
+                                  {/* Tooltip Content */}
+                                  <div className="bg-white border-2 border-green-300 rounded-xl shadow-2xl overflow-hidden">
+                                    {/* Header */}
+                                    <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-3">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-white">
+                                            <rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect>
+                                            <path d="M12 18h.01"></path>
+                                          </svg>
+                                          <h4 className="text-sm font-bold text-white">Compatible Models</h4>
+                                        </div>
+                                        <div className="px-2.5 py-1 bg-white/20 backdrop-blur-sm rounded-full">
+                                          <span className="text-xs font-bold text-white">{devicesList.length}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Devices Grid */}
+                                    <div className="max-h-80 overflow-y-auto p-3">
+                                      <div className="grid grid-cols-2 gap-2">
+                                        {devicesList.map((device: string, index: number) => (
+                                          <div 
+                                            key={`${part.id}-device-${index}`} 
+                                            className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-green-50 border border-green-200 hover:bg-green-100 hover:border-green-300 transition-all duration-150 group"
+                                          >
+                                            <div className="w-6 h-6 bg-green-200 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-green-300 transition-colors">
+                                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 text-green-700">
+                                                <rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect>
+                                                <path d="M12 18h.01"></path>
+                                              </svg>
+                                            </div>
+                                            <span className="text-xs font-medium text-gray-900 truncate flex-1">{device}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Price */}
+                <div className="ml-4 flex-shrink-0">
+                  <div className="flex flex-col">
+                    <span className="text-4xl font-bold text-gray-900 leading-tight">{priceDisplay}</span>
+                    <span className="text-lg text-gray-600 mt-1">{costPriceDisplay}</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Expand/Collapse Button */}
+              <div className="absolute bottom-4 right-4 w-7 h-7 rounded-lg flex items-center justify-center transition-all flex-shrink-0 z-10 bg-transparent" onClick={(e) => { e.stopPropagation(); toggleCardExpansion(part.id); }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+                  <path d="m6 9 6 6 6-6"></path>
+                </svg>
+              </div>
+              
+              {/* Expanded Details Section */}
+              {isExpanded && (
+                <>
+                  <div className="mt-5 pt-5 border-t-2 border-gray-200 relative">
+                    <div className="absolute top-0 left-0 right-0 flex items-center justify-center -mt-3">
+                      <span className="bg-white px-5 py-1.5 text-xs text-gray-500 font-semibold uppercase tracking-wider rounded-full border border-gray-200 shadow-sm">Product Details</span>
+                    </div>
+                  </div>
+                  
+                  <div className="px-6 pb-6 pt-2">
+                    {/* Variants Section */}
+                    {part.variants && part.variants.length > 0 ? (
+                      <div className="mb-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-blue-600">
+                              <path d="M16.5 9.4 7.55 4.24"></path>
+                              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                              <polyline points="3.29 7 12 12 20.71 7"></polyline>
+                              <line x1="12" x2="12" y1="22" y2="12"></line>
+                            </svg>
+                            Variants ({part.variants.length})
+                          </h4>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {part.variants.map((variant: any, variantIndex: number) => {
+                            const variantQuantity = variant.quantity || 0;
+                            const variantMinQuantity = variant.min_quantity || 0;
+                            const variantSellingPrice = variant.selling_price || 0;
+                            const variantCostPrice = variant.cost_price || 0;
+                            const variantImage = variant.image_url || (part.images && part.images.length > 0 ? part.images[0] : null);
+                            const variantSKU = variant.sku || part.part_number || `SKU-${variant.id?.slice(0, 13) || part.id.slice(0, 13)}-PO0`;
+                            const useChildrenVariants = variant.useChildrenVariants || false;
+                            const childrenVariants = variant.childrenVariants || [];
+                            const hasChildrenVariants = useChildrenVariants && childrenVariants.length > 0;
+                            const compatibleDevices = variant.compatible_devices || [];
+                            const filledCount = childrenVariants.filter((c: string) => c && c.trim()).length;
+                            const variantKey = `${part.id}-${variant.id || variantIndex}`;
+                            const isChildrenExpanded = expandedChildrenVariants === variantKey;
+                            
+                            const toggleChildrenExpanded = (e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              setExpandedChildrenVariants(prev => {
+                                // If clicking the same variant, collapse it. Otherwise, expand only this one
+                                if (prev === variantKey) {
+                                  return null;
+                                } else {
+                                  return variantKey;
+                                }
+                              });
+                            };
+                            
+                            return (
+                              <div key={variant.id || variant.name} className="flex flex-col">
+                                <div className="p-3 sm:p-4 md:p-6 flex flex-col h-full rounded-xl border transition-all duration-200 shadow-sm relative action-button cursor-pointer border-gray-200 bg-white hover:border-blue-400 hover:shadow-md" title={hasChildrenVariants ? "Click to check for IMEI children" : ""}>
+                                  <div className={`absolute -top-2 -right-2 sm:-top-3 sm:-right-3 p-1.5 sm:p-2 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-30 min-w-[2rem] min-h-[2rem] sm:min-w-[2.5rem] sm:min-h-[2.5rem] transition-all duration-300 ${
+                                    variantQuantity === 0 
+                                      ? 'bg-gradient-to-r from-red-500 to-red-600' 
+                                      : variantQuantity <= variantMinQuantity 
+                                      ? 'bg-gradient-to-r from-orange-500 to-orange-600'
+                                      : 'bg-gradient-to-r from-green-500 to-green-600'
+                                  }`}>
+                                    <span className="text-xs sm:text-sm font-bold text-white whitespace-nowrap px-1">{variantQuantity}</span>
+                                  </div>
+                                  {hasChildrenVariants && (
+                                    <div 
+                                      className="absolute bottom-2 right-2 w-7 h-7 bg-purple-100 hover:bg-purple-200 rounded-full flex items-center justify-center z-30 transition-colors shadow-sm cursor-pointer" 
+                                      title="Check for IMEI children"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleChildrenExpanded(e);
+                                      }}
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-purple-600 transition-transform duration-200 ${isChildrenExpanded ? 'rotate-180' : ''}`}>
+                                        <path d="m6 9 6 6 6-6"></path>
+                                      </svg>
+                                    </div>
+                                  )}
+                                  <div className="flex items-start gap-2 sm:gap-3 md:gap-4">
+                                    <div 
+                                      className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden group cursor-pointer"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedVariantForImage({ part, variant });
+                                        setShowImageModal(true);
+                                      }}
+                                    >
+                                      <div className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center w-full h-full rounded-xl">
+                                        {variantImage ? (
+                                          <SafeImage
+                                            src={variantImage}
+                                            alt={variant.name || 'Variant'}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : (
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400">
+                                            <path d="M16.5 9.4 7.55 4.24"></path>
+                                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                            <polyline points="3.29 7 12 12 20.71 7"></polyline>
+                                            <line x1="12" x2="12" y1="22" y2="12"></line>
+                                          </svg>
+                                        )}
+                                      </div>
+                                      {/* Hover overlay */}
+                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl z-10 flex items-center justify-center">
+                                        <div className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg transition-all text-xs font-medium">
+                                          <Upload className="w-3 h-3" />
+                                          <span className="hidden sm:inline">Manage</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex-1 min-w-0 flex flex-col h-16 sm:h-20 md:h-24 justify-between group">
+                                      <div>
+                                        <div className="font-medium text-gray-800 truncate text-sm sm:text-base md:text-lg lg:text-xl leading-tight" title={variant.name || 'Default'}>{variant.name || 'Default'}</div>
+                                        <div className="text-xs text-gray-500 max-h-0 overflow-hidden group-hover:max-h-10 group-hover:mt-1 transition-all duration-200">SKU: {variantSKU}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-lg sm:text-xl md:text-2xl text-gray-700 mt-0.5 sm:mt-1 font-bold">
+                                          {variantSellingPrice > 0 ? format.currency(variantSellingPrice) : 'TSh 0'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Children Variants Section - Below Variant Card */}
+                                {isChildrenExpanded && useChildrenVariants && variantQuantity > 0 && (
+                                  <div className="mt-3 ml-4 border-l-2 border-purple-300 pl-4 space-y-2">
+                                    <div className="text-xs font-semibold text-purple-700 mb-2 uppercase tracking-wide">
+                                      IMEI Children ({filledCount})
+                                    </div>
+                                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                                      {Array.from({ length: variantQuantity }, (_, childIndex) => {
+                                        const childValue = childrenVariants[childIndex] || '';
+                                        const isFilled = childValue && childValue.trim() !== '';
+                                        const childSKU = variant.sku || part.part_number || `SKU-${part.id?.slice(0, 13) || Date.now()}-${variant.id?.slice(0, 13) || variantIndex}-IMEI-${childValue || childIndex}`;
+                                        
+                                        return (
+                                          <div key={`${variantKey}-child-${childIndex}`} className="p-2 bg-purple-50 rounded-lg border border-purple-200 hover:bg-purple-100 transition-colors group">
+                                            <div className="flex items-center justify-between">
+                                              <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-purple-600 flex-shrink-0">
+                                                    <line x1="4" x2="20" y1="9" y2="9"></line>
+                                                    <line x1="4" x2="20" y1="15" y2="15"></line>
+                                                    <line x1="10" x2="8" y1="3" y2="21"></line>
+                                                    <line x1="16" x2="14" y1="3" y2="21"></line>
+                                                  </svg>
+                                                  <span className="text-sm font-medium text-gray-900 truncate uppercase">
+                                                    {isFilled ? childValue : `ITEM #${childIndex + 1}`}
+                                                  </span>
+                                                </div>
+                                                <div className="text-xs text-gray-500 ml-6 max-h-0 overflow-hidden group-hover:max-h-10 group-hover:mt-1 transition-all duration-200">
+                                                  SKU: {childSKU}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mb-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-blue-600">
+                              <path d="M16.5 9.4 7.55 4.24"></path>
+                              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                              <polyline points="3.29 7 12 12 20.71 7"></polyline>
+                              <line x1="12" x2="12" y1="22" y2="12"></line>
+                            </svg>
+                            Variants (0)
+                          </h4>
+                        </div>
+                        <div className="p-4 rounded-xl border border-gray-200 bg-gray-50 text-center text-sm text-gray-500">
+                          No variants configured for this part
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Action Buttons */}
+                    <div className="mt-5 pt-5 border-t-2 border-gray-200">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditingSparePart(part); setShowSparePartForm(true); }}
+                          className="flex items-center justify-center gap-2 px-4 py-3 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 bg-purple-600 hover:bg-purple-700 action-button"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"></path>
+                          </svg>
+                          Edit Part
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleOpenDetailModal(part); }}
+                          className="flex items-center justify-center gap-2 px-4 py-3 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 bg-blue-600 hover:bg-blue-700 action-button"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                          </svg>
+                          View Details
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleOpenStockAdjustModal(part); }}
+                          className="flex items-center justify-center gap-2 px-4 py-3 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 bg-orange-600 hover:bg-orange-700 action-button"
+                          title="Adjust stock quantity"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                            <rect width="16" height="20" x="4" y="2" rx="2"></rect>
+                            <line x1="8" x2="16" y1="6" y2="6"></line>
+                            <line x1="16" x2="16" y1="14" y2="18"></line>
+                            <path d="M16 10h.01"></path>
+                            <path d="M12 10h.01"></path>
+                            <path d="M8 10h.01"></path>
+                            <path d="M12 14h.01"></path>
+                            <path d="M8 14h.01"></path>
+                            <path d="M12 18h.01"></path>
+                            <path d="M8 18h.01"></path>
+                          </svg>
+                          Adjust Stock
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDuplicateSparePart(part); }}
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 bg-indigo-600 hover:bg-indigo-700 action-button"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                            <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+                            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+                          </svg>
+                          Duplicate
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleTransferSparePart(part); }}
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 bg-teal-600 hover:bg-teal-700 action-button"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                            <path d="m16 3 4 4-4 4"></path>
+                            <path d="M20 7H4"></path>
+                            <path d="m8 21-4-4 4-4"></path>
+                            <path d="M4 17h16"></path>
+                          </svg>
+                          Transfer
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteSparePart(part.id); }}
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 bg-red-600 hover:bg-red-700 action-button"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                            <path d="M18 6 6 18"></path>
+                            <path d="m6 6 12 12"></path>
+                          </svg>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    ) : (
+      <div className="px-8 py-6 flex-1 overflow-y-auto">
+        <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm overflow-hidden">
+          {/* Table Header - Flat Style */}
+          <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
+            <div className="grid grid-cols-12 gap-4 items-center text-xs font-semibold text-gray-700 uppercase">
+              <div className="col-span-1">
+                <span>Image</span>
+              </div>
+              <div className="col-span-2">Part Details</div>
+              <div className="col-span-2">Category</div>
+              <div className="col-span-1 text-center">Quantity</div>
+              <div className="col-span-1">Pricing</div>
+              <div className="col-span-2">Location</div>
+              <div className="col-span-1 text-center">Status</div>
+              <div className="col-span-2 text-center">Actions</div>
+            </div>
+          </div>
+
+          {/* Table Body - Flat Style */}
+          <div className="divide-y divide-gray-200">
+            {filteredSpareParts.map((part) => {
+              const stockStatus = getStockStatus(part);
+              return (
+                <div key={part.id} className="hover:bg-gray-50 transition-colors">
+                  <div className="grid grid-cols-12 gap-4 items-center px-6 py-4">
+                    {/* Image */}
+                    <div className="col-span-1">
+                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center cursor-pointer" onClick={() => handleOpenDetailModal(part)}>
+                        {part.images && part.images.length > 0 ? (
+                          <SafeImage
+                            src={part.images[0]}
+                            alt={part.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Package className="w-6 h-6 text-gray-400" />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Part Details */}
+                    <div className="col-span-2">
+                      <div className="font-bold text-gray-900">{part.name}</div>
+                      <div className="text-sm text-gray-500">{part.part_number}</div>
+                      {part.description && (
+                        <div className="text-xs text-gray-500 truncate mt-1">{part.description}</div>
+                      )}
+                    </div>
+
+                    {/* Category */}
+                    <div className="col-span-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <Package className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <span className="font-medium text-gray-900">{getSpareTypeName(part.spare_type)}</span>
+                      </div>
+                    </div>
+
+                    {/* Quantity */}
+                    <div className="col-span-1 text-center">
+                      <div className={`text-2xl font-bold ${getTotalStock(part) <= getTotalMinQuantity(part) ? 'text-red-600' : 'text-green-600'}`}>
+                        {getTotalStock(part)}
+                      </div>
+                      <div className="text-xs text-gray-500">Min: {getTotalMinQuantity(part)}</div>
+                    </div>
+
+                    {/* Pricing */}
+                    <div className="col-span-1">
+                      <div className="text-sm font-medium text-gray-900">Cost: {format.currency(getDisplayCostPrice(part))}</div>
+                      <div className="text-xs text-gray-500">Sell: {format.currency(getDisplayPrice(part))}</div>
+                    </div>
+
+                    {/* Location */}
+                    <div className="col-span-2">
+                      <div className="text-sm text-gray-900">{part.location || 'Not set'}</div>
+                    </div>
+
+                    {/* Status */}
+                    <div className="col-span-1 flex justify-center">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${stockStatus.bg} ${stockStatus.color}`}>
+                        {stockStatus.status.replace('-', ' ')}
+                      </span>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="col-span-2">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => handleOpenDetailModal(part)}
+                          className="p-2 text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition-colors"
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedSparePartForUsage(part);
+                            setShowUsageModal(true);
+                          }}
+                          disabled={getTotalStock(part) === 0}
+                          className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Use Part"
+                        >
+                          <Minus className="w-4 h-4 text-gray-700" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingSparePart(part);
+                            setShowSparePartForm(true);
+                          }}
+                          className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                          title="Edit Part"
+                        >
+                          <Edit className="w-4 h-4 text-gray-700" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSparePart(part.id)}
+                          className="p-2 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+                          title="Delete Part"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-600" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
+    <div>
     <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       {/* Wrapper Container - Single rounded container */}
       <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
@@ -559,13 +1760,13 @@ const InventorySparePartsPage: React.FC = () => {
               </div>
               
               {/* Text */}
-          <div>
+              <div>
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">Spare Parts Inventory</h1>
                 <p className="text-sm text-gray-600">
-              Manage inventory, track usage, and monitor stock levels
-            </p>
+                  Manage inventory, track usage, and monitor stock levels
+                </p>
               </div>
-          </div>
+            </div>
           
             {/* Back Button */}
             <BackButton to="/lats" label="" className="!w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center" iconClassName="text-white" />
@@ -573,159 +1774,91 @@ const InventorySparePartsPage: React.FC = () => {
         </div>
         {/* Action Bar - Enhanced Design */}
         <div className="px-8 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50 flex-shrink-0">
-          <div className="flex gap-3 flex-wrap items-center">
-            <button
-              onClick={() => {
-                setEditingSparePart(null);
-                setShowSparePartFormSteps(true);
-              }}
-              className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg hover:from-orange-600 hover:to-orange-700"
-            >
-              <Plus size={18} />
-              <span>Add Part</span>
-            </button>
-            <button
-              onClick={() => {
-                setEditingSparePart(null);
-                setShowSparePartForm(true);
-              }}
-              className="flex items-center gap-2 px-4 py-3 font-semibold text-sm rounded-xl transition-all duration-200 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
-            >
-              <Package size={18} />
-              <span>Advanced</span>
-            </button>
+          <div className="flex gap-3 flex-wrap items-center justify-between">
+            <div className="flex gap-3 flex-wrap items-center">
+              <button
+                onClick={() => {
+                  setEditingSparePart(null);
+                  setShowSparePartForm(true);
+                }}
+                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg hover:from-orange-600 hover:to-orange-700"
+              >
+                <Plus size={18} />
+                <span>Add Part</span>
+              </button>
+            </div>
+            <div className="flex gap-3 flex-wrap items-center">
+              <InventoryQuickLinks />
+              <button
+                onClick={() => navigate('/lats/spare-parts/analytics')}
+                className="flex items-center gap-2 px-4 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg hover:from-purple-600 hover:to-purple-700"
+                title="View Analytics"
+              >
+                <BarChart3 size={18} />
+                <span>Analytics</span>
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Statistics Section */}
-        <div className="p-6 pb-0 flex-shrink-0">
+        <div className="px-8 py-6 flex-shrink-0">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 hover:bg-blue-100 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
-            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
                   <Package className="w-6 h-6 text-white" />
                 </div>
-              <div>
+                <div>
                   <p className="text-xs font-medium text-gray-600 mb-1">Total Parts</p>
-                <p className="text-2xl font-bold text-gray-900">{filteredSpareParts.length}</p>
+                  <p className="text-2xl font-bold text-gray-900">{filteredSpareParts.length}</p>
+                </div>
               </div>
             </div>
-          </div>
           
             <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 hover:bg-green-100 hover:border-green-300 transition-all shadow-sm hover:shadow-md">
-            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
                   <CheckCircle className="w-6 h-6 text-white" />
                 </div>
-              <div>
+                <div>
                   <p className="text-xs font-medium text-gray-600 mb-1">In Stock</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {spareParts.filter(part => part.quantity > part.min_quantity).length}
-                </p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {spareParts.filter(part => getTotalStock(part) > getTotalMinQuantity(part)).length}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
           
             <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-5 hover:bg-yellow-100 hover:border-yellow-300 transition-all shadow-sm hover:shadow-md">
-            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-yellow-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
                   <AlertCircle className="w-6 h-6 text-white" />
                 </div>
-              <div>
+                <div>
                   <p className="text-xs font-medium text-gray-600 mb-1">Low Stock</p>
-                <p className="text-2xl font-bold text-gray-900">{stockAlerts.lowStock.length}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stockAlerts.lowStock.length}</p>
+                </div>
               </div>
             </div>
-          </div>
           
             <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 hover:bg-red-100 hover:border-red-300 transition-all shadow-sm hover:shadow-md">
-            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
                   <XCircle className="w-6 h-6 text-white" />
                 </div>
-              <div>
-                  <p className="text-xs font-medium text-gray-600 mb-1">Out of Stock</p>
-                <p className="text-2xl font-bold text-gray-900">{stockAlerts.outOfStock.length}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Stock Alerts Banner with Reorder Suggestions */}
-        {stockAlerts.total > 0 && (
-          <div className="p-6 pb-0 flex-shrink-0">
-            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-4 shadow-sm">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-yellow-800 mb-1">Stock Alerts & Reorder Suggestions</h3>
-                  <div className="text-sm text-yellow-700 space-y-1">
-                    <p>• {stockAlerts.outOfStock.length} parts out of stock (Critical)</p>
-                    <p>• {stockAlerts.lowStock.length} parts with low stock</p>
-                    <p>• {stockAlerts.reorderSuggestions.length} parts need reordering</p>
-                  </div>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Out of Stock</p>
+                  <p className="text-2xl font-bold text-gray-900">{stockAlerts.outOfStock.length}</p>
                 </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                {stockAlerts.outOfStock.length > 0 && (
-                  <button
-                    onClick={() => setStockFilter('out-of-stock')}
-                    className="px-4 py-2 text-sm font-semibold bg-red-600 text-white hover:bg-red-700 rounded-xl transition-all shadow-sm"
-                  >
-                    View Critical ({stockAlerts.outOfStock.length})
-                  </button>
-                )}
-                {stockAlerts.lowStock.length > 0 && (
-                  <button
-                    onClick={() => setStockFilter('low-stock')}
-                    className="px-4 py-2 text-sm font-semibold bg-yellow-600 text-white hover:bg-yellow-700 rounded-xl transition-all shadow-sm"
-                  >
-                    View Low Stock ({stockAlerts.lowStock.length})
-                  </button>
-                )}
-                {stockAlerts.reorderSuggestions.length > 0 && (
-                  <button
-                    onClick={handleBulkExport}
-                    className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-all shadow-sm"
-                  >
-                    Export Reorder List
-                  </button>
-                )}
               </div>
             </div>
-            
-            {/* Quick Reorder Suggestions */}
-            {stockAlerts.reorderSuggestions.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-yellow-200">
-                <h4 className="text-sm font-semibold text-yellow-800 mb-2">Quick Reorder Suggestions:</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {stockAlerts.reorderSuggestions.slice(0, 6).map((part) => (
-                    <div key={part.id} className={`p-2 rounded-xl text-xs border-2 ${
-                      part.urgency === 'critical' ? 'bg-red-100 text-red-800 border-red-200' :
-                      part.urgency === 'high' ? 'bg-orange-100 text-orange-800 border-orange-200' :
-                      'bg-yellow-100 text-yellow-800 border-yellow-200'
-                    }`}>
-                      <div className="font-semibold truncate">{part.name}</div>
-                      <div>Current: {part.quantity} | Suggested: {part.suggestedReorder}</div>
-                    </div>
-                  ))}
-                </div>
-                {stockAlerts.reorderSuggestions.length > 6 && (
-                  <p className="text-xs text-yellow-600 mt-2 font-medium">
-                    +{stockAlerts.reorderSuggestions.length - 6} more parts need attention
-                  </p>
-                )}
-              </div>
-            )}
           </div>
         </div>
-        )}
 
         {/* Bulk Actions Bar */}
         {selectedSpareParts.length > 0 && (
-          <div className="p-6 pb-0 flex-shrink-0">
+          <div className="px-8 py-6 flex-shrink-0">
             <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 shadow-sm">
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
               <div className="flex items-center gap-3">
@@ -742,13 +1875,20 @@ const InventorySparePartsPage: React.FC = () => {
                   </button>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={handleBulkExport}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold bg-green-600 text-white hover:bg-green-700 transition-all shadow-sm text-sm"
                 >
                   <Package className="w-4 h-4" />
                   Export CSV
+                </button>
+                <button
+                  onClick={handleBulkEdit}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-sm text-sm"
+                >
+                  <Edit className="w-4 h-4" />
+                  Bulk Edit
                 </button>
                 <button
                   onClick={handleBulkDelete}
@@ -760,11 +1900,11 @@ const InventorySparePartsPage: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+          </div>
         )}
 
         {/* Search and Filters Section */}
-        <div className="p-6 pb-0 flex-shrink-0 border-t border-gray-100 bg-white">
+        <div className="px-8 py-6 flex-shrink-0 border-t border-gray-100 bg-white">
           <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
           <div className="flex flex-col lg:flex-row gap-4">
             {/* Search Bar */}
@@ -783,17 +1923,25 @@ const InventorySparePartsPage: React.FC = () => {
 
             {/* Filters */}
             <div className="flex flex-wrap items-center gap-3">
-              {/* Category Filter */}
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-gray-900 bg-white"
-              >
-                <option value="all">All Categories</option>
-                {categories.map(category => (
-                  <option key={category.id} value={category.id}>{category.name}</option>
-                ))}
-              </select>
+              {/* Spare Type Filter */}
+              {(() => {
+                const uniqueSpareTypes = Array.from(new Set(spareParts.map(p => p.spare_type).filter(Boolean))).sort();
+                if (uniqueSpareTypes.length > 0) {
+                  return (
+                    <select
+                      value={selectedCategory}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                      className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-gray-900 bg-white"
+                    >
+                      <option value="all">All Spare Types</option>
+                      {uniqueSpareTypes.map(spareType => (
+                        <option key={spareType} value={spareType}>{spareType}</option>
+                      ))}
+                    </select>
+                  );
+                }
+                return null;
+              })()}
 
               {/* Stock Filter */}
               <select
@@ -806,6 +1954,40 @@ const InventorySparePartsPage: React.FC = () => {
                 <option value="low-stock">Low Stock</option>
                 <option value="out-of-stock">Out of Stock</option>
               </select>
+
+              {/* Brand Filter */}
+              {(() => {
+                const uniqueBrands = Array.from(new Set(spareParts.map(p => p.brand).filter(Boolean))).sort();
+                if (uniqueBrands.length > 0) {
+                  return (
+                    <select
+                      value={brandFilter}
+                      onChange={(e) => setBrandFilter(e.target.value)}
+                      className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-gray-900 bg-white"
+                    >
+                      <option value="all">All Brands</option>
+                      {uniqueBrands.map(brand => (
+                        <option key={brand} value={brand}>{brand}</option>
+                      ))}
+                    </select>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Supplier Filter */}
+              {suppliers.length > 0 && (
+                <select
+                  value={supplierFilter}
+                  onChange={(e) => setSupplierFilter(e.target.value)}
+                  className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-gray-900 bg-white"
+                >
+                  <option value="all">All Suppliers</option>
+                  {suppliers.map(supplier => (
+                    <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+                  ))}
+                </select>
+              )}
 
               {/* Sort Filter */}
               <select
@@ -853,11 +2035,13 @@ const InventorySparePartsPage: React.FC = () => {
               </div>
             </div>
           </div>
+          </div>
         </div>
 
         {/* Error Display */}
         {error && (
-          <GlassCard className="bg-red-50 border-red-200 p-4">
+          <div className="px-8 py-6 flex-shrink-0">
+            <GlassCard className="bg-red-50 border-red-200 p-4">
             <div className="flex items-center gap-3 text-red-700">
               <AlertCircle className="w-5 h-5" />
               <div>
@@ -866,364 +2050,170 @@ const InventorySparePartsPage: React.FC = () => {
               </div>
             </div>
           </GlassCard>
-        )}
-
-        {/* Loading State */}
-        {isLoading || isInitialLoad ? (
-          <GlassCard className="p-12">
-            <div className="flex items-center justify-center">
-              <RefreshCw className="w-8 h-8 animate-spin text-orange-500" />
-              <span className="ml-4 text-gray-700 font-medium">Loading spare parts...</span>
-            </div>
-          </GlassCard>
-        ) : filteredSpareParts.length === 0 ? (
-          // Empty State
-          <GlassCard className="p-12 text-center">
-            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">No spare parts found</h3>
-            <p className="text-gray-600 mb-6">
-              {searchTerm || selectedCategory !== 'all' || stockFilter !== 'all' 
-                ? 'Try adjusting your search or filters'
-                : 'Get started by adding your first spare part'
-              }
-            </p>
-            {!searchTerm && selectedCategory === 'all' && stockFilter === 'all' && (
-              <button
-                onClick={() => {
-                  setEditingSparePart(null);
-                  setShowSparePartForm(true);
-                }}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Spare Part</span>
-              </button>
-            )}
-          </GlassCard>
-        ) : (
-          // Spare Parts Grid/List - Auto-fit Grid
-          viewMode === 'grid' ? (
-          <div 
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))',
-              gap: 'clamp(1rem, 2vw, 1.5rem)',
-              gridAutoRows: '1fr'
-            }}
-          >
-            {filteredSpareParts.map((part) => {
-              const stockStatus = getStockStatus(part);
-              const isSelected = selectedSpareParts.includes(part.id);
-              return (
-                <div key={part.id} className={`bg-white border-2 rounded-2xl shadow-sm overflow-hidden hover:shadow-lg transition-all ${isSelected ? 'ring-2 ring-orange-500 bg-orange-50 border-orange-300' : 'border-gray-200'}`}>
-                  {/* Image Section */}
-                  <div className="relative">
-                    <div className="w-full h-40 bg-gray-100 flex items-center justify-center cursor-pointer" onClick={() => handleOpenDetailModal(part)}>
-                      {part.images && part.images.length > 0 ? (
-                        <SafeImage
-                          src={part.images[0]}
-                          alt={part.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <Package className="w-16 h-16 text-gray-400" />
-                      )}
-                    </div>
-                    {/* Status Badge */}
-                    <div className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-semibold ${stockStatus.bg} ${stockStatus.color} shadow-sm`}>
-                      {stockStatus.status.replace('-', ' ')}
-                    </div>
-                    {/* Checkbox */}
-                    <div className="absolute top-2 left-2">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleSelectPart(part.id)}
-                        className="h-5 w-5 text-orange-600 focus:ring-orange-500 border-gray-300 rounded shadow-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="p-4">
-                    {/* Header */}
-                    <div className="mb-3">
-                      <h3 className="font-bold text-gray-900 truncate text-base">{part.name}</h3>
-                      <p className="text-sm text-gray-500">{part.part_number}</p>
-                    </div>
-
-                    {/* Description */}
-                    {part.description && (
-                      <p className="text-xs text-gray-600 mb-3 line-clamp-2">{part.description}</p>
-                    )}
-
-                    {/* Details Grid */}
-                    <div className="grid grid-cols-2 gap-2 mb-4">
-                      <div className="bg-gray-50 rounded-lg p-2">
-                        <p className="text-xs text-gray-500 mb-1">Category</p>
-                        <p className="text-sm font-medium text-gray-900 truncate">{getCategoryName(part.category_id)}</p>
-                      </div>
-                      <div className="bg-gray-50 rounded-lg p-2">
-                        <p className="text-xs text-gray-500 mb-1">Quantity</p>
-                        <p className={`text-sm font-bold ${part.quantity <= part.min_quantity ? 'text-red-600' : 'text-green-600'}`}>
-                          {part.quantity}/{part.min_quantity}
-                        </p>
-                      </div>
-                      <div className="bg-gray-50 rounded-lg p-2">
-                        <p className="text-xs text-gray-500 mb-1">Cost</p>
-                        <p className="text-sm font-medium text-gray-900">{format.currency(part.cost_price)}</p>
-                      </div>
-                      <div className="bg-gray-50 rounded-lg p-2">
-                        <p className="text-xs text-gray-500 mb-1">Price</p>
-                        <p className="text-sm font-medium text-gray-900">{format.currency(part.selling_price)}</p>
-                      </div>
-                    </div>
-
-                    {part.location && (
-                      <div className="mb-4">
-                        <p className="text-xs text-gray-500">Location: <span className="font-medium text-gray-900">{part.location}</span></p>
-                      </div>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleOpenDetailModal(part)}
-                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
-                      >
-                        <Eye className="w-4 h-4" />
-                        View
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedSparePartForUsage(part);
-                          setShowUsageModal(true);
-                        }}
-                        disabled={part.quantity === 0}
-                        className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Use Part"
-                      >
-                        <Minus className="w-4 h-4 text-gray-700" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditingSparePart(part);
-                          setShowSparePartForm(true);
-                        }}
-                        className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                        title="Edit Part"
-                      >
-                        <Edit className="w-4 h-4 text-gray-700" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteSparePart(part.id)}
-                        className="p-2 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
-                        title="Delete Part"
-                      >
-                        <Trash2 className="w-4 h-4 text-red-600" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm overflow-hidden">
-            {/* Table Header - Flat Style */}
-            <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
-              <div className="grid grid-cols-12 gap-4 items-center text-xs font-semibold text-gray-700 uppercase">
-                <div className="col-span-1 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedSpareParts.length === filteredSpareParts.length && filteredSpareParts.length > 0}
-                    onChange={handleSelectAll}
-                    className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
-                  />
-                  <span>Image</span>
-                </div>
-                <div className="col-span-2">Part Details</div>
-                <div className="col-span-2">Category</div>
-                <div className="col-span-1 text-center">Quantity</div>
-                <div className="col-span-1">Pricing</div>
-                <div className="col-span-2">Location</div>
-                <div className="col-span-1 text-center">Status</div>
-                <div className="col-span-2 text-center">Actions</div>
-              </div>
-            </div>
-
-            {/* Table Body - Flat Style */}
-            <div className="divide-y divide-gray-200">
-              {filteredSpareParts.map((part) => {
-                const stockStatus = getStockStatus(part);
-                const isSelected = selectedSpareParts.includes(part.id);
-                return (
-                  <div key={part.id} className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-orange-50' : ''}`}>
-                    <div className="grid grid-cols-12 gap-4 items-center px-6 py-4">
-                      {/* Checkbox & Image */}
-                      <div className="col-span-1 flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleSelectPart(part.id)}
-                          className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
-                        />
-                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center cursor-pointer" onClick={() => handleOpenDetailModal(part)}>
-                          {part.images && part.images.length > 0 ? (
-                            <SafeImage
-                              src={part.images[0]}
-                              alt={part.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <Package className="w-6 h-6 text-gray-400" />
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Part Details */}
-                      <div className="col-span-2">
-                        <div className="font-bold text-gray-900">{part.name}</div>
-                        <div className="text-sm text-gray-500">{part.part_number}</div>
-                        {part.description && (
-                          <div className="text-xs text-gray-500 truncate mt-1">{part.description}</div>
-                        )}
-                      </div>
-
-                      {/* Category */}
-                      <div className="col-span-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                            <Package className="w-4 h-4 text-purple-600" />
-                          </div>
-                          <span className="font-medium text-gray-900">{getCategoryName(part.category_id)}</span>
-                        </div>
-                      </div>
-
-                      {/* Quantity */}
-                      <div className="col-span-1 text-center">
-                        <div className={`text-2xl font-bold ${part.quantity <= part.min_quantity ? 'text-red-600' : 'text-green-600'}`}>
-                          {part.quantity}
-                        </div>
-                        <div className="text-xs text-gray-500">Min: {part.min_quantity}</div>
-                      </div>
-
-                      {/* Pricing */}
-                      <div className="col-span-1">
-                        <div className="text-sm font-medium text-gray-900">{format.currency(part.cost_price)}</div>
-                        <div className="text-xs text-gray-500">Sell: {format.currency(part.selling_price)}</div>
-                      </div>
-
-                      {/* Location */}
-                      <div className="col-span-2">
-                        <div className="text-sm text-gray-900">{part.location || 'Not set'}</div>
-                      </div>
-
-                      {/* Status */}
-                      <div className="col-span-1 flex justify-center">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${stockStatus.bg} ${stockStatus.color}`}>
-                          {stockStatus.status.replace('-', ' ')}
-                        </span>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="col-span-2">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => handleOpenDetailModal(part)}
-                            className="p-2 text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition-colors"
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedSparePartForUsage(part);
-                              setShowUsageModal(true);
-                            }}
-                            disabled={part.quantity === 0}
-                            className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Use Part"
-                          >
-                            <Minus className="w-4 h-4 text-gray-700" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingSparePart(part);
-                              setShowSparePartForm(true);
-                            }}
-                            className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                            title="Edit Part"
-                          >
-                            <Edit className="w-4 h-4 text-gray-700" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteSparePart(part.id)}
-                            className="p-2 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
-                            title="Delete Part"
-                          >
-                            <Trash2 className="w-4 h-4 text-red-600" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         )}
-        </div>
+
+        {/* Content Area */}
+        {renderContent()}
       </div>
     </div>
 
-      {/* Spare Part Form Modal */}
-      {showSparePartForm && (
-        <SparePartAddEditForm
-          sparePart={editingSparePart}
-          onSave={handleSaveSparePart}
-          onCancel={() => {
-            setShowSparePartForm(false);
-            setEditingSparePart(null);
-          }}
-        />
-      )}
+    {/* Spare Part Form Modal */}
+    {showSparePartForm && (
+      <SparePartAddEditForm
+        sparePart={editingSparePart}
+        onSave={handleSaveSparePart}
+        onCancel={() => {
+          setShowSparePartForm(false);
+          setEditingSparePart(null);
+        }}
+      />
+    )}
 
-      {/* Spare Part Form Steps Modal */}
-      {showSparePartFormSteps && (
-        <SparePartFormSteps
-          sparePart={editingSparePart}
-          onSave={handleSaveSparePart}
-          onCancel={() => {
-            setShowSparePartFormSteps(false);
-            setEditingSparePart(null);
-          }}
-        />
-      )}
+    {/* Usage Modal */}
+    {showUsageModal && selectedSparePartForUsage && (
+      <SparePartUsageModal
+        sparePart={selectedSparePartForUsage}
+        onUse={handleUseSparePart}
+        onCancel={() => {
+          setShowUsageModal(false);
+          setSelectedSparePartForUsage(null);
+        }}
+      />
+    )}
 
-      {/* Usage Modal */}
-      {showUsageModal && selectedSparePartForUsage && (
-        <SparePartUsageModal
-          sparePart={selectedSparePartForUsage}
-          onUse={handleUseSparePart}
-          onCancel={() => {
-            setShowUsageModal(false);
-            setSelectedSparePartForUsage(null);
-          }}
-        />
-      )}
+    {/* Detail Modal */}
+    {showDetailModal && selectedSparePartForDetail && (
+      <SparePartDetailsModal
+        isOpen={showDetailModal}
+        onClose={handleCloseDetailModal}
+        sparePart={selectedSparePartForDetail}
+        currency={{ code: 'TZS', name: 'Tanzanian Shilling', symbol: 'TZS', flag: '🇹🇿' }}
+        onEdit={handleEditFromDetailModal}
+        onDelete={handleDeleteFromDetailModal}
+        onUse={handleUseFromDetailModal}
+      />
+    )}
 
-      {/* Detail Modal */}
-      {showDetailModal && selectedSparePartForDetail && (
-        <SparePartDetailsModal
-          isOpen={showDetailModal}
-          onClose={handleCloseDetailModal}
-          sparePart={selectedSparePartForDetail}
-          currency={{ code: 'TZS', name: 'Tanzanian Shilling', symbol: 'TZS', flag: '🇹🇿' }}
-          onEdit={handleEditFromDetailModal}
-          onDelete={handleDeleteFromDetailModal}
-          onUse={handleUseFromDetailModal}
-        />
-      )}
+    {/* Stock Adjustment Modal */}
+    {showStockAdjustModal && selectedSparePartForAdjust && (
+      <SparePartStockAdjustModal
+        isOpen={showStockAdjustModal}
+        onClose={() => {
+          setShowStockAdjustModal(false);
+          setSelectedSparePartForAdjust(null);
+        }}
+        sparePart={selectedSparePartForAdjust}
+        onAdjust={handleStockAdjustment}
+      />
+    )}
+
+    {/* Transfer Modal */}
+    {showTransferModal && selectedSparePartForTransfer && (
+      <SparePartTransferModal
+        isOpen={showTransferModal}
+        onClose={() => {
+          setShowTransferModal(false);
+          setSelectedSparePartForTransfer(null);
+        }}
+        sparePart={selectedSparePartForTransfer}
+        onTransfer={handleTransferSubmit}
+      />
+    )}
+
+    {/* Image Management Modal */}
+    {showImageModal && selectedVariantForImage && (
+      <Modal
+        isOpen={showImageModal}
+        onClose={() => {
+          setShowImageModal(false);
+          setSelectedVariantForImage(null);
+        }}
+        title={`Manage Images - ${selectedVariantForImage.variant ? (selectedVariantForImage.variant.name || 'Default Variant') : selectedVariantForImage.part.name}`}
+        maxWidth="xl"
+      >
+        <div className="space-y-4">
+          <SimpleImageUpload
+            productId={selectedVariantForImage.variant?.id || selectedVariantForImage.part.id}
+            userId={selectedVariantForImage.part.id || 'default-user'} // Using part ID as fallback for userId
+            existingImages={
+              selectedVariantForImage.variant
+                ? (selectedVariantForImage.variant.image_url 
+                    ? [{ image_url: selectedVariantForImage.variant.image_url }]
+                    : selectedVariantForImage.part.images?.map((img: string) => ({ image_url: img })) || [])
+                : (selectedVariantForImage.part.images?.map((img: string) => ({ image_url: img })) || [])
+            }
+            onImagesChange={async (images) => {
+              try {
+                // Update the part with new images
+                const imageUrls = images.map(img => img.url);
+                
+                // If managing variant images, update variant's image_url
+                if (selectedVariantForImage.variant) {
+                  // Update variant's image_url to first image
+                  const updatedVariants = selectedVariantForImage.part.variants?.map((v: any) => 
+                    v.id === selectedVariantForImage.variant?.id
+                      ? { ...v, image_url: imageUrls[0] || null }
+                      : v
+                  ) || [];
+                  
+                  const transformedData = {
+                    ...transformSparePartData({
+                      name: selectedVariantForImage.part.name,
+                      spareType: selectedVariantForImage.part.spare_type,
+                      brand: selectedVariantForImage.part.brand,
+                      supplierId: selectedVariantForImage.part.supplier_id,
+                      condition: selectedVariantForImage.part.condition,
+                      description: selectedVariantForImage.part.description,
+                      compatibleDevices: selectedVariantForImage.part.compatible_devices,
+                      variants: updatedVariants,
+                      images: selectedVariantForImage.part.images || []
+                    })
+                  };
+                  
+                  const response = await updateSparePart(selectedVariantForImage.part.id, transformedData);
+                  if (response.ok) {
+                    await loadSpareParts();
+                    toast.success('Variant images updated successfully');
+                  } else {
+                    toast.error(response.message || 'Failed to update variant images');
+                  }
+                } else {
+                  // Update main part images
+                  const transformedData = {
+                    ...transformSparePartData({
+                      name: selectedVariantForImage.part.name,
+                      spareType: selectedVariantForImage.part.spare_type,
+                      brand: selectedVariantForImage.part.brand,
+                      supplierId: selectedVariantForImage.part.supplier_id,
+                      condition: selectedVariantForImage.part.condition,
+                      description: selectedVariantForImage.part.description,
+                      compatibleDevices: selectedVariantForImage.part.compatible_devices,
+                      variants: selectedVariantForImage.part.variants || [],
+                      images: imageUrls
+                    }),
+                    images: imageUrls
+                  };
+                  
+                  const response = await updateSparePart(selectedVariantForImage.part.id, transformedData);
+                  if (response.ok) {
+                    await loadSpareParts();
+                    toast.success('Images updated successfully');
+                  } else {
+                    toast.error(response.message || 'Failed to update images');
+                  }
+                }
+              } catch (error) {
+                console.error('Error updating images:', error);
+                toast.error('Failed to update images');
+              }
+            }}
+            maxImages={5}
+            bucket="product-images"
+          />
+        </div>
+      </Modal>
+    )}
     </div>
   );
 };

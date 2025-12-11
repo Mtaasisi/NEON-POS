@@ -10,7 +10,7 @@ import {
   Search, QrCode, Plus, CheckCircle, XCircle, RefreshCw,
   User, Phone, Mail, Command, Truck, Coins, DollarSign, ShoppingBag, AlertTriangle, X, Building, ShoppingCart, Package,
   Keyboard, Upload, Bookmark, FileSpreadsheet, FileText, History, ChevronDown, ChevronUp, Loader2,
-  Eye, Edit, Printer
+  Eye, Edit, Printer, Wrench
 } from 'lucide-react';
 
 import { useInventoryStore } from '../stores/useInventoryStore';
@@ -175,6 +175,10 @@ interface PurchaseCartItemType {
   currentStock?: number;
   category?: string;
   images?: string[];
+  itemType?: 'product' | 'spare-part'; // Add item type
+  partNumber?: string; // For spare parts
+  minimumOrderQty?: number; // Minimum order quantity
+  notes?: string; // Notes for the item
 }
 
 interface Supplier {
@@ -242,9 +246,11 @@ const POcreate: React.FC = () => {
     products: dbProducts,
     categories,
     suppliers,
+    spareParts,
     loadProducts,
     loadCategories,
     loadSuppliers,
+    loadSpareParts,
     createPurchaseOrder,
     updatePurchaseOrder,
     getPurchaseOrder
@@ -334,7 +340,38 @@ const POcreate: React.FC = () => {
   // Add loading and error state display
   const { isLoading, error } = useInventoryStore();
 
-  // Optimized filtered products
+  // Transform spare parts for display
+  const transformedSpareParts = useMemo(() => {
+    if (!spareParts || spareParts.length === 0) return [];
+    
+    return spareParts.map(part => ({
+      id: part.id,
+      name: part.name,
+      part_number: part.part_number,
+      cost_price: part.cost_price,
+      selling_price: part.selling_price,
+      quantity: part.quantity,
+      category: 'Spare Parts',
+      itemType: 'spare-part' as const,
+      images: part.images || [],
+      brand: part.brand,
+      compatible_devices: part.compatible_devices
+    }));
+  }, [spareParts]);
+
+  // Filtered spare parts for search
+  const filteredSpareParts = useMemo(() => {
+    if (!debouncedSearchQuery.trim() || showSearchResults) return [];
+    
+    const query = debouncedSearchQuery.toLowerCase();
+    return transformedSpareParts.filter(part =>
+      part.name.toLowerCase().includes(query) ||
+      part.part_number?.toLowerCase().includes(query) ||
+      part.brand?.toLowerCase().includes(query)
+    );
+  }, [transformedSpareParts, debouncedSearchQuery, showSearchResults]);
+
+  // Optimized filtered products (separate from spare parts)
   const filteredProducts = useMemo(() => {
     if (showSearchResults && searchResults.length > 0) {
       return searchResults;
@@ -572,6 +609,10 @@ const POcreate: React.FC = () => {
           }),
           loadSuppliers().catch(err => {
             console.error('❌ Failed to load suppliers:', err);
+            return [];
+          }),
+          loadSpareParts().catch(err => {
+            console.error('❌ Failed to load spare parts:', err);
             return [];
           })
         ]);
@@ -885,8 +926,58 @@ const POcreate: React.FC = () => {
   const totalAmount = subtotal - discount;
   const totalAmountTZS = convertToTZS(totalAmount, selectedCurrency.code);
 
+  // Handle adding spare part to purchase cart
+  const handleAddSparePartToCart = useCallback((sparePart: any, quantity: number = 1) => {
+    const costPrice = sparePart.cost_price > 0 ? sparePart.cost_price : 1;
+    const sellingPrice = sparePart.selling_price || 0;
+    
+    setPurchaseCartItems(prevItems => {
+      const existingItem = prevItems.find(item => 
+        item.productId === sparePart.id && item.itemType === 'spare-part'
+      );
+      
+      if (existingItem) {
+        return prevItems.map(item =>
+          item.id === existingItem.id
+            ? {
+                ...item,
+                quantity: item.quantity + quantity,
+                totalPrice: (item.quantity + quantity) * costPrice
+              }
+            : item
+        );
+      } else {
+        const newItem: PurchaseCartItemType = {
+          id: `spare-${sparePart.id}-${Date.now()}`,
+          productId: sparePart.id,
+          variantId: 'spare-part', // Use special variant ID for spare parts
+          name: sparePart.name,
+          variantName: undefined,
+          sku: sparePart.part_number || 'N/A',
+          costPrice: costPrice,
+          sellingPrice: sellingPrice,
+          quantity: quantity,
+          totalPrice: costPrice * quantity,
+          currentStock: sparePart.quantity || 0,
+          category: 'Spare Parts',
+          images: sparePart.images || [],
+          itemType: 'spare-part',
+          partNumber: sparePart.part_number
+        };
+        
+        return [...prevItems, newItem];
+      }
+    });
+  }, []);
+
   // Handle adding product to purchase cart
   const handleAddToPurchaseCart = useCallback((product: any, variant?: any, quantity: number = 1) => {
+    // Check if it's a spare part
+    if (product.itemType === 'spare-part' || product.part_number) {
+      handleAddSparePartToCart(product, quantity);
+      return;
+    }
+
     const selectedVariant = variant || product.variants?.[0];
     if (!selectedVariant) {
       alert('Product has no variants available', 'No Variants');
@@ -902,7 +993,7 @@ const POcreate: React.FC = () => {
     
     setPurchaseCartItems(prevItems => {
       const existingItem = prevItems.find(item => 
-        item.productId === product.id && item.variantId === selectedVariant.id
+        item.productId === product.id && item.variantId === selectedVariant.id && item.itemType !== 'spare-part'
       );
       
       if (existingItem) {
@@ -916,7 +1007,7 @@ const POcreate: React.FC = () => {
             : item
         );
       } else {
-        const newItem: PurchaseCartItem = {
+        const newItem: PurchaseCartItemType = {
           id: `${product.id}-${selectedVariant.id}-${Date.now()}`,
           productId: product.id,
           variantId: selectedVariant.id,
@@ -929,8 +1020,8 @@ const POcreate: React.FC = () => {
           totalPrice: costPrice * quantity,
           currentStock: currentStock,
           category: product.categoryName,
-  
-          images: product.images || []
+          images: product.images || [],
+          itemType: 'product'
         };
         
         return [...prevItems, newItem];
@@ -938,7 +1029,7 @@ const POcreate: React.FC = () => {
     });
     
     // Don't clear search - let user continue adding products from same search
-  }, []);
+  }, [handleAddSparePartToCart]);
 
   // Handle updating cart item quantity
   const handleUpdateQuantity = useCallback((itemId: string, newQuantity: number) => {
@@ -1635,7 +1726,9 @@ const POcreate: React.FC = () => {
           costPrice: item.costPrice,
           sellingPrice: item.sellingPrice || 0, // Include selling price for PO tracking
           minimumOrderQty: item.minimumOrderQty, // Add minimum order quantity
-          notes: item.notes || '' // Add notes
+          notes: item.notes || '', // Add notes
+          itemType: item.itemType || 'product', // Include item type for spare parts
+          partNumber: item.partNumber || null // Include part number for spare parts
         }))
       };
 
@@ -2241,7 +2334,7 @@ const POcreate: React.FC = () => {
                   <div className="mb-6">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-medium text-gray-700">
-                        Search Results ({filteredProducts.length})
+                        Search Results ({filteredProducts.length + filteredSpareParts.length})
                       </h3>
                       <button
                         onClick={() => setShowSearchResults(false)}
@@ -2251,7 +2344,7 @@ const POcreate: React.FC = () => {
                       </button>
                     </div>
                     
-                    {filteredProducts.length > 0 ? (
+                    {(filteredProducts.length > 0 || filteredSpareParts.length > 0) ? (
                       <div className="w-full max-w-full mx-auto px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 md:pb-6">
                         <div 
                           style={{
@@ -2261,6 +2354,39 @@ const POcreate: React.FC = () => {
                             gridAutoRows: '1fr'
                           }}
                         >
+                        {/* Spare Parts Section */}
+                        {filteredSpareParts.length > 0 && (
+                          <>
+                            {filteredSpareParts.map((part) => (
+                              <div
+                                key={part.id}
+                                className="bg-white border-2 border-orange-200 rounded-xl p-4 hover:border-orange-400 hover:shadow-lg transition-all cursor-pointer"
+                                onClick={() => handleAddSparePartToCart(part, 1)}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                    <Wrench className="w-6 h-6 text-orange-600" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <h3 className="font-semibold text-gray-900 truncate">{part.name}</h3>
+                                      <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-medium rounded">Spare Part</span>
+                                    </div>
+                                    <p className="text-xs text-gray-600 mb-2">Part: {part.part_number || 'N/A'}</p>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm font-bold text-gray-900">
+                                        {selectedCurrency.symbol}{part.cost_price?.toLocaleString() || '0'}
+                                      </span>
+                                      <span className="text-xs text-gray-500">Stock: {part.quantity || 0}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        )}
+                        
+                        {/* Regular Products */}
                         {filteredProducts.map((product) => (
                           <VariantProductCard
                             key={product.id}
@@ -2294,37 +2420,88 @@ const POcreate: React.FC = () => {
                   <div>
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-medium text-gray-700">
-                        {isEditMode ? "Add More Products to Order" : "Available Products"}
+                        {isEditMode ? "Add More Products to Order" : "Available Products & Parts"}
                       </h3>
-                      <span className="text-sm text-gray-500">{products.length} products</span>
+                      <span className="text-sm text-gray-500">{products.length} products, {transformedSpareParts.length} spare parts</span>
                     </div>
-                    {products.length > 0 ? (
-                      <div className="w-full max-w-full mx-auto px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 md:pb-6">
-                        <div 
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))',
-                            gap: 'clamp(1rem, 2vw, 1.5rem)',
-                            gridAutoRows: '1fr'
-                          }}
-                        >
-                        {products.map((product) => (
-                          <VariantProductCard
-                            key={product.id}
-                            product={product}
-                            onAddToCart={handleAddToPurchaseCart}
-                            onViewDetails={handleViewProductDetails}
-                            primaryColor="orange"
-                            actionText="View Details"
-                            allowOutOfStockSelection={true}
-                            showCategory={true}
-                            currencyCode={selectedCurrency.code}
-                            currencySymbol={selectedCurrency.symbol}
-                            className="w-full h-full"
-                            disableVariantModal={true}
-                          />
-                        ))}
-                        </div>
+                    {(products.length > 0 || transformedSpareParts.length > 0) ? (
+                      <div className="w-full max-w-full mx-auto px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 md:pb-6 space-y-6">
+                        {/* Spare Parts Section */}
+                        {transformedSpareParts.length > 0 && (
+                          <div>
+                            <h4 className="text-md font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                              <Wrench className="w-5 h-5 text-orange-600" />
+                              Spare Parts ({transformedSpareParts.length})
+                            </h4>
+                            <div 
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))',
+                                gap: 'clamp(1rem, 2vw, 1.5rem)',
+                                gridAutoRows: '1fr'
+                              }}
+                            >
+                              {transformedSpareParts.map((part) => (
+                                <div
+                                  key={part.id}
+                                  className="bg-white border-2 border-orange-200 rounded-xl p-4 hover:border-orange-400 hover:shadow-lg transition-all cursor-pointer"
+                                  onClick={() => handleAddSparePartToCart(part, 1)}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                      <Wrench className="w-6 h-6 text-orange-600" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <h3 className="font-semibold text-gray-900 truncate">{part.name}</h3>
+                                        <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-medium rounded">Spare Part</span>
+                                      </div>
+                                      <p className="text-xs text-gray-600 mb-2">Part: {part.part_number || 'N/A'}</p>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-sm font-bold text-gray-900">
+                                          {selectedCurrency.symbol}{part.cost_price?.toLocaleString() || '0'}
+                                        </span>
+                                        <span className="text-xs text-gray-500">Stock: {part.quantity || 0}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Regular Products */}
+                        {products.length > 0 && (
+                          <div>
+                            <h4 className="text-md font-semibold text-gray-700 mb-3">Products ({products.length})</h4>
+                            <div 
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))',
+                                gap: 'clamp(1rem, 2vw, 1.5rem)',
+                                gridAutoRows: '1fr'
+                              }}
+                            >
+                              {products.map((product) => (
+                                <VariantProductCard
+                                  key={product.id}
+                                  product={product}
+                                  onAddToCart={handleAddToPurchaseCart}
+                                  onViewDetails={handleViewProductDetails}
+                                  primaryColor="orange"
+                                  actionText="View Details"
+                                  allowOutOfStockSelection={true}
+                                  showCategory={true}
+                                  currencyCode={selectedCurrency.code}
+                                  currencySymbol={selectedCurrency.symbol}
+                                  className="w-full h-full"
+                                  disableVariantModal={true}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="text-center py-12">

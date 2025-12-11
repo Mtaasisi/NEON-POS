@@ -1824,16 +1824,33 @@ const supabaseProvider = {
         return { ok: false, message: poError.message };
       }
 
-      // Create purchase order items - using only core columns
-      const items = data.items.map((item: any) => ({
-        purchase_order_id: purchaseOrder.id,
-        product_id: item.productId,
-        variant_id: item.variantId,
-        quantity_ordered: item.quantity,
-        quantity_received: 0,
-        unit_cost: item.costPrice,
-        subtotal: item.quantity * item.costPrice
-      }));
+      // Create purchase order items - handle both products and spare parts
+      const items = data.items.map((item: any) => {
+        const baseItem = {
+          purchase_order_id: purchaseOrder.id,
+          product_id: item.productId,
+          variant_id: item.variantId === 'spare-part' ? null : item.variantId, // Null for spare parts
+          quantity_ordered: item.quantity,
+          quantity_received: 0,
+          unit_cost: item.costPrice,
+          subtotal: item.quantity * item.costPrice
+        };
+        
+        // Add spare part specific fields if it's a spare part
+        if (item.itemType === 'spare-part' || item.partNumber) {
+          return {
+            ...baseItem,
+            item_type: 'spare-part',
+            part_number: item.partNumber || null
+          };
+        }
+        
+        // Regular product
+        return {
+          ...baseItem,
+          item_type: 'product'
+        };
+      });
 
       const { data: insertedItems, error: itemsError } = await supabase
         .from('lats_purchase_order_items')
@@ -2040,40 +2057,132 @@ const supabaseProvider = {
       }
 
       // Fetch related data separately
-      const categoryIds = [...new Set(spareParts.map((sp: any) => sp.category_id).filter(Boolean))];
       const supplierIds = [...new Set(spareParts.map((sp: any) => sp.supplier_id).filter(Boolean))];
       const sparePartIds = spareParts.map((sp: any) => sp.id);
 
-      // Fetch categories, suppliers, and variants in parallel
-      const [categoriesRes, suppliersRes, variantsRes] = await Promise.all([
-        categoryIds.length > 0 ? supabase.from('lats_categories').select('id, name').in('id', categoryIds) : Promise.resolve({ data: [] }),
+      // Fetch suppliers and variants in parallel (no longer fetching categories - using spare_type instead)
+      const [suppliersRes, variantsRes] = await Promise.all([
         supplierIds.length > 0 ? supabase.from('lats_suppliers').select('id, name, email, phone').in('id', supplierIds) : Promise.resolve({ data: [] }),
         sparePartIds.length > 0 ? supabase.from('lats_spare_part_variants').select('*').in('spare_part_id', sparePartIds) : Promise.resolve({ data: [] })
       ]);
 
-      // Create lookup maps
-      const categoriesMap = (categoriesRes.data || []).reduce((acc: any, c: any) => {
-        acc[c.id] = c;
-        return acc;
-      }, {});
+      // Create lookup maps (no categories map needed)
 
       const suppliersMap = (suppliersRes.data || []).reduce((acc: any, s: any) => {
         acc[s.id] = s;
         return acc;
       }, {});
 
+      // Process variants to extract all data from attributes and ensure all fields are included
       const variantsBySparePartId = (variantsRes.data || []).reduce((acc: any, v: any) => {
         if (!acc[v.spare_part_id]) acc[v.spare_part_id] = [];
-        acc[v.spare_part_id].push(v);
+        // Extract all data from attributes JSONB (compatible_devices moved to main spare part level)
+        const attributes = v.attributes || {};
+        // Remove compatible_devices from variant - it's now at main spare part level only
+        const cleanedAttributes = { ...attributes };
+        if (cleanedAttributes.compatible_devices) {
+          delete cleanedAttributes.compatible_devices;
+        }
+        const childrenVariants = cleanedAttributes.childrenVariants;
+        const useChildrenVariants = cleanedAttributes.useChildrenVariants;
+        
+        // Build complete variant object with all fields
+        const processedVariant = {
+          id: v.id,
+          spare_part_id: v.spare_part_id,
+          name: v.name || 'Default',
+          sku: v.sku || '',
+          cost_price: v.cost_price || 0,
+          selling_price: v.selling_price || 0,
+          quantity: v.quantity || 0,
+          min_quantity: v.min_quantity || 0,
+          attributes: cleanedAttributes, // Keep cleaned attributes object (no compatible_devices)
+          image_url: v.image_url || null,
+          is_active: v.is_active !== undefined ? v.is_active : true,
+          created_at: v.created_at,
+          updated_at: v.updated_at,
+          // Extract childrenVariants from attributes (compatible_devices removed)
+          childrenVariants: Array.isArray(childrenVariants) ? childrenVariants : undefined,
+          useChildrenVariants: useChildrenVariants !== undefined ? useChildrenVariants : undefined
+        };
+        
+        acc[v.spare_part_id].push(processedVariant);
         return acc;
       }, {});
 
-      // Map the data
+      // Fetch images for all spare parts (reuse sparePartIds from above)
+      const imagesPromises = sparePartIds.map(async (spId: string) => {
+        try {
+          // Try spare_part_images table first
+          const { data: images, error } = await supabase
+            .from('spare_part_images')
+            .select('image_url, thumbnail_url')
+            .eq('spare_part_id', spId)
+            .order('is_primary', { ascending: false })
+            .order('created_at', { ascending: true });
+          
+          // Check if table doesn't exist (42P01) or relation error
+          if (error && (error.code === '42P01' || error.message?.includes('does not exist'))) {
+            // Table doesn't exist, try product_images as fallback
+            try {
+              const { data: productImages } = await supabase
+                .from('product_images')
+                .select('image_url, thumbnail_url')
+                .eq('product_id', spId)
+                .order('is_primary', { ascending: false })
+                .order('created_at', { ascending: true });
+              return { spId, images: productImages?.map(img => img.image_url || img.thumbnail_url).filter(Boolean) || [] };
+            } catch {
+              return { spId, images: [] };
+            }
+          }
+          
+          if (error) {
+            // Other error, return empty array
+            return { spId, images: [] };
+          }
+          
+          return { spId, images: images?.map(img => img.image_url || img.thumbnail_url).filter(Boolean) || [] };
+        } catch {
+          return { spId, images: [] };
+        }
+      });
+      const imagesResults = await Promise.all(imagesPromises);
+      const imagesMap = imagesResults.reduce((acc: any, result) => {
+        acc[result.spId] = result.images;
+        return acc;
+      }, {});
+      
+      // Map the data with images and processed variants (variants already processed above)
       const enrichedSpareParts = spareParts.map((sp: any) => ({
         ...sp,
-        category: categoriesMap[sp.category_id],
-        supplier: suppliersMap[sp.supplier_id],
-        variants: variantsBySparePartId[sp.id] || []
+        // Include all fields from database
+        id: sp.id,
+        name: sp.name || '',
+        part_number: sp.part_number || null,
+        category_id: sp.category_id || null, // Keep for backward compatibility but don't use
+        spare_type: sp.spare_type || null, // Use spare_type instead of category
+        brand: sp.brand || null,
+        supplier_id: sp.supplier_id || null,
+        condition: sp.condition || 'new',
+        description: sp.description || null,
+        cost_price: sp.cost_price || 0,
+        selling_price: sp.selling_price || 0,
+        quantity: sp.quantity || 0,
+        min_quantity: sp.min_quantity || 0,
+        location: sp.location || null,
+        compatible_devices: sp.compatible_devices || null,
+        is_active: sp.is_active !== undefined ? sp.is_active : true,
+        created_at: sp.created_at,
+        updated_at: sp.updated_at,
+        unit_price: sp.unit_price || 0,
+        branch_id: sp.branch_id || null,
+        // Related data
+        supplier: suppliersMap[sp.supplier_id] || null,
+        // Variants with all their data (already processed above)
+        variants: variantsBySparePartId[sp.id] || [],
+        // Images
+        images: imagesMap[sp.id] || []
       }));
       return { ok: true, data: enrichedSpareParts };
     } catch (error) {
@@ -2095,19 +2204,101 @@ const supabaseProvider = {
         return { ok: false, message: error.message || 'Failed to fetch spare part' };
       }
 
-      // Fetch related data separately
-      const [categoryRes, supplierRes, variantsRes] = await Promise.all([
-        sparePart.category_id ? supabase.from('lats_categories').select('id, name').eq('id', sparePart.category_id).single() : Promise.resolve({ data: null }),
+      // Fetch related data separately (no longer fetching category - using spare_type instead)
+      const [supplierRes, variantsRes] = await Promise.all([
         sparePart.supplier_id ? supabase.from('lats_suppliers').select('id, name, email, phone').eq('id', sparePart.supplier_id).single() : Promise.resolve({ data: null }),
         supabase.from('lats_spare_part_variants').select('*').eq('spare_part_id', id)
       ]);
 
-      // Enrich the spare part with related data
+      // Fetch images for the spare part
+      let images: string[] = [];
+      try {
+        // Try spare_part_images table first
+        const { data: imagesData, error } = await supabase
+          .from('spare_part_images')
+          .select('image_url, thumbnail_url')
+          .eq('spare_part_id', id)
+          .order('is_primary', { ascending: false })
+          .order('created_at', { ascending: true });
+        
+        if (error && error.code === '42P01') {
+          // Table doesn't exist, try product_images as fallback
+          const { data: productImages } = await supabase
+            .from('product_images')
+            .select('image_url, thumbnail_url')
+            .eq('product_id', id)
+            .order('is_primary', { ascending: false })
+            .order('created_at', { ascending: true });
+          images = productImages?.map(img => img.image_url || img.thumbnail_url).filter(Boolean) || [];
+        } else {
+          images = imagesData?.map(img => img.image_url || img.thumbnail_url).filter(Boolean) || [];
+        }
+      } catch (error) {
+        console.error('Error fetching images:', error);
+      }
+      
+      // Process variants to extract all data from attributes (compatible_devices moved to main spare part level)
+      const processedVariants = (variantsRes.data || []).map((v: any) => {
+        // Extract all data from attributes JSONB
+        const attributes = v.attributes || {};
+        // Remove compatible_devices from variant - it's now at main spare part level only
+        const cleanedAttributes = { ...attributes };
+        if (cleanedAttributes.compatible_devices) {
+          delete cleanedAttributes.compatible_devices;
+        }
+        const childrenVariants = cleanedAttributes.childrenVariants;
+        const useChildrenVariants = cleanedAttributes.useChildrenVariants;
+        
+        // Build complete variant object with all fields
+        return {
+          id: v.id,
+          spare_part_id: v.spare_part_id,
+          name: v.name || 'Default',
+          sku: v.sku || '',
+          cost_price: v.cost_price || 0,
+          selling_price: v.selling_price || 0,
+          quantity: v.quantity || 0,
+          min_quantity: v.min_quantity || 0,
+          attributes: cleanedAttributes, // Keep cleaned attributes object (no compatible_devices)
+          image_url: v.image_url || null,
+          is_active: v.is_active !== undefined ? v.is_active : true,
+          created_at: v.created_at,
+          updated_at: v.updated_at,
+          // Extract childrenVariants from attributes (compatible_devices removed)
+          childrenVariants: Array.isArray(childrenVariants) ? childrenVariants : undefined,
+          useChildrenVariants: useChildrenVariants !== undefined ? useChildrenVariants : undefined
+        };
+      });
+      
+      // Enrich the spare part with all database fields and related data
       const enrichedSparePart = {
-        ...sparePart,
-        category: categoryRes.data,
-        supplier: supplierRes.data,
-        variants: variantsRes.data || []
+        // Include all fields from database
+        id: sparePart.id,
+        name: sparePart.name || '',
+        part_number: sparePart.part_number || null,
+        category_id: sparePart.category_id || null, // Keep for backward compatibility but don't use
+        spare_type: sparePart.spare_type || null, // Use spare_type instead of category
+        brand: sparePart.brand || null,
+        supplier_id: sparePart.supplier_id || null,
+        condition: sparePart.condition || 'new',
+        description: sparePart.description || null,
+        cost_price: sparePart.cost_price || 0,
+        selling_price: sparePart.selling_price || 0,
+        quantity: sparePart.quantity || 0,
+        min_quantity: sparePart.min_quantity || 0,
+        location: sparePart.location || null,
+        compatible_devices: sparePart.compatible_devices || null,
+        is_active: sparePart.is_active !== undefined ? sparePart.is_active : true,
+        created_at: sparePart.created_at,
+        updated_at: sparePart.updated_at,
+        unit_price: sparePart.unit_price || 0,
+        branch_id: sparePart.branch_id || null,
+        // Related data
+        supplier: supplierRes.data || null,
+        // Variants with all their data
+        variants: processedVariants,
+        // Images
+        images: images
       };
 
       return { ok: true, data: enrichedSparePart };

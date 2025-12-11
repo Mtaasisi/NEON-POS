@@ -21,6 +21,8 @@ export interface SaleItem {
   costPrice: number;
   profit: number;
   selectedSerialNumbers?: Array<{ id: string; serial_number: string; imei?: string; mac_address?: string }>;
+  itemType?: 'product' | 'spare-part'; // Type of item: product or spare part
+  partNumber?: string; // Part number for spare parts
 }
 
 export interface SaleData {
@@ -1269,7 +1271,10 @@ class SaleProcessingService {
           unit_price: unitPrice, // Ensure numeric
           total_price: totalPrice, // Ensure numeric
           cost_price: costPrice, // Ensure numeric
-          profit: profit // Ensure numeric
+          profit: profit, // Ensure numeric
+          // Include itemType and partNumber if available (may need database column)
+          ...(item.itemType && { item_type: item.itemType }),
+          ...(item.partNumber && { part_number: item.partNumber })
         };
       });
 
@@ -1609,12 +1614,79 @@ class SaleProcessingService {
         console.warn('⚠️ Invalid user ID for stock movement logging, defaulting to null:', userId);
       }
       
+      // Separate spare parts from products
+      const productItems = items.filter(item => item.itemType !== 'spare-part');
+      const sparePartItems = items.filter(item => item.itemType === 'spare-part');
+      
+      // Handle spare parts stock updates
+      if (sparePartItems.length > 0) {
+        for (const item of sparePartItems) {
+          try {
+            // Update spare part quantity
+            const { error: updateError } = await supabase.rpc('decrement_spare_part_quantity', {
+              spare_part_id: item.productId,
+              quantity_to_subtract: item.quantity
+            });
+            
+            // If RPC doesn't exist, do direct update
+            if (updateError && updateError.message.includes('function') || updateError.message.includes('does not exist')) {
+              const { data: currentSparePart } = await supabase
+                .from('lats_spare_parts')
+                .select('quantity')
+                .eq('id', item.productId)
+                .single();
+              
+              if (currentSparePart) {
+                const newQuantity = Math.max(0, (currentSparePart.quantity || 0) - item.quantity);
+                const { error: directUpdateError } = await supabase
+                  .from('lats_spare_parts')
+                  .update({ 
+                    quantity: newQuantity,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', item.productId);
+                
+                if (directUpdateError) {
+                  console.error('❌ Error updating spare part stock:', directUpdateError);
+                  throw directUpdateError;
+                }
+              }
+            } else if (updateError) {
+              console.error('❌ Error updating spare part stock:', updateError);
+              throw updateError;
+            }
+            
+            // Create stock movement for spare part
+            const { error: movementError } = await supabase
+              .from('lats_stock_movements')
+              .insert({
+                product_id: item.productId, // Store spare part ID in product_id for tracking
+                variant_id: null, // Spare parts don't use variants
+                movement_type: 'sale',
+                quantity: -item.quantity,
+                reference_type: 'pos_sale',
+                reference_id: saleId || null,
+                notes: `Sold ${item.quantity} units of spare part ${item.productName}${item.partNumber ? ` (Part: ${item.partNumber})` : ''}`,
+                created_at: new Date().toISOString(),
+              });
+            
+            if (movementError) {
+              console.warn('⚠️ Failed to create stock movement for spare part:', movementError);
+            }
+          } catch (error) {
+            console.error('❌ Error updating spare part inventory:', error);
+            // Continue with other items even if one fails
+          }
+        }
+      }
+      
+      // Handle product items (existing logic)
       // First, get current quantities for all variants
-      const variantIds = items.map(item => item.variantId);
+      const variantIds = productItems.map(item => item.variantId);
       
       // ✅ Handle empty items array
       if (variantIds.length === 0) {
-        console.log('ℹ️ No variants to restore stock for');
+        console.log('ℹ️ No variants to update stock for');
         return { success: true };
       }
       

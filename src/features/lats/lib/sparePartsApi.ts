@@ -18,55 +18,71 @@ import {
   SparePartVariant
 } from '../types/spareParts';
 
+// Utility function to validate UUID format
+const isValidUUID = (str: string): boolean => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+};
+
 // Utility function to convert camelCase form data to snake_case database fields
+// Only includes fields that are actually used in the form
 const convertFormDataToDatabaseFormat = (formData: any): SparePartCreateData => {
   console.log('🔍 [DEBUG] ===== CONVERT FORM DATA START =====');
   console.log('🔍 [DEBUG] Input formData:', formData);
   console.log('🔍 [DEBUG] Input formData type:', typeof formData);
   console.log('🔍 [DEBUG] Input formData keys:', Object.keys(formData || {}));
   
+  // Spare type replaces category - store it directly in the database
+  // Get spare type label from the value
+  // Common spare types mapping (matches the form)
+  const spareTypeMap: Record<string, string> = {
+    'battery': 'Battery',
+    'lcd': 'LCD / Screen',
+    'charging_port': 'Charging Port',
+    'camera': 'Camera',
+    'speaker': 'Speaker',
+    'microphone': 'Microphone',
+    'home_button': 'Home Button',
+    'power_button': 'Power Button',
+    'volume_button': 'Volume Button',
+    'logic_board': 'Logic Board',
+    'flex_cable': 'Flex Cable',
+    'antenna': 'Antenna',
+    'headphone_jack': 'Headphone Jack',
+    'other': 'Other'
+  };
+  
+  const spareTypeLabel = formData.spareType ? 
+    (formData.spareTypeOptions?.find((opt: any) => opt.value === formData.spareType)?.label || 
+     spareTypeMap[formData.spareType] ||
+     formData.spareType.charAt(0).toUpperCase() + formData.spareType.slice(1).replace(/_/g, ' ')) : 
+    null;
+  
+  // Only include fields that are in the form and database schema:
+  // - Part Name, Spare Type, Brand, Supplier, Condition, Description, Compatible Devices
+  // Clean data: Remove any fields not in the specified information list
   const convertedData: any = {
-    name: formData.name,
-    part_number: formData.partNumber,
-    category_id: formData.categoryId,
-    brand: formData.brand,
-    supplier_id: formData.supplierId,
+    name: formData.name || null,
+    spare_type: spareTypeLabel || null, // Store spare type label directly
+    category_id: null, // Keep null for backward compatibility but don't use
+    brand: formData.brand || null,
+    supplier_id: formData.supplierId || null,
     condition: formData.condition || 'new', // Ensure condition is always valid
-    description: formData.description,
-    cost_price: formData.costPrice,
-    selling_price: formData.sellingPrice,
-    quantity: formData.quantity,
-    min_quantity: formData.minQuantity,
-    location: formData.location,
-    compatible_devices: formData.compatibleDevices
+    description: formData.description || null,
+    // Convert compatible_devices to string if it's an array (for main spare part, it's stored as text)
+    compatible_devices: Array.isArray(formData.compatibleDevices) 
+      ? formData.compatibleDevices.join(', ') 
+      : (formData.compatibleDevices || null),
+    // Price and stock are now only in variants, so set to 0 for main record
+    cost_price: 0,
+    selling_price: 0,
+    quantity: 0,
+    min_quantity: 0,
+    is_active: true // Ensure spare part is active
   };
 
-  // Handle optional fields that might be present
-  if (formData.storageRoomId) {
-    convertedData.storage_room_id = formData.storageRoomId;
-  }
-  
-  if (formData.shelfId) {
-    convertedData.shelf_id = formData.shelfId;
-  }
-
-  if (formData.images) {
-    // Extract just the image URLs for the images array (for backward compatibility)
-    const imageUrls = formData.images.map((img: any) => img.image_url || img.url).filter(Boolean);
-    convertedData.images = imageUrls;
-  }
-
-  if (formData.partType) {
-    convertedData.part_type = formData.partType;
-  }
-  
-  if (formData.primaryDeviceType) {
-    convertedData.primary_device_type = formData.primaryDeviceType;
-  }
-  
-  if (formData.searchTags) {
-    convertedData.search_tags = formData.searchTags;
-  }
+  // Images are handled separately via spare_part_images table, not stored in main record
+  // Removed: part_number, location, storage_room_id, shelf_id, unit_price, and other unused fields
   
   console.log('🔍 [DEBUG] Converted data:', convertedData);
   console.log('🔍 [DEBUG] Converted data keys:', Object.keys(convertedData));
@@ -75,75 +91,47 @@ const convertFormDataToDatabaseFormat = (formData: any): SparePartCreateData => 
   return convertedData;
 };
 
-// Save spare part images to product_images table with thumbnail support
+// Save spare part images using the same pattern as product images
 const saveSparePartImagesToDatabase = async (sparePartId: string, images: any[], userId?: string): Promise<void> => {
   try {
-    console.log('🔍 [DEBUG] Saving spare part images to database:', {
-      sparePartId,
-      imageCount: images.length,
-      userId
-    });
-
-    // Prepare image data for database insertion
-    const imageData = images.map((img, index) => ({
-      spare_part_id: sparePartId, // Using spare_part_id column for spare parts
-      image_url: img.image_url || img.url,
-      thumbnail_url: img.thumbnail_url || img.thumbnailUrl || img.image_url || img.url, // Use thumbnail if available, fallback to main image
-      file_name: img.file_name || img.fileName || `spare-part-image-${index + 1}`,
-      file_size: img.file_size || img.fileSize || 0,
-      mime_type: img.mime_type || img.mimeType || 'image/jpeg',
-      is_primary: img.is_primary || img.isPrimary || index === 0, // First image is primary
-      uploaded_by: userId
-    }));
-
-    console.log('🔍 [DEBUG] Prepared image data:', imageData);
-
-    // Try inserting into spare_part_images table first
-    const { data, error } = await supabase
-      .from('spare_part_images')
-      .insert(imageData)
-      .select();
-
-    if (error) {
-      console.error('❌ [DEBUG] Error saving images to spare_part_images:', error);
-      
-      // If RLS error, try using product_images table instead
-      if (error.code === '42501') {
-        console.log('🔄 [DEBUG] RLS error detected, trying product_images table...');
+    // Handle images if provided - using same pattern as product images
+    if (images && images.length > 0) {
+      for (let i = 0; i < images.length; i++) {
+        const image = images[i];
         
-        // Convert to product_images format
-        const productImageData = images.map((img, index) => ({
-          product_id: sparePartId, // Use product_id for product_images table
-          image_url: img.image_url || img.url,
-          thumbnail_url: img.thumbnail_url || img.thumbnailUrl || img.image_url || img.url,
-          file_name: img.file_name || img.fileName || `spare-part-image-${index + 1}`,
-          file_size: img.file_size || img.fileSize || 0,
-          mime_type: img.mime_type || img.mimeType || 'image/jpeg',
-          is_primary: img.is_primary || img.isPrimary || index === 0,
-          uploaded_by: userId
-        }));
-        
-        const { data: productData, error: productError } = await supabase
-          .from('product_images')
-          .insert(productImageData)
-          .select();
-          
-        if (productError) {
-          console.error('❌ [DEBUG] Error saving images to product_images:', productError);
-          throw productError;
+        // If the image has a blob URL (from file upload), we need to convert it to a file and upload
+        if (image.image_url?.startsWith('blob:') || image.url?.startsWith('blob:')) {
+          // This would need to be handled by the EnhancedImageUpload component
+          // For now, we'll skip these images as they should be uploaded separately
+          continue;
         }
         
-        console.log('✅ [DEBUG] Images saved to product_images successfully:', productData);
-        return;
-      }
-      
-      throw error;
-    }
+        // Insert image record - using same structure as product images
+        const { error: imageError } = await supabase
+          .from('spare_part_images')
+          .insert({
+            spare_part_id: sparePartId,
+            image_url: image.image_url || image.url,
+            thumbnail_url: image.thumbnail_url || image.thumbnailUrl || image.image_url || image.url,
+            file_name: image.file_name || image.fileName || `spare-part-image-${i + 1}`,
+            file_size: image.file_size || image.fileSize || 0,
+            is_primary: image.is_primary || image.isPrimary || i === 0,
+            uploaded_by: userId,
+            mime_type: image.mime_type || image.mimeType || 'image/jpeg'
+          });
 
-    console.log('✅ [DEBUG] Images saved to spare_part_images successfully:', data);
+        if (imageError) {
+          console.error('Error inserting spare part image:', imageError);
+          // If table doesn't exist, log warning but continue
+          if (imageError.code === '42P01') {
+            console.warn('⚠️ spare_part_images table does not exist. Please run the migration: migrations/create_spare_part_images_table.sql');
+          }
+        }
+      }
+    }
   } catch (error) {
-    console.error('❌ [DEBUG] Failed to save images to database:', error);
-    throw error; // Re-throw to let the caller handle it
+    console.error('❌ Failed to save spare part images to database:', error);
+    // Don't throw - spare part creation should still succeed even if images fail
   }
 };
 
@@ -160,12 +148,29 @@ export const getSparePartImages = async (sparePartId: string): Promise<any[]> =>
       .order('is_primary', { ascending: false })
       .order('created_at', { ascending: true });
 
+    // If table doesn't exist (42P01), try product_images table
+    if (sparePartError && sparePartError.code === '42P01') {
+      console.log('🔍 [DEBUG] spare_part_images table does not exist, trying product_images...');
+      const { data: productImages, error: productError } = await supabase
+        .from('product_images')
+        .select('*')
+        .eq('product_id', sparePartId)
+        .order('is_primary', { ascending: false })
+        .order('created_at', { ascending: true });
+
+      if (!productError && productImages && productImages.length > 0) {
+        console.log('✅ [DEBUG] Retrieved spare part images from product_images:', productImages);
+        return productImages;
+      }
+      return [];
+    }
+
     if (!sparePartError && sparePartImages && sparePartImages.length > 0) {
       console.log('✅ [DEBUG] Retrieved spare part images from spare_part_images:', sparePartImages);
       return sparePartImages;
     }
 
-    // If no images in spare_part_images, try product_images table
+    // If no images in spare_part_images, try product_images table as fallback
     console.log('🔍 [DEBUG] No images in spare_part_images, trying product_images...');
     const { data: productImages, error: productError } = await supabase
       .from('product_images')
@@ -179,40 +184,9 @@ export const getSparePartImages = async (sparePartId: string): Promise<any[]> =>
       return productImages;
     }
 
-    // If no images in either table, check the main spare part record's images field
-    console.log('🔍 [DEBUG] No images in image tables, checking main spare part record...');
-    const { data: sparePartRecord, error: recordError } = await supabase
-      .from('lats_spare_parts')
-      .select('images')
-      .eq('id', sparePartId)
-      .single();
-
-    if (recordError) {
-      console.error('❌ [DEBUG] Error getting spare part record:', recordError);
-      return [];
-    }
-
-    if (sparePartRecord?.images && Array.isArray(sparePartRecord.images) && sparePartRecord.images.length > 0) {
-      // Convert URL strings to image objects
-      const convertedImages = sparePartRecord.images.map((url: string, index: number) => ({
-        id: `main-record-${index}`,
-        spare_part_id: sparePartId,
-        image_url: url,
-        thumbnail_url: url,
-        file_name: `image-${index + 1}.jpg`,
-        file_size: 0,
-        mime_type: 'image/jpeg',
-        is_primary: index === 0,
-        uploaded_by: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }));
-
-      console.log('✅ [DEBUG] Retrieved spare part images from main record:', convertedImages);
-      return convertedImages;
-    }
-
-    console.log('ℹ️ [DEBUG] No images found in any location');
+    // Note: lats_spare_parts table doesn't have an 'images' column
+    // Images are stored in spare_part_images or product_images tables only
+    console.log('🔍 [DEBUG] No images found in image tables, returning empty array');
     return [];
   } catch (error) {
     console.error('❌ [DEBUG] Failed to get spare part images:', error);
@@ -228,10 +202,23 @@ export const getSpareParts = async (
   limit: number = 20
 ): Promise<SparePartsResponse> => {
   try {
+    // Only select fields that are actually used
     let query = supabase
       .from('lats_spare_parts')
       .select(`
-        *,
+        id,
+        name,
+        category_id,
+        brand,
+        supplier_id,
+        condition,
+        description,
+        compatible_devices,
+        is_active,
+        created_at,
+        updated_at,
+        branch_id,
+        metadata,
         category:lats_categories!category_id(name),
         variants:lats_spare_part_variants!spare_part_id(*)
       `);
@@ -389,7 +376,19 @@ export const getSparePart = async (id: string): Promise<SparePartResponse> => {
     const { data, error } = await supabase
       .from('lats_spare_parts')
       .select(`
-        *,
+        id,
+        name,
+        category_id,
+        brand,
+        supplier_id,
+        condition,
+        description,
+        compatible_devices,
+        is_active,
+        created_at,
+        updated_at,
+        branch_id,
+        metadata,
         category:lats_categories!category_id(name),
         variants:lats_spare_part_variants!spare_part_id(*)
       `)
@@ -432,39 +431,17 @@ export const createSparePart = async (sparePartData: any): Promise<SparePartResp
     
     console.log('🔍 [DEBUG] Use variants:', useVariants);
     console.log('🔍 [DEBUG] Variants count:', variants.length);
+    console.log('🔍 [DEBUG] Spare type:', sparePartData.spareType);
+    
+    // Spare type is now stored directly in the database as spare_type field
+    // category_id is kept as null for backward compatibility
     
     // Convert form data from camelCase to snake_case
     const databaseData = convertFormDataToDatabaseFormat(sparePartData);
     console.log('🔍 [DEBUG] Converted databaseData:', databaseData);
     console.log('🔍 [DEBUG] DatabaseData keys:', Object.keys(databaseData || {}));
     
-    // Check if part number already exists
-    if (databaseData.part_number) {
-      console.log('🔍 [DEBUG] Checking for duplicate part number:', databaseData.part_number);
-      const { data: existingPart, error: checkError } = await supabase
-        .from('lats_spare_parts')
-        .select('id, name, part_number')
-        .eq('part_number', databaseData.part_number)
-        .maybeSingle();
-      
-      if (checkError) {
-        console.error('❌ [DEBUG] Error checking for duplicate part number:', checkError);
-        throw checkError;
-      }
-      
-      if (existingPart) {
-        console.log('❌ [DEBUG] Duplicate part number found:', existingPart);
-        return {
-          data: existingPart,
-          message: `DUPLICATE_PART_NUMBER: A spare part with part number "${databaseData.part_number}" already exists (ID: ${existingPart.id}, Name: "${existingPart.name}"). Please use a different part number or update the existing part instead.`,
-          ok: false,
-          errorType: 'DUPLICATE_PART_NUMBER',
-          existingPart: existingPart
-        };
-      }
-      
-      console.log('✅ [DEBUG] Part number is unique, proceeding with creation');
-    }
+    // Part number check removed - part numbers are now tracked in variants only
     
     // Calculate total quantity and value if using variants
     let totalQuantity = 0;
@@ -483,21 +460,15 @@ export const createSparePart = async (sparePartData: any): Promise<SparePartResp
     
     const insertData = {
       ...databaseData,
-      // When using variants, set main product quantities to 0
-      quantity: useVariants ? 0 : databaseData.quantity,
-      cost_price: useVariants ? 0 : databaseData.cost_price,
-      selling_price: useVariants ? 0 : databaseData.selling_price,
-      min_quantity: useVariants ? 0 : databaseData.min_quantity,
-      // Add metadata about variants
-      metadata: {
-        useVariants: useVariants,
-        variantCount: useVariants ? variants.length : 0,
-        totalQuantity: totalQuantity,
-        totalValue: totalValue
-      },
+      // Price and stock are always 0 for main record (stored in variants)
+      quantity: 0,
+      cost_price: 0,
+      selling_price: 0,
+      min_quantity: 0,
+      // Note: metadata column doesn't exist in lats_spare_parts table
+      // Variant information is stored in lats_spare_part_variants table instead
       branch_id: currentBranchId, // ✅ Add branch_id for branch isolation
-      created_by: user?.id,
-      updated_by: user?.id
+      // Note: created_by and updated_by columns don't exist in lats_spare_parts table
     };
     console.log('🔍 [DEBUG] Final insert data:', insertData);
     console.log('🔍 [DEBUG] Insert data keys:', Object.keys(insertData));
@@ -566,25 +537,96 @@ export const createSparePart = async (sparePartData: any): Promise<SparePartResp
       await saveSparePartImagesToDatabase(data.id, sparePartData.images, user?.id);
     }
     
+    // Always create at least one default variant if none exist
+    let finalVariants = variants;
+    if (useVariants && variants.length === 0 && data) {
+      console.log('🔍 [DEBUG] No variants provided, creating default variant...');
+      finalVariants = [{
+        name: 'Default',
+        sku: `${databaseData.name?.replace(/\s+/g, '-').toUpperCase() || 'PART'}-DEFAULT`,
+        cost_price: 0,
+        selling_price: 0,
+        quantity: 0,
+        min_quantity: 0,
+        attributes: {},
+        image_url: null
+      }];
+    }
+    
     // Create variants if they exist
-    if (useVariants && variants.length > 0 && data) {
+    if (useVariants && finalVariants.length > 0 && data) {
       console.log('🔍 [DEBUG] Creating variants for spare part:', data.id);
       
-      const variantData = variants.map((variant: SparePartVariant) => ({
-        spare_part_id: data.id,
-        name: variant.name,
-        sku: variant.sku,
-        cost_price: variant.cost_price,
-        selling_price: variant.selling_price,
-        quantity: variant.quantity,
-        min_quantity: variant.min_quantity,
-        variant_attributes: variant.attributes || {},
-        image_url: variant.image_url || null,
-        created_by: user?.id,
-        updated_by: user?.id
-      }));
+      const variantData = finalVariants.map((variant: SparePartVariant) => {
+        // Store childrenVariants in attributes JSONB (compatible_devices moved to main spare part level)
+        const attributes = variant.attributes || {};
+        // Remove compatible_devices from variant attributes - it's now at main spare part level only
+        if (attributes.compatible_devices) {
+          delete attributes.compatible_devices;
+        }
+        // Store childrenVariants (track individual items) in attributes
+        const childrenVariants = (variant as any).childrenVariants;
+        if (childrenVariants && Array.isArray(childrenVariants) && childrenVariants.length > 0) {
+          attributes.childrenVariants = childrenVariants.filter((c: string) => c && c.trim().length > 0);
+        }
+        const useChildrenVariants = (variant as any).useChildrenVariants;
+        if (useChildrenVariants !== undefined) {
+          attributes.useChildrenVariants = useChildrenVariants;
+        }
+        
+        return {
+          spare_part_id: data.id,
+          name: variant.name,
+          sku: variant.sku,
+          cost_price: variant.cost_price,
+          selling_price: variant.selling_price,
+          quantity: variant.quantity,
+          min_quantity: variant.min_quantity,
+          attributes: attributes, // Only includes childrenVariants (compatible_devices removed)
+          image_url: variant.image_url || null,
+          // Note: created_by and updated_by columns don't exist in lats_spare_part_variants table
+        };
+      });
       
       console.log('🔍 [DEBUG] Variant data to insert:', variantData);
+      
+      // Check for duplicate SKUs before inserting
+      const skus = variantData.map(v => v.sku).filter(Boolean);
+      const duplicateSkus = skus.filter((sku, index) => skus.indexOf(sku) !== index);
+      if (duplicateSkus.length > 0) {
+        console.warn('⚠️ [DEBUG] Duplicate SKUs detected:', duplicateSkus);
+        // Remove duplicates by keeping only the first occurrence
+        const seenSkus = new Set<string>();
+        variantData.forEach((variant, index) => {
+          if (variant.sku && seenSkus.has(variant.sku)) {
+            // Generate a unique SKU by appending index
+            variant.sku = `${variant.sku}-${index}`;
+            console.log(`🔧 [DEBUG] Generated unique SKU for variant ${index}: ${variant.sku}`);
+          }
+          if (variant.sku) {
+            seenSkus.add(variant.sku);
+          }
+        });
+      }
+      
+      // Check for existing SKUs in database
+      if (skus.length > 0) {
+        const { data: existingVariants } = await supabase
+          .from('lats_spare_part_variants')
+          .select('sku')
+          .in('sku', skus.filter(Boolean));
+        
+        if (existingVariants && existingVariants.length > 0) {
+          const existingSkus = new Set(existingVariants.map(v => v.sku).filter(Boolean));
+          variantData.forEach((variant, index) => {
+            if (variant.sku && existingSkus.has(variant.sku)) {
+              // Generate a unique SKU by appending timestamp and index
+              variant.sku = `${variant.sku}-${Date.now()}-${index}`;
+              console.log(`🔧 [DEBUG] Generated unique SKU for variant ${index} (conflict with existing): ${variant.sku}`);
+            }
+          });
+        }
+      }
       
       const { data: createdVariants, error: variantError } = await supabase
         .from('lats_spare_part_variants')
@@ -593,6 +635,30 @@ export const createSparePart = async (sparePartData: any): Promise<SparePartResp
       
       if (variantError) {
         console.error('❌ [DEBUG] Error creating variants:', variantError);
+        // If it's a duplicate SKU error, try to insert variants one by one with unique SKUs
+        if (variantError.code === '23505' && variantError.message?.includes('sku')) {
+          console.log('🔄 [DEBUG] Duplicate SKU error detected, trying to insert variants individually...');
+          const insertedVariants = [];
+          for (let i = 0; i < variantData.length; i++) {
+            const variant = { ...variantData[i] };
+            // Ensure unique SKU
+            if (variant.sku) {
+              variant.sku = `${variant.sku}-${Date.now()}-${i}`;
+            }
+            const { data: inserted, error: insertError } = await supabase
+              .from('lats_spare_part_variants')
+              .insert([variant])
+              .select();
+            if (insertError) {
+              console.error(`❌ [DEBUG] Error inserting variant ${i}:`, insertError);
+            } else if (inserted) {
+              insertedVariants.push(...inserted);
+            }
+          }
+          if (insertedVariants.length > 0) {
+            console.log('✅ [DEBUG] Variants created successfully (with unique SKUs):', insertedVariants);
+          }
+        }
         // Don't throw error here, just log it - the main spare part was created successfully
       } else {
         console.log('✅ [DEBUG] Variants created successfully:', createdVariants);
@@ -664,7 +730,8 @@ export const updateSparePart = async (id: string, sparePartData: any): Promise<S
     
     const updateData = {
       ...databaseData,
-      updated_by: user?.id
+      updated_at: new Date().toISOString() // Ensure updated_at is set
+      // Note: updated_by column doesn't exist in lats_spare_parts table
     };
     console.log('🔍 [DEBUG] Final update data:', updateData);
     console.log('🔍 [DEBUG] Update data keys:', Object.keys(updateData));
@@ -807,7 +874,7 @@ export const recordSparePartUsage = async (usageData: SparePartUsageCreateData):
       .from('lats_spare_parts')
       .update({
         quantity: supabase.raw(`quantity - ${usageData.quantity_used}`),
-        updated_by: user?.id
+        // Note: updated_by column doesn't exist in lats_spare_parts table
       })
       .eq('id', usageData.spare_part_id);
 
@@ -941,48 +1008,21 @@ export const createOrUpdateSparePart = async (sparePartData: any): Promise<Spare
     // Convert form data from camelCase to snake_case
     const databaseData = convertFormDataToDatabaseFormat(sparePartData);
     
-    // Check if part number already exists
-    if (databaseData.part_number) {
-      const existingPartResult = await findSparePartByPartNumber(databaseData.part_number);
-      
-      if (existingPartResult.ok && existingPartResult.data) {
-        console.log('🔍 [DEBUG] Found existing part, updating instead of creating:', existingPartResult.data.id);
-        
-        // Update existing part
-        const updateResult = await updateSparePartWithVariants(existingPartResult.data.id, sparePartData);
-        
-        if (updateResult.ok) {
-          return {
-            ...updateResult,
-            message: `UPDATED_EXISTING: Spare part "${databaseData.part_number}" was updated successfully. A spare part with this part number already existed (ID: ${existingPartResult.data.id}, Previous Name: "${existingPartResult.data.name}").`,
-            operationType: 'UPDATE_EXISTING',
-            previousData: existingPartResult.data
-          };
-        } else {
-          return {
-            ...updateResult,
-            message: `UPDATE_FAILED: Failed to update existing spare part "${databaseData.part_number}" (ID: ${existingPartResult.data.id}). ${updateResult.message}`,
-            operationType: 'UPDATE_FAILED',
-            existingPart: existingPartResult.data
-          };
-        }
-      }
-    }
-    
-    // If no existing part found, create new one
-    console.log('🔍 [DEBUG] No existing part found, creating new one');
+    // Part number check removed - part numbers are now tracked in variants only
+    // Always create new spare part (no duplicate checking by part number)
+    console.log('🔍 [DEBUG] Creating new spare part');
     const createResult = await createSparePart(sparePartData);
     
     if (createResult.ok) {
       return {
         ...createResult,
-        message: `CREATED_NEW: Spare part "${databaseData.part_number}" was created successfully as a new record.`,
+        message: `CREATED_NEW: Spare part "${databaseData.name}" was created successfully.`,
         operationType: 'CREATE_NEW'
       };
     } else {
       return {
         ...createResult,
-        message: `CREATE_FAILED: Failed to create new spare part "${databaseData.part_number}". ${createResult.message}`,
+        message: `CREATE_FAILED: Failed to create new spare part "${databaseData.name}". ${createResult.message}`,
         operationType: 'CREATE_FAILED'
       };
     }
@@ -1060,7 +1100,19 @@ export const searchSpareParts = async (searchTerm: string): Promise<SparePart[]>
     const { data, error } = await supabase
       .from('lats_spare_parts')
       .select(`
-        *,
+        id,
+        name,
+        category_id,
+        brand,
+        supplier_id,
+        condition,
+        description,
+        compatible_devices,
+        is_active,
+        created_at,
+        updated_at,
+        branch_id,
+        metadata,
         category:lats_categories!category_id(name),
         variants:lats_spare_part_variants!spare_part_id(*)
       `)
@@ -1181,9 +1233,9 @@ export const searchVariantsByAttributes = async (searchTerm: string): Promise<Sp
 
     // Filter variants by attributes that match the search term
     const matchingVariants = (data || []).filter(variant => {
-      if (!variant.variant_attributes) return false;
-      
-      const attributes = variant.variant_attributes;
+      // Note: database column is 'attributes', but may be returned as 'attributes' or 'variant_attributes' depending on query
+      const attributes = (variant as any).attributes || (variant as any).variant_attributes;
+      if (!attributes) return false;
       const searchLower = searchTerm.toLowerCase();
       
       // Check if any attribute key or value contains the search term
@@ -1211,7 +1263,7 @@ export const bulkUpdateQuantities = async (updates: Array<{ id: string; quantity
         .from('lats_spare_parts')
         .update({
           quantity: update.quantity,
-          updated_by: user?.id
+          // Note: updated_by column doesn't exist in lats_spare_parts table
         })
         .eq('id', update.id);
 
@@ -1258,12 +1310,34 @@ export const getSparePartVariants = async (sparePartId: string): Promise<SparePa
 // Create a spare part variant
 export const createSparePartVariant = async (variantData: SparePartVariant): Promise<{ data: SparePartVariant | null; message: string; ok: boolean }> => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    // Store childrenVariants in attributes JSONB (compatible_devices moved to main spare part level)
+    const attributes = variantData.attributes || {};
+    // Remove compatible_devices from variant attributes - it's now at main spare part level only
+    if (attributes.compatible_devices) {
+      delete attributes.compatible_devices;
+    }
+    // Store childrenVariants (track individual items) in attributes
+    const childrenVariants = (variantData as any).childrenVariants;
+    if (childrenVariants && Array.isArray(childrenVariants) && childrenVariants.length > 0) {
+      attributes.childrenVariants = childrenVariants.filter((c: string) => c && c.trim().length > 0);
+    }
+    const useChildrenVariants = (variantData as any).useChildrenVariants;
+    if (useChildrenVariants !== undefined) {
+      attributes.useChildrenVariants = useChildrenVariants;
+    }
     
+    // Explicitly map only valid database columns to avoid inserting non-existent columns
     const insertData = {
-      ...variantData,
-      created_by: user?.id,
-      updated_by: user?.id
+      spare_part_id: variantData.spare_part_id,
+      name: variantData.name,
+      sku: variantData.sku,
+      cost_price: variantData.cost_price,
+      selling_price: variantData.selling_price,
+      quantity: variantData.quantity,
+      min_quantity: variantData.min_quantity,
+      attributes: attributes, // Includes compatible_devices and childrenVariants if provided
+      image_url: variantData.image_url || null,
+      // Note: created_by and updated_by columns don't exist in lats_spare_part_variants table
     };
 
     const { data, error } = await supabase
@@ -1296,10 +1370,36 @@ export const updateSparePartVariant = async (id: string, variantData: Partial<Sp
   try {
     const { data: { user } } = await supabase.auth.getUser();
     
-    const updateData = {
-      ...variantData,
-      updated_by: user?.id
-    };
+    // Explicitly map only valid database columns to avoid updating non-existent columns
+    const updateData: any = {};
+    if (variantData.name !== undefined) updateData.name = variantData.name;
+    if (variantData.sku !== undefined) updateData.sku = variantData.sku;
+    if (variantData.cost_price !== undefined) updateData.cost_price = variantData.cost_price;
+    if (variantData.selling_price !== undefined) updateData.selling_price = variantData.selling_price;
+    if (variantData.quantity !== undefined) updateData.quantity = variantData.quantity;
+    if (variantData.min_quantity !== undefined) updateData.min_quantity = variantData.min_quantity;
+    
+    // Handle attributes and childrenVariants (compatible_devices moved to main spare part level)
+    if (variantData.attributes !== undefined || (variantData as any).childrenVariants !== undefined) {
+      const attributes = variantData.attributes || {};
+      // Remove compatible_devices from variant attributes - it's now at main spare part level only
+      if (attributes.compatible_devices) {
+        delete attributes.compatible_devices;
+      }
+      // Store childrenVariants (track individual items) in attributes
+      const childrenVariants = (variantData as any).childrenVariants;
+      if (childrenVariants && Array.isArray(childrenVariants) && childrenVariants.length > 0) {
+        attributes.childrenVariants = childrenVariants.filter((c: string) => c && c.trim().length > 0);
+      }
+      const useChildrenVariants = (variantData as any).useChildrenVariants;
+      if (useChildrenVariants !== undefined) {
+        attributes.useChildrenVariants = useChildrenVariants;
+      }
+      updateData.attributes = attributes; // Note: column is 'attributes', not 'variant_attributes'
+    }
+    
+    if (variantData.image_url !== undefined) updateData.image_url = variantData.image_url;
+    // Note: updated_by column doesn't exist in lats_spare_part_variants table
 
     const { data, error } = await supabase
       .from('lats_spare_part_variants')
@@ -1355,12 +1455,18 @@ export const deleteSparePartVariant = async (id: string): Promise<{ message: str
 // Bulk create spare part variants
 export const bulkCreateSparePartVariants = async (variants: SparePartVariant[]): Promise<{ data: SparePartVariant[] | null; message: string; ok: boolean }> => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    
+    // Explicitly map only valid database columns for each variant
     const insertData = variants.map(variant => ({
-      ...variant,
-      created_by: user?.id,
-      updated_by: user?.id
+      spare_part_id: variant.spare_part_id,
+      name: variant.name,
+      sku: variant.sku,
+      cost_price: variant.cost_price,
+      selling_price: variant.selling_price,
+      quantity: variant.quantity,
+      min_quantity: variant.min_quantity,
+      attributes: variant.attributes || {}, // Note: column is 'attributes', not 'variant_attributes'
+      image_url: variant.image_url || null,
+      // Note: created_by and updated_by columns don't exist in lats_spare_part_variants table
     }));
 
     const { data, error } = await supabase
@@ -1455,10 +1561,12 @@ export const getVariantsWithFilters = async (filters: {
     // Filter by attributes if provided
     if (filters.attributes && Object.keys(filters.attributes).length > 0) {
       filteredData = filteredData.filter(variant => {
-        if (!variant.variant_attributes) return false;
-        
+        // Note: database column is 'attributes', but may be returned as 'attributes' or 'variant_attributes' depending on query
+        const variantAttributes = (variant as any).attributes || (variant as any).variant_attributes;
+        if (!variantAttributes) return false;
+
         return Object.entries(filters.attributes!).every(([key, value]) => {
-          const variantValue = variant.variant_attributes[key];
+          const variantValue = variantAttributes[key];
           if (typeof value === 'string') {
             return String(variantValue).toLowerCase().includes(value.toLowerCase());
           }
@@ -1677,38 +1785,22 @@ export const updateSparePartWithVariants = async (id: string, sparePartData: any
     
     const updateData = {
       ...databaseData,
-      // When using variants, set main product quantities to 0
-      quantity: useVariants ? 0 : databaseData.quantity,
-      cost_price: useVariants ? 0 : databaseData.cost_price,
-      selling_price: useVariants ? 0 : databaseData.selling_price,
-      min_quantity: useVariants ? 0 : databaseData.min_quantity,
-      // Add metadata about variants
-      metadata: {
-        useVariants: useVariants,
-        variantCount: useVariants ? variants.length : 0,
-        totalQuantity: totalQuantity,
-        totalValue: totalValue
-      },
-      updated_by: user?.id
+      // Price and stock are always 0 for main record (stored in variants)
+      quantity: 0,
+      cost_price: 0,
+      selling_price: 0,
+      min_quantity: 0,
+      updated_at: new Date().toISOString(), // Ensure updated_at is set
+      // Note: metadata column doesn't exist in lats_spare_parts table
+      // Variant information is stored in lats_spare_part_variants table instead
+      // Note: updated_by column doesn't exist in lats_spare_parts table
     };
     
     // Validate foreign key references before updating
     console.log('🔍 [DEBUG] Validating foreign key references...');
     
-    if (updateData.category_id) {
-      const { data: categoryExists } = await supabase
-        .from('lats_categories')
-        .select('id')
-        .eq('id', updateData.category_id)
-        .single();
-      
-      if (!categoryExists) {
-        console.error('❌ [DEBUG] Category ID does not exist:', updateData.category_id);
-        throw new Error(`Category with ID ${updateData.category_id} does not exist`);
-      } else {
-        console.log('✅ [DEBUG] Category ID is valid:', updateData.category_id);
-      }
-    }
+    // Note: category_id is not validated - we use spare type instead of category
+    // category_id will always be null
     
     if (updateData.supplier_id) {
       const { data: supplierExists } = await supabase
@@ -1759,7 +1851,7 @@ export const updateSparePartWithVariants = async (id: string, sparePartData: any
       console.log('✅ [DEBUG] Verified update data:', verifyData);
     }
     
-    // Update images in spare_part_images table
+    // Update images in spare_part_images table (or product_images as fallback)
     if (sparePartData.images && sparePartData.images.length > 0) {
       console.log('🔍 [DEBUG] Updating images in spare_part_images table...');
       
@@ -1769,13 +1861,26 @@ export const updateSparePartWithVariants = async (id: string, sparePartData: any
         
         // Only delete existing images if the insert was successful
         console.log('✅ [DEBUG] Images saved successfully, cleaning up old images...');
+        
+        // Try to delete from spare_part_images first
         const { error: deleteError } = await supabase
           .from('spare_part_images')
           .delete()
           .eq('spare_part_id', id)
           .neq('image_url', sparePartData.images[0]?.image_url || sparePartData.images[0]?.url);
         
-        if (deleteError) {
+        // If table doesn't exist, try product_images
+        if (deleteError && deleteError.code === '42P01') {
+          const { error: productDeleteError } = await supabase
+            .from('product_images')
+            .delete()
+            .eq('product_id', id)
+            .neq('image_url', sparePartData.images[0]?.image_url || sparePartData.images[0]?.url);
+          
+          if (productDeleteError) {
+            console.error('❌ [DEBUG] Error deleting old images from product_images:', productDeleteError);
+          }
+        } else if (deleteError) {
           console.error('❌ [DEBUG] Error deleting old images:', deleteError);
         }
       } catch (imageError) {
@@ -1799,19 +1904,76 @@ export const updateSparePartWithVariants = async (id: string, sparePartData: any
       }
       
       // Then create new variants
-      const variantData = variants.map((variant: SparePartVariant) => ({
-        spare_part_id: id,
-        name: variant.name,
-        sku: variant.sku,
-        cost_price: variant.cost_price,
-        selling_price: variant.selling_price,
-        quantity: variant.quantity,
-        min_quantity: variant.min_quantity,
-        variant_attributes: variant.attributes || {},
-        image_url: variant.image_url || null,
-        created_by: user?.id,
-        updated_by: user?.id
-      }));
+      let variantData = variants.map((variant: SparePartVariant) => {
+        // Store childrenVariants in attributes JSONB (compatible_devices moved to main spare part level)
+        const attributes = variant.attributes || {};
+        // Remove compatible_devices from variant attributes - it's now at main spare part level only
+        if (attributes.compatible_devices) {
+          delete attributes.compatible_devices;
+        }
+        // Store childrenVariants (track individual items) in attributes
+        const childrenVariants = (variant as any).childrenVariants;
+        if (childrenVariants && Array.isArray(childrenVariants) && childrenVariants.length > 0) {
+          attributes.childrenVariants = childrenVariants.filter((c: string) => c && c.trim().length > 0);
+        }
+        const useChildrenVariants = (variant as any).useChildrenVariants;
+        if (useChildrenVariants !== undefined) {
+          attributes.useChildrenVariants = useChildrenVariants;
+        }
+        
+        return {
+          spare_part_id: id,
+          name: variant.name,
+          sku: variant.sku,
+          cost_price: variant.cost_price,
+          selling_price: variant.selling_price,
+          quantity: variant.quantity,
+          min_quantity: variant.min_quantity,
+          attributes: attributes, // Only includes childrenVariants (compatible_devices removed)
+          image_url: variant.image_url || null,
+          // Note: created_by and updated_by columns don't exist in lats_spare_part_variants table
+        };
+      });
+      
+      // Check for duplicate SKUs in the batch
+      const skus = variantData.map(v => v.sku).filter(Boolean);
+      const duplicateSkus = skus.filter((sku, index) => skus.indexOf(sku) !== index);
+      if (duplicateSkus.length > 0) {
+        console.warn('⚠️ [DEBUG] Duplicate SKUs detected in batch:', duplicateSkus);
+        // Remove duplicates by keeping only the first occurrence
+        const seenSkus = new Set<string>();
+        variantData = variantData.map((variant, index) => {
+          if (variant.sku && seenSkus.has(variant.sku)) {
+            // Generate a unique SKU by appending timestamp and index
+            variant.sku = `${variant.sku}-${Date.now()}-${index}`;
+            console.log(`🔧 [DEBUG] Generated unique SKU for variant ${index}: ${variant.sku}`);
+          }
+          if (variant.sku) {
+            seenSkus.add(variant.sku);
+          }
+          return variant;
+        });
+      }
+      
+      // Check for existing SKUs in database (across all spare parts)
+      if (skus.length > 0) {
+        const { data: existingVariants } = await supabase
+          .from('lats_spare_part_variants')
+          .select('sku')
+          .in('sku', skus.filter(Boolean));
+        
+        if (existingVariants && existingVariants.length > 0) {
+          const existingSkus = new Set(existingVariants.map(v => v.sku).filter(Boolean));
+          variantData = variantData.map((variant, index) => {
+            if (variant.sku && existingSkus.has(variant.sku)) {
+              // Generate a unique SKU by appending timestamp and index
+              variant.sku = `${variant.sku}-${Date.now()}-${index}`;
+              console.log(`🔧 [DEBUG] Generated unique SKU for variant ${index} (conflict with existing): ${variant.sku}`);
+            }
+            return variant;
+          });
+        }
+      }
       
       const { data: createdVariants, error: variantError } = await supabase
         .from('lats_spare_part_variants')
@@ -1820,6 +1982,30 @@ export const updateSparePartWithVariants = async (id: string, sparePartData: any
       
       if (variantError) {
         console.error('❌ [DEBUG] Error creating variants:', variantError);
+        // If it's a duplicate SKU error, try to insert variants one by one with unique SKUs
+        if (variantError.code === '23505' && variantError.message?.includes('sku')) {
+          console.log('🔄 [DEBUG] Duplicate SKU error detected, trying to insert variants individually...');
+          const insertedVariants = [];
+          for (let i = 0; i < variantData.length; i++) {
+            const variant = { ...variantData[i] };
+            // Ensure unique SKU
+            if (variant.sku) {
+              variant.sku = `${variant.sku}-${Date.now()}-${i}`;
+            }
+            const { data: inserted, error: insertError } = await supabase
+              .from('lats_spare_part_variants')
+              .insert([variant])
+              .select();
+            if (insertError) {
+              console.error(`❌ [DEBUG] Error inserting variant ${i}:`, insertError);
+            } else if (inserted) {
+              insertedVariants.push(...inserted);
+            }
+          }
+          if (insertedVariants.length > 0) {
+            console.log('✅ [DEBUG] Variants created successfully (with unique SKUs):', insertedVariants);
+          }
+        }
       } else {
         console.log('✅ [DEBUG] Variants updated successfully:', createdVariants);
       }

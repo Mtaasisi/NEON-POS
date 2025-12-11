@@ -46,8 +46,8 @@ if (!DATABASE_URL && existsSync('database-config.json')) {
 }
 
 if (!DATABASE_URL) {
-  // PRODUCTION SUPABASE DATABASE - Always use production Supabase database
-  DATABASE_URL = 'postgresql://postgres.jxhzveborezjhsmzsgbc:%40SMASIKA1010@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
+  // PRODUCTION NEON DATABASE - Always use production Neon database
+  DATABASE_URL = 'postgresql://neondb_owner:npg_tHAqPdo2x0LR@ep-aged-pond-adays3pg-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
 }
 
 const sql = neon(DATABASE_URL);

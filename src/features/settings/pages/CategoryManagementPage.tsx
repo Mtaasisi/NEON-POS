@@ -333,10 +333,12 @@ const CategoryManagementPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-            </GlassCard>
+            </div>
           ))}
         </div>
       )}
+        </div>
+      </div>
 
       {/* Category Form Modal */}
       {showCategoryForm && (

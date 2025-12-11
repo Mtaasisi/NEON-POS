@@ -508,7 +508,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
           {
             label: 'Categories',
             icon: <Layers size={18} />,
-            path: '/lats/inventory-management?tab=categories',
+            path: '/category-management',
             color: 'from-green-500 to-emerald-600',
             hoverColor: 'hover:from-green-600 hover:to-emerald-700',
           }
