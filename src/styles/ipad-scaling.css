@@ -1,0 +1,99 @@
+/* iPad Scaling for Safari - Optimized UI Density for Better Touch Usability */
+
+/* iPad Detection and Scaling - Production Ready */
+/* Covers iPad Pro (12.9", 11"), iPad Air, iPad Mini in all orientations */
+
+/* Standard iPad (768px - 1024px width) */
+@media only screen
+  and (min-device-width: 768px)
+  and (max-device-width: 1024px)
+  and (-webkit-min-device-pixel-ratio: 1) {
+  #app-root {
+    transform: scale(1.1);
+    transform-origin: top center;
+    width: calc(100% / 1.1);
+    height: calc(100% / 1.1);
+  }
+}
+
+/* iPad Retina (768px - 1024px width, high DPI) */
+@media only screen
+  and (min-device-width: 768px)
+  and (max-device-width: 1024px)
+  and (-webkit-min-device-pixel-ratio: 2) {
+  #app-root {
+    transform: scale(1.15);
+    transform-origin: top center;
+    width: calc(100% / 1.15);
+    height: calc(100% / 1.15);
+  }
+}
+
+/* iPad Pro 11" and 12.9" (1024px - 1366px width) */
+@media only screen
+  and (min-device-width: 1024px)
+  and (max-device-width: 1366px)
+  and (-webkit-min-device-pixel-ratio: 2) {
+  #app-root {
+    transform: scale(1.2);
+    transform-origin: top center;
+    width: calc(100% / 1.2);
+    height: calc(100% / 1.2);
+  }
+}
+
+/* Fallback: Viewport-based detection for iPadOS 13+ */
+@media only screen
+  and (min-width: 768px)
+  and (max-width: 1366px)
+  and (orientation: any)
+  and (-webkit-touch-callout: none) {
+  #app-root {
+    transform: scale(1.1);
+    transform-origin: top center;
+    width: calc(100% / 1.1);
+    height: calc(100% / 1.1);
+  }
+}
+
+/* Prevent scaling conflicts with desktop browsers */
+@media (min-width: 1367px) {
+  #app-root {
+    transform: none !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+}
+
+/* Prevent scaling on mobile phones */
+@media (max-width: 767px) {
+  #app-root {
+    transform: none !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+}
+
+/* iPad-specific optimizations */
+@media only screen
+  and (min-device-width: 768px)
+  and (max-device-width: 1366px) {
+
+  /* Better text rendering on iPad */
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Improve tap targets */
+  button, input, select, textarea {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Better scrolling on iPad */
+  .tablet-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}

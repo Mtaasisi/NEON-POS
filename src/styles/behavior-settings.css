@@ -1,0 +1,238 @@
+/**
+ * Behavior Settings CSS
+ * These styles respect user preferences for animations and other behaviors
+ */
+
+/* ============================================
+   Animation Control
+   ============================================ */
+
+/* When animations are disabled, remove all transitions and animations */
+.no-animate,
+.no-animate *,
+body.animations-disabled *,
+[data-animations="false"] * {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}
+
+/* Global animation control via root */
+:root[data-enable-animations="false"] * {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Smooth transitions when enabled */
+:root[data-enable-animations="true"] * {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================
+   Specific Animation Classes
+   ============================================ */
+
+/* Fade animations */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.animate-fade-out {
+  animation: fadeOut 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* Slide animations */
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+.animate-slide-out {
+  animation: slideOut 0.3s ease-in;
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideOut {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(10px); opacity: 0; }
+}
+
+/* Scale animations */
+.animate-scale-in {
+  animation: scaleIn 0.2s ease-out;
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* Bounce animation */
+.animate-bounce {
+  animation: bounce 0.5s ease;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+/* ============================================
+   Sound Effect Visual Feedback
+   ============================================ */
+
+/* Visual feedback for clicks when sound is enabled */
+.sound-enabled:active {
+  transform: scale(0.98);
+}
+
+/* No visual feedback when sound is disabled */
+.sound-disabled:active {
+  transform: none;
+}
+
+/* ============================================
+   Confirmation Visual Indicators
+   ============================================ */
+
+/* Highlight items that require confirmation before deletion */
+.requires-confirmation {
+  position: relative;
+}
+
+.requires-confirmation::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 2px solid transparent;
+  border-radius: inherit;
+  transition: border-color 0.2s ease;
+}
+
+.requires-confirmation:hover::after {
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* ============================================
+   Search Autocomplete Styles
+   ============================================ */
+
+.search-autocomplete-enabled {
+  position: relative;
+}
+
+.search-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  border-radius: 0 0 0.5rem 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.search-suggestions-item {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.search-suggestions-item:hover {
+  background-color: #f3f4f6;
+}
+
+.search-suggestions-item.active {
+  background-color: #e5e7eb;
+}
+
+/* ============================================
+   Toast Notification Styles (when shown)
+   ============================================ */
+
+.toast-container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* ============================================
+   Utility Classes
+   ============================================ */
+
+/* Show only when animations are enabled */
+.show-if-animations-enabled {
+  display: none;
+}
+
+:root[data-enable-animations="true"] .show-if-animations-enabled {
+  display: block;
+}
+
+/* Hide when animations are disabled */
+.hide-if-animations-disabled {
+  display: block;
+}
+
+:root[data-enable-animations="false"] .hide-if-animations-disabled {
+  display: none;
+}
+
+/* ============================================
+   Loading States (respect animation settings)
+   ============================================ */
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Disable spinner rotation when animations are off */
+:root[data-enable-animations="false"] .spinner {
+  animation: none;
+  opacity: 0.5;
+}
+
+/* ============================================
+   Reduced Motion Preference
+   ============================================ */
+
+/* Respect system preferences for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

@@ -1,0 +1,176 @@
+# Large files and databases
+*.db
+*.sqlite
+*.sqlite3
+*.pdf
+*.zip
+*.tar.gz
+*.rar
+*.7z
+*.dmg
+*.iso
+
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build outputs
+dist/
+dist-deploy/
+build/
+out/
+server/dist/
+android/build/
+
+# IDE files
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+*~
+.history/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Backup files
+*.backup
+*.bak
+*.old
+*.broken
+backup_*/
+
+# Large media files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wmv
+*.flv
+*.webm
+
+# Large images
+*.psd
+*.ai
+*.sketch
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Database dumps
+*.dump
+*.sql.gz
+
+# Large data files
+*.csv
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!tailwind.config.js
+!vite.config.ts
+
+# Exclude specific large files
+crm_system/database/
+GitHub-Backup/
+*.pdftigopesa.pdf
+crm_system/database/crm.db
+crm_system/
+archive/
+.playwright-mcp/
+playwright-report/
+test-results/
+
+# Workspace files (keep in root only)
+**/.code-workspace
+src/**/*.code-workspace
+
+# Auto-generated documentation and reports
+*_REPORT.md
+*_SUMMARY.md
+*_GUIDE.md
+*_COMPLETE.md
+*_STATUS.md
+*_FIX*.md
+*_AUDIT*.md
+*_ANALYSIS.md
+*_REFERENCE.md
+*_VERIFICATION.md
+*_INSTRUCTIONS.md
+*_IMPLEMENTATION*.md
+*_MIGRATION*.md
+*_RESULTS*.md
+*_INDEX*.md
+📊*.md
+🎉*.md
+⭐*.md
+✅*.md
+🚀*.md
+📋*.md
+📖*.md
+🔧*.md
+⚡*.md
+🎯*.md
+📄*.md
+📘*.md
+🔍*.md
+📑*.md
+📂*.md
+🌟*.md
+✨*.md
+📸*.md
+🧪*.md
+🔄*.md
+neon-branches.json
+
+# Local Netlify folder
+.netlify
+
+# Environment backups
+.env-backups/
+
+# Test artifacts
+test-artifacts/screenshots/
+test-artifacts/logs/
+
+# Archived documentation
+docs/archive/
+
+# SQL archives
+sql/archive/
+
+# Large files
+*.apk
+mobile-app-test-logs.txt

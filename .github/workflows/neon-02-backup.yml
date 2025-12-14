@@ -1,0 +1,149 @@
+name: Automatic NEON 02 Database Backup
+
+on:
+  schedule:
+    # Run daily at 02:30 UTC (30 minutes after main backup)
+    - cron: '30 2 * * *'
+  workflow_dispatch: # Allow manual triggering from GitHub UI
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Pull PostgreSQL 17 Docker image
+        run: |
+          docker pull postgres:17-alpine
+          echo "✅ PostgreSQL 17 Docker image ready"
+          echo "PostgreSQL client version:"
+          docker run --rm postgres:17-alpine pg_dump --version
+
+      - name: Create full database backup
+        env:
+          DATABASE_URL: ${{ secrets.NEON_02_DB_URL }}
+        run: |
+          set -e  # Exit on any error
+          
+          TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+          BACKUP_FILE="production-backup-neon02-${TIMESTAMP}.sql"
+          
+          echo "📥 Creating full database backup for NEON 02..."
+          echo "🕐 Timestamp: $TIMESTAMP"
+          
+          # Check if DATABASE_URL is set
+          if [ -z "$DATABASE_URL" ]; then
+            echo "❌ Error: DATABASE_URL secret is not set"
+            echo "Please add NEON_02_DB_URL secret in repository settings"
+            exit 1
+          fi
+          
+          # Parse connection string and convert pooler to direct endpoint
+          DB_URL="$DATABASE_URL"
+          if [[ "$DB_URL" == *"-pooler"* ]]; then
+            DB_URL="${DB_URL//-pooler/}"
+            echo "🔄 Converted pooler endpoint to direct endpoint"
+          fi
+          
+          # Create full backup (schema + data) using Docker with PostgreSQL 17
+          echo "⏳ Running pg_dump with PostgreSQL 17 (this may take a few minutes)..."
+          
+          # Extract password from connection string for Docker
+          DB_PASS=$(echo "$DB_URL" | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
+          
+          # Run pg_dump via Docker with PostgreSQL 17
+          # Use connection string directly - Docker handles URL encoding
+          echo "Starting pg_dump..."
+          if ! docker run --rm \
+            -e PGPASSWORD="$DB_PASS" \
+            postgres:17-alpine \
+            pg_dump "$DB_URL" \
+            --no-owner \
+            --no-privileges \
+            --clean \
+            --if-exists \
+            > "$BACKUP_FILE" 2>pg_dump_errors.log; then
+            echo "❌ pg_dump failed. Error log:"
+            cat pg_dump_errors.log
+            exit 1
+          fi
+          
+          # Verify backup was created successfully
+          if [ ! -f "$BACKUP_FILE" ]; then
+            echo "❌ Error: Backup file was not created"
+            exit 1
+          fi
+          
+          if [ ! -s "$BACKUP_FILE" ]; then
+            echo "❌ Error: Backup file is empty"
+            echo "First 20 lines of error log:"
+            head -20 pg_dump_errors.log || true
+            exit 1
+          fi
+          
+          # Get file size
+          FILE_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+          LINE_COUNT=$(wc -l < "$BACKUP_FILE" || echo "0")
+          echo "✅ Backup created: $BACKUP_FILE"
+          echo "📊 Size: $FILE_SIZE"
+          echo "📝 Lines: $LINE_COUNT"
+          
+          # Compress backup to save space
+          echo "📦 Compressing backup..."
+          if ! gzip "$BACKUP_FILE"; then
+            echo "❌ Error: Failed to compress backup"
+            exit 1
+          fi
+          
+          BACKUP_FILE="${BACKUP_FILE}.gz"
+          COMPRESSED_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+          echo "✅ Compressed: $BACKUP_FILE"
+          echo "📊 Compressed size: $COMPRESSED_SIZE"
+          
+          # Verify compressed file exists and has content
+          if [ ! -f "$BACKUP_FILE" ] || [ ! -s "$BACKUP_FILE" ]; then
+            echo "❌ Error: Compressed backup file is missing or empty"
+            exit 1
+          fi
+          
+          # Set outputs for next step
+          echo "BACKUP_FILE=$BACKUP_FILE" >> $GITHUB_ENV
+          echo "BACKUP_TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+          echo "BACKUP_SIZE=$COMPRESSED_SIZE" >> $GITHUB_ENV
+          
+          echo "✅ Backup preparation complete!"
+
+      - name: Upload Backup as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-backup-neon02-${{ env.BACKUP_TIMESTAMP }}
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: 90
+          if-no-files-found: error
+          compression-level: 0  # Already compressed with gzip
+        continue-on-error: false
+
+      - name: Cleanup local files
+        if: always()
+        run: |
+          rm -f production-backup-neon02-*.sql*
+
+      - name: Summary
+        run: |
+          echo "✅ Backup completed successfully!"
+          echo "📦 Backup file: ${{ env.BACKUP_FILE }}"
+          echo "📊 Size: ${{ env.BACKUP_SIZE }}"
+          echo "📅 Timestamp: ${{ env.BACKUP_TIMESTAMP }}"
+          echo "🌿 Branch: NEON 02"
+          echo ""
+          echo "🔗 Download backup from:"
+          echo "   https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo ""
+          echo "💡 How to restore:"
+          echo "   1. Go to Actions tab → Find this workflow run"
+          echo "   2. Download the artifact: production-backup-neon02-${{ env.BACKUP_TIMESTAMP }}"
+          echo "   3. Extract: gunzip production-backup-neon02-*.sql.gz"
+          echo "   4. Restore: psql \"\$DATABASE_URL\" -f production-backup-neon02-*.sql"
+

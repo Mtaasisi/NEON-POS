@@ -1,0 +1,19 @@
+name: Test Neon Backup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Test pg_dump connection
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DB_URL }}
+        run: |
+          echo "Testing connection..."
+          pg_dump "$DATABASE_URL" --schema-only

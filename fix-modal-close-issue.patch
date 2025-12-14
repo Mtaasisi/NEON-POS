@@ -1,0 +1,15 @@
+--- a/src/features/lats/components/purchase-order/SerialNumberReceiveModal.tsx
++++ b/src/features/lats/components/purchase-order/SerialNumberReceiveModal.tsx
+@@ -359,7 +359,12 @@
+           pointerEvents: 'none'
+         }}
+       >
+-      <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col">
++      <div 
++        className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col"
++        onClick={(e) => e.stopPropagation()}
++        style={{ pointerEvents: 'auto' }}
++      >
++        {/* Modal content can now receive clicks without closing */}
+         {/* Header */}
+         <div className="p-6 border-b border-gray-200">

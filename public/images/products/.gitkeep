@@ -1,0 +1,4 @@
+# Product Images Folder
+# Product images are stored here
+# Format: /images/products/<filename>.jpg
+# Files in this folder are copied to dist/images/products/ during build

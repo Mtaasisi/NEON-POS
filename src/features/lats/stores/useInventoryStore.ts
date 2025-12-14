@@ -1,0 +1,2220 @@
+// Inventory store for LATS module using Zustand
+import { create } from 'zustand';
+import { devtools, subscribeWithSelector } from 'zustand/middleware';
+import { 
+  Category, 
+  Supplier, 
+  Product, 
+  ProductVariant,
+  StockMovement,
+  PurchaseOrder,
+  PurchaseOrderItem,
+  ApiResponse,
+  PaginatedResponse 
+} from '../types/inventory';
+import { logDatabase, logBusiness, logAuth } from '../lib/errorService';
+import { SparePart, SparePartUsage } from '../types/spareParts';
+import { getLatsProvider } from '../lib/data/provider';
+import { latsEventBus, LatsEventType } from '../lib/data/eventBus';
+import { latsAnalyticsService as latsAnalytics } from '../lib/analytics';
+import { supabase } from '../../../lib/supabaseClient';
+import { processLatsData, processCategoriesOnly, processProductsOnly, processSuppliersOnly, validateDataIntegrity, emergencyDataCleanup } from '../lib/dataProcessor';
+import { productCacheService } from '../../../lib/productCacheService';
+import { categoryService } from '../lib/categoryService';
+import { 
+  getActiveSuppliers as getActiveSuppliersApi, 
+  getAllSuppliers as getAllSuppliersApi,
+  createSupplier as createSupplierApi, 
+  updateSupplier as updateSupplierApi 
+} from '../../../lib/supplierApi';
+import { 
+  createSparePart as createSparePartApi, 
+  createOrUpdateSparePart as createOrUpdateSparePartApi,
+  updateSparePartWithVariants as updateSparePartWithVariantsApi,
+  deleteSparePart as deleteSparePartApi,
+  recordSparePartUsage as recordSparePartUsageApi
+} from '../lib/sparePartsApi';
+
+interface InventoryState {
+  // Loading states
+  isLoading: boolean;
+  isCreating: boolean;
+  isUpdating: boolean;
+  isDeleting: boolean;
+  
+  // Prevent multiple simultaneous loads
+  isDataLoading: boolean;
+  isCategoriesLoading: boolean;
+  lastDataLoadTime: number;
+  // Supplier-specific loading to avoid global guard skipping
+  isSuppliersLoading?: boolean;
+
+  // Cache management
+  dataCache: {
+    categories: Category[] | null;
+    suppliers: Supplier[] | null;
+    products: Product[] | null;
+    stockMovements: StockMovement[] | null;
+    sales: any[] | null;
+    spareParts: SparePart[] | null;
+  };
+  cacheTimestamp: number;
+  CACHE_DURATION: number; // 5 minutes
+
+  // Data
+  categories: Category[];
+  suppliers: Supplier[];
+  products: Product[];
+  sales: any[];
+  stockMovements: StockMovement[];
+  purchaseOrders: PurchaseOrder[];
+  spareParts: SparePart[];
+  sparePartUsage: SparePartUsage[];
+
+  // Filters and search
+  searchTerm: string;
+  selectedCategory: string | null;
+  selectedSupplier: string | null;
+  stockFilter: 'all' | 'in-stock' | 'low-stock' | 'out-of-stock';
+
+  // Pagination
+  currentPage: number;
+  itemsPerPage: number;
+  totalItems: number;
+
+  // Selected items
+  selectedProducts: string[];
+  selectedPurchaseOrders: string[];
+
+  // Error handling
+  error: string | null;
+
+  // Actions
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
+  clearError: () => void;
+
+  // Search and filters
+  setSearchTerm: (term: string) => void;
+  setSelectedCategory: (categoryId: string | null) => void;
+
+  setSelectedSupplier: (supplierId: string | null) => void;
+  setStockFilter: (filter: 'all' | 'in-stock' | 'low-stock' | 'out-of-stock') => void;
+  clearFilters: () => void;
+
+  // Pagination
+  setCurrentPage: (page: number) => void;
+  setItemsPerPage: (items: number) => void;
+
+  // Selection
+  toggleProductSelection: (productId: string) => void;
+  selectAllProducts: () => void;
+  deselectAllProducts: () => void;
+  togglePurchaseOrderSelection: (orderId: string) => void;
+  selectAllPurchaseOrders: () => void;
+  deselectAllPurchaseOrders: () => void;
+
+  // Categories
+  loadCategories: () => Promise<void>;
+  loadSparePartCategories: () => Promise<void>;
+  createCategory: (category: Omit<Category, 'id' | 'createdAt' | 'updatedAt'>) => Promise<ApiResponse<Category>>;
+  updateCategory: (id: string, category: Partial<Category>) => Promise<ApiResponse<Category>>;
+  deleteCategory: (id: string) => Promise<ApiResponse<void>>;
+
+  // Suppliers
+  loadSuppliers: () => Promise<void>;
+  createSupplier: (supplier: Omit<Supplier, 'id' | 'createdAt' | 'updatedAt'>) => Promise<ApiResponse<Supplier>>;
+  updateSupplier: (id: string, supplier: Partial<Supplier>) => Promise<ApiResponse<Supplier>>;
+  deleteSupplier: (id: string) => Promise<ApiResponse<void>>;
+
+  // Products
+  loadProducts: (filters?: any) => Promise<void>;
+  forceRefreshProducts: () => Promise<void>;
+  loadProductVariants: (productId: string) => Promise<{ ok: boolean; data: ProductVariant[] }>;
+  getProduct: (id: string) => Promise<ApiResponse<Product>>;
+  createProduct: (product: any) => Promise<ApiResponse<Product>>;
+  updateProduct: (id: string, product: any) => Promise<ApiResponse<Product>>;
+  updateProductInStore: (updatedProduct: Product) => void;
+  deleteProduct: (id: string) => Promise<void>;
+  searchProducts: (query: string) => Promise<ApiResponse<Product[]>>;
+
+  // Stock Management
+  loadStockMovements: () => Promise<void>;
+  adjustStock: (productId: string, variantId: string, quantity: number, reason: string) => Promise<ApiResponse<void>>;
+
+  // Sales Data
+  loadSales: () => Promise<void>;
+  getProductSales: (productId: string) => Promise<ApiResponse<any[]>>;
+  getSoldQuantity: (productId: string, variantId?: string) => number;
+
+  // Purchase Orders
+  loadPurchaseOrders: () => Promise<void>;
+  getPurchaseOrder: (id: string) => Promise<ApiResponse<PurchaseOrder>>;
+  createPurchaseOrder: (order: any) => Promise<ApiResponse<PurchaseOrder>>;
+  updatePurchaseOrder: (id: string, order: any) => Promise<ApiResponse<PurchaseOrder>>;
+  updatePurchaseOrderStatus: (id: string, status: string) => Promise<ApiResponse<PurchaseOrder>>;
+  approvePurchaseOrder: (id: string) => Promise<ApiResponse<PurchaseOrder>>;
+  receivePurchaseOrder: (id: string) => Promise<ApiResponse<void>>;
+  deletePurchaseOrder: (id: string) => Promise<ApiResponse<void>>;
+
+
+  // Spare Parts
+  loadSpareParts: () => Promise<void>;
+  getSparePart: (id: string) => Promise<ApiResponse<SparePart>>;
+  createSparePart: (sparePart: any) => Promise<ApiResponse<SparePart>>;
+  createOrUpdateSparePart: (sparePart: any) => Promise<ApiResponse<SparePart>>;
+  updateSparePart: (id: string, sparePart: any) => Promise<ApiResponse<SparePart>>;
+  deleteSparePart: (id: string) => Promise<ApiResponse<void>>;
+  useSparePart: (id: string, quantity: number, reason: string, notes?: string) => Promise<ApiResponse<void>>;
+  loadSparePartUsage: () => Promise<void>;
+
+  // Computed values
+  getFilteredProducts: () => Product[];
+  getLowStockProducts: () => Product[];
+  getOutOfStockProducts: () => Product[];
+  getProductById: (id: string) => Product | undefined;
+  getCategoryById: (id: string) => Category | undefined;
+  getSupplierById: (id: string) => Supplier | undefined;
+}
+
+// Check if Redux DevTools extension is available to avoid console warnings
+const hasReduxDevTools = typeof window !== 'undefined' && (window as any).__REDUX_DEVTOOLS_EXTENSION__;
+
+export const useInventoryStore = create<InventoryState>()(
+  devtools(
+    subscribeWithSelector((set, get) => ({
+      // Initial state
+      isLoading: false,
+      isCreating: false,
+      isUpdating: false,
+      isDeleting: false,
+      isDataLoading: false,
+      isCategoriesLoading: false,
+      isSuppliersLoading: false,
+      lastDataLoadTime: 0,
+
+      // Cache management - Optimized cache duration for better POS performance
+      // Longer cache reduces unnecessary database queries and improves load times
+      dataCache: {
+        categories: null,
+        suppliers: null,
+        products: null,
+        stockMovements: null,
+        sales: null,
+        spareParts: null,
+      },
+      cacheTimestamp: 0,
+      CACHE_DURATION: 15 * 60 * 1000, // 15 minutes (increased from 10min for better performance)
+
+      categories: [],
+      suppliers: [],
+      products: [],
+      sales: [],
+      stockMovements: [],
+      purchaseOrders: [],
+      spareParts: [],
+      sparePartUsage: [],
+
+      searchTerm: '',
+      selectedCategory: null,
+      selectedSupplier: null,
+      stockFilter: 'all',
+
+      currentPage: 1,
+      itemsPerPage: 20,
+      totalItems: 0,
+
+      selectedProducts: [],
+      selectedPurchaseOrders: [],
+
+      error: null,
+
+      // Basic actions
+      setLoading: (loading) => set({ isLoading: loading }),
+      setError: (error) => set({ error }),
+      clearError: () => set({ error: null }),
+
+      // Search and filters
+      setSearchTerm: (term) => set({ searchTerm: term, currentPage: 1 }),
+      setSelectedCategory: (categoryId) => set({ selectedCategory: categoryId, currentPage: 1 }),
+
+      setSelectedSupplier: (supplierId) => set({ selectedSupplier: supplierId, currentPage: 1 }),
+      setStockFilter: (filter) => set({ stockFilter: filter, currentPage: 1 }),
+      clearFilters: () => set({
+        searchTerm: '',
+        selectedCategory: null,
+        selectedSupplier: null,
+        stockFilter: 'all',
+        currentPage: 1
+      }),
+
+      // Pagination
+      setCurrentPage: (page) => set({ currentPage: page }),
+      setItemsPerPage: (items) => set({ itemsPerPage: items, currentPage: 1 }),
+
+      // Selection
+      toggleProductSelection: (productId) => {
+        const { selectedProducts } = get();
+        const newSelection = selectedProducts.includes(productId)
+          ? selectedProducts.filter(id => id !== productId)
+          : [...selectedProducts, productId];
+        set({ selectedProducts: newSelection });
+      },
+
+      selectAllProducts: () => {
+        const { getFilteredProducts } = get();
+        const productIds = getFilteredProducts().map(p => p.id);
+        set({ selectedProducts: productIds });
+      },
+
+      deselectAllProducts: () => set({ selectedProducts: [] }),
+      
+      // Force refresh products (useful when new products are added or stock changes)
+      forceRefreshProducts: async () => {
+        console.log('🔄 [useInventoryStore] Force refreshing products...');
+        const state = get();
+
+        // Clear all caches - memory, localStorage, query cache, and enhanced cache
+        try {
+          // 1. Clear localStorage product cache (using already imported service)
+          productCacheService.clearProducts();
+          console.log('✅ [useInventoryStore] localStorage cache cleared');
+        } catch (error) {
+          console.warn('⚠️ [useInventoryStore] Failed to clear localStorage cache:', error);
+        }
+
+        try {
+          // 2. Clear query cache
+          const { invalidateCachePattern } = await import('../../../lib/queryCache');
+          invalidateCachePattern('^products:');
+          console.log('✅ [useInventoryStore] Query cache cleared');
+        } catch (error) {
+          console.warn('⚠️ [useInventoryStore] Failed to clear query cache:', error);
+        }
+
+        try {
+          // 3. Clear enhanced cache
+          const { smartCache } = await import('../../../lib/enhancedCacheManager');
+          await smartCache.invalidateCache('products');
+          console.log('✅ [useInventoryStore] Enhanced cache cleared');
+        } catch (error) {
+          console.warn('⚠️ [useInventoryStore] Failed to clear enhanced cache:', error);
+        }
+
+        // 4. Clear memory cache and reset loading state
+        set({
+          dataCache: { ...state.dataCache, products: null },
+          cacheTimestamp: 0,
+          products: [], // Clear current products to show loading state
+          isDataLoading: false, // Reset loading state to allow refresh
+          isLoading: false
+        });
+
+        // Load fresh data with force=true to bypass loading check
+        await get().loadProducts({ page: 1, limit: 500 }, true);
+        console.log('✅ [useInventoryStore] Products force refreshed');
+      },
+
+      togglePurchaseOrderSelection: (orderId) => {
+        const { selectedPurchaseOrders } = get();
+        const newSelection = selectedPurchaseOrders.includes(orderId)
+          ? selectedPurchaseOrders.filter(id => id !== orderId)
+          : [...selectedPurchaseOrders, orderId];
+        set({ selectedPurchaseOrders: newSelection });
+      },
+
+      selectAllPurchaseOrders: () => {
+        const { purchaseOrders } = get();
+        const orderIds = purchaseOrders.map(o => o.id);
+        set({ selectedPurchaseOrders: orderIds });
+      },
+
+      deselectAllPurchaseOrders: () => set({ selectedPurchaseOrders: [] }),
+
+      // Cache management
+      isCacheValid: (dataType: keyof InventoryState['dataCache']) => {
+        const state = get();
+        const cacheAge = Date.now() - state.cacheTimestamp;
+        const isValid = state.dataCache[dataType] !== null && cacheAge < state.CACHE_DURATION;
+
+        return isValid;
+      },
+
+      updateCache: (dataType: keyof InventoryState['dataCache'], data: any) => {
+        const state = get();
+
+        set({
+          dataCache: {
+            ...state.dataCache,
+            [dataType]: data
+          },
+          cacheTimestamp: Date.now()
+        });
+      },
+
+      clearCache: (dataType?: keyof InventoryState['dataCache']) => {
+        const state = get();
+
+        if (dataType) {
+          // Clear specific cache
+          set({
+            dataCache: {
+              ...state.dataCache,
+              [dataType]: null
+            }
+          });
+        } else {
+          // Clear all cache
+          set({
+            dataCache: {
+              categories: null,
+              suppliers: null,
+              products: null,
+              stockMovements: null,
+              sales: null,
+            },
+            cacheTimestamp: 0
+          });
+        }
+      },
+
+      invalidateCache: (dataType: keyof InventoryState['dataCache']) => {
+        const state = get();
+        set({
+          dataCache: {
+            ...state.dataCache,
+            [dataType]: null
+          }
+        });
+      },
+
+      // Categories
+      loadCategories: async () => {
+        const state = get();
+        
+        // Check cache first (but force refresh for now to test)
+        if (state.isCacheValid('categories') && false) { // Temporarily disabled to force refresh
+          set({ categories: state.dataCache.categories || [] });
+          return;
+        }
+
+        // Prevent multiple simultaneous category loads (use separate flag)
+        if (state.isCategoriesLoading) {
+          return;
+        }
+
+        set({ isLoading: true, isCategoriesLoading: true, error: null });
+        try {
+          // Use optimized category service
+          const categories = await categoryService.getCategories();
+          
+          // Validate and process categories
+          if (categories.length > 0) {
+            validateDataIntegrity(categories, 'Categories');
+          }
+          const processedCategories = processCategoriesOnly(categories);
+          
+          // Only update if categories have actually changed
+          const currentCategories = get().categories;
+          const hasChanged = !currentCategories || 
+            currentCategories.length !== processedCategories.length ||
+            currentCategories.some((cat, index) => 
+              !processedCategories[index] || 
+              cat.id !== processedCategories[index].id ||
+              cat.name !== processedCategories[index].name
+            );
+          
+          if (hasChanged) {
+
+            set({ 
+              categories: processedCategories, 
+              lastDataLoadTime: Date.now(),
+              error: null // Clear any previous errors
+            });
+            get().updateCache('categories', processedCategories);
+            latsAnalytics.track('categories_loaded', { count: processedCategories.length });
+          } else {
+
+          }
+        } catch (error) {
+          logDatabase('Failed to load categories', error, {
+            component: 'useInventoryStore',
+            action: 'loadCategories'
+          });
+          
+          // Create fallback categories if database fails
+
+          const fallbackCategories = [
+            {
+              id: 'sample-category',
+              name: 'Electronics',
+              description: 'Electronic devices and accessories',
+              color: '#3B82F6',
+              icon: '📱',
+              parent_id: null,
+              isActive: true,
+              is_active: true,
+              sortOrder: 1,
+              metadata: {},
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            },
+            {
+              id: 'sample-category-2',
+              name: 'Accessories',
+              description: 'Phone and device accessories',
+              color: '#10B981',
+              icon: '🎧',
+              parent_id: null,
+              isActive: true,
+              is_active: true,
+              sortOrder: 2,
+              metadata: {},
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            },
+            {
+              id: 'sample-category-3',
+              name: 'Repair Parts',
+              description: 'Repair and replacement parts',
+              color: '#F59E0B',
+              icon: '🔧',
+              parent_id: null,
+              isActive: true,
+              is_active: true,
+              sortOrder: 3,
+              metadata: {},
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            }
+          ];
+          
+          set({ 
+            categories: fallbackCategories,
+            error: 'Using sample categories due to database connection issue'
+          });
+        } finally {
+          set({ isLoading: false, isCategoriesLoading: false });
+        }
+      },
+
+      loadSparePartCategories: async () => {
+        const state = get();
+        
+        // Prevent multiple simultaneous loads
+        if (state.isDataLoading) {
+          return;
+        }
+
+        set({ isLoading: true, isDataLoading: true, error: null });
+        try {
+          // Use optimized category service to get spare part categories
+          const sparePartCategories = await categoryService.getSparePartCategories();
+          
+          // Validate and process categories
+          if (sparePartCategories.length > 0) {
+            validateDataIntegrity(sparePartCategories, 'Spare Part Categories');
+          }
+          const processedCategories = processCategoriesOnly(sparePartCategories);
+          
+          // Only update if categories have actually changed
+          const currentCategories = get().categories;
+          const hasChanged = !currentCategories || 
+            currentCategories.length !== processedCategories.length ||
+            currentCategories.some((cat, index) => 
+              !processedCategories[index] || 
+              cat.id !== processedCategories[index].id ||
+              cat.name !== processedCategories[index].name
+            );
+          
+          if (hasChanged) {
+
+            set({ 
+              categories: processedCategories, 
+              lastDataLoadTime: Date.now(),
+              error: null // Clear any previous errors
+            });
+            latsAnalytics.track('spare_part_categories_loaded', { count: processedCategories.length });
+          } else {
+
+          }
+        } catch (error) {
+          console.error('Spare part categories exception:', error);
+          set({ error: 'Failed to load spare part categories' });
+        } finally {
+          set({ isLoading: false, isDataLoading: false });
+        }
+      },
+
+      createCategory: async (category) => {
+        set({ isCreating: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.createCategory(category);
+          if (response.ok) {
+            // Invalidate both local and service cache
+            get().invalidateCache('categories');
+            categoryService.invalidateCache();
+            latsAnalytics.track('category_created', { categoryId: response.data?.id });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to create category';
+          set({ error: errorMsg });
+          logDatabase('Failed to create category', error, {
+            component: 'useInventoryStore',
+            action: 'createCategory'
+          });
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isCreating: false });
+        }
+      },
+
+      updateCategory: async (id, category) => {
+        set({ isUpdating: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.updateCategory(id, category);
+          if (response.ok) {
+            // Invalidate both local and service cache
+            get().invalidateCache('categories');
+            categoryService.invalidateCache();
+            latsAnalytics.track('category_updated', { categoryId: id });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to update category';
+          set({ error: errorMsg });
+          console.error('Error updating category:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isUpdating: false });
+        }
+      },
+
+      deleteCategory: async (id) => {
+        set({ isDeleting: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.deleteCategory(id);
+          if (response.ok) {
+            // Invalidate both local and service cache
+            get().invalidateCache('categories');
+            categoryService.invalidateCache();
+            latsAnalytics.track('category_deleted', { categoryId: id });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to delete category';
+          set({ error: errorMsg });
+          console.error('Error deleting category:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isDeleting: false });
+        }
+      },
+
+      // Suppliers
+      loadSuppliers: async () => {
+        const state = get();
+        
+        // Check cache first with shorter cache duration for suppliers
+        if (state.isCacheValid('suppliers')) {
+          const cachedSuppliers = state.dataCache.suppliers || [];
+          console.log(`✅ Using cached suppliers (${cachedSuppliers.length} suppliers)`);
+          set({ suppliers: cachedSuppliers });
+          return;
+        }
+
+        // Use a supplier-specific loading flag to avoid conflicts with other loads
+        if (state.isSuppliersLoading) {
+          console.log('⏳ Suppliers already loading, skipping...');
+          return;
+        }
+
+        console.log('🔄 Starting supplier load...');
+        set({ isSuppliersLoading: true, error: null });
+        
+        // Use Promise.race for timeout protection (increased to 90 seconds for Neon cold starts)
+        // Neon databases can take 30-60 seconds to wake up from cold start
+        const SUPPLIER_FETCH_TIMEOUT = 90000; // 90 seconds
+
+        let retryCount = 0;
+        const MAX_RETRIES = 2; // Retry up to 2 times for timeout errors
+        
+        try {
+          while (retryCount <= MAX_RETRIES) {
+            try {
+              // Create a new timeout promise for each retry attempt
+              const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Supplier fetch timeout - database may be cold starting. Please wait and try again.')), SUPPLIER_FETCH_TIMEOUT)
+              );
+              
+              // Race between actual fetch and timeout - loading only active suppliers
+              const suppliers = await Promise.race([
+                getActiveSuppliersApi(),
+                timeoutPromise
+              ]);
+            
+              // Use data processor for consistent processing
+              const processedSuppliers = processSuppliersOnly(suppliers);
+              
+              console.log(`✅ Suppliers loaded successfully: ${processedSuppliers.length} suppliers`);
+              
+              // Warn if no suppliers found
+              if (processedSuppliers.length === 0) {
+                console.error('⚠️ CRITICAL: No suppliers found!');
+                console.error('🔧 FIX: Run MAKE-SUPPLIERS-WORK.sql in your database');
+                set({ 
+                  suppliers: [], 
+                  error: 'No suppliers found. Please run database setup.' 
+                });
+              } else {
+                set({ 
+                  suppliers: processedSuppliers, 
+                  lastDataLoadTime: Date.now(),
+                  error: null
+                });
+              }
+              
+              // Update cache with longer duration for suppliers (5 minutes)
+              get().updateCache('suppliers', processedSuppliers);
+              latsAnalytics.track('suppliers_loaded', { count: processedSuppliers.length });
+              
+              // Success - break out of retry loop
+              break;
+            } catch (error: any) {
+              const errorMessage = error?.message || String(error);
+              const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('Timeout');
+              
+              if (isTimeout && retryCount < MAX_RETRIES) {
+                retryCount++;
+                const delay = Math.min(5000 * retryCount, 15000); // Exponential backoff, max 15s
+                console.warn(`⏱️ Supplier fetch timeout (attempt ${retryCount}/${MAX_RETRIES + 1}). Retrying in ${delay}ms...`);
+                console.warn('💡 This may be a cold start - Neon databases can take 30-60 seconds to wake up.');
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue; // Retry
+              }
+              
+              // Final error or non-timeout error
+              console.error('❌ Suppliers exception:', error);
+              if (isTimeout) {
+                console.error('⏱️ Supplier fetch timed out after all retries. Database may be cold starting.');
+                console.error('💡 Please wait 30-60 seconds and refresh the page.');
+              } else {
+                console.error('🔧 FIX: Run MAKE-SUPPLIERS-WORK.sql in your database');
+              }
+              set({ 
+                error: isTimeout 
+                  ? 'Supplier fetch timed out. Database may be cold starting. Please wait and refresh.'
+                  : 'Failed to load suppliers. Check database connection.',
+                suppliers: [] 
+              });
+              break; // Exit retry loop
+            }
+          }
+        } catch (error: any) {
+          // Catch any unexpected errors that escape the inner try-catch
+          const errorMessage = error?.message || String(error);
+          console.error('❌ Unexpected error in loadSuppliers:', error);
+          set({ 
+            error: errorMessage.includes('timeout') 
+              ? 'Supplier fetch timed out. Database may be cold starting. Please wait and refresh.'
+              : 'Failed to load suppliers. Check database connection.',
+            suppliers: [] 
+          });
+        } finally {
+          // Always reset loading state, even if an error occurred
+          set({ isSuppliersLoading: false });
+        }
+      },
+
+      createSupplier: async (supplier) => {
+        set({ isCreating: true, error: null });
+        try {
+          const createdSupplier = await createSupplierApi(supplier);
+          await get().loadSuppliers();
+          latsAnalytics.track('supplier_created', { supplierId: createdSupplier.id });
+          return { ok: true, data: createdSupplier };
+        } catch (error) {
+          const errorMsg = 'Failed to create supplier';
+          set({ error: errorMsg });
+          console.error('Error creating supplier:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isCreating: false });
+        }
+      },
+
+      updateSupplier: async (id, supplier) => {
+        set({ isUpdating: true, error: null });
+        try {
+          const updatedSupplier = await updateSupplierApi(id, supplier);
+          await get().loadSuppliers();
+          latsAnalytics.track('supplier_updated', { supplierId: id });
+          return { ok: true, data: updatedSupplier };
+        } catch (error) {
+          const errorMsg = 'Failed to update supplier';
+          set({ error: errorMsg });
+          console.error('Error updating supplier:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isUpdating: false });
+        }
+      },
+
+      deleteSupplier: async (id) => {
+        set({ isDeleting: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.deleteSupplier(id);
+          if (response.ok) {
+            await get().loadSuppliers();
+            latsAnalytics.track('supplier_deleted', { supplierId: id });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to delete supplier';
+          set({ error: errorMsg });
+          console.error('Error deleting supplier:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isDeleting: false });
+        }
+      },
+
+      // Products
+      loadProducts: async (filters?: any, force = false) => {
+        const state = get();
+
+        // Prevent multiple simultaneous loads (unless forced)
+        // But if products are already loaded, we can return early
+        if (state.isDataLoading && !force) {
+          console.log('🔍 [useInventoryStore] Products already loading, waiting for completion...');
+          // Wait for the current load to complete (max 30 seconds)
+          const maxWait = 30000;
+          const startWait = Date.now();
+          let waitCount = 0;
+          const maxWaitIterations = maxWait / 100; // 300 iterations max
+          
+          while (waitCount < maxWaitIterations) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            waitCount++;
+            const currentState = get();
+            if (!currentState.isDataLoading) {
+              // Load completed, check if products are now available
+              if (currentState.products.length > 0) {
+                console.log(`✅ [useInventoryStore] Products loaded by concurrent request: ${currentState.products.length}`);
+                return;
+              }
+              // Load completed but no products - break and continue loading
+              break;
+            }
+            // Safety check - if we've waited too long, break
+            if (Date.now() - startWait >= maxWait) {
+              console.warn('⚠️ [useInventoryStore] Timeout waiting for concurrent load, proceeding with new load');
+              break;
+            }
+          }
+          // If we waited and still no products, continue with loading
+          const finalState = get();
+          if (finalState.products.length === 0) {
+            console.log('⚠️ [useInventoryStore] Previous load completed but no products found, loading now...');
+            // Reset loading state and continue
+            set({ isDataLoading: false });
+          } else {
+            return;
+          }
+        }
+        
+        console.log('🔍 [useInventoryStore] Starting products load...', { filters });
+
+        // Ensure filters has default pagination values
+        const safeFilters = {
+          page: 1,
+          limit: 500, // Increased to 500 for better mobile POS performance - covers most shops
+          ...filters
+        };
+
+        // 🚀 SUPER OPTIMIZED: ALWAYS try localStorage cache first (instant load!)
+        // Even with filters, we can filter the cached data locally (much faster!)
+        if (!force) {
+          const cachedProducts = productCacheService.getProducts();
+          if (cachedProducts && cachedProducts.length > 0) {
+            console.log(`⚡ [useInventoryStore] Using localStorage cache (${cachedProducts.length} products) - INSTANT LOAD!`);
+            
+            // 🔍 DEBUG: Check cached products quality
+            if (import.meta.env.DEV) {
+              const cachedWithVariants = cachedProducts.filter((p: any) => p.variants && p.variants.length > 0).length;
+              const totalCachedVariants = cachedProducts.reduce((sum: number, p: any) => sum + (p.variants?.length || 0), 0);
+              const cachedWithStock = cachedProducts.filter((p: any) => {
+                const totalStock = p.variants?.reduce((sum: number, v: any) => sum + (v.quantity || v.stockQuantity || 0), 0) || 0;
+                return totalStock > 0;
+              }).length;
+              const cachedWithPrice = cachedProducts.filter((p: any) => {
+                const hasPrice = p.price > 0 || p.variants?.some((v: any) => (v.sellingPrice || v.price || 0) > 0);
+                return hasPrice;
+              }).length;
+              
+              console.log('🔍 [useInventoryStore Debug] Cached products quality:', {
+                total: cachedProducts.length,
+                withVariants: cachedWithVariants,
+                withoutVariants: cachedProducts.length - cachedWithVariants,
+                totalVariants: totalCachedVariants,
+                withStock: cachedWithStock,
+                withPrice: cachedWithPrice,
+                percentageWithVariants: Math.round((cachedWithVariants / cachedProducts.length) * 100),
+                percentageWithStock: Math.round((cachedWithStock / cachedProducts.length) * 100),
+                percentageWithPrice: Math.round((cachedWithPrice / cachedProducts.length) * 100),
+                dataSource: 'localStorage cache (downloaded database)'
+              });
+              
+              // Check if this is from full database download
+              const { fullDatabaseDownloadService } = await import('../../../services/fullDatabaseDownloadService');
+              const isDownloaded = fullDatabaseDownloadService.isDownloaded();
+              const downloadMeta = fullDatabaseDownloadService.getDownloadMetadata();
+              console.log('🔍 [useInventoryStore Debug] Full database status:', {
+                isDownloaded,
+                downloadTimestamp: downloadMeta?.timestamp,
+                downloadAge: downloadMeta ? Math.round((Date.now() - new Date(downloadMeta.timestamp).getTime()) / 1000 / 60) + ' minutes' : 'N/A'
+              });
+            }
+            
+            // Always use cache first, filter locally if needed (much faster than DB!)
+            set({ 
+              products: cachedProducts, 
+              isLoading: false, 
+              isDataLoading: false,
+              error: null 
+            });
+            
+            // ⚡ CRITICAL FIX: Also preload child variants when using cache!
+            const { childVariantsCacheService } = await import('../../../services/childVariantsCacheService');
+            childVariantsCacheService.preloadAllChildVariants(cachedProducts).catch(err => {
+              console.warn('⚠️ Failed to preload child variants from cache (non-critical):', err);
+            });
+            
+            // Update memory cache too
+            get().updateCache('products', cachedProducts);
+            
+            // Load fresh data in background (non-blocking) if cache is older than 1 minute
+            // Reduced from 5 minutes to ensure more frequent updates
+            try {
+              const cacheData = JSON.parse(localStorage.getItem('pos_products_cache') || '{}');
+              const cacheAge = Date.now() - (cacheData.timestamp || 0);
+              if (cacheAge > 1 * 60 * 1000) { // 1 minute instead of 5 minutes
+                console.log('🔄 [useInventoryStore] Cache is stale, refreshing in background...');
+                // Refresh in background without blocking UI
+                setTimeout(() => {
+                  get().loadProducts(filters, true).catch(err => {
+                    console.warn('⚠️ Background refresh failed (non-critical):', err);
+                  });
+                }, 100);
+              }
+            } catch (e) {
+              // Ignore cache age check errors
+            }
+            
+            return;
+          }
+        }
+
+        // 🚀 OPTIMIZED: Try memory cache if localStorage cache not available
+        if (state.isCacheValid('products') && !force) {
+          console.log('⚡ [useInventoryStore] Using memory cache (valid for 10 min)');
+          const memoryCachedProducts = state.dataCache.products || [];
+          
+          if (!filters) {
+            set({ products: memoryCachedProducts, isLoading: false, isDataLoading: false });
+          
+            // Preload child variants
+            if (memoryCachedProducts.length > 0) {
+            const { childVariantsCacheService } = await import('../../../services/childVariantsCacheService');
+              childVariantsCacheService.preloadAllChildVariants(memoryCachedProducts).catch(err => {
+              console.warn('⚠️ Failed to preload child variants from memory cache (non-critical):', err);
+            });
+          }
+          
+          return;
+          } else {
+            // With filters, use memory cache and filter locally
+            set({ products: memoryCachedProducts, isLoading: false, isDataLoading: false });
+            return;
+          }
+        }
+        
+        console.log('🔍 [useInventoryStore] No cache available, loading from database...');
+        console.log('⚠️ [useInventoryStore] PERFORMANCE WARNING: Loading from database instead of cache!');
+        console.log('💡 [useInventoryStore] Tip: Download full database in Settings > Offline Database for instant loads');
+        
+        const startTime = Date.now();
+        set({ isLoading: true, error: null, isDataLoading: true });
+        
+        // Add timeout to prevent infinite loading (75 seconds to account for Neon cold starts + query optimization)
+        // Increased from 45s to 75s to handle cold starts more gracefully
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Products loading timeout after 75 seconds. This may indicate a database connectivity issue.')), 75000);
+        });
+        
+        try {
+          const provider = getLatsProvider();
+
+          // Race between the actual request and timeout
+          const response = await Promise.race([
+            provider.getProducts(safeFilters),
+            timeoutPromise
+          ]);
+          
+          const loadTime = Date.now() - startTime;
+          
+          // Detect potential cold start (Neon database waking up)
+          if (loadTime > 10000) {
+            console.warn(`⚠️ [useInventoryStore] Slow database response (${loadTime}ms) - possible cold start`);
+          } else {
+            console.log(`✅ [useInventoryStore] Products loaded in ${loadTime}ms`);
+          }
+
+          if (response.ok) {
+            // Handle paginated response structure
+            const rawProducts = response.data?.data || response.data || [];
+
+            // Process and clean up product data to prevent HTTP 431 errors
+            // NOTE: Processing happens BEFORE validation so we validate the CLEANED data
+            const processedProducts = processProductsOnly(rawProducts);
+            
+            // Validate data integrity after processing (should be clean now)
+            if (processedProducts.length > 0) {
+              validateDataIntegrity(processedProducts, 'Products');
+            }
+
+            // Update pagination info
+            const paginationInfo = {
+              currentPage: response.data?.page || 1,
+              totalItems: response.data?.total || processedProducts.length,
+              totalPages: response.data?.totalPages || 1,
+              itemsPerPage: response.data?.limit || 500 // Increased to 500 for better mobile POS performance
+            };
+
+            
+            // DEBUG: Check for missing information in store data
+            const missingInfoCount = {
+              supplier: 0,
+              category: 0,
+              variants: 0,
+              price: 0,
+              stock: 0
+            };
+            
+            // 🔍 ENHANCED DIAGNOSTIC: Detailed variant, stock, and price analysis
+            const variantDetails = {
+              productsWithVariants: 0,
+              productsWithoutVariants: 0,
+              totalVariants: 0,
+              variantsWithStock: 0,
+              variantsWithoutStock: 0,
+              variantsWithPrice: 0,
+              variantsWithoutPrice: 0
+            };
+            
+            processedProducts.forEach(product => {
+              if (!product.supplier) missingInfoCount.supplier++;
+              if (!product.category) missingInfoCount.category++;
+              
+              // Variant analysis
+              if (!product.variants || product.variants.length === 0) {
+                missingInfoCount.variants++;
+                variantDetails.productsWithoutVariants++;
+              } else {
+                variantDetails.productsWithVariants++;
+                variantDetails.totalVariants += product.variants.length;
+                
+                product.variants.forEach((variant: any) => {
+                  const stock = variant.quantity || variant.stockQuantity || 0;
+                  const price = variant.sellingPrice || variant.price || 0;
+                  
+                  if (stock > 0) {
+                    variantDetails.variantsWithStock++;
+                  } else {
+                    variantDetails.variantsWithoutStock++;
+                  }
+                  
+                  if (price > 0) {
+                    variantDetails.variantsWithPrice++;
+                  } else {
+                    variantDetails.variantsWithoutPrice++;
+                  }
+                });
+              }
+              
+              // Price check (product level or variant level)
+              const hasProductPrice = product.price && product.price > 0;
+              const hasVariantPrice = product.variants?.some((v: any) => (v.sellingPrice || v.price || 0) > 0);
+              if (!hasProductPrice && !hasVariantPrice) {
+                missingInfoCount.price++;
+              }
+              
+              // Stock check (product level or variant level)
+              const productStock = product.totalQuantity || product.stockQuantity || 0;
+              const variantStock = product.variants?.reduce((sum: number, v: any) => sum + (v.quantity || v.stockQuantity || 0), 0) || 0;
+              if (productStock === 0 && variantStock === 0) {
+                missingInfoCount.stock++;
+              }
+            });
+            
+            console.log('🔍 [InventoryStore] DEBUG - Missing information in store:', {
+              totalProducts: processedProducts.length,
+              missingInfoCount,
+              percentageMissing: {
+                supplier: Math.round((missingInfoCount.supplier / processedProducts.length) * 100),
+                category: Math.round((missingInfoCount.category / processedProducts.length) * 100),
+                variants: Math.round((missingInfoCount.variants / processedProducts.length) * 100),
+                price: Math.round((missingInfoCount.price / processedProducts.length) * 100),
+                stock: Math.round((missingInfoCount.stock / processedProducts.length) * 100)
+              }
+            });
+            
+            console.log('📊 [InventoryStore] Variant/Stock/Price Analysis:', {
+              ...variantDetails,
+              averageVariantsPerProduct: variantDetails.productsWithVariants > 0 
+                ? Math.round((variantDetails.totalVariants / variantDetails.productsWithVariants) * 10) / 10 
+                : 0
+            });
+            
+            // Sample first product with variants for detailed inspection
+            const sampleProductWithVariants = processedProducts.find(p => p.variants && p.variants.length > 0);
+            if (sampleProductWithVariants) {
+              console.log('🔍 [InventoryStore] Sample product with variants:', {
+                id: sampleProductWithVariants.id,
+                name: sampleProductWithVariants.name,
+                variantCount: sampleProductWithVariants.variants?.length || 0,
+                variants: sampleProductWithVariants.variants?.map((v: any) => ({
+                  id: v.id,
+                  name: v.name,
+                  quantity: v.quantity,
+                  stockQuantity: v.stockQuantity,
+                  price: v.price,
+                  sellingPrice: v.sellingPrice,
+                  costPrice: v.costPrice
+                })) || []
+              });
+            } else {
+              console.warn('⚠️ [InventoryStore] No products with variants found!');
+            }
+
+            set({ 
+              products: processedProducts,
+              ...paginationInfo,
+              error: null // Clear any previous errors
+            });
+            
+            // Only cache if no filters applied
+            if (!filters) {
+              get().updateCache('products', processedProducts);
+              // 🚀 ALSO save to localStorage for instant loads!
+              productCacheService.saveProducts(processedProducts);
+              
+              // ⚡ PERFORMANCE: Preload ALL child variants in background (non-blocking)
+              // This makes variant selection modals instant!
+              const { childVariantsCacheService } = await import('../../../services/childVariantsCacheService');
+              childVariantsCacheService.preloadAllChildVariants(processedProducts).catch(err => {
+                console.warn('⚠️ Failed to preload child variants (non-critical):', err);
+              });
+            }
+            
+            latsAnalytics.track('products_loaded', { 
+              count: processedProducts.length,
+              page: paginationInfo.currentPage,
+              total: paginationInfo.totalItems
+            });
+          } else {
+            const errorMessage = response.message || 'Failed to load products';
+            logDatabase(`Provider returned error: ${errorMessage}`, undefined, {
+              component: 'useInventoryStore',
+              action: 'loadProducts',
+              metadata: { message: response.message }
+            });
+
+            set({ error: errorMessage });
+          }
+        } catch (error) {
+          console.error('Exception in loadProducts:', error);
+
+          // Create fallback sample categories and products so the interface works
+
+          // Create sample categories
+          const fallbackCategories = [
+            {
+              id: 'sample-category',
+              name: 'Electronics',
+              description: 'Electronic devices and accessories',
+              color: '#3B82F6',
+              icon: '📱',
+              parent_id: null,
+              isActive: true,
+              is_active: true,
+              sortOrder: 1,
+              metadata: {},
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            },
+            {
+              id: 'sample-category-2',
+              name: 'Accessories',
+              description: 'Phone and device accessories',
+              color: '#10B981',
+              icon: '🎧',
+              parent_id: null,
+              isActive: true,
+              is_active: true,
+              sortOrder: 2,
+              metadata: {},
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            },
+            {
+              id: 'sample-category-3',
+              name: 'Repair Parts',
+              description: 'Repair and replacement parts',
+              color: '#F59E0B',
+              icon: '🔧',
+              parent_id: null,
+              isActive: true,
+              is_active: true,
+              sortOrder: 3,
+              metadata: {},
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            }
+          ];
+          
+          const fallbackProducts = [
+            {
+              id: 'sample-1',
+              name: 'Sample iPhone 13',
+              shortDescription: 'Sample iPhone 13 for testing',
+              sku: 'IPH13-SAMPLE',
+              categoryId: 'sample-category',
+              supplierId: 'sample-supplier',
+              images: [],
+              isActive: true,
+              totalQuantity: 10,
+              totalValue: 50000,
+              price: 50000,
+              costPrice: 40000,
+              priceRange: '50000',
+              condition: 'new',
+              internalNotes: 'Sample product for testing',
+              attributes: { color: 'Black', storage: '128GB' },
+              variants: [
+                {
+                  id: 'sample-variant-1',
+                  productId: 'sample-1',
+                  sku: 'IPH13-SAMPLE-BLK-128',
+                  name: 'Black 128GB',
+                  attributes: { color: 'Black', storage: '128GB' },
+                  costPrice: 40000,
+                  sellingPrice: 50000,
+                  quantity: 10,
+                  min_quantity: 1,
+                  max_quantity: null,
+                  weight: null,
+                  dimensions: null,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                }
+              ],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            },
+            {
+              id: 'sample-2',
+              name: 'Sample Samsung Galaxy',
+              shortDescription: 'Sample Samsung Galaxy for testing',
+              sku: 'SAMSUNG-SAMPLE',
+              categoryId: 'sample-category-2',
+              supplierId: 'sample-supplier',
+              images: [],
+              isActive: true,
+              totalQuantity: 15,
+              totalValue: 45000,
+              price: 45000,
+              costPrice: 35000,
+              priceRange: '45000',
+              condition: 'new',
+              internalNotes: 'Sample product for testing',
+              attributes: { color: 'Blue', storage: '256GB' },
+              variants: [
+                {
+                  id: 'sample-variant-2',
+                  productId: 'sample-2',
+                  sku: 'SAMSUNG-SAMPLE-BLU-256',
+                  name: 'Blue 256GB',
+                  attributes: { color: 'Blue', storage: '256GB' },
+                  costPrice: 35000,
+                  sellingPrice: 45000,
+                  quantity: 15,
+                  min_quantity: 1,
+                  max_quantity: null,
+                  weight: null,
+                  dimensions: null,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                }
+              ],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            },
+            {
+              id: 'sample-3',
+              name: 'Sample iPhone Screen',
+              shortDescription: 'Sample iPhone screen replacement',
+              sku: 'IPH-SCREEN-SAMPLE',
+              categoryId: 'sample-category-3',
+              supplierId: 'sample-supplier',
+              images: [],
+              isActive: true,
+              totalQuantity: 5,
+              totalValue: 25000,
+              price: 25000,
+              costPrice: 20000,
+              priceRange: '25000',
+              condition: 'new',
+              internalNotes: 'Sample repair part for testing',
+              attributes: { model: 'iPhone 13', color: 'Black' },
+              variants: [
+                {
+                  id: 'sample-variant-3',
+                  productId: 'sample-3',
+                  sku: 'IPH-SCREEN-SAMPLE-BLK',
+                  name: 'Black Screen',
+                  attributes: { model: 'iPhone 13', color: 'Black' },
+                  costPrice: 20000,
+                  sellingPrice: 25000,
+                  quantity: 5,
+                  min_quantity: 1,
+                  max_quantity: null,
+                  weight: null,
+                  dimensions: null,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                }
+              ],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            }
+          ];
+          
+          set({ 
+            products: fallbackProducts,
+            categories: fallbackCategories,
+            error: 'Using sample products and categories due to database connection issue',
+            isLoading: false,
+            isDataLoading: false
+          });
+
+        } finally {
+
+          set({ isLoading: false, isDataLoading: false });
+        }
+      },
+
+      // Load product variants separately when needed
+      loadProductVariants: async (productId: string) => {
+        try {
+          const provider = getLatsProvider();
+          
+          const response = await provider.getProductVariants(productId);
+          
+          if (response.ok) {
+            return { ok: true, data: response.data };
+          } else {
+            console.error('Failed to load product variants:', response.message);
+            return { ok: false, message: response.message };
+          }
+        } catch (error) {
+          console.error('Exception in loadProductVariants:', error);
+          return { ok: false, message: 'Failed to load product variants' };
+        }
+      },
+
+      getProduct: async (id) => {
+        try {
+          const provider = getLatsProvider();
+          return await provider.getProduct(id);
+        } catch (error) {
+          console.error('Error getting product:', error);
+          return { ok: false, message: 'Failed to get product' };
+        }
+      },
+
+      createProduct: async (product) => {
+        set({ isCreating: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.createProduct(product);
+          
+          if (response.ok) {
+            // Clear products cache to force reload (both memory and localStorage)
+            get().clearCache('products');
+            productCacheService.clearProducts(); // Also clear localStorage cache
+            await get().loadProducts(null, true); // Force reload, bypass all caches
+            latsAnalytics.track('product_created', { productId: response.data?.id });
+          } else {
+            set({ error: response.message || 'Failed to create product' });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to create product';
+          console.error('Exception in createProduct:', error);
+          set({ error: errorMsg });
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isCreating: false });
+        }
+      },
+
+      updateProduct: async (id, product) => {
+        set({ isUpdating: true, error: null });
+        
+        try {
+          console.log('🏪 [Store] updateProduct called with:', { id, product });
+          const provider = getLatsProvider();
+          console.log('🏪 [Store] Provider obtained, calling updateProduct...');
+          const response = await provider.updateProduct(id, product);
+          console.log('🏪 [Store] Provider response:', response);
+          
+          if (response.ok) {
+            console.log('✅ [Store] Update successful, reloading products...');
+            // Clear cache before reloading
+            get().clearCache('products');
+            productCacheService.clearProducts();
+            await get().loadProducts(null, true); // Force reload
+            latsAnalytics.track('product_updated', { productId: id });
+          } else {
+            console.error('❌ [Store] Update failed:', response.message);
+            set({ error: response.message || 'Failed to update product' });
+          }
+          
+          return response;
+        } catch (error: any) {
+          const errorMsg = 'Failed to update product';
+          console.error('❌ [Store] Exception in updateProduct:', error);
+          console.error('❌ [Store] Error message:', error?.message);
+          console.error('❌ [Store] Error stack:', error?.stack);
+          set({ error: errorMsg });
+          return { ok: false, message: error?.message || errorMsg };
+        } finally {
+          set({ isUpdating: false });
+        }
+      },
+
+      updateProductInStore: (updatedProduct: Product) => {
+        const state = get();
+        const productIndex = state.products.findIndex(p => p.id === updatedProduct.id);
+        
+        if (productIndex >= 0) {
+          // Update existing product in the array
+          const updatedProducts = [...state.products];
+          updatedProducts[productIndex] = updatedProduct;
+          
+          set({ 
+            products: updatedProducts,
+            dataCache: {
+              ...state.dataCache,
+              products: updatedProducts
+            }
+          });
+          
+          console.log(`✅ [Store] Updated product ${updatedProduct.id} in store without reloading all products`);
+        } else {
+          // Product not found, add it to the array
+          set({ 
+            products: [...state.products, updatedProduct],
+            dataCache: {
+              ...state.dataCache,
+              products: [...state.products, updatedProduct]
+            }
+          });
+          
+          console.log(`✅ [Store] Added product ${updatedProduct.id} to store`);
+        }
+      },
+
+      deleteProduct: async (id) => {
+        set({ isDeleting: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.deleteProduct(id);
+          if (response.ok) {
+            // Clear cache before reloading
+            get().clearCache('products');
+            productCacheService.clearProducts();
+            await get().loadProducts(null, true); // Force reload
+            latsAnalytics.track('product_deleted', { productId: id });
+          } else {
+            throw new Error(response.message || 'Failed to delete product');
+          }
+        } catch (error) {
+          const errorMsg = 'Failed to delete product';
+          set({ error: errorMsg });
+          console.error('Error deleting product:', error);
+          throw error;
+        } finally {
+          set({ isDeleting: false });
+        }
+      },
+
+      searchProducts: async (query) => {
+        try {
+          const provider = getLatsProvider();
+          return await provider.searchProducts(query);
+        } catch (error) {
+          console.error('Error searching products:', error);
+          return { ok: false, message: 'Failed to search products', data: [] };
+        }
+      },
+
+      // Stock Management
+      loadStockMovements: async () => {
+        const state = get();
+        
+        // Check cache first
+        if (state.isCacheValid('stockMovements')) {
+          set({ stockMovements: state.dataCache.stockMovements || [] });
+          return;
+        }
+
+        set({ isLoading: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.getStockMovements();
+          if (response.ok) {
+            const stockMovements = response.data || [];
+            set({ stockMovements });
+            get().updateCache('stockMovements', stockMovements);
+            latsAnalytics.track('stock_movements_loaded', { count: stockMovements.length });
+          } else {
+            set({ error: response.message || 'Failed to load stock movements' });
+          }
+        } catch (error) {
+          set({ error: 'Failed to load stock movements' });
+          console.error('Error loading stock movements:', error);
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      adjustStock: async (productId, variantId, quantity, reason) => {
+        set({ isUpdating: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.adjustStock(productId, variantId, quantity, reason);
+          if (response.ok) {
+            await get().loadProducts();
+            await get().loadStockMovements();
+            latsAnalytics.track('stock_adjusted', { productId, variantId, quantity, reason });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to adjust stock';
+          set({ error: errorMsg });
+          console.error('Error adjusting stock:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isUpdating: false });
+        }
+      },
+
+      // Sales Data
+      loadSales: async () => {
+        const state = get();
+        
+        // Check cache first
+        if (state.isCacheValid('sales')) {
+          set({ sales: state.dataCache.sales || [] });
+          return;
+        }
+
+        set({ isLoading: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.getSales();
+          if (response.ok) {
+            const sales = response.data || [];
+            set({ sales });
+            get().updateCache('sales', sales);
+            latsAnalytics.track('sales_loaded', { count: sales.length });
+          } else {
+            set({ error: response.message || 'Failed to load sales' });
+          }
+        } catch (error) {
+          set({ error: 'Failed to load sales' });
+          console.error('Error loading sales:', error);
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      getProductSales: async (productId) => {
+        try {
+          const provider = getLatsProvider();
+          return await provider.getProductSales(productId);
+        } catch (error) {
+          console.error('Error getting product sales:', error);
+          return { ok: false, message: 'Failed to get product sales', data: [] };
+        }
+      },
+
+      getSoldQuantity: (productId, variantId) => {
+        const sales = get().sales;
+        return sales.filter(sale => sale.product_id === productId && sale.variant_id === variantId).reduce((sum, sale) => sum + sale.quantity, 0);
+      },
+
+      // Purchase Orders
+      loadPurchaseOrders: async () => {
+        const state = get();
+        // Prevent multiple simultaneous loads
+        if (state.isLoading || state.isDataLoading) {
+          return;
+        }
+        
+        set({ isLoading: true, isDataLoading: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.getPurchaseOrders();
+          if (response.ok) {
+            set({ purchaseOrders: response.data || [] });
+            latsAnalytics.track('purchase_orders_loaded', { count: response.data?.length || 0 });
+          } else {
+            set({ error: response.message || 'Failed to load purchase orders' });
+          }
+        } catch (error) {
+          set({ error: 'Failed to load purchase orders' });
+          console.error('Error loading purchase orders:', error);
+        } finally {
+          set({ isLoading: false, isDataLoading: false });
+        }
+      },
+
+      getPurchaseOrder: async (id) => {
+        try {
+          if (!id) {
+            console.error('❌ No purchase order ID provided');
+            return { ok: false, message: 'Purchase order ID is required' };
+          }
+
+          const provider = getLatsProvider();
+          const result = await provider.getPurchaseOrder(id);
+          
+          if (!result.ok) {
+            console.error('❌ Provider error getting purchase order:', result.message);
+          }
+          
+          return result;
+        } catch (error) {
+          console.error('❌ Store error getting purchase order:', error);
+          
+          // Provide more specific error messages
+          if (error instanceof Error) {
+            if (error.message.includes('network') || error.message.includes('fetch')) {
+              return { ok: false, message: 'Network error: Please check your internet connection' };
+            } else if (error.message.includes('timeout')) {
+              return { ok: false, message: 'Request timeout: Please try again' };
+            } else {
+              return { ok: false, message: `Error: ${error.message}` };
+            }
+          }
+          
+          return { ok: false, message: 'Failed to get purchase order: Unknown error occurred' };
+        }
+      },
+
+      createPurchaseOrder: async (order) => {
+        set({ isCreating: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.createPurchaseOrder(order);
+          if (response.ok) {
+            await get().loadPurchaseOrders();
+            latsAnalytics.track('purchase_order_created', { orderId: response.data?.id });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to create purchase order';
+          set({ error: errorMsg });
+          console.error('Error creating purchase order:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isCreating: false });
+        }
+      },
+
+      updatePurchaseOrder: async (id, order) => {
+        set({ isUpdating: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.updatePurchaseOrder(id, order);
+          if (response.ok) {
+            await get().loadPurchaseOrders();
+            latsAnalytics.track('purchase_order_updated', { orderId: id });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to update purchase order';
+          set({ error: errorMsg });
+          console.error('Error updating purchase order:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isUpdating: false });
+        }
+      },
+
+
+      receivePurchaseOrder: async (id) => {
+        set({ isUpdating: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.receivePurchaseOrder(id);
+          if (response.ok) {
+            await get().loadPurchaseOrders();
+            await get().loadProducts();
+            latsAnalytics.track('purchase_order_received', { orderId: id });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to receive purchase order';
+          set({ error: errorMsg });
+          console.error('Error receiving purchase order:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isUpdating: false });
+        }
+      },
+
+      updatePurchaseOrderStatus: async (id, status) => {
+        set({ isUpdating: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.updatePurchaseOrder(id, { status });
+          if (response.ok) {
+            await get().loadPurchaseOrders();
+            latsAnalytics.track('purchase_order_status_updated', { orderId: id, status });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to update purchase order status';
+          set({ error: errorMsg });
+          console.error('Error updating purchase order status:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isUpdating: false });
+        }
+      },
+
+      approvePurchaseOrder: async (id: string) => {
+        set({ isUpdating: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.updatePurchaseOrder(id, { 
+            status: 'sent',
+            approvedAt: new Date().toISOString(),
+            approvedBy: get().currentUser?.id
+          });
+          if (response.ok) {
+            await get().loadPurchaseOrders();
+            latsAnalytics.track('purchase_order_approved', { orderId: id });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to approve purchase order';
+          set({ error: errorMsg });
+          console.error('Error approving purchase order:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isUpdating: false });
+        }
+      },
+
+      deletePurchaseOrder: async (id) => {
+        set({ isDeleting: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.deletePurchaseOrder(id);
+          if (response.ok) {
+            await get().loadPurchaseOrders();
+            latsAnalytics.track('purchase_order_deleted', { orderId: id });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to delete purchase order';
+          set({ error: errorMsg });
+          console.error('Error deleting purchase order:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isDeleting: false });
+        }
+      },
+
+
+
+      // Spare Parts
+      loadSpareParts: async () => {
+
+        set({ isLoading: true, error: null });
+        try {
+          const provider = getLatsProvider();
+
+          const response = await provider.getSpareParts();
+
+          if (response.ok) {
+            const sparePartsData = response.data || [];
+
+            set({ spareParts: sparePartsData });
+            // Update cache
+            get().updateCache('spareParts', sparePartsData);
+            latsAnalytics.track('spare_parts_loaded', { count: sparePartsData.length });
+
+          } else {
+            console.error('❌ [DEBUG] loadSpareParts: Failed to load spare parts:', response.message);
+            set({ error: response.message || 'Failed to load spare parts' });
+          }
+        } catch (error) {
+          console.error('❌ [DEBUG] loadSpareParts: Error loading spare parts:', error);
+          set({ error: 'Failed to load spare parts' });
+        } finally {
+          set({ isLoading: false });
+
+        }
+      },
+
+      getSparePart: async (id) => {
+        try {
+          const provider = getLatsProvider();
+          return await provider.getSparePart(id);
+        } catch (error) {
+          console.error('Error getting spare part:', error);
+          return { ok: false, message: 'Failed to get spare part' };
+        }
+      },
+
+      createSparePart: async (sparePart) => {
+        set({ isCreating: true, error: null });
+        try {
+          const response = await createSparePartApi(sparePart);
+          if (response.ok) {
+            // Clear cache to force fresh data load
+            get().clearCache('spareParts');
+            await get().loadSpareParts();
+            latsAnalytics.track('spare_part_created', { sparePartId: response.data?.id });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to create spare part';
+          set({ error: errorMsg });
+          console.error('Error creating spare part:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isCreating: false });
+        }
+      },
+
+      createOrUpdateSparePart: async (sparePart) => {
+        set({ isCreating: true, error: null });
+        try {
+          const response = await createOrUpdateSparePartApi(sparePart);
+          if (response.ok) {
+
+            // Clear cache to force fresh data load
+            get().clearCache('spareParts');
+
+            await get().loadSpareParts();
+
+            latsAnalytics.track('spare_part_created_or_updated', { sparePartId: response.data?.id });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to create or update spare part';
+          set({ error: errorMsg });
+          console.error('Error creating or updating spare part:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isCreating: false });
+        }
+      },
+
+      updateSparePart: async (id, sparePart) => {
+        set({ isUpdating: true, error: null });
+        try {
+          const response = await updateSparePartWithVariantsApi(id, sparePart);
+          if (response.ok) {
+            // Clear cache to force fresh data load
+            get().clearCache('spareParts');
+            await get().loadSpareParts();
+            latsAnalytics.track('spare_part_updated', { sparePartId: id });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to update spare part';
+          set({ error: errorMsg });
+          console.error('Error updating spare part:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isUpdating: false });
+        }
+      },
+
+      deleteSparePart: async (id) => {
+        set({ isDeleting: true, error: null });
+        try {
+          const response = await deleteSparePartApi(id);
+          if (response.ok) {
+            await get().loadSpareParts();
+            latsAnalytics.track('spare_part_deleted', { sparePartId: id });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to delete spare part';
+          set({ error: errorMsg });
+          console.error('Error deleting spare part:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isDeleting: false });
+        }
+      },
+
+      useSparePart: async (id, quantity, reason, notes) => {
+        set({ isUpdating: true, error: null });
+        try {
+          const usageData = {
+            spare_part_id: id,
+            quantity_used: quantity,
+            reason,
+            notes
+          };
+          const response = await recordSparePartUsageApi(usageData);
+          if (response.ok) {
+            await get().loadSpareParts();
+            await get().loadSparePartUsage();
+            latsAnalytics.track('spare_part_used', { sparePartId: id, quantity, reason });
+          }
+          return response;
+        } catch (error) {
+          const errorMsg = 'Failed to use spare part';
+          set({ error: errorMsg });
+          console.error('Error using spare part:', error);
+          return { ok: false, message: errorMsg };
+        } finally {
+          set({ isUpdating: false });
+        }
+      },
+
+      loadSparePartUsage: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const provider = getLatsProvider();
+          const response = await provider.getSparePartUsage();
+          if (response.ok) {
+            set({ sparePartUsage: response.data || [] });
+            latsAnalytics.track('spare_part_usage_loaded', { count: response.data?.length || 0 });
+          } else {
+            set({ error: response.message || 'Failed to load spare part usage' });
+          }
+        } catch (error) {
+          set({ error: 'Failed to load spare part usage' });
+          console.error('Error loading spare part usage:', error);
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      // Computed values
+      getFilteredProducts: () => {
+        const { products, searchTerm, selectedCategory, selectedSupplier, stockFilter } = get();
+        
+        return products.filter(product => {
+          // Search filter
+          if (searchTerm) {
+            const searchLower = searchTerm.toLowerCase();
+            const matchesSearch = 
+              product.name.toLowerCase().includes(searchLower) ||
+              product.description.toLowerCase().includes(searchLower) ||
+              product.variants?.some(variant => 
+                variant.sku?.toLowerCase().includes(searchLower)
+              ) ||
+              false;
+            if (!matchesSearch) return false;
+          }
+
+          // Category filter
+          if (selectedCategory && product.categoryId !== selectedCategory) {
+            return false;
+          }
+
+
+
+          // Supplier filter
+          if (selectedSupplier && product.supplierId !== selectedSupplier) {
+            return false;
+          }
+
+          // Stock filter
+          if (stockFilter !== 'all') {
+            const totalStock = product.variants?.reduce((sum, variant) => sum + (variant.quantity || 0), 0) || 0;
+            switch (stockFilter) {
+              case 'in-stock':
+                if (totalStock <= 0) return false;
+                break;
+              case 'low-stock':
+                if (totalStock > 10) return false;
+                break;
+              case 'out-of-stock':
+                if (totalStock > 0) return false;
+                break;
+            }
+          }
+
+          return true;
+        });
+      },
+
+      getLowStockProducts: () => {
+        const { products } = get();
+        return products.filter(product => {
+          const totalStock = product.variants?.reduce((sum, variant) => sum + (variant.quantity || 0), 0) || 0;
+          return totalStock > 0 && totalStock <= 10;
+        });
+      },
+
+      getOutOfStockProducts: () => {
+        const { products } = get();
+        return products.filter(product => {
+          const totalStock = product.variants?.reduce((sum, variant) => sum + (variant.quantity || 0), 0) || 0;
+          return totalStock <= 0;
+        });
+      },
+
+      getProductById: (id) => {
+        const { products } = get();
+        
+        // Validate and sanitize the ID parameter
+        if (!id) {
+          console.error('❌ getProductById: No ID provided');
+          return undefined;
+        }
+
+        // Handle case where an object might be passed instead of a string
+        if (typeof id === 'object') {
+          console.error('❌ getProductById: Object passed instead of string ID:', id);
+          return undefined;
+        }
+
+        // Convert to string and trim whitespace
+        const sanitizedId = String(id).trim();
+        
+        if (!sanitizedId) {
+          console.error('❌ getProductById: Empty ID after sanitization');
+          return undefined;
+        }
+
+        return products.find(p => p.id === sanitizedId);
+      },
+
+      getCategoryById: (id) => {
+        const { categories } = get();
+        
+        // Validate and sanitize the ID parameter
+        if (!id || typeof id === 'object') {
+          console.error('❌ getCategoryById: Invalid ID provided:', id);
+          return undefined;
+        }
+        
+        const sanitizedId = String(id).trim();
+        return categories.find(c => c.id === sanitizedId);
+      },
+
+
+
+      getSupplierById: (id) => {
+        const { suppliers } = get();
+        
+        // Validate and sanitize the ID parameter
+        if (!id || typeof id === 'object') {
+          console.error('❌ getSupplierById: Invalid ID provided:', id);
+          return undefined;
+        }
+        
+        const sanitizedId = String(id).trim();
+        return suppliers.find(s => s.id === sanitizedId);
+      }
+    })),
+    {
+      name: 'lats-inventory-store',
+      enabled: import.meta.env.DEV && hasReduxDevTools
+    }
+  )
+);
+
+// ⚠️ CRITICAL FIX: Subscribe to events with guards to prevent boot loops
+// Use a flag to prevent multiple subscriptions and event cascades
+let eventSubscriptionInitialized = false;
+let eventProcessingTimeout: NodeJS.Timeout | null = null;
+let isProcessingEvent = false;
+let eventCount = 0; // Debug counter
+
+if (!eventSubscriptionInitialized) {
+  eventSubscriptionInitialized = true;
+  console.log('🔵 [DEBUG] Event subscription initialized');
+  
+  latsEventBus.subscribeToAll((event) => {
+    eventCount++;
+    console.log(`🔵 [DEBUG] Event received #${eventCount}:`, event.type, {
+      isProcessingEvent,
+      hasTimeout: !!eventProcessingTimeout,
+      timestamp: new Date().toISOString()
+    });
+    
+    // ⚠️ CRITICAL: Prevent concurrent event processing (prevents boot loops)
+    if (isProcessingEvent) {
+      console.log(`⏭️ [DEBUG] Skipping event ${event.type} - already processing`);
+      return; // Silently skip if already processing
+    }
+    
+    const store = useInventoryStore.getState();
+    console.log(`🔵 [DEBUG] Store state check for ${event.type}:`, {
+      isDataLoading: store.isDataLoading,
+      productsCount: store.products.length,
+      cacheTimestamp: store.cacheTimestamp
+    });
+    
+    // Prevent infinite loops by checking if data is already loading
+    if (store.isDataLoading) {
+      console.log(`⏭️ [DEBUG] Skipping event ${event.type} - data already loading`);
+      return;
+    }
+    
+    // Clear any pending event processing
+    if (eventProcessingTimeout) {
+      console.log(`🔵 [DEBUG] Clearing pending timeout for ${event.type}`);
+      clearTimeout(eventProcessingTimeout);
+    }
+    
+    // Defer event processing to prevent blocking and boot loops
+    console.log(`🔵 [DEBUG] Scheduling event processing for ${event.type} in 1 second`);
+    eventProcessingTimeout = setTimeout(() => {
+      console.log(`🔵 [DEBUG] Processing event ${event.type} now`);
+      isProcessingEvent = true;
+      
+      try {
+        switch (event.type) {
+          case 'lats:category.created':
+          case 'lats:category.updated':
+          case 'lats:category.deleted':
+            if (!store.isCacheValid('categories')) {
+              store.loadCategories().catch(() => {});
+            }
+            break;
+            
+          case 'lats:supplier.created':
+          case 'lats:supplier.updated':
+          case 'lats:supplier.deleted':
+            if (!store.isCacheValid('suppliers')) {
+              store.loadSuppliers().catch(() => {});
+            }
+            break;
+            
+          case 'lats:product.created':
+          case 'lats:product.updated':
+          case 'lats:product.deleted':
+            store.forceRefreshProducts().catch(() => {});
+            break;
+            
+          case 'lats:stock.updated':
+            console.log(`🔵 [DEBUG] Handling stock.updated event`);
+            // Only refresh if not already loading (prevents boot loops)
+            if (!store.isDataLoading) {
+              console.log(`🔵 [DEBUG] Scheduling stock refresh in 3 seconds`);
+              setTimeout(() => {
+                const currentStore = useInventoryStore.getState();
+                if (!currentStore.isDataLoading) {
+                  console.log(`🔵 [DEBUG] Executing stock refresh now`);
+                  currentStore.loadProducts().catch((err) => {
+                    console.warn('⚠️ [DEBUG] Stock refresh failed:', err);
+                  });
+                  if (!currentStore.isCacheValid('stockMovements')) {
+                    currentStore.loadStockMovements().catch((err) => {
+                      console.warn('⚠️ [DEBUG] Stock movements reload failed:', err);
+                    });
+                  }
+                } else {
+                  console.log(`⏭️ [DEBUG] Skipping stock refresh - data loading`);
+                }
+              }, 3000); // Increased to 3 seconds to prevent cascading
+            } else {
+              console.log(`⏭️ [DEBUG] Skipping stock.updated - data already loading`);
+            }
+            break;
+            
+          case 'lats:purchase-order.created':
+          case 'lats:purchase-order.updated':
+          case 'lats:purchase-order.received':
+          case 'lats:purchase-order.deleted':
+            // Disabled to prevent errors
+            break;
+            
+          case 'lats:spare-part.created':
+          case 'lats:spare-part.updated':
+          case 'lats:spare-part.deleted':
+            if (!store.isCacheValid('spareParts')) {
+              store.loadSpareParts().catch(() => {});
+            }
+            break;
+            
+          case 'lats:spare-part.used':
+            if (!store.isCacheValid('spareParts')) {
+              store.loadSpareParts().catch(() => {});
+            }
+            if (!store.isCacheValid('sparePartUsage')) {
+              store.loadSparePartUsage().catch(() => {});
+            }
+            break;
+            
+          case 'lats:sale.completed':
+            console.log(`🔵 [DEBUG] Handling sale.completed event`);
+            // Always refresh products after sale to update stock levels
+            setTimeout(() => {
+              const currentStore = useInventoryStore.getState();
+              console.log(`🔵 [DEBUG] Executing sale.completed reloads now`);
+              
+              // Always reload products to refresh stock after sale (force refresh)
+              if (!currentStore.isDataLoading) {
+                console.log(`🔄 [DEBUG] Refreshing products after sale to update stock`);
+                currentStore.loadProducts({ page: 1, limit: 200 }, true).catch((err) => {
+                  console.warn('⚠️ [DEBUG] Products reload failed:', err);
+                });
+              }
+              
+              // Also reload stock movements and sales
+              currentStore.loadStockMovements().catch((err) => {
+                console.warn('⚠️ [DEBUG] Stock movements reload failed:', err);
+              });
+              currentStore.loadSales().catch((err) => {
+                console.warn('⚠️ [DEBUG] Sales reload failed:', err);
+              });
+            }, 1000); // Reduced to 1 second for faster stock update
+            break;
+        }
+      } catch (error) {
+        console.error(`❌ [DEBUG] Error processing event ${event.type}:`, error);
+      } finally {
+        console.log(`🔵 [DEBUG] Event ${event.type} processing complete`);
+        isProcessingEvent = false;
+        eventProcessingTimeout = null;
+      }
+    }, 1000); // Defer all event processing by 1 second to prevent boot loops
+  });
+  
+  console.log('🔵 [DEBUG] Event subscription setup complete');
+} else {
+  console.log('⏭️ [DEBUG] Event subscription already initialized, skipping');
+}

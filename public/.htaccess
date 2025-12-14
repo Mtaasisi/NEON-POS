@@ -1,0 +1,112 @@
+# ================================================
+# PERMANENT FIX FOR MIME TYPE ERRORS
+# ================================================
+
+# Force correct MIME types for JavaScript modules
+<IfModule mod_mime.c>
+  # JavaScript
+  AddType application/javascript .js
+  AddType application/javascript .mjs
+  AddType text/javascript .js
+  AddType text/javascript .mjs
+  
+  # CSS
+  AddType text/css .css
+  
+  # JSON
+  AddType application/json .json
+  
+  # Images
+  AddType image/svg+xml .svg
+  AddType image/webp .webp
+  
+  # Fonts
+  AddType font/woff2 .woff2
+  AddType font/woff .woff
+  AddType font/ttf .ttf
+  AddType font/eot .eot
+</IfModule>
+
+# Ensure correct charset for JavaScript
+<IfModule mod_headers.c>
+  # Force correct Content-Type for all JS files
+  <FilesMatch "\.(js|mjs)$">
+    Header set Content-Type "application/javascript; charset=utf-8"
+  </FilesMatch>
+  
+  # Force correct Content-Type for CSS files
+  <FilesMatch "\.css$">
+    Header set Content-Type "text/css; charset=utf-8"
+  </FilesMatch>
+  
+  # Add CORS headers for assets
+  <FilesMatch "\.(js|mjs|css|json|svg|woff2|woff|ttf|eot)$">
+    Header set Access-Control-Allow-Origin "*"
+  </FilesMatch>
+  
+  # Prevent MIME type sniffing
+  Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  
+  # Ensure .js files are served with correct MIME type
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteCond %{REQUEST_URI} \.(js|mjs)$
+  RewriteRule .* - [T=application/javascript,L]
+  
+  # Ensure .css files are served with correct MIME type
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteCond %{REQUEST_URI} \.css$
+  RewriteRule .* - [T=text/css,L]
+  
+  # Don't rewrite files or directories that exist
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  
+  # Don't rewrite API endpoints - let PHP handle them
+  RewriteCond %{REQUEST_URI} !^/api/
+  
+  # Don't rewrite asset files
+  RewriteCond %{REQUEST_URI} !\.(js|mjs|css|json|svg|png|jpg|jpeg|gif|webp|woff2|woff|ttf|eot)$
+  
+  # Rewrite everything else to index.html to allow React Router to handle routes
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Enable GZIP compression
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json application/x-javascript
+</IfModule>
+
+# Set caching headers
+<IfModule mod_expires.c>
+  ExpiresActive On
+  
+  # Images
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/gif "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType image/x-icon "access plus 1 year"
+  
+  # CSS and JavaScript - cache with proper MIME types
+  ExpiresByType text/css "access plus 1 month"
+  ExpiresByType text/javascript "access plus 1 month"
+  ExpiresByType application/javascript "access plus 1 month"
+  ExpiresByType application/x-javascript "access plus 1 month"
+  
+  # HTML (don't cache)
+  ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+# Fallback for servers without mod_headers
+<IfModule !mod_headers.c>
+  <IfModule mod_setenvif.c>
+    SetEnvIf Request_URI "\.(js|mjs)$" is_js
+    SetEnvIf Request_URI "\.css$" is_css
+  </IfModule>
+</IfModule>
