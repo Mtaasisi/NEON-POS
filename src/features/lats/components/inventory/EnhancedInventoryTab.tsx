@@ -34,8 +34,6 @@ interface EnhancedInventoryTabProps {
   setSelectedBrand: (brand: string) => void;
   selectedStatus: string;
   setSelectedStatus: (status: string) => void;
-  showLowStockOnly: boolean;
-  setShowLowStockOnly: (show: boolean) => void;
   showFeaturedOnly: boolean;
   setShowFeaturedOnly: (show: boolean) => void;
   viewMode: 'grid' | 'list';
@@ -89,8 +87,6 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   setSelectedCategory,
   selectedStatus,
   setSelectedStatus,
-  showLowStockOnly,
-  setShowLowStockOnly,
   showFeaturedOnly,
   setShowFeaturedOnly,
   viewMode,
@@ -114,6 +110,9 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   deleteProduct,
   onAddProduct
 }) => {
+  // Backward compatibility: if something sets "low-stock", treat it as "in-stock"
+  const normalizedSelectedStatus = selectedStatus === 'low-stock' ? 'in-stock' : selectedStatus;
+
   // 🔍 DEBUG: Log products received
   useEffect(() => {
     if (import.meta.env.MODE === 'development') {
@@ -340,9 +339,9 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
               <Filter className="w-5 h-5 text-gray-500" />
               <span className="text-sm font-medium text-gray-700">Status:</span>
               <div className="flex rounded-full bg-gray-100 p-1 gap-1">
-                {['all', 'in-stock', 'low-stock', 'out-of-stock'].map((status) => {
+                {['all', 'in-stock', 'out-of-stock'].map((status) => {
                   const getStatusStyles = () => {
-                    if (selectedStatus !== status) {
+                    if (normalizedSelectedStatus !== status) {
                       return 'text-gray-600 hover:text-gray-900';
                     }
                     switch (status) {
@@ -350,8 +349,6 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                         return 'bg-blue-500 text-white';
                       case 'in-stock':
                         return 'bg-green-500 text-white';
-                      case 'low-stock':
-                        return 'bg-amber-500 text-white';
                       case 'out-of-stock':
                         return 'bg-red-500 text-white';
                       default:
@@ -377,7 +374,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                 <button
                   onClick={() => setShowFilters(!showFilters)}
                 className={`px-3 py-1.5 rounded-lg border-2 transition-all font-medium text-sm flex items-center gap-2 ${
-                  showFilters || selectedCategory !== 'all' || showLowStockOnly || showFeaturedOnly
+                  showFilters || selectedCategory !== 'all' || showFeaturedOnly
                     ? 'bg-blue-600 text-white border-blue-600'
                       : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:bg-blue-50'
                   }`}
@@ -385,11 +382,10 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                 >
                 <Filter className="w-4 h-4" />
                   <span>Filters</span>
-                {(selectedCategory !== 'all' || showLowStockOnly || showFeaturedOnly) && (
+                {(selectedCategory !== 'all' || showFeaturedOnly) && (
                   <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold bg-white text-blue-600">
                       {[
                         selectedCategory !== 'all' && '1',
-                        showLowStockOnly && '1',
                         showFeaturedOnly && '1'
                       ].filter(Boolean).length}
                     </span>
@@ -414,7 +410,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
             </div>
 
           {/* Expanded Filters Panel - Show when filters button is clicked or filters are active */}
-          {(showFilters || selectedCategory !== 'all' || showLowStockOnly || showFeaturedOnly) && (
+          {(showFilters || selectedCategory !== 'all' || showFeaturedOnly) && (
             <div className="mt-4 pt-4 border-t border-gray-200">
               <div className="space-y-4">
                 {/* Category Filter - Full list when expanded */}
@@ -451,16 +447,6 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                       <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-gray-700">Quick:</span>
                   <div className="flex rounded-full bg-gray-100 p-1 gap-1">
-                          <button
-                            onClick={() => setShowLowStockOnly(!showLowStockOnly)}
-                      className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
-                              showLowStockOnly
-                          ? 'bg-amber-500 text-white'
-                          : 'text-gray-600 hover:text-gray-900'
-                            }`}
-                          >
-                            Low Stock
-                          </button>
                           <button
                             onClick={() => setShowFeaturedOnly(!showFeaturedOnly)}
                       className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
@@ -1149,6 +1135,37 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                             <span>QR Code</span>
                           </button>
                         </div>
+
+                        {/* Additional Action Buttons */}
+                        <div className="mt-4 border-t border-gray-200 pt-4">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                            <button className="flex items-center justify-center gap-2 px-3 py-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg transition-all text-sm font-medium" title="Message on WhatsApp">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="w-4 h-4">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                              </svg>
+                              WhatsApp
+                            </button>
+                            <button className="flex items-center justify-center gap-2 px-3 py-2 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border border-yellow-200 rounded-lg transition-all text-sm font-medium" title="View notes">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="w-4 h-4">
+                                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" x2="8" y1="13" y2="13"></line>
+                                <line x1="16" x2="8" y1="17" y2="17"></line>
+                                <line x1="10" x2="8" y1="9" y2="9"></line>
+                              </svg>
+                              Notes
+                            </button>
+                            <button className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg transition-all text-sm font-medium" title="Payment history">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="w-4 h-4">
+                                <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+                                <line x1="2" x2="22" y1="10" y2="10"></line>
+                              </svg>
+                              Payments
+                            </button>
+                            {/* Empty placeholder to maintain grid */}
+                            <div></div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1418,7 +1435,7 @@ const MemoizedEnhancedInventoryTab = memo(EnhancedInventoryTab, (prevProps, next
   // Custom comparison function to prevent re-renders when data hasn't actually changed
   const propsToCompare = [
     'products', 'metrics', 'categories', 'suppliers', 'selectedProducts',
-    'selectedCategory', 'selectedStatus', 'showLowStockOnly',
+    'selectedCategory', 'selectedStatus',
     'showFeaturedOnly', 'viewMode', 'sortBy'
   ];
   
