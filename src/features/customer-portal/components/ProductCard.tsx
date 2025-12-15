@@ -17,17 +17,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
   // Get price from variant or fallback to product
   const displayPrice = product.variants?.[0]?.price || product.price || 0;
-  console.log('Price value:', displayPrice, 'Type:', typeof displayPrice);
-  const totalStockQty = product.variants && product.variants.length > 0
-    ? product.variants.reduce((total, v) => total + (v.stockQuantity || 0), 0)
-    : product.stockQuantity || 0;
 
-  // Stock indicator background color (matching tablet POS)
-  const stockIndicatorBg = !product.inStock || totalStockQty <= 0
-    ? 'bg-red-500'
-    : totalStockQty <= 5
-    ? 'bg-orange-500'
-    : 'bg-green-500';
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -59,14 +49,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
           marginBottom: `${imageBleed}px`,
         }}
       >
-        {/* Stock indicator (top-right) - Following tablet POS design */}
-        <div
-          className={`absolute top-3 right-2 w-12 h-6 rounded-full flex items-center justify-center shadow-sm text-xs font-bold text-white ${stockIndicatorBg}`}
-          style={{ WebkitTapHighlightColor: 'transparent' }}
-          title={`${totalStockQty} items available`}
-        >
-          {totalStockQty}
-        </div>
 
         {/* Product Image with bleed effect */}
         {(product.imageUrl || product.images?.[0]) && !imageError ? (
