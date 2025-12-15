@@ -97,6 +97,12 @@ const ProductsPage: React.FC = () => {
   const filteredProducts = useMemo(() => {
     let filtered = products;
 
+    // Filter out products without prices
+    filtered = filtered.filter(p => {
+      const price = p.variants?.[0]?.price || p.price;
+      return price && price > 0;
+    });
+
     // Search filter
     if (searchQuery) {
       filtered = filtered.filter(p =>
