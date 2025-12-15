@@ -39,6 +39,7 @@ const defaultGeneralSettings: GeneralSettings = {
   show_prices: true,
   show_barcodes: true,
   products_per_page: 20,
+  products_per_row: 4,
   auto_complete_search: true,
   confirm_delete: true,
   show_confirmations: true,

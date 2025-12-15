@@ -646,9 +646,9 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
 
     if (hasChildren) {
       // ❌ BLOCKED: Parent has children - MUST select specific child variant
-      toast.error("⚠️ Please select a specific device (IMEI) from the list below", {
-        duration: 4000,
-        icon: "📱",
+      toast.error("⚠️ Parent variants cannot be selected directly. Please expand and select individual devices (IMEI) from the list below.", {
+        duration: 5000,
+        icon: "🚫",
       });
       
       // Auto-expand the parent to show children if not already expanded
@@ -905,192 +905,57 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                       children,
                       variant.id,
                     );
-                    // ✅ Check if single parent variant with children - hide parent, show only devices
-                    const isSingleParentVariant =
-                      availableVariants.length === 1 && isParent;
-                    // More aggressive check: show children if it's a single parent variant AND either has loaded children or is flagged as parent
-                    const shouldShowOnlyChildren =
-                      isSingleParentVariant &&
-                      (hasLoadedChildren && children.length > 0 || isParent);
+                    // Always show parent variants as primary cards that can be expanded
+                    // Removed special handling for single parent variants - now all parents are shown consistently
 
-                    // Check if this is a single parent with children - show only children directly
-                    if (shouldShowOnlyChildren) {
-                      return (
-                        <React.Fragment key={variant.id}>
-                          {isLoadingChild ? (
-                            <div className="text-center py-8">
-                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                              <p className="text-gray-600 mt-2">
-                                Loading devices...
-                              </p>
-                            </div>
-                          ) : !hasLoadedChildren && isParent ? (
-                            // Parent variant flagged but children not loaded yet - show loading
-                            <div className="text-center py-8">
-                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                              <p className="text-gray-600 mt-2">
-                                Loading child variants...
-                              </p>
-                            </div>
-                          ) : children.length === 0 ? (
-                            <div className="text-center py-8">
-                              <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                              <p className="text-gray-600 font-medium mb-2">
-                                No specific devices available
-                              </p>
-                              <p className="text-gray-500 text-sm mb-4">
-                                {variantChildCounts[variant.id] > 0
-                                  ? "All devices are currently out of stock"
-                                  : "This variant has no individual devices tracked. You can add the parent variant directly."}
-                              </p>
-                              {variantChildCounts[variant.id] === 0 && (
-                                <button
-                                  onClick={() => handleVariantSelect(variant)}
-                                  className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                                >
-                                  Add Parent Variant to Cart
-                                </button>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              {/* Render children directly without wrapper - Click to select */}
-                              {children.map((child: any) => {
-                                const isSelected = selectedDevices.has(child.id);
-                                const stockLevel = child.quantity || 0;
-                                const isLowStock = stockLevel > 0 && stockLevel <= 5;
-                                const isOutOfStock = stockLevel === 0;
-                                
-                                return (
-                                  <div
-                                    key={child.id}
-                                    className={`group relative border-2 rounded-2xl bg-white transition-all duration-300 cursor-pointer overflow-hidden ${
-                                      isSelected 
-                                        ? "border-green-500 ring-4 ring-green-100" 
-                                        : "border-gray-200 hover:border-blue-400 hover:-translate-y-0.5"
-                                    }`}
-                                    onClick={() => handleVariantSelect(child)}
-                                  >
-                                    {/* Selection Indicator Bar */}
-                                    {isSelected && (
-                                      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-green-500 to-emerald-600"></div>
-                                    )}
-                                    
-                                    <div className="flex items-center justify-between p-5">
-                                      <div className="flex items-center gap-4 flex-1">
-                                        {/* Icon with Animation */}
-                                        <div
-                                          className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${
-                                            isSelected 
-                                              ? "bg-gradient-to-br from-green-500 to-emerald-600 scale-110" 
-                                              : "bg-gradient-to-br from-gray-100 to-gray-200 group-hover:from-blue-50 group-hover:to-indigo-50"
-                                          }`}
-                                        >
-                                          {isSelected ? (
-                                            <svg
-                                              className="w-6 h-6 text-white animate-[scale-in_0.3s_ease-out]"
-                                              fill="none"
-                                              stroke="currentColor"
-                                              viewBox="0 0 24 24"
-                                            >
-                                              <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={3}
-                                                d="M5 13l4 4L19 7"
-                                              />
-                                            </svg>
-                                          ) : (
-                                            <Package className={`w-6 h-6 transition-colors ${
-                                              isSelected ? "text-white" : "text-gray-400 group-hover:text-blue-500"
-                                            }`} />
-                                          )}
-                                        </div>
-                                        
-                                        {/* Content */}
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2 mb-1.5">
-                                            <h4 className="text-xl font-bold text-gray-900 truncate">
-                                              {child.imei || child.serialNumber}
-                                            </h4>
-                                            {child.condition && child.condition.toLowerCase() !== "new" && (
-                                              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                                                {child.condition}
-                                              </span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
-                                      
-                                      {/* Action Button */}
-                                      <div className="flex flex-col items-end gap-2 ml-4">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleVariantSelect(child);
-                                          }}
-                                          className={`px-6 py-2.5 rounded-xl font-bold transition-all transform hover:scale-105 ${
-                                            isSelected
-                                              ? "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
-                                              : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
-                                          }`}
-                                        >
-                                          {isSelected ? (
-                                            <span className="flex items-center gap-2">
-                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                              </svg>
-                                              Selected
-                                            </span>
-                                          ) : (
-                                            "Select"
-                                          )}
-                                        </button>
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Hover Glow Effect */}
-                                    {!isSelected && (
-                                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/0 to-blue-500/0 group-hover:from-blue-500/5 group-hover:via-blue-500/10 group-hover:to-blue-500/5 transition-all duration-300 pointer-events-none rounded-2xl"></div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </React.Fragment>
-                      );
-                    }
-
-                    // Regular variant card with optional expansion
+                    // Regular variant card - parent variants can be expanded to show children
                     const hasNoChildren = !isParent || (childCount === 0 && (!children || children.length === 0));
                     const isVariantSelected = hasNoChildren && selectedDevices.has(variant.id);
+
+                    // Parent variants are always expandable if they have children
+                    const isExpandable = isParent && (childCount > 0 || (children && children.length > 0));
                     
                     return (
                       <div
                         key={variant.id}
-                        className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 relative overflow-hidden ${
+                        className={`border-2 rounded-2xl shadow-sm transition-all duration-300 relative overflow-hidden ${
                           isVariantSelected
-                            ? "border-green-500 ring-4 ring-green-100"
+                            ? "border-green-500 ring-4 ring-green-100 bg-green-50"
                             : isExpanded
-                            ? "border-blue-500 shadow-xl"
-                            : "border-gray-200 hover:border-gray-300 hover:shadow-md"
+                            ? "border-blue-500 shadow-xl bg-blue-50"
+                            : (() => {
+                                // Check if any children are selected
+                                const selectedChildrenCount = children.filter((child: any) => selectedDevices.has(child.id)).length;
+                                return selectedChildrenCount > 0
+                                  ? "border-green-400 ring-2 ring-green-100 bg-green-50/30"
+                                  : isExpandable
+                                  ? "border-orange-200 bg-orange-50/20 hover:border-orange-300"
+                                  : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-md";
+                              })()
                         }`}
                       >
                         {/* Selection Indicator Bar */}
                         {isVariantSelected && (
                           <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-green-500 to-emerald-600"></div>
                         )}
+
+                        {/* Child Selection Indicator */}
+                        {(() => {
+                          const selectedChildrenCount = children.filter((child: any) => selectedDevices.has(child.id)).length;
+                          return selectedChildrenCount > 0 && !isVariantSelected ? (
+                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-green-400 to-emerald-500"></div>
+                          ) : null;
+                        })()}
                         
                         {/* Variant Card - Collapsed style */}
                         <div
-                          className="flex items-start justify-between p-6 cursor-pointer group"
+                          className={`flex items-start justify-between p-6 group ${isExpandable ? 'cursor-pointer hover:bg-blue-50/50' : 'cursor-pointer'} ${isExpandable && !hasNoChildren ? 'border-l-4 border-l-orange-400' : ''}`}
                           onClick={() => {
-                            if (isParent && (childCount > 0 || (children && children.length > 0))) {
-                              // Parent with children - expand to show them
+                            if (isExpandable) {
+                              // Parent with children - expand/collapse to show child variants
                               toggleParentExpansion(variant.id);
                             } else {
-                              // Parent without children or regular variant - toggle selection
+                              // Regular variant without children - allow direct selection
                               handleVariantSelect(variant);
                             }
                           }}
@@ -1098,11 +963,13 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                           <div className="flex-1">
                             <div className="flex items-center gap-3">
                               <div
-                                className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
+                                className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all duration-200 ${
                                   isVariantSelected
                                     ? "bg-gradient-to-br from-green-500 to-emerald-600 scale-110"
                                     : isExpanded
-                                    ? "bg-blue-500"
+                                    ? "bg-blue-500 shadow-lg"
+                                    : isExpandable
+                                    ? "bg-orange-500 hover:bg-orange-600"
                                     : "bg-gray-200"
                                 }`}
                               >
@@ -1120,22 +987,14 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                                       d="M5 13l4 4L19 7"
                                     />
                                   </svg>
-                                ) : (
-                                  <svg
+                                ) : isExpandable ? (
+                                  <ChevronDown
                                     className={`w-4 h-4 text-white transition-transform duration-200 ${
                                       isExpanded ? "rotate-180" : ""
                                     }`}
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M19 9l-7 7-7-7"
-                                    />
-                                  </svg>
+                                  />
+                                ) : (
+                                  <Package className="w-4 h-4 text-white" />
                                 )}
                               </div>
                               <div className="flex-1">
@@ -1173,29 +1032,50 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                                   })()}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <p className="text-sm font-semibold text-gray-600 flex items-center gap-1.5">
-                                    <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold ${
-                                      (() => {
-                                        const stockLevel = variant.quantity ?? variant.stockQuantity ?? variant.stock_quantity ?? 0;
-                                        const isLowStock = stockLevel > 0 && stockLevel <= 5;
-                                        const isOutOfStock = stockLevel === 0;
-                                        return isOutOfStock 
-                                          ? "bg-red-500 text-white" 
-                                          : isLowStock 
-                                            ? "bg-orange-500 text-white" 
+                                  {isExpandable ? (
+                                    <p className="text-sm font-semibold text-orange-600 flex items-center gap-1.5">
+                                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold bg-orange-500 text-white">
+                                        {childCount}
+                                      </span>
+                                      <span>individual devices available</span>
+                                      <span className="text-xs text-orange-600 font-medium bg-orange-50 px-2 py-1 rounded border border-orange-200">
+                                        {isExpanded ? "▼ Click to collapse" : "▶ Click to expand & select devices"}
+                                      </span>
+                                    </p>
+                                  ) : (
+                                    <p className="text-sm font-semibold text-gray-600 flex items-center gap-1.5">
+                                      <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold ${
+                                        (() => {
+                                          const stockLevel = variant.quantity ?? variant.stockQuantity ?? variant.stock_quantity ?? 0;
+                                          const isLowStock = stockLevel > 0 && stockLevel <= 5;
+                                          const isOutOfStock = stockLevel === 0;
+                                          return isOutOfStock
+                                            ? "bg-red-500 text-white"
+                                            : isLowStock
+                                            ? "bg-orange-500 text-white"
                                             : "bg-emerald-500 text-white";
-                                      })()
-                                    }`}>
-                                      {variant.quantity ?? variant.stockQuantity ?? variant.stock_quantity ?? 0}
-                                    </span>
-                                    <span className="text-gray-500">units available</span>
-                                  </p>
-                                  {isParent && childCount > 0 && (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
-                                      {childCount} devices
-                                    </span>
+                                        })()
+                                      }`}>
+                                        {variant.quantity ?? variant.stockQuantity ?? variant.stock_quantity ?? 0}
+                                      </span>
+                                      <span className="text-gray-500">units available</span>
+                                    </p>
                                   )}
                                 </div>
+                                {/* Show selected children count for expandable parents */}
+                                {isExpandable && (() => {
+                                  const selectedChildrenCount = children.filter((child: any) => selectedDevices.has(child.id)).length;
+                                  return selectedChildrenCount > 0 ? (
+                                    <div className="mt-2">
+                                      <span className="inline-flex items-center px-3 py-1 rounded-lg text-sm font-bold bg-green-100 text-green-700 border border-green-300">
+                                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        {selectedChildrenCount} device{selectedChildrenCount !== 1 ? 's' : ''} selected
+                                      </span>
+                                    </div>
+                                  ) : null;
+                                })()}
                               </div>
                             </div>
                           </div>
@@ -1224,6 +1104,18 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                                 )}
                               </button>
                             )}
+                            {isExpandable && !hasNoChildren && (
+                              <div className="flex flex-col items-end gap-1">
+                                <div className="px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg">
+                                  <span className="text-xs text-orange-700 font-semibold">
+                                    Cannot select parent
+                                  </span>
+                                </div>
+                                <span className="text-xs text-gray-500 font-medium">
+                                  Select individual devices below
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                         
@@ -1234,7 +1126,36 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
 
                       {/* Child Variants (IMEI devices) - Show if expanded */}
                       {isParent && isExpanded && (
-                          <div className="bg-white p-6 border-t-2 border-gray-200 rounded-b-2xl">
+                          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 border-t-2 border-blue-200 rounded-b-2xl">
+                            {/* Header for child variants section */}
+                            <div className="mb-4 pb-3 border-b border-blue-200">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h4 className="text-lg font-bold text-blue-900 flex items-center gap-2">
+                                    <Package className="w-5 h-5" />
+                                    Select Individual Devices
+                                  </h4>
+                                  <p className="text-sm text-blue-700 mt-1">
+                                    Choose one or more specific devices from this variant
+                                  </p>
+                                </div>
+                                {/* Selection counter for this parent */}
+                                {(() => {
+                                  const selectedChildrenCount = children.filter((child: any) => selectedDevices.has(child.id)).length;
+                                  return selectedChildrenCount > 0 ? (
+                                    <div className="flex items-center gap-2 px-3 py-2 bg-green-100 border border-green-300 rounded-lg">
+                                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                      <span className="text-sm font-bold text-green-700">
+                                        {selectedChildrenCount} selected
+                                      </span>
+                                    </div>
+                                  ) : null;
+                                })()}
+                              </div>
+                            </div>
+
                             {isLoadingChild ? (
                               <div className="text-center py-12">
                                 <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
@@ -1249,7 +1170,7 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                                   No Devices Available
                                 </h3>
                                 <p className="text-gray-600 text-base mb-4 px-4">
-                                  {variantChildCounts[variant.id] > 0 
+                                  {variantChildCounts[variant.id] > 0
                                     ? "All devices are currently out of stock"
                                     : "This variant has no individual devices tracked"}
                                 </p>
@@ -1264,7 +1185,7 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                               </div>
                             ) : (
                               <div className="space-y-3">
-                                {/* Child variant selection - Click to select IMEI device */}
+                                {/* Child variant selection - Click to select multiple IMEI devices */}
                                 {children.map((child: any) => {
                                   const isSelected = selectedDevices.has(child.id);
                                   const stockLevel = child.quantity || 0;

@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabaseClient';
+import { getCurrentBranchId } from '../../../lib/branchAwareApi';
 
 export interface SalesAnalyticsData {
   dailySales: Array<{
@@ -45,11 +46,11 @@ class SalesAnalyticsService {
   async getSalesAnalytics(period: string = '7d'): Promise<SalesAnalyticsData | null> {
     try {
       console.log('📊 Fetching sales analytics for period:', period);
-      
+
       // Calculate date range based on period
       const endDate = new Date();
       const startDate = new Date();
-      
+
       switch (period) {
         case '1d':
           startDate.setDate(endDate.getDate() - 1);
@@ -67,6 +68,10 @@ class SalesAnalyticsService {
           startDate.setDate(endDate.getDate() - 7);
       }
 
+      // Get current branch for filtering
+      const currentBranchId = getCurrentBranchId();
+      console.log('🏪 Analytics filtering by branch:', currentBranchId);
+
       // Fetch sales data with improved error handling
       let sales: any[] = [];
       let salesError: any = null;
@@ -75,8 +80,8 @@ class SalesAnalyticsService {
         // Skip complex query entirely to avoid 400 errors
         // Go directly to simple query that we know works
         console.log('🔧 Using simplified sales analytics query to avoid 400 errors...');
-        
-        const { data: simpleSales, error: simpleError } = await supabase
+
+        let query = supabase
           .from('lats_sales')
           .select(`
             id,
@@ -93,6 +98,13 @@ class SalesAnalyticsService {
           .gte('created_at', startDate.toISOString())
           .lte('created_at', endDate.toISOString())
           .order('created_at', { ascending: false });
+
+        // Apply branch filtering if branch ID exists
+        if (currentBranchId) {
+          query = query.eq('branch_id', currentBranchId);
+        }
+
+        const { data: simpleSales, error: simpleError } = await query;
 
         if (simpleError) {
           console.error('Simple sales analytics query failed:', simpleError);

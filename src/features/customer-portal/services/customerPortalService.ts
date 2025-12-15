@@ -1,6 +1,11 @@
 import { supabase } from '../../../lib/supabaseClient';
 import { CustomerProduct, CustomerOrder, CustomerOrderItem } from '../types';
 
+interface ProductImageItem {
+  image_url: string;
+  is_primary: boolean;
+}
+
 /**
  * Customer Portal Service
  * Handles all database operations for customer-facing features
@@ -100,12 +105,13 @@ class CustomerPortalService {
       let productQuery = supabase
         .from('lats_products')
         .select(`
-          id, 
-          name, 
-          description, 
-          image_url, 
-          created_at, 
+          id,
+          name,
+          description,
+          image_url,
+          created_at,
           is_active,
+          is_customer_portal_visible,
           category_id,
           brand,
           category:lats_categories!category_id(name)
@@ -113,6 +119,9 @@ class CustomerPortalService {
 
       // Filter for active products only
       productQuery = productQuery.eq('is_active', true);
+
+      // Filter for customer portal visible products only
+      productQuery = productQuery.eq('is_customer_portal_visible', true);
 
       // Apply filters
       if (filters?.search) {
@@ -285,18 +294,20 @@ class CustomerPortalService {
       const { data: productData, error: productError } = await supabase
         .from('lats_products')
         .select(`
-          id, 
-          name, 
-          description, 
-          image_url, 
-          created_at, 
+          id,
+          name,
+          description,
+          image_url,
+          created_at,
           is_active,
+          is_customer_portal_visible,
           category_id,
           brand,
           category:lats_categories!category_id(name)
         `)
         .eq('id', productId)
         .eq('is_active', true)
+        .eq('is_customer_portal_visible', true)
         .single();
 
       if (productError) {
@@ -341,7 +352,7 @@ class CustomerPortalService {
         console.warn('⚠️  Error fetching product images:', imagesError);
       }
 
-      const imageUrls = (productImages || []).map((img: any) => img.image_url);
+      const imageUrls = (productImages || []).map((img: ProductImageItem) => img.image_url);
       const primaryImageUrl = imageUrls[0] || productData.image_url || null;
 
       console.log(`✅ Found ${imageUrls.length} images for product`);
@@ -475,16 +486,19 @@ class CustomerPortalService {
     try {
       const { data, error } = await supabase
         .from('lats_products')
-        .select('category')
+        .select('category:lats_categories!category_id(name)')
         .eq('is_active', true)
-        .not('category', 'is', null);
+        .eq('is_customer_portal_visible', true);
 
       if (error) {
         console.error('Error fetching categories:', error);
         return [];
       }
 
-      const categories = [...new Set((data || []).map((p: any) => p.category).filter(Boolean))];
+      const categories = [...new Set((data || [])
+        .map((p: any) => p.category?.name)
+        .filter(Boolean)
+      )];
       return categories;
     } catch (error) {
       console.error('Error in getCategories:', error);
@@ -501,6 +515,7 @@ class CustomerPortalService {
         .from('lats_products')
         .select('brand')
         .eq('is_active', true)
+        .eq('is_customer_portal_visible', true)
         .not('brand', 'is', null);
 
       if (error) {

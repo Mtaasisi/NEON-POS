@@ -35,7 +35,7 @@ import {
   recordSparePartUsage as recordSparePartUsageApi
 } from '../lib/sparePartsApi';
 
-interface InventoryState {
+export interface InventoryState {
   // Loading states
   isLoading: boolean;
   isCreating: boolean;
@@ -93,42 +93,29 @@ interface InventoryState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearError: () => void;
-
-  // Search and filters
   setSearchTerm: (term: string) => void;
   setSelectedCategory: (categoryId: string | null) => void;
-
   setSelectedSupplier: (supplierId: string | null) => void;
   setStockFilter: (filter: 'all' | 'in-stock' | 'low-stock' | 'out-of-stock') => void;
   clearFilters: () => void;
-
-  // Pagination
   setCurrentPage: (page: number) => void;
   setItemsPerPage: (items: number) => void;
-
-  // Selection
   toggleProductSelection: (productId: string) => void;
   selectAllProducts: () => void;
   deselectAllProducts: () => void;
   togglePurchaseOrderSelection: (orderId: string) => void;
   selectAllPurchaseOrders: () => void;
   deselectAllPurchaseOrders: () => void;
-
-  // Categories
   loadCategories: () => Promise<void>;
   loadSparePartCategories: () => Promise<void>;
   createCategory: (category: Omit<Category, 'id' | 'createdAt' | 'updatedAt'>) => Promise<ApiResponse<Category>>;
   updateCategory: (id: string, category: Partial<Category>) => Promise<ApiResponse<Category>>;
   deleteCategory: (id: string) => Promise<ApiResponse<void>>;
-
-  // Suppliers
   loadSuppliers: () => Promise<void>;
   createSupplier: (supplier: Omit<Supplier, 'id' | 'createdAt' | 'updatedAt'>) => Promise<ApiResponse<Supplier>>;
   updateSupplier: (id: string, supplier: Partial<Supplier>) => Promise<ApiResponse<Supplier>>;
   deleteSupplier: (id: string) => Promise<ApiResponse<void>>;
-
-  // Products
-  loadProducts: (filters?: any) => Promise<void>;
+  loadProducts: (filters?: any, force?: boolean) => Promise<void>;
   forceRefreshProducts: () => Promise<void>;
   loadProductVariants: (productId: string) => Promise<{ ok: boolean; data: ProductVariant[] }>;
   getProduct: (id: string) => Promise<ApiResponse<Product>>;
@@ -137,17 +124,11 @@ interface InventoryState {
   updateProductInStore: (updatedProduct: Product) => void;
   deleteProduct: (id: string) => Promise<void>;
   searchProducts: (query: string) => Promise<ApiResponse<Product[]>>;
-
-  // Stock Management
   loadStockMovements: () => Promise<void>;
   adjustStock: (productId: string, variantId: string, quantity: number, reason: string) => Promise<ApiResponse<void>>;
-
-  // Sales Data
   loadSales: () => Promise<void>;
   getProductSales: (productId: string) => Promise<ApiResponse<any[]>>;
   getSoldQuantity: (productId: string, variantId?: string) => number;
-
-  // Purchase Orders
   loadPurchaseOrders: () => Promise<void>;
   getPurchaseOrder: (id: string) => Promise<ApiResponse<PurchaseOrder>>;
   createPurchaseOrder: (order: any) => Promise<ApiResponse<PurchaseOrder>>;
@@ -156,9 +137,6 @@ interface InventoryState {
   approvePurchaseOrder: (id: string) => Promise<ApiResponse<PurchaseOrder>>;
   receivePurchaseOrder: (id: string) => Promise<ApiResponse<void>>;
   deletePurchaseOrder: (id: string) => Promise<ApiResponse<void>>;
-
-
-  // Spare Parts
   loadSpareParts: () => Promise<void>;
   getSparePart: (id: string) => Promise<ApiResponse<SparePart>>;
   createSparePart: (sparePart: any) => Promise<ApiResponse<SparePart>>;
@@ -167,14 +145,16 @@ interface InventoryState {
   deleteSparePart: (id: string) => Promise<ApiResponse<void>>;
   useSparePart: (id: string, quantity: number, reason: string, notes?: string) => Promise<ApiResponse<void>>;
   loadSparePartUsage: () => Promise<void>;
-
-  // Computed values
   getFilteredProducts: () => Product[];
   getLowStockProducts: () => Product[];
   getOutOfStockProducts: () => Product[];
   getProductById: (id: string) => Product | undefined;
   getCategoryById: (id: string) => Category | undefined;
   getSupplierById: (id: string) => Supplier | undefined;
+  isCacheValid: (dataType: keyof InventoryState['dataCache']) => boolean;
+  updateCache: (dataType: keyof InventoryState['dataCache'], data: any) => void;
+  clearCache: (dataType?: keyof InventoryState['dataCache']) => void;
+  invalidateCache: (dataType: keyof InventoryState['dataCache']) => void;
 }
 
 // Check if Redux DevTools extension is available to avoid console warnings
@@ -372,6 +352,7 @@ export const useInventoryStore = create<InventoryState>()(
               products: null,
               stockMovements: null,
               sales: null,
+              spareParts: null,
             },
             cacheTimestamp: 0
           });
@@ -944,10 +925,22 @@ export const useInventoryStore = create<InventoryState>()(
           }
         }
         
+        // ⚡ FORCE REFRESH: Clear cache before loading fresh data
+        if (force) {
+          console.log('🔄 [useInventoryStore] Force refresh requested - clearing cache before loading...');
+          productCacheService.clearProducts();
+          get().clearCache('products');
+
+          // Also clear child variants cache to ensure fresh IMEI/serial data
+          const { childVariantsCacheService } = await import('../../../services/childVariantsCacheService');
+          childVariantsCacheService.clearCache();
+          console.log('🧹 [useInventoryStore] Cleared child variants cache as well');
+        }
+
         console.log('🔍 [useInventoryStore] No cache available, loading from database...');
         console.log('⚠️ [useInventoryStore] PERFORMANCE WARNING: Loading from database instead of cache!');
         console.log('💡 [useInventoryStore] Tip: Download full database in Settings > Offline Database for instant loads');
-        
+
         const startTime = Date.now();
         set({ isLoading: true, error: null, isDataLoading: true });
         
@@ -982,6 +975,24 @@ export const useInventoryStore = create<InventoryState>()(
             // Process and clean up product data to prevent HTTP 431 errors
             // NOTE: Processing happens BEFORE validation so we validate the CLEANED data
             const processedProducts = processProductsOnly(rawProducts);
+
+            // 🔍 DEBUG: Check stock data in API response
+            if (import.meta.env.DEV && processedProducts.length > 0) {
+              const sampleProducts = processedProducts.slice(0, 3); // Check first 3 products
+              sampleProducts.forEach((product, index) => {
+                console.log(`🔍 [Stock Debug] Product ${index + 1}: "${product.name}"`, {
+                  hasVariants: product.variants?.length > 0,
+                  variantCount: product.variants?.length || 0,
+                  productStockQuantity: product.stockQuantity,
+                  variantsStock: product.variants?.map(v => ({
+                    name: v.name || v.variant_name,
+                    quantity: v.quantity,
+                    stock_quantity: v.stock_quantity
+                  })),
+                  totalVariantStock: product.variants?.reduce((sum, v) => sum + (v.quantity || v.stock_quantity || 0), 0) || 0
+                });
+              });
+            }
             
             // Validate data integrity after processing (should be clean now)
             if (processedProducts.length > 0) {
@@ -1925,6 +1936,7 @@ export const useInventoryStore = create<InventoryState>()(
           console.error('Error loading spare part usage:', error);
         } finally {
           set({ isLoading: false });
+
         }
       },
 
@@ -1950,7 +1962,6 @@ export const useInventoryStore = create<InventoryState>()(
           if (selectedCategory && product.categoryId !== selectedCategory) {
             return false;
           }
-
 
 
           // Supplier filter
@@ -2215,6 +2226,24 @@ if (!eventSubscriptionInitialized) {
   });
   
   console.log('🔵 [DEBUG] Event subscription setup complete');
+
+  // Listen for branch changes and clear relevant caches
+  window.addEventListener('branchChanged', (event: any) => {
+    console.log('🏪 [useInventoryStore] Branch changed, clearing caches for new branch...');
+    try {
+      // Clear products cache to force fresh load for new branch
+      get().clearCache('products');
+      productCacheService.clearProducts();
+
+      // Clear other branch-specific caches
+      get().clearCache('sales');
+      get().clearCache('stockMovements');
+
+      console.log('✅ [useInventoryStore] Caches cleared for branch switch');
+    } catch (error) {
+      console.error('❌ [useInventoryStore] Failed to clear caches on branch change:', error);
+    }
+  });
 } else {
   console.log('⏭️ [DEBUG] Event subscription already initialized, skipping');
 }

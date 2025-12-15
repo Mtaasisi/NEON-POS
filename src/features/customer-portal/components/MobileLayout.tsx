@@ -1,10 +1,10 @@
 import React, { ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { 
-  Home, 
-  ShoppingBag, 
-  Heart, 
-  User, 
+import {
+  Home,
+  ShoppingBag,
+  Heart,
+  User,
   Package,
   Bell,
   ArrowLeft,
@@ -19,11 +19,11 @@ interface MobileLayoutProps {
   showBottomNav?: boolean;
 }
 
-const MobileLayout: React.FC<MobileLayoutProps> = ({ 
-  children, 
-  title, 
+const MobileLayout: React.FC<MobileLayoutProps> = ({
+  children,
+  title,
   showBackButton = false,
-  showBottomNav = true 
+  showBottomNav = true
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,8 +41,8 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Top Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="flex items-center justify-between px-4 py-3">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-50 h-14">
+        <div className="flex items-center justify-between px-4 py-3 h-full">
           {showBackButton ? (
             <button
               onClick={() => navigate(-1)}
@@ -53,13 +53,13 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
           ) : (
             <div className="w-8" />
           )}
-          
+
           {title && (
             <h1 className="text-lg font-semibold text-gray-900 truncate flex-1 text-center">
               {title}
             </h1>
           )}
-          
+
           <button
             onClick={() => navigate('/customer-portal/notifications')}
             className="p-2 -mr-2 hover:bg-gray-100 rounded-full transition-colors relative"

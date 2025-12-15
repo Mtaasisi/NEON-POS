@@ -6,6 +6,7 @@ interface TabletVariantSelectionModalProps {
   onClose: () => void;
   product: any;
   onSelectVariant: (variant: any) => void;
+  cartItems?: any[];
 }
 
 const TabletVariantSelectionModal: React.FC<TabletVariantSelectionModalProps> = ({
@@ -13,6 +14,7 @@ const TabletVariantSelectionModal: React.FC<TabletVariantSelectionModalProps> = 
   onClose,
   product,
   onSelectVariant,
+  cartItems = [],
 }) => {
   if (!isOpen) return null;
 
@@ -21,15 +23,24 @@ const TabletVariantSelectionModal: React.FC<TabletVariantSelectionModalProps> = 
   const variants = product?.variants ?? [];
 
   const filteredVariants = useMemo(() => {
-    if (!query) return variants;
+    // First filter out sold-out variants (considering cart quantities)
+    const availableVariants = variants.filter((variant: any) => {
+      const variantStock = variant.stock_quantity ?? variant.quantity ?? variant.available_quantity ?? 0;
+      const cartQuantity = cartItems.find(item => item.variantId === variant.id)?.quantity ?? 0;
+      const remainingStock = variantStock - cartQuantity;
+      return remainingStock > 0;
+    });
+
+    // Then apply search filter
+    if (!query) return availableVariants;
     const q = query.toLowerCase();
-    return variants.filter(
+    return availableVariants.filter(
       (v: any) =>
         v.variant_name?.toLowerCase().includes(q) ||
         v.name?.toLowerCase().includes(q) ||
         v.sku?.toLowerCase().includes(q)
     );
-  }, [variants, query]);
+  }, [variants, query, cartItems]);
 
   const handleSelect = (variant: any) => {
     onSelectVariant(variant);
@@ -96,11 +107,13 @@ const TabletVariantSelectionModal: React.FC<TabletVariantSelectionModalProps> = 
                 variant.unit_price ??
                 product?.price ??
                 0;
-              const stock =
+              const totalStock =
                 variant.stock_quantity ??
                 variant.quantity ??
                 variant.available_quantity ??
                 0;
+              const cartQuantity = cartItems.find(item => item.variantId === variant.id)?.quantity ?? 0;
+              const remainingStock = totalStock - cartQuantity;
 
               return (
                 <div
@@ -123,26 +136,26 @@ const TabletVariantSelectionModal: React.FC<TabletVariantSelectionModalProps> = 
                       </span>
                       <span
                         className={
-                          stock > 5
+                          remainingStock > 5
                             ? 'text-green-600'
-                            : stock > 0
+                            : remainingStock > 0
                             ? 'text-orange-500'
                             : 'text-red-500'
                         }
                       >
-                        {stock > 0 ? `${stock} in stock` : 'Out of stock'}
+                        {remainingStock > 0 ? `${remainingStock} available` : 'Out of stock'}
                       </span>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => handleSelect(variant)}
-                      disabled={stock <= 0}
+                      disabled={remainingStock <= 0}
                       className="px-4 py-2 bg-blue-500 disabled:bg-gray-300 text-white rounded-lg text-sm font-semibold hover:bg-blue-600 transition-colors"
                     >
                       Select
                     </button>
-                    {stock <= 0 && (
+                    {remainingStock <= 0 && (
                       <span className="text-xs text-red-500 font-medium">
                         Out
                       </span>

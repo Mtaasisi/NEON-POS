@@ -72,7 +72,6 @@ const PurchaseOrdersPage: React.FC = () => {
   // Manage Suppliers Modal state
   const [showManageSuppliersModal, setShowManageSuppliersModal] = useState(false);
   const [suppliers, setSuppliers] = useState<any[]>([]);
-  const PAGE_SCALE = 0.6; // Scale down page similar to inventory
 
   // Close dropdown when clicking outside or on escape
   React.useEffect(() => {
@@ -961,21 +960,9 @@ const PurchaseOrdersPage: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 flex justify-center">
-      <div
-        className="max-w-7xl w-full"
-        style={{
-          transform: `scale(${PAGE_SCALE})`,
-          transformOrigin: 'top center',
-          width: `${100 / PAGE_SCALE}%`,
-          imageRendering: 'crisp-edges',
-          WebkitFontSmoothing: 'antialiased',
-          MozOsxFontSmoothing: 'grayscale',
-          textRendering: 'optimizeLegibility'
-        }}
-      >
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       {/* Combined Container - All sections in one */}
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-visible flex flex-col">
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
         {/* Fixed Header Section - Enhanced Modal Style */}
         <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -1028,8 +1015,8 @@ const PurchaseOrdersPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Main Content - flows with page scroll */}
-        <div className="flex-1">
+        {/* Main Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
             {/* Fixed Statistics Section */}
             <div className="p-6 pb-0 flex-shrink-0">
             <div 
@@ -2214,7 +2201,6 @@ const PurchaseOrdersPage: React.FC = () => {
          />
        )}
       </div>
-    </div>
     );
   };
 

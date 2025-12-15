@@ -1036,7 +1036,9 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         
         // CRITICAL: Skip if table or alias name ends with _id - these are ALWAYS foreign key columns, never table names
         if ((table.endsWith('_id') && table !== 'id') || (alias.endsWith('_id') && alias !== 'id')) {
-          console.log(`⏭️ [Pattern 2] Skipping ${alias}:${table}( - names ending with _id are foreign key columns, not table names`);
+          console.error(`❌ [Pattern 2] BLOCKING invalid syntax ${alias}:${table}( - names ending with _id are foreign key columns, not table names`);
+          console.error(`❌ [Pattern 2] This syntax will cause SQL errors. Use proper table names.`);
+          console.error(`❌ [Pattern 2] Example: use "customer:customers(...)" not "${alias}:${table}(...)"`);
           inferredPattern.lastIndex = 0;
           continue;
         }
@@ -1170,7 +1172,9 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         
         // CRITICAL: Skip if tableName ends with _id - these are ALWAYS foreign key columns, never table names
         if (tableName.endsWith('_id') && tableName !== 'id') {
-          console.log(`⏭️ [Pattern 3] Skipping ${tableName}( - names ending with _id are foreign key columns, not table names`);
+          console.error(`❌ [Pattern 3] BLOCKING invalid syntax ${tableName}( - names ending with _id are foreign key columns, not table names`);
+          console.error(`❌ [Pattern 3] This syntax will cause SQL errors. Use proper table names.`);
+          console.error(`❌ [Pattern 3] Example: use "customers(...)" not "${tableName}(...)"`);
           simplePattern.lastIndex = 0;
           continue;
         }
@@ -1228,13 +1232,18 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
           // CRITICAL: Filter out any relationships where table name ends with _id
           // These are foreign key columns (like customer_id, user_id, branch_id), not table names
           if (rel.table.endsWith('_id') && rel.table !== 'id') {
-            console.warn(`⚠️ [buildJoins] Filtering out invalid relationship - "${rel.table}" is a foreign key column, not a table name`);
-            console.warn(`⚠️ [buildJoins] This likely means a query is using "${rel.table}" incorrectly. Check the select() call.`);
+            console.error(`❌ [buildJoins] BLOCKING invalid relationship - table "${rel.table}" is a foreign key column, not a table name`);
+            console.error(`❌ [buildJoins] Relationship: alias="${rel.alias}", table="${rel.table}", foreignKey="${rel.foreignKey}"`);
+            console.error(`❌ [buildJoins] This will cause SQL error: relation "${rel.table}" does not exist`);
+            console.error(`❌ [buildJoins] Check the select() call for incorrect syntax like "${rel.alias}:${rel.table}(...)"`);
             return false;
           }
-          // Also check alias
+          // Also check alias - aliases should not end with _id as they represent table names
           if (rel.alias.endsWith('_id') && rel.alias !== 'id') {
-            console.warn(`⚠️ [buildJoins] Filtering out invalid relationship - alias "${rel.alias}" ends with _id (foreign key column, not table name)`);
+            console.error(`❌ [buildJoins] BLOCKING invalid relationship - alias "${rel.alias}" ends with _id (foreign key column, not table name)`);
+            console.error(`❌ [buildJoins] Relationship: alias="${rel.alias}", table="${rel.table}", foreignKey="${rel.foreignKey}"`);
+            console.error(`❌ [buildJoins] This will cause SQL JOIN errors. Use proper table names as aliases.`);
+            console.error(`❌ [buildJoins] Example: use "customer:customers(...)" not "customer_id:customers(...)"`);
             return false;
           }
           return true;

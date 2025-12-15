@@ -72,6 +72,7 @@ const productFormSchema = z.object({
   condition: z.enum(['new', 'used', 'refurbished'], {
     errorMap: () => ({ message: 'Please select a condition' })
   }),
+  isCustomerPortalVisible: z.boolean().optional().default(true),
   metadata: z.record(z.string(), z.any()).optional().default({}),
   variants: z.array(z.any()).optional().default([])
 });
@@ -102,6 +103,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
     condition: 'new' as 'new' | 'used' | 'refurbished',
     description: '',
     specification: '',
+    isCustomerPortalVisible: true,
     metadata: {},
     variants: []
   });
@@ -763,6 +765,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
         condition: condition as 'new' | 'used' | 'refurbished',
         description: product.description || '',
         specification: specification,
+        isCustomerPortalVisible: (product as any).isCustomerPortalVisible !== false,
         metadata: (product as any).metadata || {},
         variants: []
       });
@@ -970,6 +973,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
         sku: formData.sku,
         categoryId: formData.categoryId || null,
         condition: formData.condition,
+        isCustomerPortalVisible: formData.isCustomerPortalVisible !== false,
         attributes: productAttributes,
         metadata: {
           ...(formData.metadata || {}),

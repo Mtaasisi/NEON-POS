@@ -134,15 +134,15 @@ const PNGGenerationTest = lazy(() => import('./components/ui/PNGGenerationTest')
 const MobileLayout = lazy(() => import('./features/mobile/components/MobileLayout'));
 const MobileDashboard = lazy(() => import('./features/mobile/pages/MobileDashboard'));
 const MobilePOS = lazy(() => import('./features/mobile/pages/MobilePOS'));
-const MobileInventory = lazy(() => import('./features/mobile/pages/MobileInventory'));
-const MobileAddProduct = lazy(() => import('./features/mobile/pages/MobileAddProduct'));
-const MobileClients = lazy(() => import('./features/mobile/pages/MobileClients'));
-const MobileEditClient = lazy(() => import('./features/mobile/pages/MobileEditClient'));
-const MobileMore = lazy(() => import('./features/mobile/pages/MobileMore'));
-const MobileAnalytics = lazy(() => import('./features/mobile/pages/MobileAnalytics'));
-const MobileProductDetail = lazy(() => import('./features/mobile/pages/MobileProductDetail'));
-const MobileClientDetail = lazy(() => import('./features/mobile/pages/MobileClientDetail'));
-const MobileSheetDemo = lazy(() => import('./features/mobile/pages/MobileSheetDemo'));
+// const MobileInventory = lazy(() => import('./features/mobile/pages/MobileInventory'));
+// const MobileAddProduct = lazy(() => import('./features/mobile/pages/MobileAddProduct'));
+// const MobileClients = lazy(() => import('./features/mobile/pages/MobileClients'));
+// const MobileEditClient = lazy(() => import('./features/mobile/pages/MobileEditClient'));
+// const MobileMore = lazy(() => import('./features/mobile/pages/MobileMore'));
+// const MobileAnalytics = lazy(() => import('./features/mobile/pages/MobileAnalytics'));
+// const MobileProductDetail = lazy(() => import('./features/mobile/pages/MobileProductDetail'));
+// const MobileClientDetail = lazy(() => import('./features/mobile/pages/MobileClientDetail'));
+// const MobileSheetDemo = lazy(() => import('./features/mobile/pages/MobileSheetDemo'));
 
 const LATSDashboardPage = lazy(() => import('./features/lats/pages/LATSDashboardPage'));
 // SerialNumberManagerPage removed - replaced by IMEI Variant System
@@ -873,7 +873,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           <Route path="/attendance" element={<Navigate to="/employees?tab=attendance" replace />} />
           
           {/* Calendar View Routes */}
-
+          
           
           {/* LATS Module Routes */}
           <Route path="/lats" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><LATSDashboardPage /></Suspense></RoleProtectedRoute>} />
@@ -1030,7 +1030,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
               <MobilePOS />
             </Suspense>
           } />
-          <Route path="inventory" element={
+          {/* <Route path="inventory" element={
             <Suspense fallback={<DynamicPageLoader />}>
               <MobileInventory />
             </Suspense>
@@ -1074,7 +1074,8 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             <Suspense fallback={<DynamicPageLoader />}>
               <MobileSheetDemo />
             </Suspense>
-          } />
+          } /> */} 
+          <Route index element={<DefaultRedirect />} />
         </Route>
         
         {/* Test Pages */}

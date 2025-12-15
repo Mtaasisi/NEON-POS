@@ -59,10 +59,11 @@ import LATSBreadcrumb from '../components/ui/LATSBreadcrumb';
 import POSTopBar from '../components/pos/POSTopBar';
 import ProductSearchSection from '../components/pos/ProductSearchSection';
 import POSCartSection from '../components/pos/POSCartSection';
-import { useDynamicDataStore } from '../lib/data/dynamicDataStore';
 import { useInventoryStore } from '../stores/useInventoryStore';
+import { InventoryState } from '../stores/useInventoryStore';
 import AddExternalProductModal from '../components/pos/AddExternalProductModal';
 import DeliverySection from '../components/pos/DeliverySection';
+import { DeliveryFormData } from '../components/pos/DeliverySection';
 import AddCustomerModal from '../../../features/customers/components/forms/AddCustomerModal';
 import CustomerSelectionModal from '../components/pos/CustomerSelectionModal';
 import CustomerEditModal from '../components/pos/CustomerEditModal';
@@ -83,7 +84,6 @@ const TradeInCalculator = React.lazy(() => import('../components/pos/TradeInCalc
 import InstallmentManagementModal from '../components/pos/InstallmentManagementModal';
 import PaymentsPopupModal from '../../../components/PaymentsPopupModal';
 import { supabase } from '../../../lib/supabaseClient';
-import { usePaymentMethodsContext } from '../../../context/PaymentMethodsContext';
 import { latsEventBus } from '../lib/data/eventBus';
 import PostClosureWarningModal from '../components/modals/PostClosureWarningModal';
 import DayOpeningModal from '../components/modals/DayOpeningModal';
@@ -131,7 +131,6 @@ import {
   // useNotificationSettings, // NOT USED - removed
   useAdvancedSettings
 } from '../../../hooks/usePOSSettings';
-import { useDynamicDelivery } from '../hooks/useDynamicDelivery';
 import { format } from '../lib/format';
 import { usePOSFeatures } from '../hooks/usePOSFeatures';
 import { SafeImage } from '../../../components/SafeImage';
@@ -153,9 +152,7 @@ import { SafeImage } from '../../../components/SafeImage';
 
 
 // Performance optimization constants
-const PRODUCTS_PER_PAGE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
-const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 
 // Custom hook for debounced search
 const useDebounce = (value: string, delay: number) => {
@@ -177,7 +174,7 @@ const useDebounce = (value: string, delay: number) => {
 
 const POSPageOptimized: React.FC = () => {
   const navigate = useNavigate();
-  const { playClickSound, playPaymentSound, playDeleteSound } = usePOSClickSounds();
+  const { playClickSound, playPaymentSound } = usePOSClickSounds();
   
   // Device detection for automatic mobile UI switching
   const { isMobile, isTablet, deviceType } = useDeviceDetection();
@@ -281,11 +278,11 @@ const POSPageOptimized: React.FC = () => {
   const { currentUser } = useAuth();
   
   // Get current branch
-  const { currentBranch, loading: branchLoading } = useBranch();
+  const { } = useBranch();
   
   // Unified search for products and spare parts
-  const { search: unifiedSearch, results: unifiedSearchResults, isSearching: isUnifiedSearching } = useUnifiedSearch();
-  
+  const { search: unifiedSearch, results: unifiedSearchResults } = useUnifiedSearch();
+
   // Success modal for sale completion
   const successModal = useSuccessModal();
   
@@ -309,16 +306,9 @@ const POSPageOptimized: React.FC = () => {
   const userRole = currentUser?.role as UserRole;
   const canAccessPOS = rbacManager.canUser(currentUser, 'pos', 'view');
   const canSell = rbacManager.canUser(currentUser, 'pos', 'sell');
-  const canRefund = rbacManager.canUser(currentUser, 'pos', 'refund');
-  const canVoid = rbacManager.canUser(currentUser, 'pos', 'void');
-  const canViewInventory = rbacManager.canUser(currentUser, 'pos-inventory', 'view');
   const canSearchInventory = rbacManager.canUser(currentUser, 'pos-inventory', 'search');
   const canAddToCart = rbacManager.canUser(currentUser, 'pos-inventory', 'add-to-cart');
   const canCreateSales = rbacManager.canUser(currentUser, 'sales', 'create');
-  const canViewSales = rbacManager.canUser(currentUser, 'sales', 'view');
-  const canEditSales = rbacManager.canUser(currentUser, 'sales', 'edit');
-  const canDeleteSales = rbacManager.canUser(currentUser, 'sales', 'delete');
-  const canRefundSales = rbacManager.canUser(currentUser, 'sales', 'refund');
 
   // Get payment methods from global context
   // const { paymentMethods: dbPaymentMethods, loading: paymentMethodsLoading } = usePaymentMethodsContext();
@@ -328,21 +318,6 @@ const POSPageOptimized: React.FC = () => {
   const { settings: generalSettings } = useGeneralSettings();
   const { settings: dynamicPricingSettings } = useDynamicPricingSettings();
   const { settings: barcodeScannerSettings } = useBarcodeScannerSettings();
-  const { settings: deliverySettings } = useDeliverySettings();
-  // ✅ FIX: Ensure deliverySettings has all required fields with proper defaults
-  const safeDeliverySettings = deliverySettings ? {
-    ...deliverySettings,
-    delivery_areas: deliverySettings.delivery_areas || [],
-    area_delivery_fees: deliverySettings.area_delivery_fees || {}
-  } : {
-    delivery_areas: [],
-    area_delivery_fees: {},
-    enable_delivery: false,
-    default_delivery_fee: 0,
-    free_delivery_threshold: 0
-  } as any; // Type assertion to handle partial settings
-  const dynamicDelivery = useDynamicDelivery(safeDeliverySettings);
-  const [selectedDeliveryArea, setSelectedDeliveryArea] = useState<string>('');
   const { settings: searchFilterSettings } = useSearchFilterSettings();
   const { settings: advancedSettings } = useAdvancedSettings();
   
@@ -357,8 +332,7 @@ const POSPageOptimized: React.FC = () => {
     loadCategories,
     loadSuppliers,
     loadSales,
-    loadSpareParts,
-    spareParts
+    loadSpareParts
   } = useInventoryStore();
 
   // Unified loading system for non-blocking loading indicators
@@ -522,7 +496,6 @@ const POSPageOptimized: React.FC = () => {
 
   // Performance optimization: Cache data loading state
   const [dataLoaded, setDataLoaded] = useState(false);
-  const [lastLoadTime, setLastLoadTime] = useState(0);
 
   // Log product load status only when products change (not on every render)
   useEffect(() => {
@@ -585,15 +558,11 @@ const POSPageOptimized: React.FC = () => {
       console.log(`🔍 [POS Debug] dbProducts: ${dbProducts.length}, products: ${products.length}, dataLoaded: ${dataLoaded}`);
     }
   }, [dbProducts.length, products.length, dataLoaded, dbProducts]);
-  const isCachingEnabled = advancedSettings?.enable_caching;
-
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
   const debounceTime = searchFilterSettings?.search_debounce_time || SEARCH_DEBOUNCE_MS;
   const debouncedSearchQuery = useDebounce(searchQuery, debounceTime);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -609,7 +578,6 @@ const POSPageOptimized: React.FC = () => {
 
   // Feature toggles - Load from localStorage
   const { 
-    features, 
     isDeliveryEnabled, 
     isLoyaltyEnabled, 
     isCustomerProfilesEnabled, 
@@ -618,7 +586,6 @@ const POSPageOptimized: React.FC = () => {
 
   // Customer state
   const [customerName, setCustomerName] = useState('');
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [showShareReceipt, setShowShareReceipt] = useState(false);
@@ -642,18 +609,11 @@ const POSPageOptimized: React.FC = () => {
     paymentDate: ''
   });
   const [showAdditionalInfoForm, setShowAdditionalInfoForm] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<any>(null);
   const [cartItems, setCartItems] = useState<any[]>([]);
-  const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [currentReceipt, setCurrentReceipt] = useState<any>(null);
   const [cashierName, setCashierName] = useState('');
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-
   // QrCode scanning state
-  const [recentScans, setRecentScans] = useState<string[]>([]);
-  const [scanHistory, setScanHistory] = useState<Array<{barcode: string, product: any, timestamp: Date}>>([]);
-
   // Modal states
   const [showAddExternalProductModal, setShowAddExternalProductModal] = useState(false);
   const [showDeliverySection, setShowDeliverySection] = useState(false);
@@ -664,7 +624,6 @@ const POSPageOptimized: React.FC = () => {
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [showDraftNotification, setShowDraftNotification] = useState(false);
   const [showQuickExpense, setShowQuickExpense] = useState(false);
-  const [draftNotes, setDraftNotes] = useState('');
   const [showPOSSummaryModal, setShowPOSSummaryModal] = useState(false);
   const [showVariantSelectionModal, setShowVariantSelectionModal] = useState(false);
   const [selectedProductForVariants, setSelectedProductForVariants] = useState<any>(null);
@@ -672,11 +631,8 @@ const POSPageOptimized: React.FC = () => {
 
   // Draft management
   const { 
-    saveDraft, 
     loadDraft, 
     getAllDrafts, 
-    deleteCurrentDraft: deleteDraft,
-    hasUnsavedChanges,
     currentDraftId 
   } = useDraftManager({
     cartItems,
@@ -690,38 +646,12 @@ const POSPageOptimized: React.FC = () => {
   const [discountValue, setDiscountValue] = useState('');
 
   // Stats and notifications
-  const [dailyStats, setDailyStats] = useState({
-    totalSales: 0,
-    totalTransactions: 0,
-    averageTransactionValue: 0,
-    topSellingProducts: []
-  });
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [currentShift, setCurrentShift] = useState({
-    startTime: new Date(),
-    totalSales: 0,
-    totalTransactions: 0
-  });
-
   // QrCode scanner state
   const [showQrCodeScanner, setShowQrCodeScanner] = useState(false);
   const [scannerError, setScannerError] = useState<string>('');
-  const [isScanning, setIsScanning] = useState(false);
-  const [scannedQrCodes, setScannedQrCodes] = useState<string[]>([]);
-
   // Receipt state
-  const [receiptTemplate, setReceiptTemplate] = useState({
-    header: '',
-    footer: '',
-    includeLogo: true,
-    includeQR: true
-  });
   const [receiptHistory, setReceiptHistory] = useState<any[]>([]);
   const [showReceiptHistory, setShowReceiptHistory] = useState(false);
-  const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
-  const [receiptPrintMode, setReceiptPrintMode] = useState<'thermal' | 'a4' | 'email'>('thermal');
-
 
   // Daily closure state
   const [isDailyClosed, setIsDailyClosed] = useState(false);
@@ -739,8 +669,6 @@ const POSPageOptimized: React.FC = () => {
 
   // Customer loyalty
   const [customerLoyaltyPoints, setCustomerLoyaltyPoints] = useState<{[key: string]: number}>({});
-  const [customerPurchaseHistory, setCustomerPurchaseHistory] = useState<{[key: string]: any[]}>({});
-  const [customerNotes, setCustomerNotes] = useState<{[key: string]: string}>({});
   const [showCustomerDetails, setShowCustomerDetails] = useState(false);
   const [selectedCustomerForDetails, setSelectedCustomerForDetails] = useState<any>(null);
   
@@ -757,6 +685,10 @@ const POSPageOptimized: React.FC = () => {
   const [showReturnsModal, setShowReturnsModal] = useState(false);
   const [showSplitPaymentModal, setShowSplitPaymentModal] = useState(false);
   const [showLoyaltyModal, setShowLoyaltyModal] = useState(false);
+
+  // Payment Tracking Modal State
+  const [showPaymentTrackingModal, setShowPaymentTrackingModal] = useState(false);
+  const handleShowPaymentTracking = useCallback(() => setShowPaymentTrackingModal(true), []);
 
   // Trade-In state
   const [showTradeInCalculator, setShowTradeInCalculator] = useState(false);
@@ -870,7 +802,7 @@ const POSPageOptimized: React.FC = () => {
         // The loadProducts function handles cache internally, so we don't need to check it here
         // Also load spare parts for POS functionality
         await Promise.allSettled([
-          loadProducts({ page: 1, limit: 200 }, false),
+          loadProducts({ page: 1, limit: 200 }),
           loadCategories(),
           loadSpareParts() // Load spare parts for POS search and stock validation
         ]);
@@ -901,7 +833,6 @@ const POSPageOptimized: React.FC = () => {
     });
     
     setDataLoaded(true);
-    setLastLoadTime(Date.now());
   }, [loadProducts, loadCategories, loadSuppliers, loadSales, startLoading, completeLoading, failLoading]);
 
   // Auto-open customer selection modal when POS page loads (similar to PO page)
@@ -1165,7 +1096,6 @@ const POSPageOptimized: React.FC = () => {
           inStockOnly: false
         });
         updateProgress(jobId, 70);
-        setShowSearchResults(true);
         updateProgress(jobId, 100);
         completeLoading(jobId);
       }
@@ -1192,7 +1122,6 @@ const POSPageOptimized: React.FC = () => {
       }
 
       setShowQrCodeScanner(true);
-      setIsScanning(true);
       setScannerError('');
       toast.success('QrCode scanner started. Scan a product barcode.');
       
@@ -1200,12 +1129,10 @@ const POSPageOptimized: React.FC = () => {
       // Note: In production, this would integrate with a real barcode scanner library
       // For now, we'll show a message to use external barcode scanner
       toast.success('Please use your external barcode scanner device to scan products');
-      setIsScanning(false);
     } catch (error) {
       console.error('Error starting barcode scanner:', error);
       toast.error('Failed to start barcode scanner. Please try again.');
       setShowQrCodeScanner(false);
-      setIsScanning(false);
     }
   };
 
@@ -1215,7 +1142,6 @@ const POSPageOptimized: React.FC = () => {
       if (!barcode || barcode.trim() === '') {
         setScannerError('Invalid barcode');
         toast.error('Invalid barcode scanned. Please try again.');
-        setIsScanning(false);
         setShowQrCodeScanner(false);
         return;
       }
@@ -1232,7 +1158,6 @@ const POSPageOptimized: React.FC = () => {
           addToCart(product);
         }
         toast.success(`Product added: ${product.name}`);
-        setScannedQrCodes(prev => [...prev, barcode]);
       } else {
         setScannerError('Product not found');
         toast.error(`Product not found for barcode: ${barcode}`);
@@ -1242,7 +1167,6 @@ const POSPageOptimized: React.FC = () => {
       setScannerError('Failed to process barcode');
       toast.error('Failed to process barcode. Please try again.');
     } finally {
-      setIsScanning(false);
       setShowQrCodeScanner(false);
     }
   };
@@ -2411,7 +2335,7 @@ const POSPageOptimized: React.FC = () => {
   const handleRefreshData = async () => {
     try {
       // Get store instance to access invalidateCache
-      const store = useInventoryStore.getState();
+      const store = useInventoryStore.getState() as InventoryState;
       
       // Invalidate all caches to force fresh load from database
       store.invalidateCache('products');
@@ -2667,7 +2591,7 @@ const POSPageOptimized: React.FC = () => {
           onAddCustomer={() => handleShowAddCustomerModal()}
           onRemoveCustomer={handleRemoveCustomer}
           onScanBarcode={startQrCodeScanner}
-          onViewReceipts={() => toast.info('Receipts view feature coming soon!', { duration: 3000 })}
+          onViewReceipts={() => toast('Receipts view feature coming soon!', { duration: 3000 })}
           onToggleSettings={() => setShowSettings(true)}
           onViewSales={async () => {
             await loadSales();
@@ -2678,7 +2602,6 @@ const POSPageOptimized: React.FC = () => {
           discountAmount={discountAmount}
           taxAmount={taxAmount}
           finalAmount={finalAmount}
-          isProcessingPayment={isProcessingPayment}
           todaysSales={todaysSales}
           isTaxEnabled={isTaxEnabled}
           taxRate={TAX_RATE}
@@ -2917,7 +2840,7 @@ const POSPageOptimized: React.FC = () => {
                   totalPrice: item.totalPrice,
                   costPrice: 0,
                   profit: 0,
-                  selectedSerialNumbers: item.selectedSerialNumbers || [] // Pass serial numbers
+                  selectedSerialNumbers: item.selectedSerialNumbers || [], // Pass serial numbers
                 })),
                 subtotal: totalAmount,
                 tax: taxAmount,
@@ -3337,18 +3260,15 @@ const POSPageOptimized: React.FC = () => {
         onScanQrCode={isQrCodeScannerEnabled ? startQrCodeScanner : () => {}}
         onAddCustomer={() => handleShowAddCustomerModal()}
         onViewReceipts={() => {
-          toast.info('Receipts view feature coming soon!', { duration: 3000 });
+          toast('Receipts view feature coming soon!', { duration: 3000 });
         }}
         onViewSales={async () => {
           // Refresh sales data before navigating
           await loadSales();
           navigate('/lats/sales-reports');
         }}
-        onOpenPaymentTracking={() => {
-          handleShowPaymentTracking();
-        }}
+        onOpenPaymentTracking={() => setShowPaymentTrackingModal(true)}
         onOpenDrafts={() => setShowDraftModal(true)}
-        isProcessingPayment={isProcessingPayment}
         hasSelectedCustomer={!!selectedCustomer}
         draftCount={getAllDrafts().length}
         // Bottom bar actions moved to top bar
@@ -3425,7 +3345,6 @@ const POSPageOptimized: React.FC = () => {
               products={products as any}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
-              isSearching={isSearching}
               showAdvancedFilters={showAdvancedFilters}
               setShowAdvancedFilters={setShowAdvancedFilters}
               selectedCategory={selectedCategory}
@@ -3449,7 +3368,6 @@ const POSPageOptimized: React.FC = () => {
               onScanQrCode={startQrCodeScanner}
               currentPage={currentPage}
               setCurrentPage={setCurrentPage}
-              totalPages={totalPages}
               productsPerPage={productsPerPageFromSettings}
               spareParts={unifiedSearchResults.spareParts}
             />
@@ -4676,9 +4594,7 @@ const POSPageOptimized: React.FC = () => {
                     sku: item.sku,
                     image: item.image,
                     selectedSerialNumbers: item.selectedSerialNumbers || [],
-                    attributes: attributes,
-                    itemType: item.itemType || 'product', // Include item type for spare parts
-                    partNumber: (item as any).partNumber || null // Include part number for spare parts
+                    attributes: attributes
                   };
                 }),
                 customerName: selectedCustomer?.name || null,
@@ -5007,7 +4923,6 @@ const POSPageOptimized: React.FC = () => {
         onClose={() => setShowReceipt(false)}
         receipt={currentReceipt}
         onPrint={(_mode: string) => {
-          setReceiptPrintMode(_mode as "email" | "thermal" | "a4");
           // Handle printing logic
         }}
         onEmail={(_email: string) => {
@@ -5327,7 +5242,6 @@ const POSPageOptimized: React.FC = () => {
                       key={receipt.id}
                       className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer"
                       onClick={() => {
-                        setSelectedReceipt(receipt);
                         // Show receipt details or print
                       }}
                     >
@@ -5385,7 +5299,12 @@ const POSPageOptimized: React.FC = () => {
         <DeliverySection
           isOpen={showDeliverySection}
           onClose={() => setShowDeliverySection(false)}
-          onDeliverySet={(_delivery) => {
+          onDeliveryComplete={(delivery: DeliveryFormData) => {
+            console.log('Delivery completed:', delivery);
+            // Add logic to handle completed delivery, e.g., update order, save to state
+            setShowDeliverySection(false);
+          }}
+          onDeliverySet={(delivery: DeliveryFormData) => {
             // Handle delivery setting
             setShowDeliverySection(false);
           }}

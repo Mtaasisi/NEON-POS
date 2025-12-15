@@ -9,6 +9,7 @@ import LoadingSpinner from '../../../../components/ui/LoadingSpinner';
 interface SalesAnalyticsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  branchId?: string;
 }
 
 const SalesAnalyticsModal: React.FC<SalesAnalyticsModalProps> = ({ isOpen, onClose }) => {

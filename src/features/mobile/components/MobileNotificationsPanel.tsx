@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Bell, Package, AlertCircle, TrendingDown, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../lib/supabase';
-import { useMobileBranch } from '../hooks/useMobileBranch';
+import { supabase } from '../../../lib/supabaseClient';
+import { useBranch } from '../../../context/BranchContext';
 
 interface Notification {
   id: string;
@@ -21,7 +21,7 @@ interface MobileNotificationsPanelProps {
 
 const MobileNotificationsPanel: React.FC<MobileNotificationsPanelProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
-  const { currentBranch } = useMobileBranch();
+  const { currentBranch } = useBranch();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -105,10 +105,10 @@ const MobileNotificationsPanel: React.FC<MobileNotificationsPanelProps> = ({ isO
 
   const getIconColor = (type: string) => {
     switch (type) {
-      case 'low_stock': return 'bg-orange-50 text-orange-600';
-      case 'out_of_stock': return 'bg-red-50 text-red-600';
-      case 'sale': return 'bg-green-50 text-green-600';
-      default: return 'bg-blue-50 text-blue-600';
+      case 'low_stock': return 'bg-warning-50 text-warning-600';
+      case 'out_of_stock': return 'bg-danger-50 text-danger-600';
+      case 'sale': return 'bg-success-50 text-success-600';
+      default: return 'bg-primary-50 text-primary-600';
     }
   };
 
@@ -117,28 +117,33 @@ const MobileNotificationsPanel: React.FC<MobileNotificationsPanelProps> = ({ isO
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end" onClick={onClose}>
       <div 
-        className="absolute right-0 top-0 bottom-0 w-full max-w-sm bg-white shadow-2xl flex flex-col"
+        className="bg-white w-full h-[90vh] rounded-t-3xl flex flex-col animate-slide-up shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Handle Bar */}
+        <div className="flex justify-center pt-2 pb-1">
+          <div className="w-10 h-1 bg-neutral-300 rounded-full" />
+        </div>
+
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-4 py-4 safe-area-inset-top">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[24px] font-bold text-gray-900">Notifications</h2>
+        <div className="bg-white border-b border-neutral-200 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[20px] font-semibold text-neutral-900">Notifications</h2>
             <button
               onClick={onClose}
-              className="p-2 -mr-2 active:bg-gray-100 rounded-full transition-all"
+              className="text-primary-500 text-[17px] active:text-primary-600 transition-colors"
             >
-              <X size={24} className="text-gray-600" strokeWidth={2.5} />
+              Done
             </button>
           </div>
           {unreadCount > 0 && (
-            <div className="flex items-center justify-between">
-              <span className="text-[14px] text-gray-500">{unreadCount} unread</span>
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-[14px] text-neutral-500">{unreadCount} unread</span>
               <button
                 onClick={markAllAsRead}
-                className="text-[14px] text-blue-500 font-medium active:text-blue-700"
+                className="text-[14px] text-primary-500 font-medium active:text-primary-700"
               >
                 Mark all as read
               </button>
@@ -147,35 +152,38 @@ const MobileNotificationsPanel: React.FC<MobileNotificationsPanelProps> = ({ isO
         </div>
 
         {/* Notifications List */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto pb-safe-bottom">
           {isLoading && (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
             </div>
           )}
 
           {!isLoading && notifications.length === 0 && (
             <div className="text-center py-12 px-4">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Bell size={32} className="text-gray-400" strokeWidth={1.5} />
+              <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Bell size={32} className="text-neutral-400" strokeWidth={1.5} />
               </div>
-              <p className="text-gray-500 text-[16px] font-medium">No notifications</p>
-              <p className="text-gray-400 text-[14px] mt-1">You're all caught up!</p>
+              <p className="text-neutral-500 text-[16px] font-medium">No notifications</p>
+              <p className="text-neutral-400 text-[14px] mt-1">You're all caught up!</p>
             </div>
           )}
 
           {!isLoading && notifications.length > 0 && (
             <div className="py-2">
-              {notifications.map((notification) => {
+              {notifications.map((notification, index) => {
                 const Icon = getIcon(notification.type);
                 const iconColor = getIconColor(notification.type);
+                const isLast = index === notifications.length - 1;
                 
                 return (
                   <button
                     key={notification.id}
                     onClick={() => handleNotificationClick(notification)}
-                    className={`w-full px-4 py-3 flex items-start gap-3 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-100 ${
-                      !notification.read ? 'bg-blue-50/30' : ''
+                    className={`w-full px-4 py-3 flex items-start gap-3 hover:bg-neutral-50 active:bg-neutral-100 transition-colors ${
+                      !isLast ? 'border-b border-neutral-100' : ''
+                    } ${
+                      !notification.read ? 'bg-primary-50/30' : ''
                     }`}
                   >
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${iconColor}`}>
@@ -183,13 +191,13 @@ const MobileNotificationsPanel: React.FC<MobileNotificationsPanelProps> = ({ isO
                     </div>
                     <div className="flex-1 text-left min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[15px] font-semibold text-gray-900">{notification.title}</span>
+                        <span className="text-[15px] font-semibold text-neutral-900">{notification.title}</span>
                         {!notification.read && (
-                          <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
+                          <div className="w-2 h-2 bg-primary-500 rounded-full flex-shrink-0"></div>
                         )}
                       </div>
-                      <p className="text-[14px] text-gray-600 mb-1">{notification.message}</p>
-                      <span className="text-[12px] text-gray-400">{notification.time}</span>
+                      <p className="text-[14px] text-neutral-600 mb-1">{notification.message}</p>
+                      <span className="text-[12px] text-neutral-400">{notification.time}</span>
                     </div>
                   </button>
                 );
@@ -203,4 +211,3 @@ const MobileNotificationsPanel: React.FC<MobileNotificationsPanelProps> = ({ isO
 };
 
 export default MobileNotificationsPanel;
-

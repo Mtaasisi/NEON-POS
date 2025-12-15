@@ -14,34 +14,6 @@ interface MobilePopupContainerProps {
   showHomeIndicator?: boolean;
 }
 
-/**
- * MobilePopupContainer
- * 
- * A reusable popup container that exactly matches the iOS-style popup from the reference image.
- * 
- * Features:
- * - Full screen on mobile, centered modal on desktop
- * - iOS status bar spacer (44px)
- * - Header with left/right buttons and centered title/subtitle
- * - Scrollable content area
- * - iOS home indicator
- * - Smooth animations
- * 
- * Usage:
- * ```tsx
- * <MobilePopupContainer
- *   isOpen={isOpen}
- *   onClose={onClose}
- *   title="Add items"
- *   subtitle="TZS 0"
- *   leftButtonText="Cancel"
- *   rightButtonText="Add"
- *   onRightButtonClick={handleAdd}
- * >
- *   {/* Your content here *\/}
- * </MobilePopupContainer>
- * ```
- */
 const MobilePopupContainer: React.FC<MobilePopupContainerProps> = ({
   isOpen,
   onClose,
@@ -59,32 +31,32 @@ const MobilePopupContainer: React.FC<MobilePopupContainerProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center">
+      <div className="fixed inset-0 z-50 flex items-end">
         {/* Full screen on mobile, centered modal on desktop */}
-        <div className="w-full h-full sm:h-auto sm:max-w-lg sm:max-h-[90vh] bg-white sm:rounded-2xl flex flex-col sm:shadow-2xl animate-slide-up">
+        <div className="w-full h-full bg-white rounded-t-3xl flex flex-col shadow-lg animate-slide-up">
           
           {/* iOS Status Bar Spacer - 44px (h-11) */}
-          <div className="h-11 bg-white flex-shrink-0 sm:hidden" />
+          <div className="h-11 bg-white flex-shrink-0" />
           
           {/* Header Bar - Exact dimensions from image */}
-          <div className="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
-            <div className="flex items-center justify-between h-11">
+          <div className="bg-white border-b border-neutral-200 px-4 py-3 flex-shrink-0">
+            <div className="flex items-center justify-between h-[44px]">
               {/* Left Button (Cancel) */}
               <button
                 onClick={onClose}
                 disabled={leftButtonDisabled}
-                className="text-blue-500 font-normal text-[17px] disabled:opacity-50 min-w-[70px] text-left"
+                className="text-primary-500 font-normal text-[17px] disabled:opacity-50 min-w-[70px] text-left"
               >
                 {leftButtonText}
               </button>
 
               {/* Center Title + Subtitle */}
               <div className="flex-1 text-center px-4">
-                <h2 className="text-[17px] font-semibold text-gray-900 leading-tight">
+                <h2 className="text-[17px] font-semibold text-neutral-900 leading-tight">
                   {title}
                 </h2>
                 {subtitle && (
-                  <p className="text-[11px] text-gray-500 mt-0.5 font-normal">
+                  <p className="text-[11px] text-neutral-500 mt-0.5 font-normal">
                     {subtitle}
                   </p>
                 )}
@@ -96,8 +68,8 @@ const MobilePopupContainer: React.FC<MobilePopupContainerProps> = ({
                 disabled={rightButtonDisabled}
                 className={`font-normal text-[17px] transition-colors min-w-[70px] text-right ${
                   rightButtonDisabled
-                    ? 'text-gray-400'
-                    : 'text-blue-500'
+                    ? 'text-neutral-400'
+                    : 'text-primary-500'
                 }`}
               >
                 {rightButtonText}
@@ -112,8 +84,8 @@ const MobilePopupContainer: React.FC<MobilePopupContainerProps> = ({
 
           {/* iOS Home Indicator - Black rounded line at bottom */}
           {showHomeIndicator && (
-            <div className="flex-shrink-0 py-2 bg-white sm:hidden">
-              <div className="w-32 h-1 bg-gray-300 rounded-full mx-auto" />
+            <div className="flex-shrink-0 py-2 bg-white">
+              <div className="w-[134px] h-[5px] bg-neutral-300 rounded-full mx-auto" />
             </div>
           )}
         </div>
@@ -124,34 +96,14 @@ const MobilePopupContainer: React.FC<MobilePopupContainerProps> = ({
         @keyframes slide-up {
           from {
             transform: translateY(100%);
-            opacity: 0;
           }
           to {
             transform: translateY(0);
-            opacity: 1;
           }
         }
 
         .animate-slide-up {
           animation: slide-up 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        /* Desktop fade-in animation */
-        @media (min-width: 640px) {
-          .animate-slide-up {
-            animation: fade-in 0.2s ease-out;
-          }
-        }
-
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
         }
       `}</style>
     </>
@@ -159,4 +111,3 @@ const MobilePopupContainer: React.FC<MobilePopupContainerProps> = ({
 };
 
 export default MobilePopupContainer;
-

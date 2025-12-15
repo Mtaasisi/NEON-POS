@@ -79,6 +79,7 @@ export interface Product {
   id: string;
   name: string;
   sku: string;
+  barcode?: string; // Add missing barcode property
   description?: string; // Add missing description property
 
   categoryId: string;

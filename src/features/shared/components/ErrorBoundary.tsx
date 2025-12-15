@@ -145,7 +145,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
               {/* Error Title */}
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                <h1 className="text-3xl font-black text-gray-900 mb-2">
                   {isReactRefreshError ? 'Development Refresh Error' : 'Something went wrong'}
                 </h1>
                 <p className="text-gray-600">

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, RefreshCw, Home, ArrowLeft, AlertCircle } from 'lucide-react';
+import { RefreshCw, Home, ArrowLeft, AlertCircle } from 'lucide-react';
 import GlassButton from './ui/GlassButton';
 import GlassCard from './ui/GlassCard';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -60,7 +60,7 @@ const PageErrorFallback: React.FC<PageErrorFallbackProps> = ({
 
           {/* Error Title */}
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            <h1 className="text-2xl font-black text-gray-900 mb-2">
               Page Error
             </h1>
             <p className="text-gray-600">

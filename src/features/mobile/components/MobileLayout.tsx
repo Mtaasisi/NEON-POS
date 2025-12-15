@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Home, Users, FileText, Calculator, Plus, Search, Bell, User } from 'lucide-react';
+import { Home, Users, FileText, Calculator, Plus, Search, Bell, User, CreditCard, LayoutList, MoreHorizontal } from 'lucide-react';
 import MobileAppInitializer from './MobileAppInitializer';
 import MobileSearchModal from './MobileSearchModal';
 import MobileNotificationsPanel from './MobileNotificationsPanel';
@@ -19,9 +19,9 @@ const MobileLayout: React.FC = () => {
   const navItems = [
     { id: 'home', label: 'Home', icon: Home, path: '/mobile/dashboard' },
     { id: 'clients', label: 'Clients', icon: Users, path: '/mobile/clients' },
-    { id: 'pos', label: 'POS', icon: Calculator, path: '/mobile/pos' },
-    { id: 'inventory', label: 'Inventory', icon: FileText, path: '/mobile/inventory' },
-    { id: 'more', label: 'More', icon: null, path: '/mobile/more' }
+    { id: 'pos', label: 'POS', icon: CreditCard, path: '/mobile/pos' },
+    { id: 'inventory', label: 'Inventory', icon: LayoutList, path: '/mobile/inventory' },
+    { id: 'more', label: 'More', icon: MoreHorizontal, path: '/mobile/more' }
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -145,4 +145,3 @@ const MobileLayout: React.FC = () => {
 };
 
 export default MobileLayout;
-

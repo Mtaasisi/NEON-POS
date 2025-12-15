@@ -198,6 +198,7 @@ export interface Customer {
   whatsapp?: string;
   gender: 'male' | 'female' | 'other';
   city: string;
+  address?: string;
   notes: CustomerNote[];
   joinedDate: string;
   loyaltyLevel: LoyaltyLevel;

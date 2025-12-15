@@ -1,5 +1,4 @@
 import React, { ReactNode } from 'react';
-import { useResponsiveSizes } from '../../../hooks/useResponsiveSize';
 
 interface MobileButtonProps {
   children: ReactNode;
@@ -24,50 +23,21 @@ const MobileButton: React.FC<MobileButtonProps> = ({
   type = 'button',
   className = ''
 }) => {
-  const sizes = useResponsiveSizes();
   
-  const baseClasses = 'font-semibold transition-all flex items-center justify-center touch-target';
+  const baseClasses = 'font-semibold transition-all flex items-center justify-center -webkit-tap-highlight-color: transparent rounded-xl';
   
   const variantClasses = {
-    primary: 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white shadow-md disabled:bg-gray-300',
-    secondary: 'bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 disabled:bg-gray-100 disabled:text-gray-400',
-    outline: 'border-2 border-blue-500 text-blue-500 hover:bg-blue-50 active:bg-blue-100 disabled:border-gray-300 disabled:text-gray-400',
-    danger: 'bg-red-500 hover:bg-red-600 active:bg-red-700 text-white shadow-md disabled:bg-gray-300'
+    primary: 'bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-white shadow-md disabled:bg-neutral-300',
+    secondary: 'bg-neutral-100 hover:bg-neutral-200 active:bg-neutral-300 text-neutral-700 disabled:bg-neutral-100 disabled:text-neutral-400',
+    outline: 'border-2 border-primary-500 text-primary-500 hover:bg-primary-50 active:bg-primary-100 disabled:border-neutral-300 disabled:text-neutral-400',
+    danger: 'bg-danger-500 hover:bg-danger-600 active:bg-danger-700 text-white shadow-md disabled:bg-neutral-300'
   };
 
-  // Responsive sizing based on size prop
-  const getButtonStyles = () => {
-    const baseStyle: React.CSSProperties = {
-      borderRadius: `${sizes.radiusMd}px`,
-      minHeight: `${sizes.buttonHeight}px`,
-      WebkitTapHighlightColor: 'transparent'
-    };
-
-    switch (size) {
-      case 'sm':
-        return {
-          ...baseStyle,
-          padding: `${sizes.spacing2}px ${sizes.spacing3}px`,
-          fontSize: `${sizes.textSm}px`,
-          gap: `${sizes.spacing1}px`,
-          minHeight: `${sizes.buttonHeight * 0.85}px`
-        };
-      case 'lg':
-        return {
-          ...baseStyle,
-          padding: `${sizes.spacing4}px ${sizes.spacing6}px`,
-          fontSize: `${sizes.textLg}px`,
-          gap: `${sizes.spacing3}px`,
-          minHeight: `${sizes.buttonHeight * 1.15}px`
-        };
-      default: // 'md'
-        return {
-          ...baseStyle,
-          padding: `${sizes.spacing3}px ${sizes.spacing4}px`,
-          fontSize: `${sizes.textBase}px`,
-          gap: `${sizes.spacing2}px`
-        };
-    }
+  // Fixed sizing based on size prop
+  const sizeClasses = {
+    sm: 'px-3 py-2 text-[13px] gap-1 min-h-[36px]',
+    md: 'px-4 py-3 text-[15px] gap-2 min-h-[44px]',
+    lg: 'px-6 py-4 text-[17px] gap-3 min-h-[52px]'
   };
 
   const widthClass = fullWidth ? 'w-full' : '';
@@ -77,10 +47,10 @@ const MobileButton: React.FC<MobileButtonProps> = ({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      style={getButtonStyles()}
       className={`
         ${baseClasses} 
         ${variantClasses[variant]} 
+        ${sizeClasses[size]}
         ${widthClass}
         ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}
         ${className}
@@ -93,4 +63,3 @@ const MobileButton: React.FC<MobileButtonProps> = ({
 };
 
 export default MobileButton;
-

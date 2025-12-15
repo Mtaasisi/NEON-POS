@@ -650,6 +650,7 @@ const AdminSettingsPageContent: React.FC = () => {
                     slate: isActive ? 'bg-slate-50 border-slate-300 text-slate-700' : 'hover:bg-slate-50 hover:border-slate-200',
                     sky: isActive ? 'bg-sky-50 border-sky-300 text-sky-700' : 'hover:bg-sky-50 hover:border-sky-200',
                     lime: isActive ? 'bg-lime-50 border-lime-300 text-lime-700' : 'hover:bg-lime-50 hover:border-lime-200',
+                    indigo: isActive ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'hover:bg-indigo-50 hover:border-indigo-200',
                   };
                   
                   return (

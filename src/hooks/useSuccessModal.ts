@@ -55,13 +55,14 @@ export const useSuccessModal = () => {
   });
 
   const show = useCallback((message: string, options?: SuccessModalOptions) => {
-    // Validate message - provide fallback if empty
-    const validMessage = message && message.trim() !== '' 
-      ? message 
+    // Validate message - ensure it's a string and provide fallback if empty
+    const messageStr = String(message || '');
+    const validMessage = messageStr.trim() !== ''
+      ? messageStr
       : 'Operation completed successfully!';
-    
+
     // Warn if message is empty (in development)
-    if (!message || message.trim() === '') {
+    if (!messageStr || messageStr.trim() === '') {
       console.warn('⚠️ useSuccessModal: Empty message provided. Using fallback message.');
     }
     

@@ -268,6 +268,19 @@ const AppLayout: React.FC = () => {
         count: 0
       },
       {
+        path: '/tablet-pos',
+        label: 'Tablet POS',
+        icon: <Smartphone size={20} strokeWidth={1.5} />,
+        roles: ['admin', 'customer-care'],
+        count: 0,
+        badge: '📱',
+        onClick: () => {
+          // Force tablet mode by setting localStorage and navigating
+          localStorage.setItem('forceTabletMode', 'true');
+          navigate('/pos');
+        }
+      },
+      {
         path: '/lats/trade-in/management',
         label: 'Trade-in',
         icon: <Repeat size={20} strokeWidth={1.5} />,
@@ -550,71 +563,118 @@ const AppLayout: React.FC = () => {
               {navItems.map(item => (
                 <li key={item.path}>
                   <div className="relative group">
-                    <Link
-                      to={item.path}
-                      className={`
-                        flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300
-                        ${isNavCollapsed ? 'justify-center' : ''}
-                        ${location.pathname === item.path
-                          ? isDark 
-                            ? 'bg-gradient-to-r from-blue-600/20 to-indigo-600/20 text-blue-400 font-medium shadow-sm backdrop-blur-sm border border-blue-500/30'
-                            : 'bg-gradient-to-r from-blue-500/10 to-indigo-500/10 text-blue-700 font-medium shadow-sm backdrop-blur-sm border border-blue-200/30'
-                          : isDark
+                    {item.onClick ? (
+                      <button
+                        onClick={() => {
+                          item.onClick?.();
+                          setIsMenuOpen(false);
+                          markAsRead(item.path);
+                        }}
+                        className={`
+                          flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 w-full text-left
+                          ${isNavCollapsed ? 'justify-center' : ''}
+                          ${isDark
                             ? 'text-gray-300 hover:bg-slate-800/60 hover:text-white'
                             : 'text-gray-700 hover:bg-white/40 hover:text-gray-900'
-                        }
-                      `}
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        markAsRead(item.path);
-                      }}
-                    >
-                    <span className={`
-                      ${location.pathname === item.path 
-                        ? isDark ? 'text-blue-400' : 'text-blue-600' 
-                        : isDark ? 'text-gray-400' : 'text-blue-500'
-                      }
-                      ${isNavCollapsed ? 'w-8 h-8 flex items-center justify-center' : ''}
-                      relative
-                    `}>
-                      {item.icon}
-                      
-                      {/* Activity Counter - Compact mode for collapsed sidebar */}
-                      {getUnreadCount(item.path, item.count) > 0 && isNavCollapsed && (
-                        <ActivityCounter 
-                          count={getUnreadCount(item.path, item.count)} 
-                          compact={true}
-                        />
-                      )}
+                          }
+                        `}
+                      >
+                        <span className={`
+                          ${isNavCollapsed ? 'w-8 h-8 flex items-center justify-center' : ''}
+                          relative
+                        `}>
+                          {item.icon}
 
-                    </span>
-                    <span className={`transition-opacity duration-300 ${isNavCollapsed ? 'md:hidden' : ''} flex-1`}>
-                      {item.label}
-                    </span>
-                    
-                    {/* Activity Counter - Normal mode for expanded sidebar */}
-                    {getUnreadCount(item.path, item.count) > 0 && !isNavCollapsed && (
-                      <ActivityCounter 
-                        count={getUnreadCount(item.path, item.count)} 
-                        className={`${isNavCollapsed ? 'md:hidden' : ''}`}
-                      />
+                          {/* Activity Counter - Compact mode for collapsed sidebar */}
+                          {getUnreadCount(item.path, item.count) > 0 && isNavCollapsed && (
+                            <ActivityCounter
+                              count={getUnreadCount(item.path, item.count)}
+                              compact={true}
+                            />
+                          )}
+                        </span>
+                        <span className={`transition-opacity duration-300 ${isNavCollapsed ? 'md:hidden' : ''} flex-1`}>
+                          {item.label}
+                        </span>
+
+                        {/* Activity Counter - Normal mode for expanded sidebar */}
+                        {getUnreadCount(item.path, item.count) > 0 && !isNavCollapsed && (
+                          <ActivityCounter
+                            count={getUnreadCount(item.path, item.count)}
+                            className={`${isNavCollapsed ? 'md:hidden' : ''}`}
+                          />
+                        )}
+
+                        {item.badge && (
+                          <span className="ml-auto text-sm">{item.badge}</span>
+                        )}
+                      </button>
+                    ) : (
+                      <Link
+                        to={item.path}
+                        className={`
+                          flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300
+                          ${isNavCollapsed ? 'justify-center' : ''}
+                          ${location.pathname === item.path
+                            ? isDark
+                              ? 'bg-gradient-to-r from-blue-600/20 to-indigo-600/20 text-blue-400 font-medium shadow-sm backdrop-blur-sm border border-blue-500/30'
+                              : 'bg-gradient-to-r from-blue-500/10 to-indigo-500/10 text-blue-700 font-medium shadow-sm backdrop-blur-sm border border-blue-200/30'
+                            : isDark
+                              ? 'text-gray-300 hover:bg-slate-800/60 hover:text-white'
+                              : 'text-gray-700 hover:bg-white/40 hover:text-gray-900'
+                          }
+                        `}
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          markAsRead(item.path);
+                        }}
+                      >
+                        <span className={`
+                          ${location.pathname === item.path
+                            ? isDark ? 'text-blue-400' : 'text-blue-600'
+                            : isDark ? 'text-gray-400' : 'text-blue-500'
+                          }
+                          ${isNavCollapsed ? 'w-8 h-8 flex items-center justify-center' : ''}
+                          relative
+                        `}>
+                          {item.icon}
+
+                          {/* Activity Counter - Compact mode for collapsed sidebar */}
+                          {getUnreadCount(item.path, item.count) > 0 && isNavCollapsed && (
+                            <ActivityCounter
+                              count={getUnreadCount(item.path, item.count)}
+                              compact={true}
+                            />
+                          )}
+                        </span>
+                        <span className={`transition-opacity duration-300 ${isNavCollapsed ? 'md:hidden' : ''} flex-1`}>
+                          {item.label}
+                        </span>
+
+                        {/* Activity Counter - Normal mode for expanded sidebar */}
+                        {getUnreadCount(item.path, item.count) > 0 && !isNavCollapsed && (
+                          <ActivityCounter
+                            count={getUnreadCount(item.path, item.count)}
+                            className={`${isNavCollapsed ? 'md:hidden' : ''}`}
+                          />
+                        )}
+
+                        {location.pathname === item.path && (
+                          <ChevronRightIcon size={16} strokeWidth={1.5} className={`
+                            ml-auto ${isDark ? 'text-blue-400' : 'text-blue-500'}
+                            ${isNavCollapsed ? 'md:hidden' : ''}
+                          `} />
+                        )}
+                      </Link>
                     )}
-                    
-                      {location.pathname === item.path && (
-                        <ChevronRightIcon size={16} strokeWidth={1.5} className={`
-                          ml-auto ${isDark ? 'text-blue-400' : 'text-blue-500'}
-                          ${isNavCollapsed ? 'md:hidden' : ''}
-                        `} />
-                      )}
-                    </Link>
-                    
+
                     {/* Hover tooltip - only show when sidebar is collapsed */}
                     {isNavCollapsed && (
-                      <div className={`absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 
-                        ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} 
+                      <div className={`absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2
+                        ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'}
                         backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
                         {item.label}
-                        <div className={`absolute right-full top-1/2 transform -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent 
+                        <div className={`absolute right-full top-1/2 transform -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent
                           ${isDark ? 'border-r-slate-800/95' : 'border-r-white/95'}`}></div>
                       </div>
                     )}

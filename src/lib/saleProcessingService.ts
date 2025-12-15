@@ -20,7 +20,8 @@ export interface SaleItem {
   totalPrice: number;
   costPrice: number;
   profit: number;
-  selectedSerialNumbers?: Array<{ id: string; serial_number: string; imei?: string; mac_address?: string }>;
+  serialNumbers?: Array<{ id: string; serial_number: string; imei?: string; mac_address?: string }>;
+  tags?: string[];
   itemType?: 'product' | 'spare-part'; // Type of item: product or spare part
   partNumber?: string; // Part number for spare parts
 }
@@ -1821,13 +1822,9 @@ class SaleProcessingService {
           return {
             product_id: item.productId,
             variant_id: item.variantId, // This is guaranteed to exist in lats_product_variants
-            type: 'sale', // ✅ FIX: Required 'type' column (NOT NULL)
             movement_type: 'out',
             quantity: item.quantity,
-            previous_quantity: currentQuantity,
-            new_quantity: newQuantity,
-            reason: 'Sale',
-            reference: `Sale ${item.sku}`,
+            reference_type: 'pos_sale',
             reference_id: saleId || null, // ✅ CRITICAL: Set reference_id so reversals can find this movement
             notes: `Sold ${item.quantity} units of ${item.productName} (${item.variantName})`,
             created_by: normalizedUserId

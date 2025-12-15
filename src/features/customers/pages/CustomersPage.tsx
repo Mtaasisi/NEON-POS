@@ -1463,14 +1463,14 @@ const CustomersPage = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+    <div className="p-2 sm:p-4 md:p-6 max-w-none sm:max-w-7xl mx-auto">
       {isOffline && (
-        <div style={{ background: '#fbbf24', color: 'black', padding: '8px', textAlign: 'center', marginBottom: '1rem', borderRadius: '0.5rem' }}>
+        <div className="scale-50 sm:scale-100 origin-top-left sm:origin-center mb-4 sm:mb-0" style={{ background: '#fbbf24', color: 'black', padding: '8px', textAlign: 'center', borderRadius: '0.5rem' }}>
           You are offline. Data is loaded from cache.
         </div>
       )}
       {/* Combined Container - All sections in one */}
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[95vh]">
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[190vh] sm:max-h-[95vh] scale-50 sm:scale-100 origin-top-left sm:origin-center">
         {/* Fixed Header Section - Enhanced Modal Style */}
         <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center justify-between">

@@ -36,22 +36,7 @@ export async function fetchAllDevices(): Promise<Device[]> {
           device_cost,
           repair_price,
           diagnosis_required,
-          device_notes,
-          customers!customer_id (
-            id,
-            name,
-            phone,
-            email,
-            loyalty_level,
-            total_spent,
-            last_visit,
-            color_tag
-          ),
-          technician:users!technician_id (
-            id,
-            full_name,
-            email
-          )
+          device_notes
         `)
         .order('created_at', { ascending: false });
       
@@ -61,17 +46,6 @@ export async function fetchAllDevices(): Promise<Device[]> {
       }
       
       const { data, error } = await query;
-      
-      // Check if error is due to PostgREST syntax not being supported (Neon direct connection)
-      const isPostgRESTError = error?.message?.includes('syntax error') || 
-                               error?.message?.includes('relation') ||
-                               error?.code === '42601' ||
-                               error?.code === '42703';
-      
-      if (error && !isPostgRESTError) {
-        // Non-syntax errors - log and continue to fallback
-        console.warn('⚠️ Device query error (non-syntax):', error.message);
-      }
       
       // If query failed or returned no data, use fallback approach
       if (error || !data || data.length === 0) {

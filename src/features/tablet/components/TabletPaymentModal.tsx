@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { X, CreditCard, DollarSign, CheckCircle, Plus } from 'lucide-react';
 import { format } from '../../lats/lib/format';
+import { usePaymentAccounts } from '../../../hooks/usePaymentAccounts';
+import { FinanceAccount } from '../../../lib/financeAccountService';
 
 interface TabletPaymentModalProps {
   amount: number;
+  discountValue: number;
+  discountType: 'percentage' | 'fixed';
+  onChangeDiscount: (value: number) => void;
+  onChangeDiscountType: (type: 'percentage' | 'fixed') => void;
   onClose: () => void;
   onComplete: (payments: any[], totalPaid: number) => void;
 }
 
 interface Payment {
   paymentMethod: string;
+  paymentAccountId?: string;
   amount: number;
   reference?: string;
   timestamp?: string;
@@ -17,47 +24,88 @@ interface Payment {
 
 const TabletPaymentModal: React.FC<TabletPaymentModalProps> = ({
   amount,
+  discountValue,
+  discountType,
+  onChangeDiscount,
+  onChangeDiscountType,
   onClose,
   onComplete,
 }) => {
+  const { paymentAccounts, loading: accountsLoading } = usePaymentAccounts();
+
+  // Helper functions declared before state variables
+  const parseNumber = (value: string) => parseFloat(value.replace(/,/g, '')) || 0;
+  const formatNumber = (value: number) => value.toLocaleString();
+
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [currentPaymentMethod, setCurrentPaymentMethod] = useState('Cash');
-  const [currentAmount, setCurrentAmount] = useState(amount.toString());
+  const [currentPaymentMethod, setCurrentPaymentMethod] = useState<string>('');
+  const [amountInput, setAmountInput] = useState(amount.toLocaleString());
   const [reference, setReference] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [discountEnabled, setDiscountEnabled] = useState(discountValue > 0);
+  const [discountInput, setDiscountInput] = useState(formatNumber(discountValue || 0));
 
   const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const remainingAmount = Math.max(0, amount - totalPaid);
   const change = Math.max(0, totalPaid - amount);
 
-  const paymentMethods = [
-    'Cash',
-    'Card',
-    'Mobile Money',
-    'Bank Transfer',
-    'Check',
+  // Force discount type to TSh (fixed) for tablet flow
+  useEffect(() => {
+    onChangeDiscountType('fixed');
+  }, [onChangeDiscountType]);
+
+  // Sync discount toggle when parent discount value changes
+  useEffect(() => {
+    setDiscountEnabled((discountValue || 0) > 0);
+    // keep local display in sync with incoming value
+    setDiscountInput(formatNumber(discountValue || 0));
+  }, [discountValue]);
+
+  // Keep amount input in sync if parent total changes (e.g., discount edits)
+  useEffect(() => {
+    setAmountInput(formatNumber(amount));
+  }, [amount]);
+
+  // Filter to only show active payment methods
+  const activePaymentAccounts = paymentAccounts.filter(account => account.is_payment_method && account.is_active);
+
+  // Fallback payment methods if no accounts are loaded
+  const fallbackPaymentMethods = [
+    { id: 'cash', name: 'Cash', type: 'cash' },
+    { id: 'card', name: 'Card', type: 'credit_card' },
+    { id: 'mobile_money', name: 'Mobile Money', type: 'mobile_money' },
+    { id: 'bank_transfer', name: 'Bank Transfer', type: 'bank' },
+    { id: 'check', name: 'Check', type: 'other' },
   ];
 
-  const quickAmounts = [
-    { label: 'Exact', amount: remainingAmount },
-    { label: '50%', amount: Math.ceil(amount * 0.5) },
-    { label: '70%', amount: Math.ceil(amount * 0.7) },
-    { label: '100%', amount: amount },
-  ];
+  // Use fallback if no payment accounts are loaded
+  const availablePaymentMethods = activePaymentAccounts.length > 0 ? activePaymentAccounts : fallbackPaymentMethods;
+
+  // Set default payment method when accounts load
+  useEffect(() => {
+    if (availablePaymentMethods.length > 0 && !currentPaymentMethod) {
+      setCurrentPaymentMethod(availablePaymentMethods[0].id);
+    }
+  }, [availablePaymentMethods, currentPaymentMethod]);
+
 
   const addPayment = () => {
-    const paymentAmount = parseFloat(currentAmount) || 0;
+    const paymentAmount = parseNumber(amountInput);
     if (paymentAmount <= 0) return;
 
+    const selectedMethod = availablePaymentMethods.find(method => method.id === currentPaymentMethod);
+    if (!selectedMethod) return;
+
     const newPayment: Payment = {
-      paymentMethod: currentPaymentMethod,
+      paymentMethod: selectedMethod.name,
+      paymentAccountId: activePaymentAccounts.length > 0 ? selectedMethod.id : undefined, // Only set accountId if we have real accounts
       amount: paymentAmount,
       reference: reference || undefined,
       timestamp: new Date().toISOString(),
     };
 
     setPayments([...payments, newPayment]);
-    setCurrentAmount('0');
+    setAmountInput('0');
     setReference('');
   };
 
@@ -144,43 +192,86 @@ const TabletPaymentModal: React.FC<TabletPaymentModalProps> = ({
                 )}
               </div>
 
+              {/* Discount (fixed currency only) */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Discount (TSh)</p>
+                    <p className="text-xs text-gray-500">Toggle to add a discount</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !discountEnabled;
+                      setDiscountEnabled(next);
+                      if (!next) {
+                        setDiscountInput('0');
+                        onChangeDiscount(0);
+                      }
+                    }}
+                    className={`w-12 h-6 rounded-full transition-all ${
+                      discountEnabled ? 'bg-blue-500' : 'bg-gray-300'
+                    }`}
+                  >
+                    <div
+                      className={`w-5 h-5 bg-white rounded-full shadow transform transition-all ${
+                        discountEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {discountEnabled && (
+                  <div className="space-y-1.5">
+                    <input
+                      type="text"
+                      value={discountInput}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/,/g, '');
+                        const num = parseFloat(raw) || 0;
+                        setDiscountInput(num.toLocaleString());
+                        onChangeDiscount(num);
+                      }}
+                      onFocus={(e) => {
+                        e.target.select();
+                        setDiscountInput('');
+                      }}
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="0"
+                      inputMode="decimal"
+                    />
+                    <p className="text-xs text-gray-500">
+                      Applied: {format.currency(discountValue || 0)}
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Payment Method */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Payment Method
                 </label>
-                <select
-                  value={currentPaymentMethod}
-                  onChange={(e) => setCurrentPaymentMethod(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {paymentMethods.map((method) => (
-                    <option key={method} value={method}>
-                      {method}
-                    </option>
-                  ))}
-                </select>
+                {accountsLoading ? (
+                  <div className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg animate-pulse">
+                    <div className="h-5 bg-gray-300 rounded"></div>
+                  </div>
+                ) : (
+                  <select
+                    value={currentPaymentMethod}
+                    onChange={(e) => setCurrentPaymentMethod(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={accountsLoading}
+                  >
+                    {availablePaymentMethods.map((method) => (
+                      <option key={method.id} value={method.id}>
+                        {method.name} ({method.type.replace('_', ' ')})
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
-              {/* Quick Amount Buttons */}
-              {remainingAmount > 0 && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">
-                    Quick Amounts
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {quickAmounts.map((quick) => (
-                      <button
-                        key={quick.label}
-                        onClick={() => setCurrentAmount(quick.amount.toString())}
-                        className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        {quick.label} ({format.currency(quick.amount)})
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Amount Input */}
               <div>
@@ -188,32 +279,51 @@ const TabletPaymentModal: React.FC<TabletPaymentModalProps> = ({
                   Amount
                 </label>
                 <input
-                  type="number"
-                  value={currentAmount}
-                  onChange={(e) => setCurrentAmount(e.target.value)}
+                  type="text"
+                  value={amountInput}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/,/g, '');
+                    const num = parseFloat(raw) || 0;
+                    setAmountInput(num.toLocaleString());
+                  }}
+                  onFocus={(e) => {
+                    e.target.select();
+                    setAmountInput('');
+                  }}
                   className="w-full px-3 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
                   placeholder="0"
+                  inputMode="decimal"
                 />
               </div>
 
-              {/* Reference */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Reference (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Transaction ID, receipt number, etc."
-                />
-              </div>
+              {/* Reference - Only show for bank transfer or mobile money */}
+              {(() => {
+                const selectedMethod = availablePaymentMethods.find(method => method.id === currentPaymentMethod);
+                const shouldShowReference = selectedMethod?.type === 'bank' || selectedMethod?.type === 'mobile_money';
+
+                if (!shouldShowReference) return null;
+
+                return (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      Reference (Required)
+                    </label>
+                    <input
+                      type="text"
+                      value={reference}
+                      onChange={(e) => setReference(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Transaction ID, receipt number, etc."
+                      required
+                    />
+                  </div>
+                );
+              })()}
 
               {/* Add Payment Button */}
               <button
                 onClick={addPayment}
-                disabled={!currentAmount || parseFloat(currentAmount) <= 0}
+                disabled={!amountInput || parseFloat(amountInput.replace(/,/g, '')) <= 0}
                 className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center space-x-2"
               >
                 <Plus size={20} />

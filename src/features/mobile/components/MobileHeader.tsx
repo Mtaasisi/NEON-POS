@@ -8,6 +8,7 @@ interface MobileHeaderProps {
   showBack?: boolean;
   onBack?: () => void;
   action?: ReactNode;
+  centerTitle?: boolean;
 }
 
 const MobileHeader: React.FC<MobileHeaderProps> = ({ 
@@ -15,7 +16,8 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
   subtitle, 
   showBack = false, 
   onBack,
-  action 
+  action,
+  centerTitle = false,
 }) => {
   const navigate = useNavigate();
 
@@ -28,29 +30,37 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
   };
 
   return (
-    <div className="bg-white border-b border-gray-200 px-4 py-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+    <div className="bg-white border-b border-neutral-200 px-4 py-3 safe-area-inset-top">
+      <div className={`flex items-center ${
+        centerTitle ? 'justify-between relative' : 'justify-start gap-3'
+      }`}>
           {showBack && (
             <button 
               onClick={handleBack}
-              className="text-gray-600 hover:text-gray-900 flex-shrink-0"
+            className="flex items-center gap-1 text-primary-500 active:text-primary-600 transition-colors"
             >
-              <ArrowLeft size={24} />
+            <ArrowLeft size={20} strokeWidth={2.5} />
+            {!centerTitle && <span className="text-[17px]">Back</span>}
             </button>
           )}
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 truncate">{title}</h1>
+        {centerTitle && (
+          <h1 className="text-[17px] font-semibold text-neutral-900 absolute left-1/2 transform -translate-x-1/2">
+            {title}
+          </h1>
+        )}
+        <div className={`flex-1 min-w-0 ${showBack && !centerTitle ? 'ml-3' : ''}`}>
+          {!centerTitle && (
+            <h1 className="text-[22px] font-bold text-neutral-900 tracking-tight truncate">{title}</h1>
+          )}
             {subtitle && (
-              <p className="text-sm text-gray-500 mt-0.5 truncate">{subtitle}</p>
+            <p className="text-[15px] text-neutral-500 mt-0.5 truncate">{subtitle}</p>
             )}
-          </div>
         </div>
-        {action && <div className="flex-shrink-0 ml-3">{action}</div>}
+        {action && <div className={`flex-shrink-0 ${centerTitle ? '' : 'ml-3'}`}>{action}</div>}
+        {centerTitle && !action && <div className="w-[50px]" /> /* Placeholder for spacing */}
       </div>
     </div>
   );
 };
 
 export default MobileHeader;
-

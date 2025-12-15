@@ -135,7 +135,6 @@ export default function WhatsAppInboxPage() {
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
   const [bulkSending, setBulkSending] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0, success: 0, failed: 0 });
-  const PAGE_SCALE = 0.6; // Scale down page similar to inventory/stock transfer
   
   // Message validation & warnings
   const [messageWarnings, setMessageWarnings] = useState<Array<{type: 'spam' | 'duplicate' | 'character' | 'phone', message: string}>>([]);
@@ -4376,21 +4375,9 @@ export default function WhatsAppInboxPage() {
       />
 
       {/* Main Content */}
-    <div className="p-4 sm:p-6 flex justify-center" style={{ paddingTop: 'calc(var(--app-topbar-height, 0px) + 20px)' }}>
-      <div
-        className="max-w-7xl w-full"
-        style={{
-          transform: `scale(${PAGE_SCALE})`,
-          transformOrigin: 'top center',
-          width: `${100 / PAGE_SCALE}%`,
-          imageRendering: 'crisp-edges',
-          WebkitFontSmoothing: 'antialiased',
-          MozOsxFontSmoothing: 'grayscale',
-          textRendering: 'optimizeLegibility'
-        }}
-      >
-      {/* Combined Container - WhatsApp Style */}
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-visible flex flex-col">
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto" style={{ paddingTop: 'calc(var(--app-topbar-height, 0px) + 20px)' }}>
+        {/* Combined Container - WhatsApp Style */}
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col" style={{ maxHeight: 'calc(95vh - 20px)' }}>
           {/* Fixed Header Section - Enhanced Modal Style */}
           <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -7716,8 +7703,7 @@ export default function WhatsAppInboxPage() {
       
       {/* Floating Detailed Campaign Panel - SHOWS ALL DETAILS */}
       {renderMinimizedPanel()}
-      </div>
-
+      
       {/* Advanced Feature Modals */}
       <React.Fragment key="modals">
       <CampaignManagementModal
@@ -8056,8 +8042,8 @@ export default function WhatsAppInboxPage() {
           </div>
         </div>
       </Modal>
+      </React.Fragment>
     </React.Fragment>
-  </React.Fragment>
   );
 }
 

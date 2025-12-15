@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GlassButton from '../../shared/components/ui/GlassButton';
 import { X, Camera, AlertCircle } from 'lucide-react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
-import { useEffect } from 'react';
+import { Html5Qrcode } from 'html5-qrcode';
 
 interface BarcodeScannerProps {
   onClose: () => void;
@@ -15,56 +14,98 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onClose, onScan }) => {
   const [error, setError] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [scanningSuccess, setScanningSuccess] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
 
   useEffect(() => {
-    const scanner = new Html5QrcodeScanner('reader', {
-      qrbox: {
-        width: 250,
-        height: 250,
-      },
-      fps: 5,
-      aspectRatio: 1.0,
-      showTorchButtonIfSupported: true,
-      showZoomSliderIfSupported: true,
-      defaultZoomValueIfSupported: 2,
-    }, false);
+    let isMounted = true;
 
-    setIsScanning(true);
+    const startScanner = async () => {
+      try {
+        setIsScanning(true);
+        setError('');
 
-    scanner.render((result) => {
-      if (result) {
-        if (onScan) {
-          onScan(result);
-          setScanningSuccess(true);
-          setError('');
-          setTimeout(() => {
-            onClose();
-          }, 500);
-        } else {
-          const deviceId = result;
-          if (deviceId?.startsWith('DEV-')) {
-            setScanningSuccess(true);
-            setError('');
-            setTimeout(() => {
-              navigate(`/devices/${deviceId}`);
-              onClose();
-            }, 500);
-          } else {
-            setError('Invalid device QR code. Please scan a valid device barcode.');
-            setScanningSuccess(false);
-          }
+        // Best-effort permission warm-up; do not block on failure
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          stream.getTracks().forEach(track => track.stop());
+        } catch (permErr) {
+          console.warn('Camera warm-up failed (will still try):', permErr);
         }
-      }
-    }, (error) => {
-      if (error) {
-        setError('Error accessing camera. Please check camera permissions.');
+
+        if (!isMounted) return;
+
+        const cameras = await Html5Qrcode.getCameras();
+        if (!cameras || cameras.length === 0) {
+          throw new Error('No camera available');
+        }
+
+        const cameraId = cameras[0].id;
+        const html5Scanner = new Html5Qrcode('reader');
+        scannerRef.current = html5Scanner;
+
+        await html5Scanner.start(
+          { deviceId: { exact: cameraId } },
+          {
+            fps: 10,
+            qrbox: { width: 260, height: 260 },
+            aspectRatio: 1.0,
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+          },
+          (decodedText) => {
+            if (!decodedText) return;
+            const clean = decodedText.trim();
+            if (onScan) {
+              onScan(clean);
+              setScanningSuccess(true);
+              setError('');
+              setTimeout(() => {
+                onClose();
+              }, 250);
+            } else {
+              const deviceId = clean;
+              if (deviceId?.startsWith('DEV-')) {
+                setScanningSuccess(true);
+                setError('');
+                setTimeout(() => {
+                  navigate(`/devices/${deviceId}`);
+                  onClose();
+                }, 250);
+              } else {
+                setError('Invalid device QR code. Please scan a valid device barcode.');
+                setScanningSuccess(false);
+              }
+            }
+          },
+          (err) => {
+            console.error(err);
+            setError('Error scanning. Please allow camera permissions (HTTPS/localhost) and try again.');
+            setIsScanning(false);
+          }
+        );
+      } catch (err: any) {
+        console.error(err);
+        setError('Unable to access camera. Please allow camera permissions and use HTTPS or localhost.');
         setIsScanning(false);
-        console.error(error);
       }
-    });
+    };
+
+    startScanner();
 
     return () => {
-      scanner.clear();
+      isMounted = false;
+      if (scannerRef.current) {
+        const stop = async () => {
+          try {
+            if (scannerRef.current?.isScanning) {
+              await scannerRef.current.stop();
+            }
+            await scannerRef.current?.clear();
+          } catch (e) {
+            // ignore
+          }
+        };
+        stop();
+      }
       setIsScanning(false);
     };
   }, [navigate, onClose, onScan]);
@@ -86,11 +127,11 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onClose, onScan }) => {
           <div className="flex items-center gap-2 mb-3 sm:mb-4">
             <Camera size={20} className="sm:w-5 sm:h-5 text-blue-600" />
             <h3 className="text-base sm:text-lg font-bold text-gray-900">
-              Scan Device QR Code
+              Scan Barcode / QR Code
             </h3>
           </div>
           
-          <div className="relative aspect-square overflow-hidden rounded-lg mb-4">
+          <div className="relative aspect-square overflow-hidden rounded-lg mb-4 bg-black">
             <div id="reader" className="w-full h-full" />
             <div className="absolute inset-0 border-2 border-blue-500/50 pointer-events-none" />
             

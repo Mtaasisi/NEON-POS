@@ -1915,6 +1915,8 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
               boxShadow: '0 20px 60px -15px rgba(0, 0, 0, 0.3), 0 10px 30px -10px rgba(0, 0, 0, 0.2)',
               margin: 'auto', // Center both horizontally and vertically
               alignSelf: 'center', // Additional vertical centering
+            }}
+            style={{
               ...(pageSize === 'a4' && orientation === 'landscape' 
                 ? {
                     aspectRatio: '297/210',

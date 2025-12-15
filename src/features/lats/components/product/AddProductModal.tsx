@@ -55,6 +55,7 @@ const productFormSchema = z.object({
   condition: z.enum(['new', 'used', 'refurbished'], {
     errorMap: () => ({ message: 'Please select a condition' })
   }),
+  isCustomerPortalVisible: z.boolean().optional().default(true),
   metadata: z.record(z.string(), z.any()).optional().default({}),
   variants: z.array(z.any()).optional().default([])
 });
@@ -84,6 +85,7 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
     condition: 'new' as 'new' | 'used' | 'refurbished',
     description: '',
     specification: '',
+    isCustomerPortalVisible: true,
     metadata: {},
     variants: []
   });
@@ -549,6 +551,7 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
         total_quantity: totalQuantity,
         total_value: totalValue,
         attributes: productAttributes,
+        is_customer_portal_visible: formData.isCustomerPortalVisible !== false,
         metadata: {
           useVariants: useVariants,
           variantCount: useVariants ? variants.length : 0,

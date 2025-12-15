@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Calendar, DollarSign, Users, Package, Target, BarChart3, ExternalLink, Sparkles } from 'lucide-react';
+import { TrendingUp, TrendingDown, Calendar, Users, Target, BarChart3, ExternalLink, Sparkles } from 'lucide-react';
 import { useRealtimeDashboard } from '../../../../hooks/useRealtimeDashboard';
 
 interface ForecastData {
@@ -74,7 +74,6 @@ export const PredictiveAnalyticsWidget: React.FC<PredictiveAnalyticsWidgetProps>
     const monthlySales = avgDailySales * 30;
     const turnoverRatio = monthlySales > 0 ? (inventoryValue / monthlySales) : 0;
     const optimalTurnover = 6; // 2 months of inventory
-    const recommendedValue = monthlySales * optimalTurnover;
     const turnoverChange = turnoverRatio > 0
       ? ((optimalTurnover - turnoverRatio) / turnoverRatio) * 100
       : (optimalTurnover > 0 ? 100 : 0); // If no turnover, show 100% improvement needed
@@ -180,17 +179,6 @@ export const PredictiveAnalyticsWidget: React.FC<PredictiveAnalyticsWidgetProps>
     return 'text-rose-600 bg-rose-50';
   };
 
-  const formatCurrency = (amount: number) => {
-    if (isNaN(amount) || !isFinite(amount)) {
-      return 'TSh 0';
-    }
-    return new Intl.NumberFormat('en-TZ', {
-      style: 'currency',
-      currency: 'TZS',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
 
   const formatCompactCurrency = (amount: number) => {
     if (isNaN(amount) || !isFinite(amount) || amount < 0) {
@@ -251,7 +239,7 @@ export const PredictiveAnalyticsWidget: React.FC<PredictiveAnalyticsWidgetProps>
 
       {/* Main Forecast Highlight - Expanded */}
       {salesTrend && (
-        <div className="mb-8 p-6 rounded-xl bg-gradient-to-br from-emerald-50 to-blue-50 border border-emerald-100">
+        <div className="mb-8 p-6 rounded-xl">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <p className="text-xs text-gray-500 mb-2 font-medium">Next 30 Days Forecast</p>
@@ -505,7 +493,7 @@ export const PredictiveAnalyticsWidget: React.FC<PredictiveAnalyticsWidgetProps>
               <p className="text-xs text-gray-600 leading-relaxed">
                 Sales projected to grow by {(() => {
                   const change = salesTrend?.change;
-                  if (isNaN(change) || !isFinite(change)) return '5.0';
+                  if (change === undefined || isNaN(change) || !isFinite(change)) return '5.0';
                   return Number(change).toFixed(1);
                 })()}% next period.
               </p>

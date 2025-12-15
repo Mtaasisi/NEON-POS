@@ -4,11 +4,10 @@ import MobileLayout from '../components/MobileLayout';
 import ProductCard from '../components/ProductCard';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
 import { ProductGridSkeleton } from '../../../components/ui/SkeletonLoaders';
-import { 
-  Search, 
-  SlidersHorizontal, 
+import {
+  Search,
+  SlidersHorizontal,
   X,
-  ChevronDown,
   TrendingUp,
   Grid,
   List
@@ -32,7 +31,6 @@ const ProductsPage: React.FC = () => {
   const [sortBy, setSortBy] = useState<'popular' | 'price-low' | 'price-high' | 'newest'>('popular');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
-  const [favorites, setFavorites] = useState<string[]>([]);
   
   // Categories and Brands (will be loaded from database)
   const [categories, setCategories] = useState<string[]>([]);
@@ -41,7 +39,6 @@ const ProductsPage: React.FC = () => {
   // Load products
   useEffect(() => {
     loadProducts();
-    loadFavorites();
   }, []);
 
   const loadProducts = async (isRetry = false) => {
@@ -95,24 +92,6 @@ const ProductsPage: React.FC = () => {
     loadProducts(true);
   };
 
-  const loadFavorites = () => {
-    const saved = localStorage.getItem('customer_favorites');
-    if (saved) {
-      setFavorites(JSON.parse(saved));
-    }
-  };
-
-  const toggleFavorite = (productId: string) => {
-    setFavorites(prev => {
-      const newFavorites = prev.includes(productId)
-        ? prev.filter(id => id !== productId)
-        : [...prev, productId];
-      
-      localStorage.setItem('customer_favorites', JSON.stringify(newFavorites));
-      toast.success(newFavorites.includes(productId) ? 'Added to favorites' : 'Removed from favorites');
-      return newFavorites;
-    });
-  };
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
@@ -168,7 +147,7 @@ const ProductsPage: React.FC = () => {
   return (
     <MobileLayout title="Shop">
       {/* Search Bar */}
-      <div className="bg-white border-b border-gray-200 p-4 sticky top-14 z-40">
+      <div className="bg-white border-b border-gray-200 p-4">
         <div className="flex gap-2">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
@@ -285,25 +264,6 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Results Count */}
-      <div className="bg-gray-50 px-4 py-2 flex items-center justify-between">
-        <span className="text-sm text-gray-600">
-          {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}
-        </span>
-        {(selectedCategory !== 'all' || selectedBrand !== 'all' || searchQuery) && (
-          <button
-            onClick={() => {
-              setSelectedCategory('all');
-              setSelectedBrand('all');
-              setSearchQuery('');
-            }}
-            className="text-sm text-blue-600 font-medium"
-          >
-            Clear filters
-          </button>
-        )}
-      </div>
-
       {/* Products Grid/List */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20">
@@ -372,13 +332,10 @@ const ProductsPage: React.FC = () => {
           </button>
         </div>
       ) : viewMode === 'grid' ? (
-        <div 
-          className="p-4"
+        <div
+          className="px-4 pt-6 pb-4 sm:px-5 md:px-6 lg:px-8 grid gap-4 sm:gap-5 md:gap-6 auto-rows-fr max-w-6xl mx-auto"
           style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))',
-            gap: 'clamp(0.75rem, 2vw, 1rem)',
-            gridAutoRows: '1fr'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))'
           }}
         >
           {filteredProducts.map(product => (
@@ -387,8 +344,6 @@ const ProductsPage: React.FC = () => {
               product={product}
               onProductClick={handleProductClick}
               onAddToCart={handleAddToCart}
-              onToggleFavorite={toggleFavorite}
-              isFavorite={favorites.includes(product.id)}
             />
           ))}
         </div>
@@ -400,8 +355,6 @@ const ProductsPage: React.FC = () => {
               product={product}
               onProductClick={handleProductClick}
               onAddToCart={handleAddToCart}
-              onToggleFavorite={toggleFavorite}
-              isFavorite={favorites.includes(product.id)}
             />
           ))}
         </div>

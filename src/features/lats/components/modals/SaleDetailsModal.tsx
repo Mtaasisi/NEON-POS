@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, FileText, User, CreditCard, Package, Calendar, Clock, MapPin, Phone, Mail, DollarSign, TrendingUp, ShoppingCart, Receipt, Download, Printer } from 'lucide-react';
 import { supabase } from '../../../../lib/supabaseClient';
 import { toast } from 'react-hot-toast';
+import { getCurrentBranchId } from '../../../../lib/branchAwareApi';
 
 interface SaleDetailsModalProps {
   isOpen: boolean;
@@ -146,6 +147,18 @@ const SaleDetailsModal: React.FC<SaleDetailsModalProps> = ({ isOpen, onClose, sa
       }
 
       console.log('✅ Sale data loaded:', saleData);
+
+      // Step 1.1: Branch security validation
+      const currentBranchId = getCurrentBranchId();
+      if (currentBranchId && saleData.branch_id && saleData.branch_id !== currentBranchId) {
+        console.error('🚫 Branch access violation - sale does not belong to current branch:', {
+          saleId,
+          saleBranchId: saleData.branch_id,
+          currentBranchId
+        });
+        setError('Access denied: This sale belongs to a different branch');
+        return;
+      }
 
       // Step 1.5: Get cashier name from users table if sold_by exists
       if (saleData.sold_by) {

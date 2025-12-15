@@ -1,25 +1,49 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Minus, X, User, ShoppingCart, CreditCard, CheckCircle, ArrowLeft, ArrowRight, Package } from 'lucide-react';
+import { Search, Plus, Minus, X, User, ShoppingCart, CreditCard, CheckCircle, Scan, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useCustomers } from '../../../context/CustomersContext';
+import { useBranch } from '../../../context/BranchContext';
 import { useInventoryStore } from '../../lats/stores/useInventoryStore';
 import { saleProcessingService } from '../../../lib/saleProcessingService';
 import { format } from '../../lats/lib/format';
-import toast from 'react-hot-toast';
-import MobileCustomerSelectionModal from '../components/MobileCustomerSelectionModal';
-import MobileAddCustomerModal from '../components/MobileAddCustomerModal';
+import toast, { Toaster } from 'react-hot-toast';
+import { useMobileBranch } from '../hooks/useMobileBranch';
+import { supabase } from '../../../lib/supabaseClient';
+import { usePaymentMethodsContext } from '../../../context/PaymentMethodsContext';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { latsEventBus } from '../../lats/lib/data/eventBus';
+import { useUnifiedSearch } from '../../lats/hooks/useUnifiedSearch';
+import { useDraftManager } from '../../lats/hooks/useDraftManager';
+import { useDynamicDataStore } from '../../lats/lib/data/dynamicDataStore';
+import { SoundManager } from '../../../lib/soundUtils';
+import { usePOSClickSounds } from '../../lats/hooks/usePOSClickSounds';
+import { MobileCard, MobileCardBody } from '../components/MobileCard';
+import MobileButton from '../components/MobileButton';
+import MobileHeader from '../components/MobileHeader';
 import MobilePaymentModal from '../components/MobilePaymentModal';
 import MobileVariantSelectionModal from '../components/MobileVariantSelectionModal';
+import MobileCustomerSelectionModal from '../components/MobileCustomerSelectionModal';
+import MobileAddCustomerModal from '../components/MobileAddCustomerModal';
 import ShareReceiptModal from '../../../components/ui/ShareReceiptModal';
 import SuccessModal from '../../../components/ui/SuccessModal';
 import { useSuccessModal } from '../../../hooks/useSuccessModal';
 import { SuccessIcons } from '../../../components/ui/SuccessModalIcons';
-import { useMobileBranch } from '../hooks/useMobileBranch';
-import { supabase } from '../../../lib/supabaseClient';
-import { useResponsiveSizes, useScreenInfo } from '../../../hooks/useResponsiveSize';
-import { ResponsiveMobileWrapper } from '../components/ResponsiveMobileWrapper';
-import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import BarcodeScanner from '../../devices/components/BarcodeScanner';
+
+// Advanced POS modals and components (matching main POS)
+import SalesAnalyticsModal from '../../lats/components/pos/SalesAnalyticsModal';
+import ComprehensivePaymentModal from '../../lats/components/pos/ComprehensivePaymentModal';
+import POSInstallmentModal from '../../lats/components/pos/POSInstallmentModal';
+import TradeInContractModal from '../../lats/components/pos/TradeInContractModal';
+import TradeInPricingModal from '../../lats/components/pos/TradeInPricingModal';
+import InstallmentManagementModal from '../../lats/components/pos/InstallmentManagementModal';
+import PaymentsPopupModal from '../../../components/PaymentsPopupModal';
+import DeliverySection from '../../lats/components/pos/DeliverySection';
+import AddExternalProductModal from '../../lats/components/pos/AddExternalProductModal';
+import InvoiceTemplate from '../../../components/templates/InvoiceTemplate';
+import DraftManagementModal from '../../lats/components/pos/DraftManagementModal';
+import DraftNotification from '../../lats/components/pos/DraftNotification';
 
 interface CartItem {
   id: string;
@@ -35,38 +59,24 @@ interface CartItem {
   image?: string;
 }
 
-type Step = 'products' | 'cart' | 'payment';
-
 const MobilePOS: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const { currentBranch } = useMobileBranch();
+  const { currentBranch, loading: branchLoading } = useBranch();
   const { customers, loading: customersLoading, refreshCustomers } = useCustomers();
   const { products: dbProducts, loadProducts } = useInventoryStore();
   const successModal = useSuccessModal();
-  
-  // Responsive sizing
-  const sizes = useResponsiveSizes();
-  const screenInfo = useScreenInfo();
-  
-  // Debug: Log screen dimensions on mount
-  useEffect(() => {
-    console.log('🖥️ [MobilePOS] Screen Info:', {
-      width: screenInfo.width,
-      height: screenInfo.height,
-      deviceCategory: screenInfo.deviceCategory,
-      scale: sizes.scale,
-      innerWidth: window.innerWidth,
-      innerHeight: window.innerHeight,
-      pixelRatio: window.devicePixelRatio
-    });
-  }, [screenInfo.width, screenInfo.deviceCategory]);
 
-  // Current step
-  const [currentStep, setCurrentStep] = useState<Step>('products');
+  // POS features and settings
+  // Advanced POS hooks and services (matching main POS)
+  const { paymentMethods } = usePaymentMethodsContext();
+  const { startLoading, updateProgress, completeLoading, failLoading } = useLoadingJob();
+  const { search: unifiedSearch, results: unifiedSearchResults, isSearching: isUnifiedSearching } = useUnifiedSearch();
+  const { playClickSound, playSuccessSound, playErrorSound } = usePOSClickSounds();
 
-  // State
+  // State (matching main POS structure)
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [cartItems, setCartItems] = useState<any[]>([]); // For draft manager compatibility
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [currentReceipt, setCurrentReceipt] = useState<any>(null);
@@ -74,19 +84,63 @@ const MobilePOS: React.FC = () => {
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [notes, setNotes] = useState('');
-  
+  const [quickSku, setQuickSku] = useState('');
+  const [showScanner, setShowScanner] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Additional state for advanced features (matching main POS)
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [showShareReceipt, setShowShareReceipt] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [showShareReceiptModal, setShowShareReceiptModal] = useState(false);
+  const [showInvoicePreview, setShowInvoicePreview] = useState(false);
+  const [createdInvoice, setCreatedInvoice] = useState<any>(null);
+  const [additionalCustomerInfo, setAdditionalCustomerInfo] = useState({
+    phone: '',
+    email: '',
+    address: '',
+    notes: ''
+  });
+  const [paymentInfo, setPaymentInfo] = useState({
+    method: 'cash',
+    amount: 0,
+    reference: '',
+    accountId: null
+  });
+  const [showAdditionalInfoForm, setShowAdditionalInfoForm] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<any>(null);
+
+  // Modal states for advanced features (matching main POS)
+  const [showSalesAnalyticsModal, setShowSalesAnalyticsModal] = useState(false);
+  const [showDeliverySection, setShowDeliverySection] = useState(false);
+  const [showAddExternalProductModal, setShowAddExternalProductModal] = useState(false);
+  const [showDraftManagementModal, setShowDraftManagementModal] = useState(false);
+
+  // Draft manager hook (needs to be after state declarations)
+  const {
+    drafts,
+    saveDraft,
+    loadDraft,
+    deleteDraft,
+    hasUnsavedChanges
+  } = useDraftManager({
+    cartItems,
+    selectedCustomer,
+    discount,
+    discountType,
+    notes
+  });
+
   // Modal states
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showShareReceipt, setShowShareReceipt] = useState(false);
   const [showVariantModal, setShowVariantModal] = useState(false);
   const [selectedProductForVariants, setSelectedProductForVariants] = useState<any>(null);
 
   const TAX_RATE = 18;
 
-  // Products are preloaded globally, no need to load here
-  // Only load if products array is empty (fallback)
+  // Load products if not already loaded
   useEffect(() => {
     if (dbProducts.length === 0) {
       console.log('📦 [MobilePOS] No products in store, loading...');
@@ -96,29 +150,28 @@ const MobilePOS: React.FC = () => {
     }
   }, []);
 
-  // Load product images separately
+  // Load product images
   useEffect(() => {
     const fetchProductImages = async () => {
       if (!dbProducts || dbProducts.length === 0) return;
-      
+
       const productIds = dbProducts.map(p => p.id);
-      
+
       try {
         const { data: images, error } = await supabase
           .from('product_images')
           .select('product_id, image_url, is_primary')
           .in('product_id', productIds)
           .eq('is_primary', true);
-        
+
         if (error) throw error;
-        
+
         if (images && images.length > 0) {
-          // Create a map of product_id -> image_url
           const imageMap = images.reduce((acc, img) => {
             acc[img.product_id] = img.image_url;
             return acc;
           }, {} as Record<string, string>);
-          
+
           setProductImages(imageMap);
           console.log('✅ [MobilePOS] Loaded', images.length, 'product images');
         }
@@ -126,28 +179,42 @@ const MobilePOS: React.FC = () => {
         console.error('❌ [MobilePOS] Error loading product images:', error);
       }
     };
-    
+
     if (dbProducts.length > 0) {
       fetchProductImages();
     }
   }, [dbProducts]);
 
+  // Event bus subscriptions for real-time updates (matching main POS)
+  useEffect(() => {
+    const handleStockUpdate = (data: any) => {
+      console.log('📦 [MobilePOS] Stock updated:', data);
+      // Refresh products if needed
+      if (dbProducts.length === 0) {
+        loadProducts({ page: 1, limit: 500 });
+      }
+    };
+
+    const handleSaleCompleted = (data: any) => {
+      console.log('✅ [MobilePOS] Sale completed:', data);
+      // Could show a notification or update local state
+      playSuccessSound?.();
+    };
+
+    // Subscribe to real-time events
+    const unsubscribeStock = latsEventBus.subscribe('lats:stock.updated', handleStockUpdate);
+    const unsubscribeSale = latsEventBus.subscribe('lats:sale.completed', handleSaleCompleted);
+
+    return () => {
+      unsubscribeStock();
+      unsubscribeSale();
+    };
+  }, [dbProducts.length, loadProducts, playSuccessSound]);
+
   // Filter products
   const filteredProducts = useMemo(() => {
     if (!dbProducts) return [];
-    
-    // Log product data for debugging
-    if (dbProducts.length > 0 && dbProducts.length <= 10) {
-      console.log('📊 [MobilePOS] Products loaded:', dbProducts.map(p => ({
-        name: p.name,
-        hasVariants: !!p.variants && p.variants.length > 0,
-        variantCount: p.variants?.length || 0,
-        price: p.price || p.selling_price,
-        variantPrice: p.variants?.[0]?.selling_price,
-        stock: p.variants?.[0]?.quantity || p.stockQuantity
-      })));
-    }
-    
+
     return dbProducts.filter(product => {
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
@@ -161,8 +228,8 @@ const MobilePOS: React.FC = () => {
 
   // Cart calculations
   const cartSubtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
-  const discountAmount = discountType === 'percentage' 
-    ? (cartSubtotal * discount) / 100 
+  const discountAmount = discountType === 'percentage'
+    ? (cartSubtotal * discount) / 100
     : Math.min(discount, cartSubtotal);
   const subtotalAfterDiscount = cartSubtotal - discountAmount;
   const cartTax = (subtotalAfterDiscount * TAX_RATE) / 100;
@@ -171,31 +238,41 @@ const MobilePOS: React.FC = () => {
 
   // Add to cart
   const handleAddToCart = (product: any) => {
-    // Check if product has no variants
     if (!product.variants || product.variants.length === 0) {
       toast.error('Product has no variants available');
       return;
     }
 
-    // Check if product has multiple variants or parent variants with children
     const hasMultipleVariants = product.variants.length > 1;
-    const hasParentVariant = product.variants.some((v: any) => 
+    const hasParentVariant = product.variants.some((v: any) =>
       v.variant_type === 'parent' || v.is_parent === true
     );
 
-    // If multiple variants or has parent variants, show selection modal
     if (hasMultipleVariants || hasParentVariant) {
       setSelectedProductForVariants(product);
       setShowVariantModal(true);
       return;
     }
 
-    // Single variant - add directly
     const variant = product.variants[0];
     addVariantToCart(product, variant);
   };
 
-  // Add specific variant to cart
+  const resolvePrice = (variant: any, product: any) => {
+    const raw =
+      variant?.selling_price ??
+      variant?.sellingPrice ??
+      variant?.price ??
+      variant?.unit_price ??
+      product?.price ??
+      product?.selling_price ??
+      0;
+    return Number(raw) || 0;
+  };
+
+  const resolveAvailableQty = (variant: any) =>
+    variant?.stock_quantity ?? variant?.quantity ?? 0;
+
   const addVariantToCart = (product: any, variant: any) => {
     if (!variant) {
       toast.error('Invalid variant');
@@ -203,9 +280,11 @@ const MobilePOS: React.FC = () => {
     }
 
     const existingItem = cart.find(item => item.variantId === variant.id);
-    
+    const unitPrice = resolvePrice(variant, product);
+    const availableQuantity = resolveAvailableQty(variant);
+
     if (existingItem) {
-      if (existingItem.quantity >= variant.stock_quantity) {
+      if (existingItem.quantity >= availableQuantity) {
         toast.error('Not enough stock available');
         return;
       }
@@ -216,11 +295,11 @@ const MobilePOS: React.FC = () => {
       ));
       toast.success('Quantity updated');
     } else {
-      if ((variant.stock_quantity || variant.quantity || 0) <= 0) {
+      if (availableQuantity <= 0) {
         toast.error('Out of stock');
         return;
       }
-      
+
       const newItem: CartItem = {
         id: `${product.id}-${variant.id}`,
         productId: product.id,
@@ -229,9 +308,9 @@ const MobilePOS: React.FC = () => {
         variantName: variant.variant_name || variant.name || 'Default',
         sku: variant.sku || product.sku || '',
         quantity: 1,
-        unitPrice: variant.selling_price || variant.unit_price || 0,
-        totalPrice: variant.selling_price || variant.unit_price || 0,
-        availableQuantity: variant.stock_quantity || variant.quantity || 0,
+        unitPrice,
+        totalPrice: unitPrice,
+        availableQuantity,
         image: productImages[product.id] || product.image_url
       };
       setCart([...cart, newItem]);
@@ -239,14 +318,94 @@ const MobilePOS: React.FC = () => {
     }
   };
 
-  // Handle variant selection from modal
   const handleVariantSelected = (variant: any) => {
     if (selectedProductForVariants) {
       addVariantToCart(selectedProductForVariants, variant);
     }
   };
 
-  // Update quantity
+  const handleQuickAdd = (skuOrBarcodeRaw?: string) => {
+    const skuOrBarcode = (skuOrBarcodeRaw ?? quickSku).trim().toLowerCase();
+    if (!skuOrBarcode) {
+      toast.error('Enter a SKU or barcode');
+      return;
+    }
+
+    let matchedProduct: any | undefined;
+    let matchedVariant: any | undefined;
+
+    for (const product of dbProducts || []) {
+      const productMatches =
+        product?.sku?.toLowerCase() === skuOrBarcode ||
+        product?.barcode?.toLowerCase() === skuOrBarcode;
+
+      const variantMatch = product?.variants?.find((variant: any) =>
+        variant?.sku?.toLowerCase() === skuOrBarcode ||
+        variant?.barcode?.toLowerCase() === skuOrBarcode
+      );
+
+      if (variantMatch) {
+        matchedProduct = product;
+        matchedVariant = variantMatch;
+        break;
+      }
+
+      if (productMatches) {
+        matchedProduct = product;
+        if (product?.variants?.length === 1) {
+          matchedVariant = product.variants[0];
+        }
+        break;
+      }
+    }
+
+    if (matchedProduct && matchedVariant) {
+      addVariantToCart(matchedProduct, matchedVariant);
+      setQuickSku('');
+      return;
+    }
+
+    if (matchedProduct) {
+      setSelectedProductForVariants(matchedProduct);
+      setShowVariantModal(true);
+      toast.success('Select a variant to add');
+      return;
+    }
+
+    toast.error('No product found for that SKU/barcode');
+  };
+
+  const handleScanClick = async () => {
+    const typed = searchQuery?.trim();
+    if (!window.isSecureContext) {
+      toast.error('Camera requires HTTPS or localhost');
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error('Camera not supported in this browser');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      stream.getTracks().forEach(track => track.stop());
+      if (typed) {
+        setQuickSku(typed);
+        handleQuickAdd(typed);
+      }
+      setShowScanner(true);
+    } catch (err) {
+      console.error('Camera permission denied or unavailable', err);
+      toast.error('Please allow camera access to scan');
+    }
+  };
+
+  const handleScanResult = (value: string) => {
+    if (!value) return;
+    setQuickSku(value);
+    handleQuickAdd(value);
+    setShowScanner(false);
+  };
+
   const updateQuantity = (itemId: string, delta: number) => {
     setCart(cart.map(item => {
       if (item.id === itemId) {
@@ -262,27 +421,23 @@ const MobilePOS: React.FC = () => {
     }).filter(Boolean) as CartItem[]);
   };
 
-  // Remove from cart
   const removeFromCart = (itemId: string) => {
     setCart(cart.filter(item => item.id !== itemId));
   };
 
-  // Process payment
   const handlePaymentComplete = async (payments: any[], totalPaid: number) => {
     try {
-      console.log('🔄 [MobilePOS] Processing sale...', { 
-        items: cart.length, 
+      console.log('🔄 [MobilePOS] Processing sale...', {
+        items: cart.length,
         total: cartTotal,
-        payments: payments.length 
+        payments: payments.length
       });
 
-      // Validate customer selected
       if (!selectedCustomer) {
         toast.error('Please select a customer');
         return;
       }
 
-      // Prepare sale data matching desktop POS format
       const saleData = {
         customerId: selectedCustomer?.id,
         customerName: selectedCustomer?.name,
@@ -297,8 +452,8 @@ const MobilePOS: React.FC = () => {
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           totalPrice: item.totalPrice,
-          costPrice: 0, // Will be fetched by service
-          profit: 0, // Will be calculated by service
+          costPrice: 0,
+          profit: 0,
         })),
         subtotal: cartSubtotal,
         tax: cartTax,
@@ -306,14 +461,13 @@ const MobilePOS: React.FC = () => {
         discountType: discountType,
         discountValue: discount,
         total: cartTotal,
-        // Payment method structure matching desktop POS
         paymentMethod: {
           type: payments.length === 1 ? payments[0].paymentMethod : 'multiple',
           details: {
             payments: payments.map((payment: any) => ({
               method: payment.paymentMethod,
               amount: payment.amount,
-              accountId: null, // Will be fetched from payment method name
+              accountId: payment.paymentAccountId || null,
               reference: payment.reference || '',
               notes: '',
               timestamp: payment.timestamp || new Date().toISOString()
@@ -330,22 +484,20 @@ const MobilePOS: React.FC = () => {
 
       console.log('📤 [MobilePOS] Sending sale data:', saleData);
 
-      // Process the sale using the same service as desktop
       const result = await saleProcessingService.processSale(saleData);
-      
+
       if (!result.success) {
         throw new Error(result.error || 'Failed to process sale');
       }
 
       console.log('✅ [MobilePOS] Sale processed successfully:', result);
-      
+
       setCurrentReceipt(result.sale);
       setShowPaymentModal(false);
-      
-      // Show success modal
+
       successModal.show({
         title: 'Sale Completed!',
-        message: `Sale of ${format.currency(cartTotal)} completed successfully`,
+        message: String(`Sale of ${format.currency(cartTotal)} completed successfully`),
         icon: SuccessIcons.CheckCircle,
         color: 'green',
         actions: [
@@ -355,664 +507,311 @@ const MobilePOS: React.FC = () => {
             variant: 'primary'
           },
           {
+            label: 'Share/Print',
+            onClick: () => setShowShareReceipt(true),
+            variant: 'secondary'
+          },
+          {
             label: 'New Sale',
             onClick: () => {
               setCart([]);
               setSelectedCustomer(null);
-              setCurrentStep('products');
             },
             variant: 'secondary'
           }
         ]
       });
 
-      // Clear cart after successful sale
       setCart([]);
       setSelectedCustomer(null);
-      setCurrentStep('products');
-      
+      setShowShareReceipt(true);
+
     } catch (error: any) {
       console.error('❌ [MobilePOS] Sale processing error:', error);
       toast.error(error.message || 'Failed to process sale');
     }
   };
 
-  // Step navigation
-  const canProceedToCart = cart.length > 0;
-  const canProceedToPayment = cart.length > 0;
-
-  const nextStep = () => {
-    if (currentStep === 'products' && canProceedToCart) {
-      setCurrentStep('cart');
-    } else if (currentStep === 'cart' && canProceedToPayment) {
-      setCurrentStep('payment');
-      setShowPaymentModal(true);
+  const handleProceedToPayment = () => {
+    if (cart.length === 0) {
+      toast.error('Add items to cart first');
+      return;
     }
+    setShowPaymentModal(true);
   };
 
-  const previousStep = () => {
-    if (currentStep === 'payment') {
-      setCurrentStep('cart');
-    } else if (currentStep === 'cart') {
-      setCurrentStep('products');
-    }
-  };
+	return (
+    <div className="min-h-screen bg-gray-50">
+      <MobileHeader
+        title="Mobile POS"
+        subtitle={currentBranch?.name || 'Branch'}
+        rightActions={
+          <div className="flex items-center gap-2">
+            {/* Analytics Button */}
+            <button
+              onClick={() => setShowSalesAnalyticsModal(true)}
+              className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+              title="Sales Analytics"
+            >
+              <div className="w-5 h-5 rounded bg-blue-100 flex items-center justify-center">
+                <span className="text-xs font-bold text-blue-600">📊</span>
+              </div>
+            </button>
 
-  // Step indicator
-  const steps = [
-    { id: 'products', label: 'Products', icon: Package },
-    { id: 'cart', label: 'Cart', icon: ShoppingCart },
-    { id: 'payment', label: 'Payment', icon: CreditCard },
-  ];
+            {/* Delivery Button */}
+            <button
+              onClick={() => setShowDeliverySection(true)}
+              className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+              title="Delivery"
+            >
+              <div className="w-5 h-5 rounded bg-green-100 flex items-center justify-center">
+                <span className="text-xs">🚚</span>
+              </div>
+            </button>
 
-  const currentStepIndex = steps.findIndex(s => s.id === currentStep);
+            {/* Drafts Button */}
+            <button
+              onClick={() => setShowDraftManagementModal(true)}
+              className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+              title="Drafts"
+            >
+              <div className="w-5 h-5 rounded bg-orange-100 flex items-center justify-center">
+                <span className="text-xs">📝</span>
+              </div>
+            </button>
 
-  return (
-    <ResponsiveMobileWrapper>
-      <div className="flex flex-col h-full bg-white">
-        {/* iOS 17 Header - Minimal (Optimized for 1080x2400) */}
-        <div style={{ 
-          paddingLeft: `${sizes.spacing8}px`, 
-          paddingRight: `${sizes.spacing8}px`,
-          paddingTop: `${sizes.spacing8}px`,
-          paddingBottom: `${sizes.spacing5}px`
-        }}>
-        <div className="flex items-center justify-between" style={{ marginBottom: `${sizes.spacing6}px` }}>
-          <button
-            onClick={() => navigate('/mobile/dashboard')}
-            className="active:bg-gray-100 rounded-full transition-all flex items-center justify-center"
-            style={{ 
-              WebkitTapHighlightColor: 'transparent',
-              padding: `${sizes.spacing3}px`,
-              width: `${sizes.buttonHeight}px`,
-              height: `${sizes.buttonHeight}px`,
-            }}
-          >
-            <ArrowLeft size={sizes.iconSizeLg} className="text-blue-500" strokeWidth={2.5} />
-          </button>
-          <div className="text-center flex-1">
-            <p style={{ fontSize: `${sizes.textSm}px` }} className="text-gray-400 uppercase tracking-wider font-semibold">
-              {currentStep === 'products' ? 'Step 1 of 3' : currentStep === 'cart' ? 'Step 2 of 3' : 'Step 3 of 3'}
-            </p>
-            <h1 style={{ fontSize: `${sizes.text3xl}px`, marginTop: `${sizes.spacing1}px` }} className="font-bold text-gray-900 tracking-tight">
-              {currentStep === 'products' ? 'Select Items' : currentStep === 'cart' ? 'Review Order' : 'Payment'}
-            </h1>
+            {/* Refresh Button */}
+            <button
+              onClick={async () => {
+                if (isRefreshing) return;
+                setIsRefreshing(true);
+                console.log('🔄 [MobilePOS] Refreshing products...');
+
+                try {
+                  loadProducts({ page: 1, limit: 500 });
+                  toast.success('Products refreshed', { duration: 3000 });
+                } catch (error) {
+                  console.error('❌ [MobilePOS] Error refreshing products:', error);
+                  toast.error('Refresh failed');
+                } finally {
+                  setIsRefreshing(false);
+                }
+              }}
+              disabled={isRefreshing}
+              className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+            >
+              <RefreshCw size={20} className={`text-gray-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
           </div>
-          <div style={{ width: `${sizes.buttonHeight}px` }} />
-        </div>
-        
-        {/* Simple Progress Dots */}
-        <div className="flex items-center justify-center" style={{ gap: `${sizes.spacing2}px` }}>
-          {steps.map((_, index) => {
-            const isActive = index === currentStepIndex;
-            const isCompleted = index < currentStepIndex;
-            
-            return (
-              <div
-                key={index}
-                style={{
-                  height: `${sizes.spacing1 + 2}px`,
-                  width: isActive ? `${sizes.spacing8}px` : `${sizes.spacing1 + 2}px`,
-                  borderRadius: `${sizes.radiusFull}px`
-                }}
-                className={`transition-all duration-300 ${
-                  isActive ? 'bg-blue-500' :
-                  isCompleted ? 'bg-blue-500' :
-                  'bg-gray-300'
-                }`}
-              />
-            );
-          })}
-        </div>
-      </div>
+        }
+      />
 
-      {/* Step Content */}
-      <div className="flex-1 overflow-y-auto" style={{ paddingBottom: `${sizes.spacing10 + sizes.buttonHeight}px` }}>
-        {/* STEP 1: Products */}
-        {currentStep === 'products' && (
-          <div style={{ paddingLeft: `${sizes.spacing8}px`, paddingRight: `${sizes.spacing8}px` }}>
-            {/* iOS Search Bar */}
-            <div style={{ marginBottom: `${sizes.spacing6}px` }}>
-              <div className="bg-gray-100/80 flex items-center" style={{
-                borderRadius: `${sizes.radiusXl}px`,
-                padding: `${sizes.spacing4}px ${sizes.spacing5}px`,
-                gap: `${sizes.spacing3}px`
-              }}>
-                <Search className="text-gray-400" size={sizes.iconSize} strokeWidth={2} />
+      <div className="p-4 space-y-4">
+        {/* Customer Selection */}
+        <MobileCard variant="elevated">
+          <MobileCardBody>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                  <User size={20} className="text-blue-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900">
+                    {selectedCustomer ? selectedCustomer.name : 'Select Customer'}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {selectedCustomer ? selectedCustomer.phone : 'Required for sale'}
+                  </p>
+                </div>
+              </div>
+              <MobileButton
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCustomerModal(true)}
+              >
+                {selectedCustomer ? 'Change' : 'Select'}
+              </MobileButton>
+            </div>
+          </MobileCardBody>
+        </MobileCard>
+
+        {/* Search Bar */}
+        <MobileCard>
+          <MobileCardBody>
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
                   placeholder="Search products..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1 bg-transparent border-none outline-none placeholder-gray-400"
-                  style={{ fontSize: `${sizes.textLg}px` }}
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="active:scale-90 transition-transform"
-                    style={{ WebkitTapHighlightColor: 'transparent' }}
-                  >
-                    <X size={sizes.iconSize} className="text-gray-400" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Clean Product Grid - Responsive (Optimized for 1080x2400) */}
-            <div 
-              className="grid"
-              style={{ 
-                gap: `${sizes.gapLg}px`,
-                gridTemplateColumns: screenInfo.width < 360 
-                  ? '1fr' 
-                  : screenInfo.width < 600 
-                  ? 'repeat(2, 1fr)' 
-                  : 'repeat(3, 1fr)',
-                width: '100%'
-              }}
-            >
-              {filteredProducts.map((product) => {
-                const variant = product.variants?.[0];
-                const inCart = cart.find(item => item.variantId === variant?.id);
-                
-                // Get price from variant or fallback to product
-                const displayPrice = variant?.selling_price || variant?.price || product.price || product.selling_price || 0;
-                const stockQty = variant?.quantity || variant?.stock_quantity || product.stockQuantity || 0;
-                
-                return (
-                  <button
-                    key={product.id}
-                    onClick={() => handleAddToCart(product)}
-                    className="bg-gray-50 active:scale-[0.97] transition-all duration-150"
-                    style={{ 
-                      WebkitTapHighlightColor: 'transparent',
-                      borderRadius: `${sizes.radiusXl}px`,
-                      padding: `${sizes.productCardPadding}px`,
-                    }}
-                  >
-                    {/* Product Image */}
-                    {(productImages[product.id] || product.image_url) ? (
-                      <div 
-                        className="w-full aspect-square bg-white mb-3 overflow-hidden shadow-sm"
-                        style={{ borderRadius: `${sizes.productImageRadius}px` }}
-                      >
-                        <img
-                          src={productImages[product.id] || product.image_url}
-                          alt={product.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            // Fallback to package icon if image fails
-                            const target = e.currentTarget;
-                            target.style.display = 'none';
-                            const parent = target.parentElement;
-                            if (parent) {
-                              parent.innerHTML = `<div class="w-full h-full flex items-center justify-center"><svg width="${sizes.iconSizeXl}" height="${sizes.iconSizeXl}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg></div>`;
-                            }
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div 
-                        className="w-full aspect-square bg-white mb-3 flex items-center justify-center"
-                        style={{ borderRadius: `${sizes.productImageRadius}px` }}
-                      >
-                        <Package size={sizes.iconSizeXl} className="text-gray-300" />
-                      </div>
-                    )}
-                    
-                    {/* Product Name */}
-                    <h3 
-                      style={{ fontSize: `${sizes.textBase}px` }} 
-                      className="font-semibold text-gray-900 mb-2 line-clamp-2 text-left leading-tight"
-                    >
-                      {product.name}
-                    </h3>
-                    
-                    {/* Price and Stock Info */}
-                    <div className="flex items-end justify-between" style={{ marginTop: `${sizes.spacing2}px` }}>
-                      <div className="flex flex-col items-start" style={{ gap: `${sizes.spacing1}px` }}>
-                        <span style={{ fontSize: `${sizes.textXl}px` }} className="font-bold text-gray-900">
-                          {format.currency(displayPrice)}
-                        </span>
-                        <span style={{ fontSize: `${sizes.textSm}px` }} className={`font-medium ${
-                          stockQty === 0 
-                            ? 'text-red-500' 
-                            : stockQty <= 5 
-                            ? 'text-orange-500' 
-                            : 'text-green-600'
-                        }`}>
-                          {stockQty === 0 
-                            ? 'Out of stock' 
-                            : `${stockQty} in stock`
-                          }
-                        </span>
-                      </div>
-                      
-                      {/* Add to Cart Button */}
-                      {inCart ? (
-                        <div 
-                          className="bg-blue-500 text-white font-bold flex items-center justify-center" 
-                          style={{
-                            fontSize: `${sizes.textBase}px`,
-                            padding: `${sizes.spacing2}px ${sizes.spacing3}px`,
-                            borderRadius: `${sizes.radiusFull}px`,
-                            minWidth: `${sizes.spacing8}px`,
-                          }}
-                        >
-                          {inCart.quantity}
-                        </div>
-                      ) : (
-                        <div 
-                          className="rounded-full bg-blue-500 flex items-center justify-center shadow-md" 
-                          style={{
-                            width: `${sizes.spacing8}px`,
-                            height: `${sizes.spacing8}px`,
-                          }}
-                        >
-                          <Plus size={Math.round(sizes.iconSize)} className="text-white" strokeWidth={3} />
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {filteredProducts.length === 0 && (
-              <div className="text-center py-20">
-                <div className="rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4" style={{
-                  width: `${sizes.avatarSize * 1.5}px`,
-                  height: `${sizes.avatarSize * 1.5}px`
-                }}>
-                  <Package size={Math.round(sizes.iconSizeLg * 2)} className="text-gray-300" />
-                </div>
-                <p style={{ fontSize: `${sizes.textLg}px` }} className="text-gray-400 font-medium">No products found</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* STEP 2: Cart Review */}
-        {currentStep === 'cart' && (
-          <div style={{ 
-            paddingLeft: `${sizes.spacing8}px`, 
-            paddingRight: `${sizes.spacing8}px`,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: `${sizes.spacing6}px`
-          }}>
-            {/* Customer Section */}
-            {selectedCustomer ? (
-              <div 
-                className="bg-gray-50 flex items-center justify-between" 
-                style={{ 
-                  borderRadius: `${sizes.radiusXl}px`,
-                  padding: `${sizes.spacing5}px`
-                }}
-              >
-                <div className="flex items-center" style={{ gap: `${sizes.spacing4}px` }}>
-                  <div 
-                    className="rounded-full bg-blue-500 text-white flex items-center justify-center font-bold"
-                    style={{
-                      width: `${sizes.avatarSize}px`,
-                      height: `${sizes.avatarSize}px`,
-                      fontSize: `${sizes.textXl}px`
-                    }}
-                  >
-                    {selectedCustomer.name?.charAt(0) || '?'}
-                  </div>
-                  <div>
-                    <p style={{ fontSize: `${sizes.textLg}px` }} className="font-semibold text-gray-900">{selectedCustomer.name}</p>
-                    <p style={{ fontSize: `${sizes.textBase}px` }} className="text-gray-500">{selectedCustomer.phone}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedCustomer(null)}
-                  className="rounded-full bg-gray-200 active:bg-gray-300 flex items-center justify-center"
-                  style={{ 
-                    WebkitTapHighlightColor: 'transparent',
-                    width: `${sizes.spacing8}px`,
-                    height: `${sizes.spacing8}px`
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const value = (e.currentTarget.value || '').trim();
+                      if (value) {
+                        setQuickSku(value);
+                        handleQuickAdd(value);
+                      }
+                    }
                   }}
-                >
-                  <X size={sizes.iconSize} className="text-gray-600" />
-                </button>
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                />
               </div>
-            ) : (
-              <button
-                onClick={() => setShowCustomerModal(true)}
-                className="w-full bg-gray-50 flex items-center justify-between active:bg-gray-100 transition-colors"
-                style={{ 
-                  WebkitTapHighlightColor: 'transparent',
-                  borderRadius: `${sizes.radiusXl}px`,
-                  padding: `${sizes.spacing5}px`
-                }}
+              <MobileButton
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowAddExternalProductModal(true)}
+                className="px-3"
               >
-                <div className="flex items-center" style={{ gap: `${sizes.spacing4}px` }}>
-                  <div 
-                    className="rounded-full bg-gray-200 flex items-center justify-center"
-                    style={{
-                      width: `${sizes.spacing10}px`,
-                      height: `${sizes.spacing10}px`
-                    }}
-                  >
-                    <User size={sizes.iconSize} className="text-gray-500" />
-                  </div>
-                  <span style={{ fontSize: `${sizes.textLg}px` }} className="text-gray-600 font-medium">Add Customer</span>
-                </div>
-                <Plus size={sizes.iconSize} className="text-gray-400" />
-              </button>
-            )}
-
-            {/* Discount Section */}
-            <div 
-              className="bg-gray-50" 
-              style={{ 
-                borderRadius: `${sizes.radiusXl}px`,
-                padding: `${sizes.spacing5}px`
-              }}
-            >
-              <div 
-                className="flex items-center justify-between" 
-                style={{ marginBottom: `${sizes.spacing4}px` }}
+                + Add
+              </MobileButton>
+              <MobileButton
+                variant="secondary"
+                size="sm"
+                onClick={handleScanClick}
+                icon={<Scan size={18} />}
               >
-                <span style={{ fontSize: `${sizes.textLg}px` }} className="font-semibold text-gray-900">Discount</span>
-                <div className="flex items-center" style={{ gap: `${sizes.spacing2}px` }}>
-                  <button
-                    onClick={() => setDiscountType('percentage')}
-                    className={`font-semibold transition-colors ${
-                      discountType === 'percentage'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 text-gray-600'
-                    }`}
-                    style={{
-                      padding: `${sizes.spacing2}px ${sizes.spacing4}px`,
-                      borderRadius: `${sizes.radiusMd}px`,
-                      fontSize: `${sizes.textBase}px`
-                    }}
-                  >
-                    %
-                  </button>
-                  <button
-                    onClick={() => setDiscountType('fixed')}
-                    className={`font-semibold transition-colors ${
-                      discountType === 'fixed'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 text-gray-600'
-                    }`}
-                    style={{
-                      padding: `${sizes.spacing2}px ${sizes.spacing4}px`,
-                      borderRadius: `${sizes.radiusMd}px`,
-                      fontSize: `${sizes.textBase}px`
-                    }}
-                  >
-                    TSh
-                  </button>
-                </div>
-              </div>
-              <input
-                type="number"
-                value={discount}
-                onChange={(e) => setDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
-                placeholder="Enter discount"
-                className="w-full bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                style={{
-                  padding: `${sizes.spacing4}px ${sizes.spacing5}px`,
-                  borderRadius: `${sizes.radiusLg}px`,
-                  fontSize: `${sizes.textLg}px`
-                }}
-              />
-              {discountAmount > 0 && (
-                <p 
-                  style={{ 
-                    fontSize: `${sizes.textBase}px`,
-                    marginTop: `${sizes.spacing3}px`
-                  }} 
-                  className="text-green-600 font-medium"
-                >
-                  Discount: -{format.currency(discountAmount)}
-                </p>
-              )}
+                Scan
+              </MobileButton>
             </div>
+          </MobileCardBody>
+        </MobileCard>
 
-            {/* Notes Section */}
-            <div 
-              className="bg-gray-50" 
-              style={{ 
-                borderRadius: `${sizes.radiusXl}px`,
-                padding: `${sizes.spacing5}px`
-              }}
-            >
-              <label 
-                style={{ 
-                  fontSize: `${sizes.textLg}px`,
-                  marginBottom: `${sizes.spacing4}px`
-                }} 
-                className="font-semibold text-gray-900 block"
+        {/* Products Grid */}
+        <div className="space-y-3">
+          <h3 className="font-semibold text-gray-900 px-1">Products</h3>
+          <div className="grid grid-cols-2 gap-3">
+            {filteredProducts.slice(0, 20).map((product) => (
+              <MobileCard
+                key={product.id}
+                variant="elevated"
+                onClick={() => handleAddToCart(product)}
+                className="cursor-pointer"
               >
-                Order Notes (Optional)
-              </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add any special instructions or notes..."
-                rows={3}
-                className="w-full bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                style={{
-                  padding: `${sizes.spacing4}px ${sizes.spacing5}px`,
-                  borderRadius: `${sizes.radiusLg}px`,
-                  fontSize: `${sizes.textLg}px`
-                }}
-              />
-            </div>
-
-            {/* Cart Items - iOS List Style (Optimized for 1080x2400) */}
-            <div 
-              className="bg-gray-50 overflow-hidden" 
-              style={{ borderRadius: `${sizes.radiusXl}px` }}
-            >
-              {cart.map((item, index) => (
-                <div 
-                  key={item.id} 
-                  className={index !== cart.length - 1 ? 'border-b border-gray-200/50' : ''}
-                  style={{ padding: `${sizes.spacing5}px` }}
-                >
-                  <div className="flex" style={{ gap: `${sizes.spacing5}px` }}>
-                    {item.image && (
-                      <div 
-                        className="bg-white overflow-hidden shadow-sm flex-shrink-0" 
-                        style={{ 
-                          width: `${sizes.avatarSize * 1.8}px`,
-                          height: `${sizes.avatarSize * 1.8}px`,
-                          borderRadius: `${sizes.radiusLg}px`
-                        }}
-                      >
-                        <img src={item.image} alt={item.productName} className="w-full h-full object-cover" />
-                      </div>
+                <MobileCardBody className="p-3">
+                  <div className="aspect-square bg-gray-100 rounded-lg mb-2 flex items-center justify-center">
+                    {productImages[product.id] ? (
+                      <img
+                        src={productImages[product.id]}
+                        alt={product.name}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                    ) : (
+                      <Package size={24} className="text-gray-400" />
                     )}
+                  </div>
+                  <h4 className="font-medium text-gray-900 text-sm line-clamp-2 mb-1">
+                    {product.name}
+                  </h4>
+                  <p className="text-blue-600 font-semibold text-sm">
+                    {format.currency(product.price || 0)}
+                  </p>
+                </MobileCardBody>
+              </MobileCard>
+            ))}
+          </div>
+        </div>
+
+        {/* Cart Summary */}
+        {cart.length > 0 && (
+          <MobileCard variant="elevated">
+            <MobileCardBody>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-gray-900">Cart ({cartItemCount} items)</h3>
+                <ShoppingCart size={20} className="text-gray-600" />
+              </div>
+
+              <div className="space-y-2 mb-4">
+                {cart.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
                     <div className="flex-1 min-w-0">
-                      <h3 
-                        style={{ 
-                          fontSize: `${sizes.textLg}px`,
-                          marginBottom: `${sizes.spacing1}px`
-                        }} 
-                        className="font-semibold text-gray-900"
+                      <p className="font-medium text-gray-900 text-sm truncate">{item.productName}</p>
+                      <p className="text-gray-500 text-xs">{format.currency(item.unitPrice)}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => updateQuantity(item.id, -1)}
+                        className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center active:bg-gray-200"
                       >
-                        {item.productName}
-                      </h3>
-                      <p 
-                        style={{ 
-                          fontSize: `${sizes.textBase}px`,
-                          marginBottom: `${sizes.spacing4}px`
-                        }} 
-                        className="text-gray-500"
+                        <Minus size={14} />
+                      </button>
+                      <span className="font-medium w-8 text-center">{item.quantity}</span>
+                      <button
+                        onClick={() => updateQuantity(item.id, 1)}
+                        className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center active:bg-gray-200"
                       >
-                        {format.currency(item.unitPrice)} × {item.quantity} = {format.currency(item.totalPrice)}
-                      </p>
-                      <div className="flex items-center justify-between">
-                        <div 
-                          className="flex items-center bg-white shadow-md" 
-                          style={{ borderRadius: `${sizes.radiusLg}px` }}
-                        >
-                          <button
-                            onClick={() => updateQuantity(item.id, -1)}
-                            className="flex items-center justify-center active:bg-gray-100"
-                            style={{ 
-                              WebkitTapHighlightColor: 'transparent',
-                              width: `${sizes.buttonHeight}px`,
-                              height: `${sizes.buttonHeight}px`,
-                              borderTopLeftRadius: `${sizes.radiusLg}px`,
-                              borderBottomLeftRadius: `${sizes.radiusLg}px`
-                            }}
-                          >
-                            <Minus size={sizes.iconSize} className="text-gray-600" strokeWidth={2.5} />
-                          </button>
-                          <span 
-                            className="text-center font-bold"
-                            style={{ 
-                              fontSize: `${sizes.textLg}px`,
-                              minWidth: `${sizes.spacing10}px`
-                            }}
-                          >
-                            {item.quantity}
-                          </span>
-                          <button
-                            onClick={() => updateQuantity(item.id, 1)}
-                            className="flex items-center justify-center active:bg-gray-100"
-                            disabled={item.quantity >= item.availableQuantity}
-                            style={{ 
-                              WebkitTapHighlightColor: 'transparent',
-                              width: `${sizes.buttonHeight}px`,
-                              height: `${sizes.buttonHeight}px`,
-                              borderTopRightRadius: `${sizes.radiusLg}px`,
-                              borderBottomRightRadius: `${sizes.radiusLg}px`
-                            }}
-                          >
-                            <Plus size={sizes.iconSize} className="text-gray-600" strokeWidth={2.5} />
-                          </button>
-                        </div>
-                        <button
-                          onClick={() => removeFromCart(item.id)}
-                          className="rounded-full bg-red-100 active:bg-red-200 flex items-center justify-center"
-                          style={{ 
-                            WebkitTapHighlightColor: 'transparent',
-                            width: `${sizes.spacing10}px`,
-                            height: `${sizes.spacing10}px`
-                          }}
-                        >
-                          <X size={sizes.iconSize} className="text-red-600" strokeWidth={2.5} />
-                        </button>
-                      </div>
+                        <Plus size={14} />
+                      </button>
+                      <button
+                        onClick={() => removeFromCart(item.id)}
+                        className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center active:bg-red-200 ml-2"
+                      >
+                        <X size={14} className="text-red-600" />
+                      </button>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
 
-            {/* Clean Summary (Optimized for 1080x2400) */}
-            <div 
-              className="bg-gray-50" 
-              style={{ 
-                borderRadius: `${sizes.radiusXl}px`,
-                padding: `${sizes.spacing6}px`
-              }}
-            >
-              <div style={{ 
-                display: 'flex',
-                flexDirection: 'column',
-                gap: `${sizes.spacing5}px`
-              }}>
-                <div className="flex justify-between items-center">
-                  <span style={{ fontSize: `${sizes.textLg}px` }} className="text-gray-600">Subtotal</span>
-                  <span style={{ fontSize: `${sizes.textLg}px` }} className="font-semibold text-gray-900">{format.currency(cartSubtotal)}</span>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Subtotal:</span>
+                  <span>{format.currency(cartSubtotal)}</span>
                 </div>
                 {discountAmount > 0 && (
-                  <div className="flex justify-between items-center">
-                    <span style={{ fontSize: `${sizes.textLg}px` }} className="text-green-600">Discount</span>
-                    <span style={{ fontSize: `${sizes.textLg}px` }} className="font-semibold text-green-600">-{format.currency(discountAmount)}</span>
+                  <div className="flex justify-between text-green-600">
+                    <span>Discount:</span>
+                    <span>-{format.currency(discountAmount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between items-center">
-                  <span style={{ fontSize: `${sizes.textLg}px` }} className="text-gray-600">Tax ({TAX_RATE}%)</span>
-                  <span style={{ fontSize: `${sizes.textLg}px` }} className="font-semibold text-gray-900">{format.currency(cartTax)}</span>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Tax (18%):</span>
+                  <span>{format.currency(cartTax)}</span>
                 </div>
-                <div style={{ height: '2px' }} className="bg-gray-300" />
-                <div className="flex justify-between items-center">
-                  <span style={{ fontSize: `${sizes.text2xl}px` }} className="font-bold text-gray-900">Total</span>
-                  <span style={{ fontSize: `${sizes.text3xl}px` }} className="font-bold text-gray-900">{format.currency(cartTotal)}</span>
+                <div className="flex justify-between font-semibold text-base pt-1 border-t border-gray-200">
+                  <span>Total:</span>
+                  <span className="text-blue-600">{format.currency(cartTotal)}</span>
                 </div>
               </div>
-            </div>
-          </div>
+
+              <div className="mt-4">
+                <MobileButton
+                  variant="primary"
+                  fullWidth
+                  size="lg"
+                  onClick={handleProceedToPayment}
+                  icon={<CreditCard size={20} />}
+                >
+                  Proceed to Payment
+                </MobileButton>
+              </div>
+            </MobileCardBody>
+          </MobileCard>
+        )}
+
+        {/* Empty Cart State */}
+        {cart.length === 0 && (
+          <MobileCard variant="elevated">
+            <MobileCardBody className="text-center py-8">
+              <ShoppingCart size={48} className="text-gray-300 mx-auto mb-4" />
+              <h3 className="font-medium text-gray-900 mb-2">Cart is empty</h3>
+              <p className="text-gray-500 text-sm">Add products to get started</p>
+            </MobileCardBody>
+          </MobileCard>
         )}
       </div>
 
-      {/* iOS 17 Bottom Bar - Responsive */}
-      <div className="bg-white/95 backdrop-blur-xl border-t border-gray-200/50 safe-area-inset-bottom" style={{
-        padding: `${sizes.spacing4}px ${sizes.spacing6}px`,
-        paddingBottom: `calc(${sizes.spacing4}px + var(--safe-area-inset-bottom, 0px))`
-      }}>
-        {currentStep === 'products' && (
-          <button
-            onClick={nextStep}
-            disabled={!canProceedToCart}
-            className={`w-full font-semibold transition-all ${
-              canProceedToCart
-                ? 'bg-blue-500 text-white active:scale-[0.98]'
-                : 'bg-gray-200 text-gray-400'
-            }`}
-            style={{ 
-              WebkitTapHighlightColor: 'transparent',
-              padding: `${sizes.spacing4}px`,
-              borderRadius: `${sizes.radiusLg}px`,
-              fontSize: `${sizes.textLg}px`,
-              minHeight: `${sizes.buttonHeight}px`
-            }}
-          >
-            {canProceedToCart ? `Continue (${cartItemCount})` : 'Add Items to Continue'}
-          </button>
-        )}
-
-        {currentStep === 'cart' && (
-          <div className="flex" style={{ gap: `${sizes.spacing3}px` }}>
-            <button
-              onClick={previousStep}
-              className="bg-gray-100 text-gray-900 active:scale-95 transition-all font-semibold"
-              style={{ 
-                WebkitTapHighlightColor: 'transparent',
-                padding: `${sizes.spacing4}px ${sizes.spacing8}px`,
-                borderRadius: `${sizes.radiusLg}px`,
-                fontSize: `${sizes.textLg}px`,
-                minHeight: `${sizes.buttonHeight}px`
-              }}
-            >
-              Back
-            </button>
-            <button
-              onClick={nextStep}
-              disabled={!canProceedToPayment}
-              className={`flex-1 font-semibold transition-all ${
-                canProceedToPayment
-                  ? 'bg-blue-500 text-white active:scale-[0.98]'
-                  : 'bg-gray-200 text-gray-400'
-              }`}
-              style={{ 
-                WebkitTapHighlightColor: 'transparent',
-                padding: `${sizes.spacing4}px`,
-                borderRadius: `${sizes.radiusLg}px`,
-                fontSize: `${sizes.textLg}px`,
-                minHeight: `${sizes.buttonHeight}px`
-              }}
-            >
-              Pay {format.currency(cartTotal)}
-            </button>
-          </div>
-        )}
-      </div>
+      {/* Camera Scanner Modal */}
+      {showScanner && (
+        <BarcodeScanner
+          onClose={() => setShowScanner(false)}
+          onScan={handleScanResult}
+        />
+      )}
 
       {/* Modals */}
-      {/* Variant Selection Modal */}
       {showVariantModal && selectedProductForVariants && (
         <MobileVariantSelectionModal
           isOpen={showVariantModal}
@@ -1054,10 +853,11 @@ const MobilePOS: React.FC = () => {
       {showPaymentModal && (
         <MobilePaymentModal
           amount={cartTotal}
-          onClose={() => {
-            setShowPaymentModal(false);
-            setCurrentStep('cart');
-          }}
+          discountValue={discount}
+          discountType={discountType}
+          onChangeDiscount={setDiscount}
+          onChangeDiscountType={setDiscountType}
+          onClose={() => setShowPaymentModal(false)}
           onComplete={handlePaymentComplete}
         />
       )}
@@ -1069,11 +869,117 @@ const MobilePOS: React.FC = () => {
         />
       )}
 
+      {/* Advanced POS Modals (matching main POS) */}
+      {showSalesAnalyticsModal && (
+        <SalesAnalyticsModal
+          isOpen={showSalesAnalyticsModal}
+          onClose={() => setShowSalesAnalyticsModal(false)}
+          branchId={currentBranch?.id}
+        />
+      )}
+
+      {showDeliverySection && (
+        <DeliverySection
+          isOpen={showDeliverySection}
+          onClose={() => setShowDeliverySection(false)}
+          deliverySettings={deliverySettings}
+          onDeliveryComplete={(delivery) => {
+            console.log('🚚 [MobilePOS] Delivery completed:', delivery);
+            setShowDeliverySection(false);
+            toast.success('Delivery arranged successfully');
+          }}
+        />
+      )}
+
+      {showAddExternalProductModal && (
+        <AddExternalProductModal
+          isOpen={showAddExternalProductModal}
+          onClose={() => setShowAddExternalProductModal(false)}
+          onProductAdded={(product) => {
+            console.log('📦 [MobilePOS] External product added:', product);
+            setShowAddExternalProductModal(false);
+            // Refresh products to show the new external product
+            loadProducts({ page: 1, limit: 500 });
+            toast.success('External product added');
+          }}
+        />
+      )}
+
+      {showDraftManagementModal && (
+        <DraftManagementModal
+          isOpen={showDraftManagementModal}
+          onClose={() => setShowDraftManagementModal(false)}
+          drafts={drafts}
+          onLoadDraft={(draft) => {
+            loadDraft(draft);
+            setShowDraftManagementModal(false);
+            toast.success('Draft loaded');
+          }}
+          onDeleteDraft={(draftId) => {
+            deleteDraft(draftId);
+            toast.success('Draft deleted');
+          }}
+        />
+      )}
+
+      {/* Invoice Preview Modal */}
+      {showInvoicePreview && createdInvoice && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <h3 className="font-semibold text-gray-900">Invoice Preview</h3>
+              <button
+                onClick={() => setShowInvoicePreview(false)}
+                className="p-2 rounded-full hover:bg-gray-100"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <InvoiceTemplate invoice={createdInvoice} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Draft notification */}
+      {hasUnsavedChanges && (
+        <DraftNotification
+          onSave={() => {
+            const draftName = prompt('Enter draft name:');
+            if (draftName) {
+              saveDraft(draftName);
+              toast.success('Draft saved');
+            }
+          }}
+          onDiscard={() => {
+            // Clear unsaved changes
+            setCart([]);
+            setSelectedCustomer(null);
+            setDiscount(0);
+            setNotes('');
+          }}
+        />
+      )}
+
+      {/* Minimal UI Toaster */}
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: '500',
+          },
+        }}
+      />
+
       <SuccessModal {...successModal.props} />
-      </div>
-    </ResponsiveMobileWrapper>
-  );
+		</div>
+	);
 };
 
 export default MobilePOS;
+
 

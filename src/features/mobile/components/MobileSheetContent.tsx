@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 /**
  * MobileSheetContent Components
@@ -18,6 +18,7 @@ interface SheetInputFieldProps {
   type?: 'text' | 'tel' | 'email' | 'number';
   disabled?: boolean;
   autoFocus?: boolean;
+  className?: string;
 }
 
 export const SheetInputField: React.FC<SheetInputFieldProps> = ({
@@ -26,9 +27,10 @@ export const SheetInputField: React.FC<SheetInputFieldProps> = ({
   onChange,
   type = 'text',
   disabled = false,
-  autoFocus = false
+  autoFocus = false,
+  className = '',
 }) => (
-  <div style={{ padding: '14px 16px' }}>
+  <div className="px-4 py-3.5">
     <input
       type={type}
       placeholder={placeholder}
@@ -36,13 +38,8 @@ export const SheetInputField: React.FC<SheetInputFieldProps> = ({
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
       autoFocus={autoFocus}
-      className="w-full outline-none bg-transparent border-0 p-0 disabled:text-gray-400"
-      style={{
-        fontSize: '17px',
-        fontWeight: '400',
-        color: value ? '#000000' : '#C7C7CC',
-        letterSpacing: '-0.41px'
-      }}
+      className={`w-full text-[17px] text-neutral-900 placeholder-neutral-400 outline-none bg-transparent border-0 p-0 disabled:text-neutral-400 ${className}`}
+      style={{ WebkitAppearance: 'none' }}
     />
   </div>
 );
@@ -52,10 +49,11 @@ export const SheetInputField: React.FC<SheetInputFieldProps> = ({
 // ============================================
 interface SheetInputGroupProps {
   children: ReactNode;
+  className?: string;
 }
 
-export const SheetInputGroup: React.FC<SheetInputGroupProps> = ({ children }) => (
-  <div className="divide-y divide-gray-200">
+export const SheetInputGroup: React.FC<SheetInputGroupProps> = ({ children, className = '' }) => (
+  <div className={`divide-y divide-neutral-200 bg-white rounded-2xl shadow-sm overflow-hidden ${className}`}>
     {children}
   </div>
 );
@@ -67,47 +65,36 @@ interface SheetDetailRowProps {
   label: string;
   value: string | ReactNode;
   onClick?: () => void;
+  className?: string;
 }
 
-export const SheetDetailRow: React.FC<SheetDetailRowProps> = ({ 
-  label, 
+export const SheetDetailRow: React.FC<SheetDetailRowProps> = ({
+  label,
   value,
-  onClick 
+  onClick,
+  className = '',
 }) => (
-  <div 
+  <button
+    type="button"
     onClick={onClick}
-    className={onClick ? 'cursor-pointer active:bg-gray-50' : ''}
-    style={{ padding: '14px 16px' }}
+    className={`w-full px-4 py-3.5 flex items-center justify-between text-left ${className} ${onClick ? 'active:bg-neutral-100 transition-colors' : ''}`}
+    disabled={!onClick}
   >
-    <div className="flex items-center justify-between">
-      <span 
-        className="text-gray-900"
-        style={{
-          fontSize: '17px',
-          fontWeight: '400',
-          letterSpacing: '-0.41px'
-        }}
-      >
-        {label}
-      </span>
-      <span 
-        className="text-gray-900 font-semibold"
-        style={{
-          fontSize: '17px',
-          letterSpacing: '-0.41px'
-        }}
-      >
+    <span className="text-[17px] text-neutral-900 leading-tight flex-1">{label}</span>
+    <div className="flex items-center gap-1">
+      <span className="text-[17px] font-semibold text-neutral-900 leading-tight">
         {value}
       </span>
+      {onClick && <ChevronRight size={20} className="text-neutral-400 flex-shrink-0" strokeWidth={2} />}
     </div>
-  </div>
+  </button>
 );
 
 // ============================================
 // SECTION DIVIDER - 8px gray background spacer
 // ============================================
 export const SheetSectionDivider: React.FC = () => (
-  <div style={{ height: '8px', backgroundColor: '#F2F2F7' }} />
+  <div className="h-2 bg-neutral-100" />
 );
 
 // ============================================
@@ -115,10 +102,11 @@ export const SheetSectionDivider: React.FC = () => (
 // ============================================
 interface SheetCollapsibleSectionProps {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   isOpen: boolean;
   onToggle: () => void;
   children?: ReactNode;
+  className?: string;
 }
 
 export const SheetCollapsibleSection: React.FC<SheetCollapsibleSectionProps> = ({
@@ -126,47 +114,40 @@ export const SheetCollapsibleSection: React.FC<SheetCollapsibleSectionProps> = (
   subtitle,
   isOpen,
   onToggle,
-  children
+  children,
+  className = '',
 }) => (
-  <div className="border-t border-b border-gray-200">
+  <div className={`bg-white rounded-2xl shadow-sm overflow-hidden ${className}`}>
     <button
       type="button"
       onClick={onToggle}
-      className="w-full flex items-center justify-between active:bg-gray-50 transition-colors"
-      style={{ padding: '14px 16px' }}
+      className="w-full flex items-center justify-between px-4 py-3.5 active:bg-neutral-100 transition-colors"
     >
       <div className="flex-1 text-left">
         <div 
-          className="text-gray-900 font-semibold"
-          style={{
-            fontSize: '17px',
-            letterSpacing: '-0.41px'
-          }}
+          className="text-neutral-900 font-semibold text-[17px] tracking-tight"
         >
           {title}
         </div>
-        <div 
-          className="text-gray-500 mt-1"
-          style={{
-            fontSize: '13px',
-            fontWeight: '400',
-            letterSpacing: '-0.08px'
-          }}
-        >
-          {subtitle}
-        </div>
+        {subtitle && (
+          <div 
+            className="text-neutral-500 mt-0.5 text-[13px] font-normal tracking-tight"
+          >
+            {subtitle}
+          </div>
+        )}
       </div>
-      <ChevronDown 
+      <ChevronRight 
         size={20}
-        className={`text-gray-400 transition-transform ml-3 flex-shrink-0 ${
-          isOpen ? 'rotate-180' : ''
+        className={`text-neutral-400 transition-transform ml-3 flex-shrink-0 ${
+          isOpen ? 'rotate-90' : ''
         }`}
-        strokeWidth={2.5}
+        strokeWidth={2}
       />
     </button>
 
     {isOpen && children && (
-      <div className="border-t border-gray-200">
+      <div className="divide-y divide-neutral-200">
         {children}
       </div>
     )}
@@ -174,66 +155,13 @@ export const SheetCollapsibleSection: React.FC<SheetCollapsibleSectionProps> = (
 );
 
 // ============================================
-// SEARCH SECTION - Like "Choose multiple" in image
-// ============================================
-interface SheetSearchSectionProps {
-  title: string;
-  subtitle: string;
-  onClick: () => void;
-}
-
-export const SheetSearchSection: React.FC<SheetSearchSectionProps> = ({
-  title,
-  subtitle,
-  onClick
-}) => (
-  <div className="border-t border-b border-gray-200">
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full flex items-center justify-between active:bg-gray-50 transition-colors"
-      style={{ padding: '14px 16px' }}
-    >
-      <div className="flex-1 text-left">
-        <div 
-          className="text-gray-900 font-semibold"
-          style={{
-            fontSize: '17px',
-            letterSpacing: '-0.41px'
-          }}
-        >
-          {title}
-        </div>
-        <div 
-          className="text-gray-500 mt-1"
-          style={{
-            fontSize: '13px',
-            fontWeight: '400',
-            letterSpacing: '-0.08px'
-          }}
-        >
-          {subtitle}
-        </div>
-      </div>
-      <Search 
-        size={22}
-        className="text-gray-400 ml-3 flex-shrink-0"
-        strokeWidth={2}
-      />
-    </button>
-  </div>
-);
-
-// ============================================
 // CONTENT SPACER - Adds bottom padding for scrolling
 // ============================================
-interface SheetContentSpacerProps {
-  height?: number;
-}
-
-export const SheetContentSpacer: React.FC<SheetContentSpacerProps> = ({ 
-  height = 80 
-}) => (
-  <div style={{ height: `${height}px` }} />
+export const SheetContentSpacer: React.FC = () => (
+  <div className="h-20 w-full bg-neutral-100" />
 );
 
+export default {
+  SheetInputField, SheetInputGroup, SheetDetailRow, SheetSectionDivider,
+  SheetCollapsibleSection, SheetContentSpacer
+};

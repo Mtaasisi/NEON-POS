@@ -106,8 +106,13 @@ const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = ''
     }, 500);
   };
 
-  // Show for admin only
-  if (currentUser?.role !== 'admin') {
+  // Show for users with branch switching permissions
+  const canSwitchBranches = currentUser?.role === 'admin' ||
+    currentUser?.permissions?.includes('all') ||
+    currentUser?.permissions?.includes('manage_branches') ||
+    currentUser?.permissions?.includes('switch_branches');
+
+  if (!canSwitchBranches) {
     return null;
   }
 

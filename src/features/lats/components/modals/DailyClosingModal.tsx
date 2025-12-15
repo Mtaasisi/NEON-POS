@@ -99,7 +99,7 @@ const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
           if (sale.payment_method.type === 'multiple' && sale.payment_method.details?.payments) {
             // Process each payment method in the multiple payment
             sale.payment_method.details.payments.forEach((payment: any) => {
-              const method = payment.method || 'Unknown';
+              const method = (typeof payment.method === 'object' ? payment.method.type : payment.method) || 'Unknown';
               const amount = parseFloat(payment.amount) || 0;
               
               if (isNaN(amount) || !isFinite(amount)) {
@@ -119,7 +119,7 @@ const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
             });
           } else {
             // Single payment method
-            const method = sale.payment_method.name || sale.payment_method.type || 'Unknown';
+            const method = (typeof sale.payment_method === 'object' && sale.payment_method !== null ? sale.payment_method.name || (typeof sale.payment_method.type === 'object' ? sale.payment_method.type.type : sale.payment_method.type) : sale.payment_method) || 'Unknown';
             
             if (paymentMap.has(method)) {
               const existing = paymentMap.get(method)!;

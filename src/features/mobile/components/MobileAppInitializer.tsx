@@ -233,40 +233,40 @@ const MobileAppInitializer: React.FC<MobileAppInitializerProps> = ({ children })
 
   // Show initialization screen
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-neutral-100 flex items-center justify-center p-4 z-50">
       <div className="max-w-md w-full">
         {/* Logo/Brand */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl mx-auto mb-4 flex items-center justify-center shadow-lg">
+          <div className="w-20 h-20 bg-primary-500 rounded-3xl mx-auto mb-4 flex items-center justify-center shadow-lg">
             <Database size={40} className="text-white" strokeWidth={2} />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">LATS POS Mobile</h1>
-          <p className="text-gray-600">Setting up your mobile app...</p>
+          <h1 className="text-[28px] font-bold text-neutral-900 mb-2">LATS POS Mobile</h1>
+          <p className="text-neutral-600 text-[15px]">Setting up your mobile app...</p>
         </div>
 
         {/* Status Card */}
         <div className="bg-white rounded-3xl shadow-xl p-6 mb-4">
           {/* Online Status */}
-          <div className="flex items-center justify-center gap-3 mb-6 pb-4 border-b border-gray-100">
+          <div className="flex items-center justify-center gap-3 mb-6 pb-4 border-b border-neutral-100">
             {isOnline ? (
               <>
-                <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
-                  <Wifi size={20} className="text-green-600" strokeWidth={2.5} />
+                <div className="w-10 h-10 bg-success-50 rounded-xl flex items-center justify-center">
+                  <Wifi size={20} className="text-success-600" strokeWidth={2.5} />
                 </div>
                 <div className="text-left">
-                  <div className="text-sm font-semibold text-gray-900">Connected</div>
-                  <div className="text-xs text-gray-500">Syncing with server</div>
+                  <div className="text-[15px] font-semibold text-neutral-900">Connected</div>
+                  <div className="text-[13px] text-neutral-500">Syncing with server</div>
                 </div>
-                <div className="ml-auto w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <div className="ml-auto w-2 h-2 bg-success-500 rounded-full animate-pulse"></div>
               </>
             ) : (
               <>
-                <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center">
-                  <WifiOff size={20} className="text-orange-600" strokeWidth={2.5} />
+                <div className="w-10 h-10 bg-warning-50 rounded-xl flex items-center justify-center">
+                  <WifiOff size={20} className="text-warning-600" strokeWidth={2.5} />
                 </div>
                 <div className="text-left">
-                  <div className="text-sm font-semibold text-gray-900">Offline</div>
-                  <div className="text-xs text-gray-500">Using cached data</div>
+                  <div className="text-[15px] font-semibold text-neutral-900">Offline</div>
+                  <div className="text-[13px] text-neutral-500">Using cached data</div>
                 </div>
               </>
             )}
@@ -275,15 +275,15 @@ const MobileAppInitializer: React.FC<MobileAppInitializerProps> = ({ children })
           {/* Progress Bar */}
           <div className="mb-4">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-900">{status.step}</span>
-              <span className="text-sm text-gray-500">
+              <span className="text-[15px] font-medium text-neutral-900">{status.step}</span>
+              <span className="text-[15px] text-neutral-500">
                 {status.progress} / {status.total}
               </span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+            <div className="w-full bg-neutral-200 rounded-full h-2.5 overflow-hidden">
               <div
                 className={`h-2.5 rounded-full transition-all duration-500 ${
-                  status.error ? 'bg-red-500' : 'bg-blue-500'
+                  status.error ? 'bg-danger-500' : 'bg-primary-500'
                 }`}
                 style={{ width: `${(status.progress / status.total) * 100}%` }}
               />
@@ -291,22 +291,22 @@ const MobileAppInitializer: React.FC<MobileAppInitializerProps> = ({ children })
           </div>
 
           {/* Status Message */}
-          <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
+          <div className="flex items-start gap-3 p-4 bg-neutral-50 rounded-xl">
             {status.error ? (
-              <AlertCircle size={20} className="text-red-500 flex-shrink-0 mt-0.5" strokeWidth={2} />
+              <AlertCircle size={20} className="text-danger-500 flex-shrink-0 mt-0.5" strokeWidth={2} />
             ) : isInitializing ? (
-              <RefreshCw size={20} className="text-blue-500 flex-shrink-0 mt-0.5 animate-spin" strokeWidth={2} />
+              <RefreshCw size={20} className="text-primary-500 flex-shrink-0 mt-0.5 animate-spin" strokeWidth={2} />
             ) : (
-              <CheckCircle size={20} className="text-green-500 flex-shrink-0 mt-0.5" strokeWidth={2} />
+              <CheckCircle size={20} className="text-success-500 flex-shrink-0 mt-0.5" strokeWidth={2} />
             )}
-            <p className={`text-sm ${status.error ? 'text-red-700' : 'text-gray-700'}`}>
+            <p className={`text-[14px] ${status.error ? 'text-danger-700' : 'text-neutral-700'}`}>
               {status.message}
             </p>
           </div>
 
           {/* Loading Steps Indicator */}
           {!status.error && isInitializing && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="mt-4 pt-4 border-t border-neutral-100">
               <div className="grid grid-cols-4 gap-2">
                 {[
                   { icon: Database, label: 'DB', step: 1 },
@@ -322,15 +322,15 @@ const MobileAppInitializer: React.FC<MobileAppInitializerProps> = ({ children })
                       <div
                         className={`w-10 h-10 mx-auto rounded-lg flex items-center justify-center mb-1 transition-all ${
                           isComplete
-                            ? 'bg-blue-500 text-white'
+                            ? 'bg-primary-500 text-white'
                             : isCurrent
-                            ? 'bg-blue-100 text-blue-600 animate-pulse'
-                            : 'bg-gray-100 text-gray-400'
+                            ? 'bg-primary-100 text-primary-600 animate-pulse'
+                            : 'bg-neutral-100 text-neutral-400'
                         }`}
                       >
                         <Icon size={18} strokeWidth={2.5} />
                       </div>
-                      <div className={`text-xs ${isComplete ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>
+                      <div className={`text-[12px] ${isComplete ? 'text-neutral-900 font-medium' : 'text-neutral-400'}`}>
                         {item.label}
                       </div>
                     </div>
@@ -346,7 +346,7 @@ const MobileAppInitializer: React.FC<MobileAppInitializerProps> = ({ children })
           <div className="space-y-2">
             <button
               onClick={handleRetry}
-              className="w-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white px-6 py-3.5 rounded-xl font-semibold transition-all shadow-lg flex items-center justify-center gap-2"
+              className="w-full bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-white px-6 py-3.5 rounded-xl font-semibold transition-all shadow-lg flex items-center justify-center gap-2"
             >
               <RefreshCw size={20} strokeWidth={2.5} />
               Retry
@@ -354,7 +354,7 @@ const MobileAppInitializer: React.FC<MobileAppInitializerProps> = ({ children })
             {canWorkOffline && (
               <button
                 onClick={handleContinueOffline}
-                className="w-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 px-6 py-3.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
+                className="w-full bg-neutral-100 hover:bg-neutral-200 active:bg-neutral-300 text-neutral-700 px-6 py-3.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
               >
                 <WifiOff size={20} strokeWidth={2.5} />
                 Continue Offline
@@ -365,7 +365,7 @@ const MobileAppInitializer: React.FC<MobileAppInitializerProps> = ({ children })
 
         {/* Info Text */}
         {!status.error && (
-          <p className="text-center text-sm text-gray-500 mt-4">
+          <p className="text-center text-[14px] text-neutral-500 mt-4">
             {isOnline
               ? 'This may take a few moments on first launch'
               : 'Connect to the internet for full functionality'}
@@ -377,4 +377,3 @@ const MobileAppInitializer: React.FC<MobileAppInitializerProps> = ({ children })
 };
 
 export default MobileAppInitializer;
-
