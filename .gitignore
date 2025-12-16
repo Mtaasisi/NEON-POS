@@ -174,3 +174,10 @@ sql/archive/
 # Large files
 *.apk
 mobile-app-test-logs.txt
+
+# Ignore env files except examples/templates
+.env
+.env.*
+!.env.example
+!.env.template
+!.env.production.template
