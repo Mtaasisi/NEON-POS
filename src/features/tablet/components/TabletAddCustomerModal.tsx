@@ -24,6 +24,7 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
   const [birthMonth, setBirthMonth] = useState('');
   const [birthDay, setBirthDay] = useState('');
   const [email, setEmail] = useState('');
+  const [company, setCompany] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [notes, setNotes] = useState('');
   const [hasWhatsapp, setHasWhatsapp] = useState(true);
@@ -81,9 +82,8 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
         referralSource: referralSource || '',
         birthMonth: birthMonth || '',
         birthDay: birthDay || '',
-        notes: notes
-          ? [{ id: Date.now().toString(), content: notes, createdAt: new Date().toISOString(), createdBy: 'system' }]
-          : [],
+        notes: notes,
+        company: company || '',
         loyaltyLevel: 'interested' as const,
         colorTag: 'new' as const,
         referrals: [],
@@ -109,8 +109,7 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
     }
   };
 
-  const sharedInput =
-    'w-full px-4 py-2 bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base';
+  const sharedInput = 'flex-1 bg-transparent focus:outline-none text-base';
   const regions = [
     'Dar es Salaam', 'Arusha', 'Mwanza', 'Dodoma', 'Mbeya', 'Tanga', 'Morogoro',
     'Iringa', 'Tabora', 'Kigoma', 'Mara', 'Kagera', 'Shinyanga', 'Singida',
@@ -184,6 +183,8 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
               <input
                 className="flex-1 bg-transparent focus:outline-none text-base"
                 placeholder="Company"
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
               />
             </div>
             <div className="flex items-center justify-between px-6 py-3">
@@ -212,60 +213,73 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
             </div>
           </div>
 
-          <div className="p-6 space-y-4">
-            <div className="flex items-center space-x-2">
+          <div className="divide-y divide-gray-200 border-b border-gray-200 mt-4">
+            <div className="flex items-center px-6 py-3 justify-between">
+              <span className="text-base text-gray-700">WhatsApp same as phone</span>
               <input
                 type="checkbox"
                 checked={hasWhatsapp}
                 onChange={(e) => setHasWhatsapp(e.target.checked)}
                 className="form-checkbox h-4 w-4 text-blue-600 rounded"
               />
-              <span className="text-sm text-gray-700">WhatsApp same as phone</span>
             </div>
             {!hasWhatsapp && (
-              <input
-                className={sharedInput}
-                placeholder="WhatsApp number"
-                value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
-              />
+              <div className="flex items-center px-6 py-3">
+                <input
+                  className="flex-1 bg-transparent focus:outline-none text-base"
+                  placeholder="WhatsApp number"
+                  value={whatsapp}
+                  onChange={(e) => setWhatsapp(e.target.value)}
+                />
+              </div>
             )}
-            <select
-              className={sharedInput}
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-            >
-              <option value="">Select region</option>
-              {regions.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-            <select
-              className={sharedInput}
-              value={gender}
-              onChange={(e) => setGender(e.target.value as any)}
-            >
-              <option value="">Gender</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
-            <select
-              className={sharedInput}
-              value={referralSource}
-              onChange={(e) => setReferralSource(e.target.value)}
-            >
-              <option value="">How did they hear about us?</option>
-              {referralSources.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-            <input
-              className={sharedInput}
-              placeholder="Email (optional)"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              type="email"
-            />
+            <div className="flex items-center px-6 py-3 justify-between">
+              <span className="text-base text-gray-700">Region</span>
+              <select
+                className="text-right bg-transparent focus:outline-none text-base"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+              >
+                <option value="">Select region</option>
+                {regions.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center px-6 py-3 justify-between">
+              <span className="text-base text-gray-700">Gender</span>
+              <select
+                className="text-right bg-transparent focus:outline-none text-base"
+                value={gender}
+                onChange={(e) => setGender(e.target.value as any)}
+              >
+                <option value="">Gender</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
+            </div>
+            <div className="flex items-center px-6 py-3 justify-between">
+              <span className="text-base text-gray-700">How did they hear about us?</span>
+              <select
+                className="text-right bg-transparent focus:outline-none text-base"
+                value={referralSource}
+                onChange={(e) => setReferralSource(e.target.value)}
+              >
+                <option value="">Select option</option>
+                {referralSources.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center px-6 py-3 justify-between">
+              <span className="text-base text-gray-700">Email</span>
+              <input
+                className="text-right bg-transparent focus:outline-none text-base"
+                placeholder="Optional"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
           </div>
 
           {/* Optional details (collapsed by default for speed) */}
@@ -282,7 +296,7 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
               <div className="divide-y divide-gray-200 border-t border-gray-200">
                 <div className="flex items-center px-6 py-3">
                   <select
-                    className="flex-1 bg-transparent focus:outline-none text-base"
+                    className={sharedInput}
                     value={birthMonth}
                     onChange={(e) => setBirthMonth(e.target.value)}
                   >
@@ -294,7 +308,7 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
                 </div>
                 <div className="flex items-center px-6 py-3">
                   <input
-                    className="flex-1 bg-transparent focus:outline-none text-base"
+                    className={sharedInput}
                     placeholder="Birth day (1-31)"
                     value={birthDay}
                     onChange={(e) => setBirthDay(e.target.value)}
@@ -305,7 +319,7 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
                 </div>
                 <div className="flex items-center px-6 py-3">
                   <textarea
-                    className="flex-1 bg-transparent focus:outline-none text-base resize-none"
+                    className={`${sharedInput} resize-none`}
                     rows={3}
                     placeholder="Optional notes..."
                     value={notes}
