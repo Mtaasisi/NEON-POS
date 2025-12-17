@@ -127,12 +127,12 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-[600px] h-[700px]">
+      <div className="bg-white rounded-2xl w-[680px] max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-2xl font-bold text-gray-900">Add Customer</h2>
           <button
             onClick={onClose}
-            className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center"
+            className="w-8 h-8 flex items-center justify-center"
           >
             <X size={24} className="text-gray-600" />
           </button>
@@ -156,7 +156,7 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
               <path d="M20 21a8 8 0 0 0-16 0"></path>
             </svg>
           </div>
-          <button className="text-blue-500 font-semibold text-sm">Add Photo</button>
+          <button className="text-blue-500 font-bold text-base">Add Photo</button>
         </div>
 
         <div className="p-0">
@@ -203,11 +203,11 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
               />
             </div>
             {phoneError && <p className="text-xs text-red-500 px-6 pb-2">{phoneError}</p>}
-            <div className="flex items-center px-6 py-3 text-blue-500 font-semibold">
+            <div className="flex items-center px-6 py-3 text-red-500 font-semibold">
               <PlusCircle size={20} className="mr-2" />
               Add Phone
             </div>
-            <div className="flex items-center px-6 py-3 text-blue-500 font-semibold">
+            <div className="flex items-center px-6 py-3 text-red-500 font-semibold">
               <PlusCircle size={20} className="mr-2" />
               Add Email
             </div>
@@ -283,10 +283,10 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
           </div>
 
           {/* Optional details (collapsed by default for speed) */}
-          <div className="rounded-xl">
+          <div className="rounded-xl mt-4">
             <button
               type="button"
-              className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 rounded-lg"
+              className="w-full flex items-center justify-between px-6 py-3 bg-white rounded-lg"
               onClick={() => setShowOptional((v) => !v)}
             >
               <span className="text-base font-semibold text-gray-900">Optional details</span>
