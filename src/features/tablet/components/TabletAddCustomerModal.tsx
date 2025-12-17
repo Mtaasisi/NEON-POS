@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, PlusCircle, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCustomers } from '../../../context/CustomersContext';
 import { formatTanzaniaPhoneNumber, formatTanzaniaWhatsAppNumber } from '../../../lib/phoneUtils';
@@ -110,7 +110,7 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
   };
 
   const sharedInput =
-    'w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm';
+    'w-full px-4 py-2 bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base';
   const regions = [
     'Dar es Salaam', 'Arusha', 'Mwanza', 'Dodoma', 'Mbeya', 'Tanga', 'Morogoro',
     'Iringa', 'Tabora', 'Kigoma', 'Mara', 'Kagera', 'Shinyanga', 'Singida',
@@ -128,42 +128,97 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl w-[600px] h-[700px]">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">Add Customer</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Add Customer</h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center"
+            className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center"
           >
-            <X size={20} className="text-gray-600" />
+            <X size={24} className="text-gray-600" />
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="flex flex-col items-center p-6">
+          <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              className="text-blue-500"
+            >
+              <circle cx="12" cy="8" r="5"></circle>
+              <path d="M20 21a8 8 0 0 0-16 0"></path>
+            </svg>
+          </div>
+          <button className="text-blue-500 font-semibold text-sm">Add Photo</button>
+        </div>
+
+        <div className="p-0">
           {/* Fast lane: essentials at top */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input
-              className={sharedInput}
-              placeholder="Customer name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoFocus
-            />
-            <input
-              className={`${sharedInput} ${phoneError ? 'border-red-300 focus:ring-red-500' : ''}`}
-              placeholder="Phone number"
-              value={phone}
-              onChange={(e) => {
-                setPhone(e.target.value);
-                if (phoneError) setPhoneError('');
-              }}
-            />
-            {phoneError && <p className="text-xs text-red-500">{phoneError}</p>}
+          <div className="divide-y divide-gray-200 border-t border-b border-gray-200">
+            <div className="flex items-center px-6 py-3">
+              <input
+                className="flex-1 bg-transparent focus:outline-none text-base"
+                placeholder="First name"
+                value={name.split(' ')[0] || ''}
+                onChange={(e) => setName(`${e.target.value} ${name.split(' ')[1] || ''}`)}
+                autoFocus
+              />
+            </div>
+            <div className="flex items-center px-6 py-3">
+              <input
+                className="flex-1 bg-transparent focus:outline-none text-base"
+                placeholder="Last name"
+                value={name.split(' ')[1] || ''}
+                onChange={(e) => setName(`${name.split(' ')[0] || ''} ${e.target.value}`)}
+              />
+            </div>
+            <div className="flex items-center px-6 py-3">
+              <input
+                className="flex-1 bg-transparent focus:outline-none text-base"
+                placeholder="Company"
+              />
+            </div>
+            <div className="flex items-center justify-between px-6 py-3">
+              <div className="flex items-center space-x-2">
+                <span className="text-base text-gray-700">phone</span>
+                <ChevronRight size={16} className="text-gray-400" />
+              </div>
+              <input
+                className={`text-right bg-transparent focus:outline-none text-base w-1/2 ${phoneError ? 'text-red-500' : ''}`}
+                placeholder="+255 745 000 035"
+                value={phone}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  if (phoneError) setPhoneError('');
+                }}
+              />
+            </div>
+            {phoneError && <p className="text-xs text-red-500 px-6 pb-2">{phoneError}</p>}
+            <div className="flex items-center px-6 py-3 text-blue-500 font-semibold">
+              <PlusCircle size={20} className="mr-2" />
+              Add Phone
+            </div>
+            <div className="flex items-center px-6 py-3 text-blue-500 font-semibold">
+              <PlusCircle size={20} className="mr-2" />
+              Add Email
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
             <div className="flex items-center space-x-2">
               <input
                 type="checkbox"
                 checked={hasWhatsapp}
                 onChange={(e) => setHasWhatsapp(e.target.checked)}
+                className="form-checkbox h-4 w-4 text-blue-600 rounded"
               />
               <span className="text-sm text-gray-700">WhatsApp same as phone</span>
             </div>
@@ -204,31 +259,30 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
                 <option key={r} value={r}>{r}</option>
               ))}
             </select>
-            <select
+            <input
               className={sharedInput}
+              placeholder="Email (optional)"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               type="email"
-            >
-              <option value="">Email (optional)</option>
-            </select>
+            />
           </div>
 
           {/* Optional details (collapsed by default for speed) */}
-          <div className="border border-gray-200 rounded-xl">
+          <div className="rounded-xl">
             <button
               type="button"
-              className="w-full flex items-center justify-between px-4 py-3"
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 rounded-lg"
               onClick={() => setShowOptional((v) => !v)}
             >
-              <span className="text-sm font-semibold text-gray-900">Optional details</span>
+              <span className="text-base font-semibold text-gray-900">Optional details</span>
               {showOptional ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
             {showOptional && (
-              <div className="px-4 pb-4 space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="divide-y divide-gray-200 border-t border-gray-200">
+                <div className="flex items-center px-6 py-3">
                   <select
-                    className={sharedInput}
+                    className="flex-1 bg-transparent focus:outline-none text-base"
                     value={birthMonth}
                     onChange={(e) => setBirthMonth(e.target.value)}
                   >
@@ -237,8 +291,10 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
                       <option key={m} value={m}>{m}</option>
                     ))}
                   </select>
+                </div>
+                <div className="flex items-center px-6 py-3">
                   <input
-                    className={sharedInput}
+                    className="flex-1 bg-transparent focus:outline-none text-base"
                     placeholder="Birth day (1-31)"
                     value={birthDay}
                     onChange={(e) => setBirthDay(e.target.value)}
@@ -247,10 +303,9 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
                     max={31}
                   />
                 </div>
-                <div>
-                  <label className="text-sm font-semibold text-gray-900 mb-2 block">Notes</label>
+                <div className="flex items-center px-6 py-3">
                   <textarea
-                    className={`${sharedInput} resize-none`}
+                    className="flex-1 bg-transparent focus:outline-none text-base resize-none"
                     rows={3}
                     placeholder="Optional notes..."
                     value={notes}
@@ -262,11 +317,11 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
           </div>
         </div>
 
-        <div className="p-6 border-t border-gray-200">
+        <div className="p-6">
           <button
             onClick={handleSubmit}
             disabled={isLoading}
-            className="w-full py-3 rounded-lg text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-60"
+            className="w-full py-4 rounded-lg text-base font-semibold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-60"
           >
             {isLoading ? 'Adding...' : 'Add Customer'}
           </button>
