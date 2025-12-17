@@ -215,7 +215,7 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
 
           <div className="divide-y divide-gray-200 border-b border-gray-200 mt-4">
             <div className="flex items-center px-6 py-3 justify-between">
-              <span className="text-base text-gray-700">WhatsApp same as phone</span>
+              <span className="text-base text-gray-900">WhatsApp same as phone</span>
               <input
                 type="checkbox"
                 checked={hasWhatsapp}
@@ -234,7 +234,7 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
               </div>
             )}
             <div className="flex items-center px-6 py-3 justify-between">
-              <span className="text-base text-gray-700">Region</span>
+              <span className="text-base text-gray-900">Region</span>
               <select
                 className="text-right bg-transparent focus:outline-none text-base"
                 value={city}
@@ -247,7 +247,7 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
               </select>
             </div>
             <div className="flex items-center px-6 py-3 justify-between">
-              <span className="text-base text-gray-700">Gender</span>
+              <span className="text-base text-gray-900">Gender</span>
               <select
                 className="text-right bg-transparent focus:outline-none text-base"
                 value={gender}
@@ -259,20 +259,20 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
               </select>
             </div>
             <div className="flex items-center px-6 py-3 justify-between">
-              <span className="text-base text-gray-700">How did they hear about us?</span>
+              <span className="text-base text-gray-900">Source</span>
               <select
                 className="text-right bg-transparent focus:outline-none text-base"
                 value={referralSource}
                 onChange={(e) => setReferralSource(e.target.value)}
               >
-                <option value="">Select option</option>
+                <option value="">How did they hear about us?</option>
                 {referralSources.map((r) => (
                   <option key={r} value={r}>{r}</option>
                 ))}
               </select>
             </div>
             <div className="flex items-center px-6 py-3 justify-between">
-              <span className="text-base text-gray-700">Email</span>
+              <span className="text-base text-gray-900">Email</span>
               <input
                 className="text-right bg-transparent focus:outline-none text-base"
                 placeholder="Optional"
@@ -283,7 +283,7 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
           </div>
 
           {/* Optional details (collapsed by default for speed) */}
-          <div className="rounded-xl mt-4">
+          <div className="rounded-xl">
             <button
               type="button"
               className="w-full flex items-center justify-between px-6 py-3 bg-white rounded-lg"
@@ -293,7 +293,7 @@ const TabletAddCustomerModal: React.FC<TabletAddCustomerModalProps> = ({
               {showOptional ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
             {showOptional && (
-              <div className="divide-y divide-gray-200 border-t border-gray-200">
+              <div className="divide-y divide-gray-200">
                 <div className="flex items-center px-6 py-3">
                   <select
                     className={sharedInput}
