@@ -172,7 +172,7 @@ const EnhancedPaymentManagementPage: React.FC = () => {
         FROM
           account_transactions at
         LEFT JOIN
-          finance_accounts fa ON at.account_id = fa.id
+          finance_accounts fa ON at.finance_account_id = fa.id
         WHERE
           at.transaction_type = 'expense'
           AND at.account_id IN (${accountIdsForBranch.map(id => `'${id}'`).join(',')})
