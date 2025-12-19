@@ -1133,8 +1133,8 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                     // Use normalized variant stock
                     productStock = primaryVariant.stockQuantity || 0;
                   } else {
-                    // Fallback to product-level stock
-                    productStock = product.stockQuantity ?? product.totalQuantity ?? 0;
+                    // Calculate stock from variants instead of using product-level stock
+                    productStock = product.variants?.filter(v => !v.isParent && !v.is_parent).reduce((sum, v) => sum + (v.quantity || 0), 0) || 0;
                   }
                   
                   const isOutOfStock = productStock <= 0;

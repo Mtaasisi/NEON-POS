@@ -1,16 +1,13 @@
 import React, { ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  Home,
   ShoppingBag,
-  Heart,
-  User,
-  Package,
   Bell,
   ArrowLeft,
-  Crown,
-  Award
+  Sun,
+  Moon
 } from 'lucide-react';
+import { useTheme } from '../../../context/ThemeContext';
 
 interface MobileLayoutProps {
   children: ReactNode;
@@ -27,19 +24,17 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme, setTheme, isDark } = useTheme();
 
+  // Keep only the Shop button while browsing products
   const navItems = [
-    { icon: Home, label: 'Home', path: '/customer-portal/dashboard' },
     { icon: ShoppingBag, label: 'Shop', path: '/customer-portal/products' },
-    { icon: Package, label: 'Orders', path: '/customer-portal/orders' },
-    { icon: Crown, label: 'Loyalty', path: '/customer-portal/loyalty' },
-    { icon: User, label: 'Profile', path: '/customer-portal/profile' },
   ];
 
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--bg-primary)' }}>
       {/* Top Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50 h-14">
         <div className="flex items-center justify-between px-4 py-3 h-full">
@@ -60,19 +55,29 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
             </h1>
           )}
 
-          <button
-            onClick={() => navigate('/customer-portal/notifications')}
-            className="p-2 -mr-2 hover:bg-gray-100 rounded-full transition-colors relative"
-          >
-            <Bell size={20} className="text-gray-700" />
-            {/* Notification badge */}
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setTheme(isDark ? 'light' : 'dark')}
+              className="p-2 -mr-2 hover:bg-gray-100 rounded-full transition-colors"
+              aria-label="Toggle theme"
+            >
+              {isDark ? <Sun size={18} className="text-gray-700" /> : <Moon size={18} className="text-gray-700" />}
+            </button>
+
+            <button
+              onClick={() => navigate('/customer-portal/notifications')}
+              className="p-2 -mr-2 hover:bg-gray-100 rounded-full transition-colors relative"
+            >
+              <Bell size={20} className="text-gray-700" />
+              {/* Notification badge */}
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto pb-20">
+      <main className="flex-1 overflow-y-auto pb-20" style={{ backgroundColor: 'var(--bg-secondary)' }}>
         {children}
       </main>
 

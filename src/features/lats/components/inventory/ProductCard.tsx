@@ -18,6 +18,8 @@ interface ProductVariant {
   costPrice: number;
   stockQuantity: number;
   minStockLevel: number;
+  isParent?: boolean;
+  is_parent?: boolean;
 
   attributes: Record<string, any>;
 }
@@ -123,7 +125,10 @@ const ProductCard: React.FC<ProductCardProps> = ({
   })();
   
   // Calculate product stats
-  const totalStock = product.variants.reduce((sum, v) => sum + v.stockQuantity, 0);
+  // For IMEI-based products, only count child variants (physical devices)
+  // Parent variants represent product definition with qty=0
+  const childVariants = product.variants.filter(v => !v.isParent && !v.is_parent);
+  const totalStock = childVariants.reduce((sum, v) => sum + v.stockQuantity, 0);
   const totalValue = product.variants.reduce((sum, v) => sum + (v.stockQuantity * v.price), 0);
   const activeVariants = product.variants.filter(v => v.isActive).length;
   const lowStockVariants = product.variants.filter(v => v.stockQuantity <= v.minStockLevel).length;

@@ -74,7 +74,7 @@ import POSInstallmentModal from '../components/pos/POSInstallmentModal';
 import TradeInContractModal from '../components/pos/TradeInContractModal';
 import TradeInPricingModal from '../components/pos/TradeInPricingModal';
 import VariantSelectionModal from '../components/pos/VariantSelectionModal';
-import ComprehensivePaymentModal from '../components/pos/ComprehensivePaymentModal';
+import TabletPaymentModal from '../../tablet/components/TabletPaymentModal';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
 import ProductGridSkeleton from '../../../components/ui/ProductGridSkeleton';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
@@ -95,6 +95,8 @@ import MobilePOSWrapper from '../components/pos/MobilePOSWrapper';
 import InvoiceTemplate from '../../../components/templates/InvoiceTemplate';
 import { FileText, Printer, Wrench } from 'lucide-react';
 import { useUnifiedSearch } from '../hooks/useUnifiedSearch';
+import { posErrorHandler } from '../lib/posErrorHandler';
+import { posErrorHandler } from '../lib/posErrorHandler';
 
 
 // Import lazy-loaded modal wrappers
@@ -1629,7 +1631,7 @@ const POSPageOptimized: React.FC = () => {
                   sellingPrice: product.selling_price || product.price || product.unit_price,
                   price: product.price || product.unit_price || product.selling_price,
                   sku: product.sku || 'N/A',
-                  quantity: product.stock_quantity || 0,
+                  quantity: product.variants?.filter(v => !v.isParent && !v.is_parent).reduce((sum, v) => sum + (v.quantity || 0), 0) || 0,
                   is_parent: false,
                   variant_type: 'standard'
                 };
@@ -1680,8 +1682,8 @@ const POSPageOptimized: React.FC = () => {
       let availableStock: number;
       
       if (isVirtualVariant) {
-        // For products without variants, use product stock from cache
-        availableStock = product.stock_quantity || 0;
+        // For products without variants, calculate stock from variants
+        availableStock = product.variants?.filter(v => !v.isParent && !v.is_parent).reduce((sum, v) => sum + (v.quantity || 0), 0) || 0;
         if (availableStock < quantity) {
           toast.error(`${product.name}: Insufficient stock. Available: ${availableStock}, Requested: ${quantity}`);
           return;
@@ -2154,65 +2156,123 @@ const POSPageOptimized: React.FC = () => {
   // Customer functionality - functions already defined above
 
   // Payment processing with error handling
+  // Enhanced payment processing with offline support
   const handleProcessPayment = async () => {
     try {
       // Check permissions
       if (!canSell || !canCreateSales) {
-        toast.error('You do not have permission to process sales');
+        posErrorHandler.handleError({
+          code: 'INSUFFICIENT_PERMISSIONS',
+          message: 'User lacks sales permissions',
+          userMessage: 'You do not have permission to process sales.',
+          recoveryAction: 'Contact your administrator for sales permissions.',
+          canRetry: false,
+          severity: 'high'
+        }, 'Payment Processing - Permissions');
         return;
       }
 
-      // Validate cart
-      if (cartItems.length === 0) {
-        toast.error('Cart is empty. Please add items before processing payment.');
+      // Check network connectivity
+      const isOnline = await posErrorHandler.checkNetworkConnectivity();
+      if (!isOnline) {
+        posErrorHandler.handleError({
+          code: 'NETWORK_ERROR',
+          message: 'No network connectivity detected',
+          userMessage: 'No internet connection. Please check your network and try again.',
+          recoveryAction: 'Check your internet connection and retry.',
+          canRetry: true,
+          severity: 'high'
+        }, 'Payment Processing - Network');
         return;
       }
 
-      // Validate cart items have valid prices
-      const invalidItems = cartItems.filter(item => 
-        !item.totalPrice || 
-        item.totalPrice <= 0 || 
-        isNaN(item.totalPrice) ||
-        !item.unitPrice ||
-        item.unitPrice <= 0 ||
-        isNaN(item.unitPrice)
-      );
-
-      if (invalidItems.length > 0) {
-        console.error('❌ Invalid cart items found:', invalidItems);
-        toast.error(`Invalid prices found for: ${invalidItems.map(i => i.productName).join(', ')}`);
+      // Check database connection
+      const dbStatus = await posErrorHandler.checkDatabaseConnection();
+      if (!dbStatus.connected) {
+        posErrorHandler.handleError({
+          code: 'DATABASE_ERROR',
+          message: 'Database connection failed',
+          userMessage: 'Unable to connect to database. Please try again.',
+          recoveryAction: 'Refresh the page and try again. Contact support if issues persist.',
+          canRetry: true,
+          severity: 'high'
+        }, 'Payment Processing - Database');
         return;
       }
 
-      // Validate total amount
-      if (isNaN(totalAmount) || totalAmount <= 0) {
-        console.error('❌ Invalid total amount:', totalAmount);
-        toast.error('Cart total is invalid. Please check item prices.');
+      // Log database latency for monitoring
+      if (dbStatus.latency && dbStatus.latency > 2000) {
+        console.warn(`⚠️ Slow database response: ${dbStatus.latency}ms`);
+      }
+
+      // Validate cart items
+      const cartError = posErrorHandler.validateCartItems(cartItems);
+      if (cartError) {
+        posErrorHandler.handleError(cartError, 'Payment Processing - Cart Validation');
         return;
       }
 
-      // Validate discount is not greater than total
-      if (discountAmount >= totalAmount) {
-        console.error('❌ Discount exceeds total:', { discountAmount, totalAmount });
-        toast.error(`Discount (${format.money(discountAmount)}) cannot exceed total (${format.money(totalAmount)})`);
+      // Validate amounts
+      const amountError = posErrorHandler.validateAmounts(totalAmount, discountAmount, finalAmount);
+      if (amountError) {
+        posErrorHandler.handleError(amountError, 'Payment Processing - Amount Validation');
         return;
       }
 
-      // Validate final amount
-      if (finalAmount <= 0) {
-        console.error('❌ Invalid final amount:', {
-          totalAmount,
-          discountAmount,
-          finalAmount
-        });
-        toast.error('Invalid total amount. Please check your cart items and discount.');
-        return;
+      // Validate customer (optional but recommended)
+      const customerError = posErrorHandler.validateCustomer(selectedCustomer, finalAmount);
+      if (customerError) {
+        // For customer validation, we show as warning but don't block
+        if (customerError.severity === 'low') {
+          toast(customerError.userMessage, { icon: '⚠️' });
+        } else {
+          posErrorHandler.handleError(customerError, 'Payment Processing - Customer Validation');
+          return;
+        }
       }
 
-      // Check if customer is required for certain payment methods (optional for now)
-      if (!selectedCustomer && (finalAmount > 50000)) {
-        toast.error('Customer information is recommended for payments over 50,000 TZS');
-        // Don't return, just show warning
+      // Validate stock availability (real-time check)
+      console.log('🔍 Checking stock availability for payment processing...');
+      const stockError = await posErrorHandler.validateStockAvailability(cartItems);
+      if (stockError) {
+        posErrorHandler.handleError(stockError, 'Payment Processing - Stock Validation');
+        return;
+      }
+      console.log('✅ Stock validation passed');
+
+      // Check if we're offline and queue payment if needed
+      if (isOffline) {
+        posErrorHandler.handleError({
+          code: 'OFFLINE_MODE',
+          message: 'Application is currently offline',
+          userMessage: 'You are currently offline. Payment will be processed when connection is restored.',
+          recoveryAction: 'Payment has been saved locally and will sync when online.',
+          canRetry: false,
+          severity: 'medium'
+        }, 'Payment Processing - Offline Mode');
+
+        // Queue the payment for offline processing
+        await posErrorHandler.queueOfflinePayment(
+          {
+            totalAmount: finalAmount,
+            discountAmount,
+            taxAmount,
+            method: 'queued_offline',
+            timestamp: new Date().toISOString()
+          },
+          cartItems,
+          selectedCustomer
+        );
+
+        // Update offline payment count
+        setOfflinePaymentCount(prev => prev + 1);
+
+        // Clear cart and show success message
+        clearCart();
+        setSelectedCustomer(null);
+        toast.success('Payment saved offline - will sync when online');
+
+        return;
       }
 
       // Validate IMEI Variants are selected for items that require them
@@ -2321,8 +2381,7 @@ const POSPageOptimized: React.FC = () => {
       // Show summary modal first before payment
       setShowPOSSummaryModal(true);
     } catch (error) {
-      console.error('Error in handleProcessPayment:', error);
-      toast.error('Failed to initialize payment. Please try again.');
+      posErrorHandler.handleError(error, 'Payment Processing - Unexpected Error');
     }
   };
 
@@ -2331,6 +2390,34 @@ const POSPageOptimized: React.FC = () => {
     setShowPOSSummaryModal(false);
     setShowPaymentModal(true);
   };
+
+  // Smart inventory update function - updates only affected products in memory
+  const updateLocalInventory = useCallback((saleItems: any[]) => {
+    // Update products state directly without database reload
+    const updatedProducts = products.map(product => {
+      const productSaleItems = saleItems.filter(item => item.productId === product.id);
+      if (productSaleItems.length === 0) return product;
+
+      // Update variants quantities
+      const updatedVariants = product.variants?.map(variant => {
+        const variantSaleItem = productSaleItems.find(item => item.variantId === variant.id);
+        if (!variantSaleItem) return variant;
+
+        return {
+          ...variant,
+          quantity: Math.max(0, (variant.quantity || 0) - variantSaleItem.quantity)
+        };
+      });
+
+      return {
+        ...product,
+        variants: updatedVariants
+      };
+    });
+
+    // Update the store state directly (this is a temporary workaround)
+    useInventoryStore.setState({ products: updatedProducts });
+  }, [products]);
 
   const handleRefreshData = async () => {
     try {
@@ -2529,6 +2616,61 @@ const POSPageOptimized: React.FC = () => {
   const TAX_RATE = generalSettings?.tax_rate || 18; // Default 18% VAT for Tanzania
   const isTaxEnabled = generalSettings?.enable_tax === true; // Only enable tax if explicitly set to true
 
+  // Offline payment handling
+  const [isOffline, setIsOffline] = useState(false);
+  const [offlinePaymentCount, setOfflinePaymentCount] = useState(0);
+
+  // Monitor online/offline status
+  useEffect(() => {
+    const updateOnlineStatus = () => {
+      const online = navigator.onLine;
+      setIsOffline(!online);
+
+      if (online) {
+        // Try to sync offline payments when coming back online
+        const status = posErrorHandler.getOfflinePaymentStatus();
+        if (status.queued > 0 && !status.syncing) {
+          console.log('📡 Connection restored, syncing offline payments...');
+          posErrorHandler.syncOfflinePayments((completed, total) => {
+            console.log(`🔄 Sync progress: ${completed}/${total}`);
+          }).then(result => {
+            if (result.success > 0) {
+              toast.success(`Synced ${result.success} offline payments`);
+            }
+            if (result.failed > 0) {
+              toast.error(`${result.failed} payments failed to sync`);
+            }
+            updateOfflinePaymentCount();
+          }).catch(error => {
+            console.error('Failed to sync offline payments:', error);
+          });
+        }
+      }
+    };
+
+    const updateOfflinePaymentCount = () => {
+      const status = posErrorHandler.getOfflinePaymentStatus();
+      setOfflinePaymentCount(status.queued);
+    };
+
+    // Initial check
+    updateOnlineStatus();
+    updateOfflinePaymentCount();
+
+    // Listen for online/offline events
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+
+    // Periodic check for offline payments
+    const interval = setInterval(updateOfflinePaymentCount, 30000); // Check every 30 seconds
+
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
+      clearInterval(interval);
+    };
+  }, []);
+
   // Calculate totals with validation
   const totalAmount = useMemo(() => {
     const total = cartItems.reduce((sum, item) => {
@@ -2605,6 +2747,8 @@ const POSPageOptimized: React.FC = () => {
           todaysSales={todaysSales}
           isTaxEnabled={isTaxEnabled}
           taxRate={TAX_RATE}
+          isOffline={isOffline}
+          offlinePaymentCount={offlinePaymentCount}
           isQrCodeScannerEnabled={isQrCodeScannerEnabled}
         />
 
@@ -2778,47 +2922,18 @@ const POSPageOptimized: React.FC = () => {
           currentUser={currentUser}
         />
 
-        {/* Comprehensive Payment Modal - Supports multiple payment methods */}
-        <ComprehensivePaymentModal
-          isOpen={showPaymentModal}
+        {/* Tablet Payment Modal - Uses payment accounts */}
+        <TabletPaymentModal
+          amount={tradeInDiscount > 0 ? finalAmount - tradeInDiscount : finalAmount}
+          discountValue={manualDiscount}
+          discountType={discountType}
+          onChangeDiscount={setManualDiscount}
+          onChangeDiscountType={setDiscountType}
           onClose={() => setShowPaymentModal(false)}
-          totalAmount={totalAmount}
-          discountAmount={discountAmount + tradeInDiscount}
-          onProcessPayment={async (paymentData) => {
+          onComplete={async (payments, totalPaid) => {
             try {
-              console.log('Processing comprehensive payment:', paymentData);
-
-              // Handle different payment types
-              let payments = [];
-              let totalPaid = 0;
-
-              if (paymentData.method === 'split') {
-                // Handle split payments
-                payments = paymentData.splitPayments.map((split: any) => ({
-                  paymentMethod: split.methodId,
-                  amount: split.amount,
-                  reference: split.reference || null
-                }));
-                totalPaid = paymentData.totalAmount;
-              } else {
-                // Handle single payment
-                payments = [{
-                  paymentMethod: paymentData.method,
-                  amount: paymentData.amount,
-                  reference: paymentData.reference || null,
-                  loyaltyPoints: paymentData.loyaltyPoints || null,
-                  giftCardCode: paymentData.giftCardCode || null
-                }];
-                totalPaid = paymentData.amount;
-              }
-
-              console.log('Converted payments:', payments);
-
-              // Calculate expected payment amount
-              const expectedAmount = finalAmount;
-              
-              // ✅ FIX: Calculate validatedTotalPaid before using it
-              const validatedTotalPaid = totalPaid || expectedAmount;
+              console.log('Processing tablet payment:', { payments, totalPaid });
+              const validatedTotalPaid = totalPaid;
 
               // Prepare sale data for database with multiple payments
               const saleData = {
@@ -2870,11 +2985,29 @@ const POSPageOptimized: React.FC = () => {
               };
 
               // Process the sale using the service
-              const result = await saleProcessingService.processSale(saleData);
+              const result = await saleProcessingService.processSale({
+                ...saleData,
+                paymentMethod: {
+                  type: paymentData.method,
+                  details: {
+                    payments: [{
+                      method: paymentData.method,
+                      amount: paymentData.amount,
+                      reference: paymentData.reference || null
+                    }],
+                    totalPaid: validatedTotalPaid
+                  },
+                  amount: validatedTotalPaid
+                },
+                paymentStatus: paymentData.remainingAmount > 0 ? 'partial' : 'completed'
+              });
               
               if (result.success) {
-                const displayAmount = totalPaid || finalAmount;
+                const displayAmount = paymentData.amount;
                 const saleNumber = result.sale?.saleNumber;
+
+                // Smart inventory update - update only affected products in memory
+                updateLocalInventory(cartItems);
                 
                 // ✅ If there's a trade-in transaction, handle based on user role
                 const activeTradeInTransaction = tradeInTransaction || tradeInTransactionRef.current;
@@ -3017,10 +3150,13 @@ const POSPageOptimized: React.FC = () => {
                 
                 // Use setTimeout to ensure modal renders before state changes
                 setTimeout(() => {
+                  const isPartialPayment = paymentData.remainingAmount > 0;
                   successModal.show(
-                    `Payment of ${format.money(displayAmount)} processed successfully!${saleNumber ? ` Sale #${saleNumber}` : ''}`,
+                    isPartialPayment
+                      ? `Partial payment of ${format.money(displayAmount)} processed! Remaining: ${format.money(paymentData.remainingAmount)}${saleNumber ? ` Sale #${saleNumber}` : ''}`
+                      : `Payment of ${format.money(displayAmount)} processed successfully!${saleNumber ? ` Sale #${saleNumber}` : ''}`,
                     {
-                      title: 'Sale Complete! 🎉',
+                      title: isPartialPayment ? 'Partial Payment Received! 💰' : 'Sale Complete! 🎉',
                       icon: SuccessIcons.paymentReceived,
                       autoCloseDelay: 0,
                       actionButtons: [

@@ -64,6 +64,10 @@ const productFormSchema = z.object({
       message: "Specification must be valid JSON"
     })
   ),
+  customerPortalSpecification: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    z.string().max(2000, 'Customer portal specification must be less than 2000 characters').optional()
+  ),
   sku: z.preprocess(
     (val) => (val === '' || val === null || val === undefined ? undefined : val),
     z.string().max(50, 'SKU must be less than 50 characters').optional()
@@ -103,6 +107,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
     condition: 'new' as 'new' | 'used' | 'refurbished',
     description: '',
     specification: '',
+    customerPortalSpecification: '',
     isCustomerPortalVisible: true,
     metadata: {},
     variants: []
@@ -736,6 +741,11 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
                                (product as any).specification ||
                                '';
 
+      // Extract customer portal specification if present
+      const rawCustomerPortalSpecification = (product as any).attributes?.customer_portal_specification ||
+                                             (product as any).customer_portal_specification ||
+                                             '';
+
       // Handle specification - ensure it's a valid JSON string or empty
       let specification = '';
       if (rawSpecification) {
@@ -754,6 +764,20 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
         }
       }
 
+      // Handle customer portal specification - keep as string
+      let customerPortalSpecification = '';
+      if (rawCustomerPortalSpecification) {
+        if (typeof rawCustomerPortalSpecification === 'string') {
+          customerPortalSpecification = rawCustomerPortalSpecification;
+        } else {
+          try {
+            customerPortalSpecification = JSON.stringify(rawCustomerPortalSpecification);
+          } catch {
+            customerPortalSpecification = String(rawCustomerPortalSpecification);
+          }
+        }
+      }
+
       // Ensure categoryId is a string (handle null/undefined)
       const categoryId = product.categoryId ? String(product.categoryId) : '';
 
@@ -765,6 +789,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
         condition: condition as 'new' | 'used' | 'refurbished',
         description: product.description || '',
         specification: specification,
+        customerPortalSpecification: customerPortalSpecification,
         isCustomerPortalVisible: (product as any).isCustomerPortalVisible !== false,
         metadata: (product as any).metadata || {},
         variants: []
@@ -785,12 +810,23 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
           // Check if this variant is a parent and has children
           if (v.is_parent || v.variant_type === 'parent') {
             try {
-              const { data: childrenData, error } = await supabase
+              // Get current branch for filtering children variants
+              const currentBranchId = localStorage.getItem('current_branch_id');
+
+              let childrenQuery = supabase
                 .from('lats_product_variants')
                 .select('variant_attributes')
                 .eq('parent_variant_id', v.id)
                 .eq('is_active', true)
                 .eq('variant_type', 'imei_child');
+
+              // Children variants should belong to the same branch as their parent
+              // Only show children that are in the same branch as the current view branch
+              if (currentBranchId) {
+                childrenQuery = childrenQuery.eq('branch_id', currentBranchId);
+              }
+
+              const { data: childrenData, error } = await childrenQuery;
               
               if (!error && childrenData && childrenData.length > 0) {
                 childrenVariants = childrenData
@@ -865,6 +901,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
         condition: 'new',
         description: '',
         specification: '',
+        customerPortalSpecification: '',
         metadata: {},
         variants: []
       });
@@ -962,7 +999,8 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
       // Prepare attributes with specification and condition if available
       const productAttributes = {
         ...(formData.metadata || {}),
-        ...(formData.specification ? { specification: formData.specification } : {}),
+        ...(formData.specification !== undefined ? { specification: formData.specification } : {}),
+        ...(formData.customerPortalSpecification !== undefined ? { customer_portal_specification: formData.customerPortalSpecification } : {}),
         ...(formData.condition ? { condition: formData.condition } : {})
       };
 
@@ -1023,6 +1061,11 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
       }
 
       console.log('🔄 [EditProductModal] Updating product with data:', productUpdateData);
+      // Debug: log attributes being saved (helps confirm customer portal spec is included)
+      console.log('🔍 [EditProductModal] attributes payload:', productUpdateData.attributes);
+      try {
+        toast.custom?.(null); // noop to ensure toast lib is available (no-op)
+      } catch {}
 
       // Update product using latsProductApi (includes variants if any)
       const { updateProduct } = await import('../../../../lib/latsProductApi');
@@ -1193,6 +1236,26 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
           }
         }
 
+      // 🔍 DEBUG: Verify database write for customer portal specification
+      try {
+        const { data: dbCheck, error: dbCheckError } = await supabase
+          .from('lats_products')
+          .select('id, name, attributes')
+          .eq('id', productId)
+          .single();
+
+        if (dbCheckError) {
+          console.error('❌ [DEBUG] Failed to verify DB write:', dbCheckError);
+        } else {
+          const portalSpec = dbCheck.attributes?.customer_portal_specification;
+          console.log('🔍 [DEBUG] DB verification - Portal spec saved:', !!portalSpec);
+          console.log('🔍 [DEBUG] DB verification - Portal spec value:', portalSpec);
+          console.log('🔍 [DEBUG] DB verification - Full attributes:', dbCheck.attributes);
+        }
+      } catch (debugError) {
+        console.error('❌ [DEBUG] Exception during DB verification:', debugError);
+      }
+
       // Clear all caches
       console.log('🔄 [EditProductModal] Clearing product caches...');
       productCacheService.clearProducts();
@@ -1225,12 +1288,17 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
         await loadProducts(null, true);
       }
       
-      // Note: Background refresh removed to prevent form reset during editing
-      // The product is already updated in the store via updateProductInStore
-      // This prevents the form from being reset while user is still editing
+      // Trigger automatic data refresh to show changes immediately
+      try {
+        const { refreshAfterProductUpdate } = await import('../../../../services/productRefreshService');
+        await refreshAfterProductUpdate();
+      } catch (refreshError) {
+        console.warn('⚠️ [EditProductModal] Failed to refresh data after update:', refreshError);
+        // Don't fail the update if refresh fails - user can manually refresh if needed
+      }
 
       toast.success('Product updated successfully!');
-      
+
       // Call callbacks
       if (onProductUpdated) onProductUpdated();
       if (onSuccess) onSuccess();

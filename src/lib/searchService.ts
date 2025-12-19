@@ -377,7 +377,7 @@ export class SearchService {
         const fuseResults = fuse.search(searchQuery);
 
         return fuseResults.map(result => {
-          const customer = result.item;
+          const customer = result.item as any;
           const matches = result.matches?.map(m => m.key || '') || [];
 
           return {
@@ -717,15 +717,15 @@ export class SearchService {
           costPrice = variantCostPrice;
         }
         
-        // Calculate total stock from product and variants (including children)
-        const variantStock = variants.reduce((sum, v) => {
+        // Calculate total stock from child variants only (IMEI devices)
+        // Parent variants represent product definition with qty=0
+        const childVariantsOnly = variants.filter(v => !v.isParent && !v.is_parent && !v.is_parent);
+        const totalStock = childVariantsOnly.reduce((sum, v) => {
           // Try quantity first, then stock_quantity, then 0
           const qty = v.quantity ?? v.stock_quantity ?? 0;
           const numQty = typeof qty === 'number' ? qty : (qty != null ? Number(qty) : 0);
           return sum + (isNaN(numQty) ? 0 : numQty);
         }, 0);
-        const productStock = product.stock_quantity != null ? Number(product.stock_quantity) : 0;
-        const totalStock = productStock || variantStock || 0;
         
         // Debug logging for products without prices
         if (sellingPrice === null) {
@@ -803,7 +803,7 @@ export class SearchService {
       // Stock level filter
       if (filters.stock) {
         filteredProducts = filteredProducts.filter(product => {
-          const stock = product.stockQuantity || 0;
+          const stock = product.variants?.filter(v => !v.isParent && !v.is_parent).reduce((sum, v) => sum + (v.quantity || 0), 0) || 0;
           switch (filters.stock) {
             case 'in-stock':
               return stock > 0;
@@ -899,13 +899,13 @@ export class SearchService {
             type: 'product' as const,
             title: product.name,
             subtitle: product.sku,
-            description: product.description || `Price: ${product.price != null ? `TZS ${product.price.toLocaleString()}` : 'No price'} | Stock: ${product.stockQuantity}`,
+            description: product.description || `Price: ${product.price != null ? `TZS ${product.price.toLocaleString()}` : 'No price'} | Stock: ${product.variants?.reduce((sum, v) => sum + (v.quantity || 0), 0) || 0}`,
             url: `/lats/unified-inventory`,
             metadata: {
               price: product.price,
               sellingPrice: product.sellingPrice,
               costPrice: product.costPrice,
-              stock: product.stockQuantity,
+              stock: product.variants?.filter(v => !v.isParent && !v.is_parent).reduce((sum, v) => sum + (v.quantity || 0), 0) || 0,
               category: product.categoryId,
               categoryName: product.categoryName,
               sku: product.sku,
@@ -916,7 +916,7 @@ export class SearchService {
               variants: product.variants, // Include organized variants with children
               hasPrice: product.hasPrice, // Flag indicating if price exists
             },
-            priority: product.stockQuantity < 10 ? 1 : 2,
+            priority: (product.variants?.filter(v => !v.isParent && !v.is_parent).reduce((sum, v) => sum + (v.quantity || 0), 0) || 0) < 10 ? 1 : 2,
             score: result.score,
             matches,
             createdAt: product.createdAt,
@@ -946,13 +946,13 @@ export class SearchService {
         type: 'product' as const,
         title: product.name,
         subtitle: product.sku,
-        description: product.description || `Price: ${product.price != null ? `TZS ${product.price.toLocaleString()}` : 'No price'} | Stock: ${product.stockQuantity}`,
+        description: product.description || `Price: ${product.price != null ? `TZS ${product.price.toLocaleString()}` : 'No price'} | Stock: ${product.variants?.reduce((sum, v) => sum + (v.quantity || 0), 0) || 0}`,
         url: `/lats/unified-inventory`,
         metadata: {
           price: product.price,
           sellingPrice: product.sellingPrice,
           costPrice: product.costPrice,
-          stock: product.stockQuantity,
+          stock: product.variants?.reduce((sum, v) => sum + (v.quantity || 0), 0) || 0,
           category: product.categoryId,
           categoryName: product.categoryName,
           sku: product.sku,
@@ -963,7 +963,7 @@ export class SearchService {
           variants: product.variants, // Include organized variants with children
           hasPrice: product.hasPrice, // Flag indicating if price exists
         },
-        priority: product.stockQuantity < 10 ? 1 : 2,
+        priority: (product.variants?.filter(v => !v.isParent && !v.is_parent).reduce((sum, v) => sum + (v.quantity || 0), 0) || 0) < 10 ? 1 : 2,
         createdAt: product.createdAt,
         updatedAt: product.updatedAt,
       }));
@@ -1353,7 +1353,7 @@ export class SearchService {
         const fuseResults = fuse.search(searchQuery);
 
         return fuseResults.map(result => {
-          const sale = result.item;
+          const sale = result.item as any;
           const matches = result.matches?.map(m => m.key || '') || [];
 
           return {

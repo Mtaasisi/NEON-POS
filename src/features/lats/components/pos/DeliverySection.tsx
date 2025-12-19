@@ -1,7 +1,8 @@
 // DeliverySection component for LATS module - Redesigned for Tablet POS (Step-by-Step Wizard)
 import React, { useState, useEffect } from 'react';
-import { X, MapPin, User, Phone, Truck, CheckCircle, Plane, Bus, Bike, Edit3, Plus, Save, Search, Mail, Crown, Calendar, ChevronDown, ChevronRight, ChevronLeft, ArrowRight } from 'lucide-react';
+import { X, MapPin, User, Phone, Truck, CheckCircle, Edit3, Search, Calendar, ChevronRight, ChevronLeft, Bike, Bus, Plane } from 'lucide-react';
 import { useCustomers } from '../../../../context/CustomersContext';
+import { useBranch } from '../../../../context/BranchContext';
 import toast from 'react-hot-toast';
 
 // Customer selection modals
@@ -11,6 +12,8 @@ import TabletAddCustomerModal from '../../../tablet/components/TabletAddCustomer
 export interface DeliveryFormData {
   deliveryMethod: 'boda' | 'bus' | 'air' | '';
   deliveryAddress: string;
+  deliveryPhone: string;
+  deliveryTime: string;
   deliveryNotes: string;
   deliveryFee: number;
 
@@ -55,14 +58,17 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
   cartTotal = 0,
   cartSubtotal = 0,
 }) => {
-  const { customers, updateCustomer } = useCustomers();
+  const { customers } = useCustomers();
+  const { currentBranch } = useBranch();
 
   // State for form data
   const [formData, setFormData] = useState<DeliveryFormData>({
     deliveryMethod: '',
     deliveryAddress: '',
+    deliveryPhone: '',
+    deliveryTime: '',
     deliveryNotes: '',
-    deliveryFee: 0,
+    deliveryFee: 5000,
   });
 
   // UI state
@@ -88,6 +94,7 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
       setFormData(prev => ({
         ...prev,
         deliveryAddress: selectedCustomer.address || '',
+        deliveryPhone: selectedCustomer.phone || '',
       }));
     }
   }, [isOpen, selectedCustomer]);
@@ -98,8 +105,10 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
       setFormData({
         deliveryMethod: '',
         deliveryAddress: '',
+        deliveryPhone: '',
+        deliveryTime: '',
         deliveryNotes: '',
-        deliveryFee: 0,
+        deliveryFee: 5000,
         bodaDestination: '',
         bodaPrice: 0,
       });
@@ -108,51 +117,61 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
     }
   }, [isOpen]);
 
+  // Check if location supports boda boda
+  const supportsBodaBoda = (location: string) => {
+    const supportedLocations = ['Dar es Salaam', 'Arusha'];
+    return supportedLocations.includes(location);
+  };
+
+  // Handle delivery method change
+  const handleDeliveryMethodChange = (method: 'boda' | 'bus' | 'air' | '') => {
+    const methodFees = {
+      boda: 2000, // Boda boda fee
+      bus: 5000,  // Bus delivery fee
+      air: 15000  // Air freight fee
+    };
+
+    setFormData(prev => ({
+      ...prev,
+      deliveryMethod: method,
+      deliveryFee: method ? methodFees[method] : 0,
+      // Reset method-specific fields
+      bodaDestination: undefined,
+      bodaPrice: undefined,
+      busName: undefined,
+      busContacts: undefined,
+      arrivalDate: undefined,
+      busOfficeLocation: method === 'bus' ? (currentBranch?.city || currentBranch?.address || '') : undefined,
+      busDestination: undefined,
+      flightName: undefined,
+      flightArrivalTime: undefined,
+      airOfficeLocation: undefined,
+      airDestination: undefined,
+    }));
+  };
+
   const validateDeliveryInfo = () => {
-    if (!formData.deliveryMethod) {
-      toast.error('Please select a delivery method');
-      return false;
-    }
-    if (!formData.deliveryAddress.trim()) {
+    // For bus deliveries, "To" field serves as delivery address
+    if (formData.deliveryMethod !== 'bus' && !formData.deliveryAddress.trim()) {
       toast.error('Delivery address is required');
       return false;
     }
-
-    // Validate method-specific fields
-    if (formData.deliveryMethod === 'boda') {
-      if (!formData.bodaDestination?.trim()) {
-        toast.error('Boda destination is required');
-        return false;
-      }
-      if (!formData.bodaPrice || formData.bodaPrice <= 0) {
-        toast.error('Boda delivery price must be greater than 0');
-        return false;
-      }
+    // For bus deliveries, validate destination instead
+    if (formData.deliveryMethod === 'bus' && !formData.busDestination) {
+      toast.error('Please select a destination city');
+      return false;
     }
-    if (formData.deliveryMethod === 'bus') {
-      if (!formData.busName?.trim()) {
-        toast.error('Bus name is required');
-        return false;
-      }
-      if (!formData.busContacts?.trim()) {
-        toast.error('Bus contacts are required');
-        return false;
-      }
-      if (!formData.arrivalDate) {
-        toast.error('Arrival date is required');
-        return false;
-      }
+    if (!formData.deliveryPhone.trim()) {
+      toast.error('Phone number is required');
+      return false;
     }
-
-    if (formData.deliveryMethod === 'air') {
-      if (!formData.flightName?.trim()) {
-        toast.error('Flight name is required');
-        return false;
-      }
-      if (!formData.flightArrivalTime) {
-        toast.error('Flight arrival time is required');
-        return false;
-      }
+    if (!formData.deliveryTime) {
+      toast.error('Please select a delivery time');
+      return false;
+    }
+    if (!formData.deliveryFee || formData.deliveryFee <= 0) {
+      toast.error('Delivery fee must be greater than 0');
+      return false;
     }
 
     return true;
@@ -176,69 +195,89 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
   };
 
 
-  // Handle delivery method change
-  const handleDeliveryMethodChange = (method: 'boda' | 'bus' | 'air' | '') => {
-    const methodFees = {
-      boda: 2000, // Boda boda fee
-      bus: 5000,  // Bus delivery fee
-      air: 15000  // Air freight fee
-    };
-
-    setFormData(prev => ({
-      ...prev,
-      deliveryMethod: method,
-      deliveryFee: method ? methodFees[method] : 0,
-      // Reset method-specific fields
-      bodaDestination: undefined,
-      bodaPrice: undefined,
-      busName: undefined,
-      busContacts: undefined,
-      arrivalDate: undefined,
-      busOfficeLocation: undefined,
-      busDestination: undefined,
-      flightName: undefined,
-      flightArrivalTime: undefined,
-      airOfficeLocation: undefined,
-      airDestination: undefined,
-    }));
-  };
 
   // Handle form submission
   const handleSubmit = async () => {
+    console.log('🚚 [DeliverySection] Starting delivery submission process');
+
+    // Validate prerequisites
     if (!selectedCustomer) {
       toast.error('Please select a customer before arranging delivery');
+      console.error('❌ [DeliverySection] No customer selected');
       return;
     }
     if (cartItems.length === 0) {
       toast.error('Please add items to cart before arranging delivery');
+      console.error('❌ [DeliverySection] No items in cart');
       return;
     }
-    if (!validateDeliveryInfo()) return;
+    if (!validateDeliveryInfo()) {
+      console.error('❌ [DeliverySection] Delivery info validation failed');
+      return;
+    }
+
+    // Validate delivery data completeness
+    if (!formData.deliveryMethod) {
+      toast.error('Please select a delivery method');
+      console.error('❌ [DeliverySection] No delivery method selected');
+      return;
+    }
 
     try {
       setIsSubmitting(true);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-      onDeliveryComplete(formData);
-      toast.success('Delivery arranged successfully');
+      console.log('🚚 [DeliverySection] Validating and preparing delivery data:', formData);
+
+      // Ensure all required fields are present and properly formatted
+      const validatedDeliveryData = {
+        deliveryMethod: formData.deliveryMethod,
+        deliveryAddress: formData.deliveryAddress?.trim() || '',
+        deliveryPhone: formData.deliveryPhone?.trim() || '',
+        deliveryTime: formData.deliveryTime || 'ASAP',
+        deliveryNotes: formData.deliveryNotes?.trim() || '',
+        deliveryFee: Math.max(0, formData.deliveryFee || 0), // Ensure non-negative fee
+        fee: Math.max(0, formData.deliveryFee || 0), // Alias for compatibility
+
+        // Method-specific fields
+        ...(formData.deliveryMethod === 'boda' && {
+          bodaDestination: formData.bodaDestination?.trim(),
+          bodaPrice: formData.bodaPrice || formData.deliveryFee
+        }),
+        ...(formData.deliveryMethod === 'bus' && {
+          busName: formData.busName?.trim(),
+          busContacts: formData.busContacts?.trim(),
+          arrivalDate: formData.arrivalDate,
+          busOfficeLocation: formData.busOfficeLocation?.trim(),
+          busDestination: formData.busDestination?.trim()
+        }),
+        ...(formData.deliveryMethod === 'air' && {
+          flightName: formData.flightName?.trim(),
+          flightArrivalTime: formData.flightArrivalTime,
+          airOfficeLocation: formData.airOfficeLocation?.trim(),
+          airDestination: formData.airDestination?.trim()
+        })
+      };
+
+      console.log('✅ [DeliverySection] Delivery data validated:', validatedDeliveryData);
+
+      // Simulate API call delay for better UX
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Call the completion handler
+      console.log('📤 [DeliverySection] Calling onDeliveryComplete with validated data');
+      onDeliveryComplete(validatedDeliveryData);
+
+      console.log('✅ [DeliverySection] Delivery arrangement completed successfully');
+      toast.success('Delivery arranged successfully! Proceed to payment to complete the order.');
+
       onClose();
     } catch (error) {
-      console.error('Error setting delivery:', error);
-      toast.error('Failed to arrange delivery');
+      console.error('❌ [DeliverySection] Error during delivery submission:', error);
+      toast.error('Failed to arrange delivery. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Check if location supports boda boda
-  const supportsBodaBoda = (location: string) => {
-    const supportedLocations = ['Dar es Salaam', 'Arusha'];
-    return supportedLocations.includes(location);
-  };
-
-  // Step navigation functions
-  const goToStep = (step: number) => {
-    setCurrentStep(step);
-  };
 
   const nextStep = () => {
     if (validateCurrentStep()) {
@@ -279,70 +318,63 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
     }
   };
 
-  // Shared input styles (matching CustomerForm styling)
-  const sharedInput = 'w-full py-3 px-4 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900';
+  // Shared input styles (modern and polished)
+  const sharedInput = 'w-full py-3 px-4 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 text-gray-900 bg-gray-50 focus:bg-white';
 
-  // Tanzanian regions for location dropdown
-  const regions = [
-    'Dar es Salaam', 'Arusha', 'Mwanza', 'Dodoma', 'Mbeya', 'Tanga', 'Morogoro',
-    'Iringa', 'Tabora', 'Kigoma', 'Mara', 'Kagera', 'Shinyanga', 'Singida',
-    'Rukwa', 'Ruvuma', 'Lindi', 'Mtwara', 'Pwani', 'Manyara', 'Geita',
-    'Simiyu', 'Katavi', 'Njombe', 'Songwe'
-  ];
 
   if (!isOpen) return null;
 
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/60 z-[100000]" onClick={onClose} />
-
       {/* Modal Container */}
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden border border-gray-200" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">Arrange Delivery</h2>
+        <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Arrange Delivery</h2>
+            <p className="text-sm text-gray-600 mt-1">Set up delivery for your customer</p>
+          </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center"
+            className="w-10 h-10 bg-white hover:bg-gray-50 rounded-full flex items-center justify-center shadow-sm border border-gray-200 transition-colors"
           >
             <X size={20} className="text-gray-600" />
           </button>
         </div>
 
         {/* Step Progress Indicator */}
-        <div className="px-6 py-3 border-b border-gray-200 bg-gray-50">
+        <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50/30">
           <div className="flex items-center justify-between">
             {steps.map((step, index) => (
               <React.Fragment key={step.id}>
                 <div className="flex flex-col items-center">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all shadow-sm ${
                     currentStep === step.id
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-blue-600 text-white shadow-blue-200'
                       : completedSteps.has(step.id)
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-300 text-gray-600'
+                      ? 'bg-green-600 text-white shadow-green-200'
+                      : 'bg-gray-200 text-gray-600'
                   }`}>
                     {completedSteps.has(step.id) ? (
-                      <CheckCircle size={12} />
+                      <CheckCircle size={14} />
                     ) : (
                       step.id
                     )}
                   </div>
-                  <span className={`text-xs mt-1 ${
+                  <span className={`text-xs mt-2 font-medium ${
                     currentStep === step.id
-                      ? 'text-blue-600 font-medium'
+                      ? 'text-blue-700'
                       : completedSteps.has(step.id)
-                      ? 'text-green-600'
+                      ? 'text-green-700'
                       : 'text-gray-500'
                   }`}>
                     {step.title.split(' ')[0]}
                   </span>
                 </div>
                 {index < steps.length - 1 && (
-                  <div className={`flex-1 h-0.5 mx-1 transition-colors ${
-                    completedSteps.has(step.id) ? 'bg-green-600' : 'bg-gray-300'
+                  <div className={`flex-1 h-0.5 mx-2 transition-all ${
+                    completedSteps.has(step.id) ? 'bg-green-500' : 'bg-gray-300'
                   }`} />
                 )}
               </React.Fragment>
@@ -361,8 +393,7 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
                   </div>
 
                   <div className="space-y-3">
-                    {/* Boda Boda (Bike) - Only for Arusha and Dar es Salaam */}
-                    {supportsBodaBoda(selectedCustomer?.city) && (
+                    {/* Boda Boda (Bike) - Always available */}
                       <div
                         className={`p-4 border rounded-lg transition-all cursor-pointer ${
                           formData.deliveryMethod === 'boda'
@@ -389,7 +420,6 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
                           )}
                         </div>
                       </div>
-                    )}
 
                     {/* Bus Delivery */}
                     <div
@@ -510,149 +540,217 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
                     <p className="text-sm text-gray-600">Enter the delivery information</p>
                   </div>
 
-                  {/* Delivery Address */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Address</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        className="w-full border border-gray-200 rounded-lg py-2 px-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Enter delivery address"
-                        value={formData.deliveryAddress}
-                        onChange={(e) => handleInputChange('deliveryAddress', e.target.value)}
-                      />
-                      <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                    </div>
-                  </div>
-
-                  {/* Phone Number */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                    <div className="relative">
-                      <input
-                        type="tel"
-                        className="w-full border border-gray-200 rounded-lg py-2 px-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Customer phone number"
-                        value={formData.deliveryPhone}
-                        onChange={(e) => handleInputChange('deliveryPhone', e.target.value)}
-                      />
-                      <Phone className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                    </div>
-                  </div>
-
-                  {/* Method-specific details */}
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 text-sm mb-3 capitalize">{formData.deliveryMethod} Details</h4>
-
-                    {formData.deliveryMethod === 'boda' && (
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
+                  <div className="space-y-4">
+                    {/* Delivery Address - Hide for bus deliveries since "To" field serves same purpose */}
+                    {formData.deliveryMethod !== 'bus' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Address</label>
+                        <div className="relative">
                           <input
-                            className="w-full border border-gray-200 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="Destination area"
-                            value={formData.bodaDestination || ''}
-                            onChange={(e) => handleInputChange('bodaDestination', e.target.value)}
+                            type="text"
+                            className={sharedInput}
+                            placeholder="Enter delivery address"
+                            value={formData.deliveryAddress}
+                            onChange={(e) => handleInputChange('deliveryAddress', e.target.value)}
                           />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Fee</label>
-                          <input
-                            type="number"
-                            className="w-full border border-gray-200 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="Fee amount"
-                            value={formData.bodaPrice || ''}
-                            onChange={(e) => handleInputChange('bodaPrice', parseInt(e.target.value) || 0)}
-                            min="0"
-                          />
+                          <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                         </div>
                       </div>
                     )}
 
+                    {/* Phone Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+                      <div className="relative">
+                        <input
+                          type="tel"
+                          className={sharedInput}
+                          placeholder="Customer phone number"
+                          value={formData.deliveryPhone}
+                          onChange={(e) => handleInputChange('deliveryPhone', e.target.value)}
+                        />
+                        <Phone className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                      </div>
+                    </div>
+
+                    {/* Delivery Time */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Time</label>
+                      <div className="relative">
+                        <select
+                          className={`${sharedInput} appearance-none`}
+                          value={formData.deliveryTime}
+                          onChange={(e) => handleInputChange('deliveryTime', e.target.value)}
+                        >
+                          <option value="">Select delivery time</option>
+                          <option value="09:00-12:00">9:00 AM - 12:00 PM</option>
+                          <option value="12:00-15:00">12:00 PM - 3:00 PM</option>
+                          <option value="15:00-18:00">3:00 PM - 6:00 PM</option>
+                          <option value="18:00-21:00">6:00 PM - 9:00 PM</option>
+                          <option value="asap">ASAP (As Soon As Possible)</option>
+                        </select>
+                        <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                      </div>
+                    </div>
+
+                    {/* Method-specific optional fields */}
                     {formData.deliveryMethod === 'bus' && (
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Bus Company</label>
-                          <input
-                            className="w-full border border-gray-200 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="Bus company name"
-                            value={formData.busName || ''}
-                            onChange={(e) => handleInputChange('busName', e.target.value)}
-                          />
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">From</label>
+                            <input
+                              type="text"
+                              className={`${sharedInput} bg-gray-50`}
+                              value={currentBranch?.city || currentBranch?.address || 'Current Branch'}
+                              readOnly
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Automatically set to current branch location</p>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">To <span className="text-gray-400 text-xs">(optional)</span></label>
+                            <select
+                              className={`${sharedInput} appearance-none`}
+                              value={formData.busDestination || ''}
+                              onChange={(e) => handleInputChange('busDestination', e.target.value)}
+                            >
+                              <option value="">Select destination city</option>
+                              <option value="Arusha">Arusha</option>
+                              <option value="Mwanza">Mwanza</option>
+                              <option value="Dodoma">Dodoma</option>
+                              <option value="Mbeya">Mbeya</option>
+                              <option value="Tanga">Tanga</option>
+                              <option value="Morogoro">Morogoro</option>
+                              <option value="Iringa">Iringa</option>
+                              <option value="Tabora">Tabora</option>
+                              <option value="Kigoma">Kigoma</option>
+                              <option value="Mara">Mara</option>
+                              <option value="Kagera">Kagera</option>
+                              <option value="Shinyanga">Shinyanga</option>
+                              <option value="Singida">Singida</option>
+                              <option value="Rukwa">Rukwa</option>
+                              <option value="Ruvuma">Ruvuma</option>
+                              <option value="Lindi">Lindi</option>
+                              <option value="Mtwara">Mtwara</option>
+                              <option value="Pwani">Pwani</option>
+                              <option value="Manyara">Manyara</option>
+                              <option value="Geita">Geita</option>
+                              <option value="Simiyu">Simiyu</option>
+                              <option value="Katavi">Katavi</option>
+                              <option value="Njombe">Njombe</option>
+                              <option value="Songwe">Songwe</option>
+                            </select>
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Contact</label>
-                          <input
-                            className="w-full border border-gray-200 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="Contact number"
-                            value={formData.busContacts || ''}
-                            onChange={(e) => handleInputChange('busContacts', e.target.value)}
-                          />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Bus Company <span className="text-gray-400 text-xs">(optional)</span></label>
+                            <input
+                              type="text"
+                              className={sharedInput}
+                              placeholder="Bus company name"
+                              value={formData.busName || ''}
+                              onChange={(e) => handleInputChange('busName', e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Fee</label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                className={sharedInput}
+                                placeholder="Delivery fee"
+                                value={formData.deliveryFee}
+                                onChange={(e) => handleInputChange('deliveryFee', parseInt(e.target.value) || 0)}
+                                min="0"
+                              />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">TZS</span>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Arrival Date</label>
-                          <input
-                            type="date"
-                            className="w-full border border-gray-200 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            value={formData.arrivalDate || ''}
-                            onChange={(e) => handleInputChange('arrivalDate', e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
-                          <input
-                            className="w-full border border-gray-200 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="Destination city/area"
-                            value={formData.busDestination || ''}
-                            onChange={(e) => handleInputChange('busDestination', e.target.value)}
-                          />
-                        </div>
-                      </div>
+                      </>
                     )}
+
 
                     {formData.deliveryMethod === 'air' && (
-                      <div className="space-y-3">
+                      <>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Flight/Airline</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Flight/Airline <span className="text-gray-400 text-xs">(optional)</span></label>
                           <input
-                            className="w-full border border-gray-200 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            type="text"
+                            className={sharedInput}
                             placeholder="Flight or airline name"
                             value={formData.flightName || ''}
                             onChange={(e) => handleInputChange('flightName', e.target.value)}
                           />
                         </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Arrival Date <span className="text-gray-400 text-xs">(optional)</span></label>
+                            <input
+                              type="date"
+                              className={sharedInput}
+                              value={formData.arrivalDate || ''}
+                              onChange={(e) => handleInputChange('arrivalDate', e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Arrival Time <span className="text-gray-400 text-xs">(optional)</span></label>
+                            <input
+                              type="time"
+                              className={sharedInput}
+                              value={formData.flightArrivalTime ? new Date(formData.flightArrivalTime).toTimeString().slice(0, 5) : ''}
+                              onChange={(e) => {
+                                const timeValue = e.target.value;
+                                const datetimeValue = timeValue ? `${new Date().toISOString().split('T')[0]}T${timeValue}:00` : '';
+                                handleInputChange('flightArrivalTime', datetimeValue);
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Arrival Date/Time for Bus deliveries */}
+                    {formData.deliveryMethod === 'bus' && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Arrival Time</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Arrival Date <span className="text-gray-400 text-xs">(optional)</span></label>
                           <input
-                            type="datetime-local"
-                            className="w-full border border-gray-200 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            value={formData.flightArrivalTime || ''}
-                            onChange={(e) => handleInputChange('flightArrivalTime', e.target.value)}
+                            type="date"
+                            className={sharedInput}
+                            value={formData.arrivalDate || ''}
+                            onChange={(e) => handleInputChange('arrivalDate', e.target.value)}
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Arrival Time <span className="text-gray-400 text-xs">(optional)</span></label>
                           <input
-                            className="w-full border border-gray-200 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="Destination city"
-                            value={formData.airDestination || ''}
-                            onChange={(e) => handleInputChange('airDestination', e.target.value)}
+                            type="time"
+                            className={sharedInput}
+                            value={formData.flightArrivalTime ? new Date(formData.flightArrivalTime).toTimeString().slice(0, 5) : ''}
+                            onChange={(e) => {
+                              const timeValue = e.target.value;
+                              const datetimeValue = timeValue ? `${new Date().toISOString().split('T')[0]}T${timeValue}:00` : '';
+                              handleInputChange('flightArrivalTime', datetimeValue);
+                            }}
                           />
                         </div>
                       </div>
                     )}
-                  </div>
 
-                  {/* Delivery Notes */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Notes</label>
-                    <textarea
-                      className="w-full border border-gray-200 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                      rows={3}
-                      placeholder="Special delivery instructions..."
-                      value={formData.deliveryNotes}
-                      onChange={(e) => handleInputChange('deliveryNotes', e.target.value)}
-                    />
+
+                    {/* Delivery Notes */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Notes</label>
+                      <textarea
+                        className={`${sharedInput} resize-none`}
+                        rows={3}
+                        placeholder="Special delivery instructions..."
+                        value={formData.deliveryNotes}
+                        onChange={(e) => handleInputChange('deliveryNotes', e.target.value)}
+                      />
+                    </div>
                   </div>
                 </>
               )}
@@ -676,6 +774,7 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
                         <p className="font-medium">{selectedCustomer.name}</p>
                         {selectedCustomer.phone && <p className="text-gray-600">{selectedCustomer.phone}</p>}
                         {formData.deliveryAddress && <p className="text-gray-600">{formData.deliveryAddress}</p>}
+                        {formData.deliveryTime && <p className="text-gray-600">Time: {formData.deliveryTime === 'asap' ? 'ASAP' : formData.deliveryTime.replace('-', ' - ')}</p>}
                       </div>
                     </div>
                   )}
@@ -712,20 +811,64 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
                       Delivery Details
                     </h4>
                     <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span>Method:</span>
-                        <span className="font-medium capitalize">{formData.deliveryMethod}</span>
-                      </div>
-                      {formData.deliveryMethod === 'bus' && formData.busName && (
+                      {formData.deliveryMethod && (
                         <div className="flex justify-between">
-                          <span>Bus:</span>
-                          <span>{formData.busName}</span>
+                          <span>Method:</span>
+                          <span className="font-medium capitalize">{formData.deliveryMethod}</span>
                         </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span>{formData.deliveryMethod === 'bus' ? 'Destination:' : 'Address:'}</span>
+                        <span>{formData.deliveryMethod === 'bus' ? formData.busDestination : formData.deliveryAddress}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Phone:</span>
+                        <span>{formData.deliveryPhone}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Time:</span>
+                        <span>{formData.deliveryTime === 'asap' ? 'ASAP' : formData.deliveryTime.replace('-', ' - ')}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Fee:</span>
+                        <span>TZS {formData.deliveryFee.toLocaleString()}</span>
+                      </div>
+                      {formData.deliveryMethod === 'bus' && (
+                        <>
+                          <div className="flex justify-between">
+                            <span>From:</span>
+                            <span>{currentBranch?.city || currentBranch?.address || 'Current Branch'}</span>
+                          </div>
+                          {formData.busDestination && (
+                            <div className="flex justify-between">
+                              <span>To:</span>
+                              <span>{formData.busDestination}</span>
+                            </div>
+                          )}
+                          {formData.busName && (
+                            <div className="flex justify-between">
+                              <span>Bus Company:</span>
+                              <span>{formData.busName}</span>
+                            </div>
+                          )}
+                        </>
                       )}
                       {formData.deliveryMethod === 'air' && formData.flightName && (
                         <div className="flex justify-between">
-                          <span>Flight:</span>
+                          <span>Flight/Airline:</span>
                           <span>{formData.flightName}</span>
+                        </div>
+                      )}
+                      {(formData.deliveryMethod === 'bus' || formData.deliveryMethod === 'air') && formData.arrivalDate && (
+                        <div className="flex justify-between">
+                          <span>Arrival Date:</span>
+                          <span>{new Date(formData.arrivalDate).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                      {(formData.deliveryMethod === 'bus' || formData.deliveryMethod === 'air') && formData.flightArrivalTime && (
+                        <div className="flex justify-between">
+                          <span>Arrival Time:</span>
+                          <span>{new Date(formData.flightArrivalTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                         </div>
                       )}
                       {formData.deliveryNotes && (
@@ -741,13 +884,13 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-200 bg-gray-50">
+        <div className="p-6 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50/30">
           <div className="flex justify-between gap-3">
             {/* Previous Step Button */}
             <button
               onClick={currentStep === 1 ? onClose : prevStep}
               disabled={isSubmitting}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-white hover:border-gray-400 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
             >
               {currentStep === 1 ? (
                 <>
@@ -767,7 +910,7 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
               <button
                 onClick={nextStep}
                 disabled={isSubmitting}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 hover:shadow-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
               >
                 Next
                 <ChevronRight size={16} />
@@ -776,11 +919,11 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 hover:shadow-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
               >
                 {isSubmitting ? (
                   <>
-                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     Arranging...
                   </>
                 ) : (

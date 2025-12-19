@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Auth</title>
+</head>
+<body>
+    <h1>Clearing Authentication...</h1>
+    <script>
+        // Clear all auth-related localStorage
+        const authKeys = [
+            'lats-app-auth-token',
+            'sb-jxhzveborezjhsmzsgbc-auth-token',
+            'supabase.auth.token',
+            'supabase.auth.session'
+        ];
+
+        authKeys.forEach(key => {
+            localStorage.removeItem(key);
+            console.log(`Cleared: ${key}`);
+        });
+
+        // Clear any other auth-related data
+        Object.keys(localStorage).forEach(key => {
+            if (key.includes('supabase') || key.includes('auth') || key.includes('session')) {
+                localStorage.removeItem(key);
+                console.log(`Cleared auth-related: ${key}`);
+            }
+        });
+
+        // Clear cookies by setting them to expire
+        document.cookie.split(";").forEach(function(c) {
+            document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+        });
+
+        // Redirect back to login
+        setTimeout(() => {
+            window.location.href = 'http://localhost:5173/login';
+        }, 1000);
+    </script>
+</body>
+</html>

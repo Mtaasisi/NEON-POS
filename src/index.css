@@ -9,6 +9,7 @@
 /* Prevent blue overscroll flash */
 html, body, #root {
   /* Background removed - using SVG background instead */
+  background-color: rgba(0, 0, 0, 1);
 }
 
 /* Force SVG background on all body elements */

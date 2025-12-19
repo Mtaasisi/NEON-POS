@@ -24,6 +24,139 @@ export const clearBranchCache = () => {
   cacheTimestamp = 0;
 };
 
+// ============================================================================
+// BRANCH ISOLATION VALIDATION FUNCTIONS
+// ============================================================================
+
+/**
+ * Validate that a product query is properly branch-isolated
+ * This helps prevent stock leakage across branches
+ */
+export const validateBranchIsolation = async (
+  operation: string,
+  branchId: string,
+  expectedIsolation: 'isolated' | 'shared' | 'hybrid'
+): Promise<{ valid: boolean; issues: string[] }> => {
+  const issues: string[] = [];
+
+  try {
+    // Check if branch exists and is active
+    const { data: branch, error: branchError } = await supabase
+      .from('store_locations')
+      .select('id, name, is_active, data_isolation_mode, share_inventory')
+      .eq('id', branchId)
+      .single();
+
+    if (branchError || !branch) {
+      issues.push(`Branch ${branchId} not found or inactive`);
+      return { valid: false, issues };
+    }
+
+    if (!branch.is_active) {
+      issues.push(`Branch ${branchId} is not active`);
+      return { valid: false, issues };
+    }
+
+    // Validate isolation mode matches expectation
+    if (expectedIsolation === 'isolated' && branch.data_isolation_mode !== 'isolated') {
+      issues.push(`Expected isolated mode but branch is in ${branch.data_isolation_mode} mode`);
+    }
+
+    if (expectedIsolation === 'hybrid' && !branch.share_inventory && branch.data_isolation_mode === 'hybrid') {
+      // This is correct - hybrid with isolated inventory
+    } else if (expectedIsolation === 'hybrid' && branch.share_inventory) {
+      issues.push(`Expected isolated inventory but branch has share_inventory=true`);
+    }
+
+    // Check for variants without branch_id (critical issue)
+    const { count: variantsWithoutBranchId, error: variantError } = await supabase
+      .from('lats_product_variants')
+      .select('*', { count: 'exact', head: true })
+      .is('branch_id', null);
+
+    if (variantError) {
+      issues.push(`Could not check variant branch isolation: ${variantError.message}`);
+    } else if (variantsWithoutBranchId && variantsWithoutBranchId > 0) {
+      issues.push(`${variantsWithoutBranchId} variants found without branch_id assignment (critical)`);
+    }
+
+    // Check for products incorrectly assigned to branches (should be global)
+    const { count: productsWithBranchId, error: productError } = await supabase
+      .from('lats_products')
+      .select('*', { count: 'exact', head: true })
+      .not('branch_id', 'is', null);
+
+    if (productError) {
+      issues.push(`Could not check product branch assignment: ${productError.message}`);
+    } else if (productsWithBranchId && productsWithBranchId > 0) {
+      issues.push(`${productsWithBranchId} products incorrectly assigned to branches (should be global)`);
+    }
+
+    return { valid: issues.length === 0, issues };
+
+  } catch (error) {
+    issues.push(`Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    return { valid: false, issues };
+  }
+};
+
+/**
+ * Log branch isolation operation for debugging
+ * Call this before any branch-sensitive operation
+ */
+export const logBranchIsolationOperation = (
+  operation: string,
+  branchId: string,
+  details?: any
+) => {
+  console.log(`🔒 [BranchIsolation] ${operation}:`, {
+    branchId,
+    timestamp: new Date().toISOString(),
+    details
+  });
+};
+
+/**
+ * Emergency validation function - run this if you suspect branch isolation issues
+ */
+export const runBranchIsolationHealthCheck = async (): Promise<{
+  healthy: boolean;
+  summary: string;
+  details: any;
+}> => {
+  console.log('🔍 Running branch isolation health check...');
+
+  const currentBranchId = getCurrentBranchId();
+  if (!currentBranchId) {
+    return {
+      healthy: false,
+      summary: 'No current branch selected',
+      details: { currentBranchId: null }
+    };
+  }
+
+  const validation = await validateBranchIsolation('health_check', currentBranchId, 'hybrid');
+
+  const summary = validation.valid
+    ? 'Branch isolation is healthy'
+    : `Found ${validation.issues.length} branch isolation issues`;
+
+  console.log(`🏥 Health Check Result: ${summary}`);
+  if (!validation.valid) {
+    console.warn('❌ Issues found:', validation.issues);
+  }
+
+  return {
+    healthy: validation.valid,
+    summary,
+    details: {
+      currentBranchId,
+      issues: validation.issues,
+      timestamp: new Date().toISOString()
+    }
+  };
+};
+
 // Get branch settings
 export const getBranchSettings = async (branchId: string): Promise<StoreLocationSchema | null> => {
   try {

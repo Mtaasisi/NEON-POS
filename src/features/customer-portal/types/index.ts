@@ -47,6 +47,7 @@ export interface CustomerProduct {
   stockQuantity?: number;
   variants?: CustomerProductVariant[];
   specifications?: Record<string, string>;
+  portalSpecification?: string;
   rating?: number;
   reviewCount?: number;
 }

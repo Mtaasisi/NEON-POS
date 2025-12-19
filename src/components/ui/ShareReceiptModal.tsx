@@ -623,6 +623,21 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       await Promise.all(imagePromises);
       console.log('✅ All images verified, capturing preview...');
       
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/4d8d2b7c-213f-4a7f-865b-550e576368e7', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'pre-capture',
+          hypothesisId: 'H1',
+          location: 'ShareReceiptModal.tsx:624',
+          message: 'Images verified, about to capture preview',
+          data: { previewWidth: receiptPreview?.scrollWidth, previewHeight: receiptPreview?.scrollHeight, items: receiptData?.items?.length || 0, timestamp: Date.now() }
+        })
+      }).catch(()=>{});
+      // #endregion
+
       // Additional delay to ensure all rendering is complete
       await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -657,6 +672,21 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       // Capture the preview element with exact dimensions
       console.log('📷 Capturing preview with html2canvas (100% match)...');
       
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/4d8d2b7c-213f-4a7f-865b-550e576368e7', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'capture-start',
+          hypothesisId: 'H2',
+          location: 'ShareReceiptModal.tsx:658',
+          message: 'Starting html2canvas capture',
+          data: { scale: 3, useCORS: false, allowTaint: true, timestamp: Date.now() }
+        })
+      }).catch(()=>{});
+      // #endregion
+
       // Capture with EXACT dimensions and styling (100% match to preview)
       const canvas = await html2canvas(receiptPreview, {
         scale: 3, // Higher quality for PDF (3x for crisp rendering)
@@ -704,6 +734,22 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
 
       // Convert canvas to image
       const imgData = canvas.toDataURL('image/png', 1.0);
+
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/4d8d2b7c-213f-4a7f-865b-550e576368e7', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'capture-complete',
+          hypothesisId: 'H3',
+          location: 'ShareReceiptModal.tsx:705',
+          message: 'Canvas captured',
+          data: { canvasWidth: canvas.width, canvasHeight: canvas.height, imgDataPrefix: imgData?.substring(0,30), timestamp: Date.now() }
+        })
+      }).catch(()=>{});
+      // #endregion
+
       console.log('✅ Canvas captured, generating PDF (100% match)...');
       
       // Create PDF with EXACT dimensions matching preview
@@ -1182,7 +1228,21 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
           width: canvas.width,
           height: canvas.height
         });
-      } catch (html2canvasError: any) {
+    } catch (html2canvasError: any) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/4d8d2b7c-213f-4a7f-865b-550e576368e7', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            sessionId: 'debug-session',
+            runId: 'capture-error',
+            hypothesisId: 'H4',
+            location: 'ShareReceiptModal.tsx:1185',
+            message: 'html2canvas error',
+            data: { message: html2canvasError?.message, stack: html2canvasError?.stack, name: html2canvasError?.name, timestamp: Date.now() }
+          })
+        }).catch(()=>{});
+        // #endregion
         console.error('html2canvas error details:', {
           message: html2canvasError?.message,
           stack: html2canvasError?.stack,
@@ -1915,9 +1975,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
               boxShadow: '0 20px 60px -15px rgba(0, 0, 0, 0.3), 0 10px 30px -10px rgba(0, 0, 0, 0.2)',
               margin: 'auto', // Center both horizontally and vertically
               alignSelf: 'center', // Additional vertical centering
-            }}
-            style={{
-              ...(pageSize === 'a4' && orientation === 'landscape' 
+              ...(pageSize === 'a4' && orientation === 'landscape'
                 ? {
                     aspectRatio: '297/210',
                     minHeight: 'auto'

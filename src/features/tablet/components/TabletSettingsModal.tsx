@@ -37,7 +37,7 @@ type NotificationSettings = {
  * Simplified, tablet-friendly settings focusing only on key toggles.
  */
 const TabletSettingsModal: React.FC<TabletSettingsModalProps> = ({ isOpen, onClose }) => {
-  const { settings, saveSettings, setSettings, loading } = useGeneralSettings();
+  const { settings, saveSettings, setSettings, loading, error } = useGeneralSettings();
   const [isSaving, setIsSaving] = useState(false);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
     whatsappEnabled: true,
@@ -51,6 +51,8 @@ const TabletSettingsModal: React.FC<TabletSettingsModalProps> = ({ isOpen, onClo
     notifyLowStock: true,
     notifyNewCustomer: false,
   });
+
+  const [connectionIssue, setConnectionIssue] = useState(false);
 
   const defaults: LocalSettings = useMemo(
     () => ({
@@ -85,6 +87,25 @@ const TabletSettingsModal: React.FC<TabletSettingsModalProps> = ({ isOpen, onClo
       console.error('Error loading notification settings:', error);
     }
   }, []);
+
+  // Detect if settings are loading from database or using defaults
+  useEffect(() => {
+    if (!loading && settings) {
+      // Check if settings appear to be defaults (not from database)
+      const isUsingDefaults = settings.id === undefined && settings.user_id === undefined;
+      setConnectionIssue(isUsingDefaults);
+
+      console.log('🎯 [TabletSettingsModal] Settings status:', {
+        loading,
+        hasSettings: !!settings,
+        isUsingDefaults,
+        connectionIssue: isUsingDefaults,
+        taxRate: settings?.tax_rate,
+        enableTax: settings?.enable_tax,
+        currency: settings?.currency
+      });
+    }
+  }, [settings, loading]);
 
   // Normalize incoming settings to avoid undefined access
   useEffect(() => {
@@ -171,6 +192,27 @@ const TabletSettingsModal: React.FC<TabletSettingsModalProps> = ({ isOpen, onClo
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
+          {/* Connection Warning */}
+          {connectionIssue && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <span className="text-sm font-medium text-amber-800">Settings not synced</span>
+                </div>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 text-xs rounded transition"
+                >
+                  Refresh
+                </button>
+              </div>
+              <p className="text-xs text-amber-700 mt-1">
+                Database connection issue detected. Settings may not be saved.
+              </p>
+            </div>
+          )}
+
           {/* Display Settings */}
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">

@@ -198,22 +198,22 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
 
   return createPortal(
     <>
-      <div 
-        className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]" 
+      <div
+        className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]"
         style={{
-          top: 0, 
-          left: 0, 
+          top: 0,
+          left: 0,
           right: 0,
           bottom: 0,
           overflow: 'hidden',
           overscrollBehavior: 'none'
         }}
-        role="dialog" 
-        aria-modal="true" 
+        role="dialog"
+        aria-modal="true"
         aria-labelledby="customer-form-title"
         onClick={onClose}
       >
-        <div 
+        <div
           className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden relative"
           style={{ pointerEvents: 'auto' }}
           onClick={(e) => e.stopPropagation()}
@@ -235,7 +235,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
               <div className="w-16 h-16 bg-orange-600 rounded-full flex items-center justify-center shadow-lg">
                 <User className="w-8 h-8 text-white" />
               </div>
-              
+
               {/* Text */}
               <div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-2" id="customer-form-title">
@@ -294,7 +294,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
           </div>
         </div>
       </div>
-      
+
       {/* Success Modal - Always rendered so it persists after form closes */}
       <SuccessModal {...successModal.props} />
     </>,

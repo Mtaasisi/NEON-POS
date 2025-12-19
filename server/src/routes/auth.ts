@@ -90,7 +90,7 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res, next) => {
 
     // Get full user data
     const users = await sql`
-      SELECT id, email, role, full_name, phone, created_at
+      SELECT id, email, role, full_name, phone, branch_id, created_at
       FROM auth_users
       WHERE id = ${req.user.id}
       LIMIT 1
@@ -108,6 +108,7 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res, next) => {
         role: users[0].role,
         fullName: users[0].full_name,
         phone: users[0].phone,
+        branchId: users[0].branch_id,
         createdAt: users[0].created_at,
       },
     });

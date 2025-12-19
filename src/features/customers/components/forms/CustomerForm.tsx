@@ -448,8 +448,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
             value={formData.name || ''}
             onChange={handleInputChange}
             className={`w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 ${
-              validationErrors.name 
-                ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200' 
+              validationErrors.name
+                ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200'
                 : 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200'
             }`}
             placeholder="Enter customer name"
@@ -482,8 +482,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
             value={formData.phone || ''}
             onChange={handleInputChange}
             className={`w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 ${
-              validationErrors.phone 
-                ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200' 
+              validationErrors.phone
+                ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200'
                 : 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200'
             }`}
             placeholder="e.g., 0712345678 or +255712345678"
@@ -554,8 +554,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
             onChange={handleInputChange}
             disabled={!hasWhatsapp}
             className={`w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors ${
-              hasWhatsapp 
-                ? 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-gray-900' 
+              hasWhatsapp
+                ? 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-gray-900'
                 : 'border-gray-200 bg-gray-50 text-gray-500'
             }`}
               placeholder={hasWhatsapp ? "Enter WhatsApp number" : "WhatsApp disabled"}
@@ -594,8 +594,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
           <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
           {/* Region Dropdown */}
           {showRegionDropdown && (
-            <div 
-              data-dropdown="region" 
+            <div
+              data-dropdown="region"
               className="absolute top-full left-0 right-0 mt-1 bg-white border-2 border-gray-300 rounded-xl shadow-xl z-[9999] max-h-60 overflow-y-auto"
               role="listbox"
               aria-label="Region options"
@@ -682,8 +682,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
               onFocus={() => setShowMonthDropdown(true)}
               onBlur={() => setTimeout(() => setShowMonthDropdown(false), 200)}
               className={`w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 ${
-                validationErrors.birthMonth 
-                  ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200' 
+                validationErrors.birthMonth
+                  ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200'
                   : 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200'
               }`}
               placeholder="Type or select month"
@@ -699,8 +699,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
             {/* Month Dropdown */}
             {showMonthDropdown && (
-              <div 
-                data-dropdown="month" 
+              <div
+                data-dropdown="month"
                 className="absolute top-full left-0 right-0 mt-1 bg-white/95 backdrop-blur-md border-2 border-gray-300 rounded-lg shadow-xl z-[9999] max-h-60 overflow-y-auto p-2"
                 role="listbox"
                 aria-label="Month options"
@@ -742,8 +742,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
               onFocus={() => setShowDayDropdown(true)}
               onBlur={() => setTimeout(() => setShowDayDropdown(false), 200)}
               className={`w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 ${
-                validationErrors.birthDay 
-                  ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200' 
+                validationErrors.birthDay
+                  ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200'
                   : 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200'
               }`}
               placeholder="Type or select day"
@@ -759,8 +759,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
             {/* Day Dropdown */}
             {showDayDropdown && (
-              <div 
-                data-dropdown="day" 
+              <div
+                data-dropdown="day"
                 className="absolute top-full left-0 right-0 mt-1 bg-white/95 backdrop-blur-md border-2 border-gray-300 rounded-lg shadow-xl z-[9999] max-h-60 overflow-y-auto p-2"
                 role="listbox"
                 aria-label="Day options"
@@ -798,7 +798,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
       {/* Referral Source */}
       <div className="md:col-span-2">
         <label className="block text-sm font-medium text-gray-700 mb-2">How did you hear about us?</label>
-        
+
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
           {sortedReferralSources.map((source) => {
             const selected = formData.referralSource === source.label;
@@ -808,8 +808,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
                 type="button"
                 onClick={() => handleReferralClick(source.label)}
                 className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                  selected 
-                    ? 'bg-orange-600 text-white' 
+                  selected
+                    ? 'bg-orange-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
                 style={{ userSelect: 'none' }}

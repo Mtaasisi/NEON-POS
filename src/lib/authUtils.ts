@@ -105,10 +105,10 @@ export const handle403Error = async (): Promise<void> => {
 /**
  * Safe wrapper for Supabase auth operations that handles 403 errors
  */
-export const withAuthErrorHandling = async <T>(
+export const withAuthErrorHandling = async function<T>(
   operation: () => Promise<T>,
   fallback?: () => Promise<T>
-): Promise<T | null> => {
+): Promise<T | null> {
   try {
     return await operation();
   } catch (error: any) {

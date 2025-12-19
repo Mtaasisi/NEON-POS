@@ -146,6 +146,8 @@ export async function createProduct(
     const currentBranchId = localStorage.getItem('current_branch_id');
     
     // Create the product first
+    // Products are GLOBAL - they are not assigned to specific branches
+    // Only variants/stock should be branch-specific for isolation
     const productInsertData: any = {
       name: productWithoutImages.name,
       description: productWithoutImages.description,
@@ -153,8 +155,8 @@ export async function createProduct(
       category_id: productWithoutImages.categoryId,
       is_active: productWithoutImages.isActive ?? true,
       total_quantity: 0,
-      total_value: 0,
-      branch_id: currentBranchId  // 🔒 Auto-assign to current branch
+      total_value: 0
+      // ❌ REMOVED: branch_id assignment - products are global
     };
     
     // Add price and stock fields if provided (for non-variant products)
@@ -444,6 +446,81 @@ export async function createProduct(
         console.error('Variants data being inserted:', variants);
         throw variantsError;
       }
+
+      // 🔄 AUTOMATIC CROSS-BRANCH PARENT VARIANT CREATION
+      // After creating variants in current branch, create parent variants in all other branches
+      console.log('🔄 Creating parent variants in all branches...');
+
+      // Get all active branches except current branch
+      const { data: allBranches, error: branchesError } = await supabase
+        .from('store_locations')
+        .select('id, name, code')
+        .eq('is_active', true)
+        .neq('id', branchIdUuid); // Exclude current branch
+
+      if (branchesError) {
+        console.warn('⚠️ Could not fetch branches for cross-branch variant creation:', branchesError);
+      } else if (allBranches && allBranches.length > 0) {
+        // Find parent variants that were just created
+        const parentVariants = variants.filter(v => v.is_parent === true);
+
+        if (parentVariants.length > 0) {
+          console.log(`📦 Found ${parentVariants.length} parent variants to replicate across ${allBranches.length} branches`);
+
+          // Create parent variants in each branch
+          for (const branch of allBranches) {
+            const branchCode = branch.code || branch.name.substring(0, 3).toUpperCase();
+
+            for (const parentVariant of parentVariants) {
+              // Generate unique SKU for this branch
+              const branchSpecificSku = `${parentVariant.sku}-${branchCode}`;
+
+              const crossBranchVariant = {
+                product_id: parentVariant.product_id,
+                branch_id: branch.id,
+                variant_name: parentVariant.variant_name || parentVariant.name,
+                name: parentVariant.name,
+                sku: branchSpecificSku,
+                barcode: parentVariant.barcode,
+                cost_price: parentVariant.cost_price,
+                selling_price: parentVariant.selling_price,
+                quantity: 0, // Always 0 stock in other branches
+                reserved_quantity: 0,
+                min_quantity: parentVariant.min_quantity,
+                is_active: parentVariant.is_active,
+                variant_attributes: parentVariant.variant_attributes,
+                is_parent: parentVariant.is_parent,
+                parent_variant_id: parentVariant.parent_variant_id,
+                variant_type: parentVariant.variant_type,
+              is_shared: true, // Mark as shared since it exists in multiple branches
+              sharing_mode: 'shared',
+              visible_to_branches: null
+              };
+
+              console.log(`🏪 Creating parent variant in ${branch.name}: ${branchSpecificSku}`);
+
+              const { error: crossBranchError } = await supabase
+                .from('lats_product_variants')
+                .insert(crossBranchVariant);
+
+              if (crossBranchError) {
+                // Handle unique constraint violations gracefully
+                if (crossBranchError.code === '23505') {
+                  console.warn(`⚠️ Parent variant already exists in ${branch.name}, skipping`);
+                } else {
+                  console.error(`❌ Failed to create parent variant in ${branch.name}:`, crossBranchError);
+                }
+              }
+            }
+          }
+
+          console.log(`✅ Created parent variants in ${allBranches.length} additional branches`);
+        } else {
+          console.log('ℹ️ No parent variants found, skipping cross-branch creation');
+        }
+      } else {
+        console.log('ℹ️ No additional branches found, skipping cross-branch creation');
+      }
       
       console.log('✅ Created', variants.length, 'variants for product');
       
@@ -465,6 +542,119 @@ export async function createProduct(
         console.log('✅ Default variant auto-created by trigger:', createdVariants[0]);
       } else {
         console.warn('⚠️ No default variant created - this may cause issues');
+      }
+    }
+
+    // 🔄 AUTOMATIC CROSS-BRANCH PARENT VARIANT CREATION
+    // After variants are created (either custom or auto-generated), create parent variants in all other branches
+    console.log('🔄 Ensuring parent variants exist in all branches...');
+
+    // Get all active branches
+    const { data: allBranches, error: branchesError } = await supabase
+      .from('store_locations')
+      .select('id, name, code')
+      .eq('is_active', true);
+
+    if (branchesError) {
+      console.warn('⚠️ Could not fetch branches for cross-branch variant creation:', branchesError);
+    } else if (allBranches && allBranches.length > 0) {
+      // Get current branch ID
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      const currentBranchCode = allBranches.find(b => b.id === currentBranchId)?.code ||
+                               allBranches.find(b => b.id === currentBranchId)?.name?.substring(0, 3).toUpperCase() || 'MAIN';
+
+      // Get all parent variants for this product (should include auto-created ones)
+      const { data: allParentVariants, error: parentVariantsError } = await supabase
+        .from('lats_product_variants')
+        .select('*')
+        .eq('product_id', product.id)
+        .eq('is_parent', true);
+
+      if (parentVariantsError) {
+        console.warn('⚠️ Could not fetch parent variants:', parentVariantsError);
+      } else if (allParentVariants && allParentVariants.length > 0) {
+        console.log(`📦 Found ${allParentVariants.length} parent variants for cross-branch replication`);
+
+        // For each parent variant, ensure it exists in ALL branches
+        for (const parentVariant of allParentVariants) {
+          // Check which branches already have this parent variant
+          const { data: existingVariants, error: existingError } = await supabase
+            .from('lats_product_variants')
+            .select('branch_id')
+            .eq('product_id', product.id)
+            .eq('is_parent', true)
+            .eq('variant_name', parentVariant.variant_name);
+
+          if (existingError) {
+            console.warn('⚠️ Could not check existing variants:', existingError);
+            continue;
+          }
+
+          const existingBranchIds = new Set((existingVariants || []).map(v => v.branch_id));
+
+          // Create parent variant in branches that don't have it
+          for (const branch of allBranches) {
+            if (existingBranchIds.has(branch.id)) {
+              console.log(`ℹ️ Parent variant already exists in ${branch.name}`);
+              continue;
+            }
+
+            const branchCode = branch.code || branch.name.substring(0, 3).toUpperCase();
+
+            // Generate unique SKU for this branch
+            let branchSpecificSku;
+            if (branch.id === currentBranchId) {
+              // Keep original SKU for current branch
+              branchSpecificSku = parentVariant.sku;
+            } else {
+              // Generate new SKU for other branches
+              branchSpecificSku = `${parentVariant.sku}-${branchCode}`;
+            }
+
+              const crossBranchVariant = {
+                product_id: parentVariant.product_id,
+                branch_id: branch.id,
+                variant_name: parentVariant.variant_name || parentVariant.name,
+                name: parentVariant.name,
+                sku: branchSpecificSku,
+                barcode: parentVariant.barcode,
+                // 🔒 BRANCH-SPECIFIC PRICING: Start with same prices but allow branches to customize
+                // Each branch can modify these prices independently
+                cost_price: parentVariant.cost_price, // Copy initial price, branch can change
+                selling_price: parentVariant.selling_price, // Copy initial price, branch can change
+                quantity: 0, // Parent variants always have qty=0 (product definition only)
+                reserved_quantity: 0,
+                min_quantity: parentVariant.min_quantity,
+                is_active: parentVariant.is_active,
+                variant_attributes: parentVariant.variant_attributes,
+                is_parent: parentVariant.is_parent,
+                parent_variant_id: parentVariant.parent_variant_id,
+                variant_type: parentVariant.variant_type,
+                is_shared: true, // Mark as shared since it exists in multiple branches
+                sharing_mode: 'shared',
+                visible_to_branches: null
+              };
+
+            console.log(`🏪 Creating parent variant in ${branch.name}: ${branchSpecificSku} (qty: ${crossBranchVariant.quantity})`);
+
+            const { error: crossBranchError } = await supabase
+              .from('lats_product_variants')
+              .insert(crossBranchVariant);
+
+            if (crossBranchError) {
+              // Handle unique constraint violations gracefully
+              if (crossBranchError.code === '23505') {
+                console.warn(`⚠️ Parent variant already exists in ${branch.name}, skipping`);
+              } else {
+                console.error(`❌ Failed to create parent variant in ${branch.name}:`, crossBranchError);
+              }
+            }
+          }
+        }
+
+        console.log(`✅ Ensured parent variants exist in all ${allBranches.length} branches`);
+      } else {
+        console.warn('⚠️ No parent variants found for this product - this may cause display issues');
       }
     }
 
@@ -519,6 +709,9 @@ async function _getProductImpl(productId: string): Promise<LatsProduct & { image
     throw new Error(`Invalid product ID: ${productId}`);
   }
 
+  // Get current branch for isolation filtering
+  const currentBranchId = localStorage.getItem('current_branch_id');
+
   const { data: product, error: productError } = await supabase
     .from('lats_products')
     .select('*')
@@ -528,34 +721,92 @@ async function _getProductImpl(productId: string): Promise<LatsProduct & { image
   if (productError) throw productError;
   if (!product) throw new Error('Product not found');
 
+  // Get branch settings for filtering
+  let branchSettings: any = null;
+  if (currentBranchId) {
+    try {
+      const { data: settings } = await supabase
+        .from('store_locations')
+        .select('data_isolation_mode, share_inventory')
+        .eq('id', currentBranchId)
+        .single();
+      branchSettings = settings;
+    } catch (err) {
+      console.warn('⚠️ Could not fetch branch settings for product:', err);
+    }
+  }
+
   // Fetch all related data in parallel
   const [categoryResult, supplierResult, variantsResult, storageRoomResult, shelfResult] = await Promise.all([
     // Category
-    product.category_id 
-      ? supabase.from('lats_categories').select('id, name').eq('id', product.category_id).single() 
+    product.category_id
+      ? supabase.from('lats_categories').select('id, name').eq('id', product.category_id).single()
       : Promise.resolve({ data: null }),
-    
+
     // Supplier (with full details)
-    product.supplier_id 
-      ? supabase.from('lats_suppliers').select('id, name, contact_person, email, phone, address').eq('id', product.supplier_id).single() 
+    product.supplier_id
+      ? supabase.from('lats_suppliers').select('id, name, contact_person, email, phone, address').eq('id', product.supplier_id).single()
       : Promise.resolve({ data: null }),
-    
-    // Variants - ✅ Exclude IMEI children, show only parents
-    supabase
-      .from('lats_product_variants')
-      .select('*')
-      .eq('product_id', productId)
-      .is('parent_variant_id', null)  // ✅ FIX: Exclude IMEI children
-      .order('created_at', { ascending: true }),
-    
-    // Storage Room
-    product.storage_room_id 
-      ? supabase.from('storage_rooms').select('id, name').eq('id', product.storage_room_id).single() 
+
+    // Variants - ✅ Branch-aware filtering
+    (async () => {
+      let variantsQuery = supabase
+        .from('lats_product_variants')
+        .select('*')
+        .eq('product_id', productId)
+        .is('parent_variant_id', null)  // ✅ FIX: Exclude IMEI children
+        .order('created_at', { ascending: true });
+
+      // Apply branch filtering for variants
+      if (currentBranchId && branchSettings) {
+        if (branchSettings.data_isolation_mode === 'isolated') {
+          // Isolated mode: Only show variants from current branch
+          variantsQuery = variantsQuery.eq('branch_id', currentBranchId);
+        } else if (branchSettings.data_isolation_mode === 'hybrid') {
+          if (!branchSettings.share_inventory) {
+            // Hybrid mode with isolated inventory: Only show variants from current branch
+            variantsQuery = variantsQuery.eq('branch_id', currentBranchId);
+          }
+          // If share_inventory is true, show all variants (shared or from current branch)
+        }
+      } else if (currentBranchId) {
+        // Default: show variants from current branch or shared variants
+        variantsQuery = variantsQuery.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
+      }
+
+      return variantsQuery;
+    })(),
+
+    // Storage Room - Branch-aware
+    product.storage_room_id
+      ? (async () => {
+          let storageQuery = supabase.from('storage_rooms').select('id, name').eq('id', product.storage_room_id);
+          if (currentBranchId && branchSettings) {
+            if (branchSettings.data_isolation_mode === 'isolated') {
+              storageQuery = storageQuery.eq('branch_id', currentBranchId);
+            } else if (branchSettings.data_isolation_mode === 'hybrid') {
+              // In hybrid mode, storage can be shared or branch-specific
+              storageQuery = storageQuery.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
+            }
+          }
+          return storageQuery.single();
+        })()
       : Promise.resolve({ data: null }),
-    
-    // Shelf
-    product.shelf_id 
-      ? supabase.from('shelves').select('id, name, code').eq('id', product.shelf_id).single() 
+
+    // Shelf - Branch-aware
+    product.shelf_id
+      ? (async () => {
+          let shelfQuery = supabase.from('shelves').select('id, name, code').eq('id', product.shelf_id);
+          if (currentBranchId && branchSettings) {
+            if (branchSettings.data_isolation_mode === 'isolated') {
+              shelfQuery = shelfQuery.eq('branch_id', currentBranchId);
+            } else if (branchSettings.data_isolation_mode === 'hybrid') {
+              // In hybrid mode, shelves can be shared or branch-specific
+              shelfQuery = shelfQuery.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
+            }
+          }
+          return shelfQuery.single();
+        })()
       : Promise.resolve({ data: null })
   ]);
 
@@ -693,7 +944,9 @@ async function _getProductImpl(productId: string): Promise<LatsProduct & { image
     requiresShipping: product.requires_shipping,
     isFeatured: product.is_featured,
     tags: product.tags,
-    metadata: product.metadata
+    metadata: product.metadata,
+    attributes: product.attributes,
+    isCustomerPortalVisible: product.is_customer_portal_visible
   } as any;
 }
 
@@ -728,9 +981,22 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
   try {
     console.log('🔍 [getProducts] Starting optimized product fetch...');
     const startTime = Date.now();
-    
-    // Get current branch from localStorage
+
+    // 🔒 BRANCH ISOLATION VALIDATION: Ensure proper isolation before fetching
     const currentBranchId = localStorage.getItem('current_branch_id');
+    if (currentBranchId) {
+      const { validateBranchIsolation, logBranchIsolationOperation } = await import('./branchAwareApi');
+      logBranchIsolationOperation('getProducts', currentBranchId, { operation: 'fetch_products' });
+
+      // Run lightweight validation (skip heavy checks in production for performance)
+      if (process.env.NODE_ENV === 'development') {
+        const validation = await validateBranchIsolation('getProducts', currentBranchId, 'hybrid');
+        if (!validation.valid) {
+          console.warn('⚠️ [BranchIsolation] Issues detected before product fetch:', validation.issues);
+          // Continue anyway - don't block the operation, just warn
+        }
+      }
+    }
     
     // 🚀 OPTIMIZATION: Fetch branch settings ONCE if needed
     let branchSettings: any = null;
@@ -1307,9 +1573,10 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
         categoryId: product.category_id,
         supplierId: product.supplier_id,
         isActive: product.is_active,
-        price: product.selling_price || firstVariant?.selling_price || 0,
-        sellingPrice: product.selling_price || firstVariant?.selling_price || 0, // ✅ Add explicit sellingPrice field
-        costPrice: product.cost_price || firstVariant?.cost_price || 0,
+        // 🔒 BRANCH-SPECIFIC PRICING: Use current branch's variant prices, not global product prices
+        price: firstVariant?.selling_price || product.selling_price || 0,
+        sellingPrice: firstVariant?.selling_price || product.selling_price || 0,
+        costPrice: firstVariant?.cost_price || product.cost_price || 0,
         stockQuantity: product.stock_quantity || 0,
         minStockLevel: product.min_stock_level || 0,
         totalQuantity: product.total_quantity || 0,
@@ -1469,7 +1736,7 @@ export async function updateProduct(
     // First, verify the product exists and get branch_id
     const { data: existingProduct, error: existError } = await supabase
       .from('lats_products')
-      .select('id, name, branch_id')
+      .select('id, name, branch_id, attributes')
       .eq('id', productId)
       .single();
     
@@ -1510,6 +1777,25 @@ export async function updateProduct(
     if (productWithoutImages.minStockLevel !== undefined) updateData.min_stock_level = productWithoutImages.minStockLevel;
     if (productWithoutImages.condition !== undefined) updateData.condition = productWithoutImages.condition;
     if (productWithoutImages.specification !== undefined) updateData.specification = productWithoutImages.specification;
+    // Merge/replace attributes if provided. Preserve existing attributes and merge incoming keys.
+    try {
+      const existingAttributes = existingProduct && (existingProduct as any).attributes ? (existingProduct as any).attributes : {};
+      if (productWithoutImages.attributes !== undefined) {
+        updateData.attributes = {
+          ...existingAttributes,
+          ...productWithoutImages.attributes
+        };
+      } else if (productWithoutImages.specification !== undefined) {
+        // If only specification was provided, also ensure attributes.specification is kept in sync
+        updateData.attributes = {
+          ...existingAttributes,
+          ...(existingAttributes?.specification ? { specification: existingAttributes.specification } : {}),
+          ...(productWithoutImages.specification ? { specification: productWithoutImages.specification } : {})
+        };
+      }
+    } catch (e) {
+      console.warn('Could not merge attributes for product update:', e);
+    }
     
     // Update the product (without .select() to avoid RLS issues)
     const { error: productError } = await supabase
@@ -1554,22 +1840,24 @@ export async function updateProduct(
 
     // Handle variants if provided
     if (variants && Array.isArray(variants)) {
-      
-      // 🔒 Get branch_id for new variants - try from updated product, then existing product, then localStorage
-      let branchIdForVariants: string | null = null;
-      if (product && product.branch_id) {
-        branchIdForVariants = product.branch_id;
-      } else if (existingProduct && existingProduct.branch_id) {
-        branchIdForVariants = existingProduct.branch_id;
-      } else {
-        branchIdForVariants = localStorage.getItem('current_branch_id');
+
+      // 🔒 CRITICAL: Get current branch for branch-aware operations
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      if (!currentBranchId) {
+        throw new Error('No branch selected. Please select a branch before updating product variants.');
       }
-      
-      // Get existing variants with full details
+
+      console.log('🔒 [API] Branch-aware product update for branch:', currentBranchId);
+
+      // 🔒 Get branch_id for new variants - prioritize current branch
+      let branchIdForVariants: string | null = currentBranchId;
+
+      // Get existing variants with full details - FILTER BY CURRENT BRANCH
       const { data: existingVariants, error: fetchError } = await supabase
         .from('lats_product_variants')
-        .select('id, sku, variant_name')
-        .eq('product_id', productId);
+        .select('id, sku, variant_name, branch_id')
+        .eq('product_id', productId)
+        .eq('branch_id', currentBranchId); // 🔒 CRITICAL: Only current branch variants
 
       if (fetchError) {
         console.error('❌ [API] Failed to fetch existing variants:', fetchError);
@@ -1613,11 +1901,23 @@ export async function updateProduct(
 
         // Check if variant has an ID (existing variant) or if we need to find it by SKU
         if (variant.id) {
-          // Update by ID (most reliable)
+          // 🔒 BRANCH SAFETY: Verify the variant belongs to current branch before updating
+          const existingVariant = existingVariantsMap.get(variant.id);
+          if (!existingVariant) {
+            console.warn(`⚠️ [API] Variant ${variant.id} not found in current branch, skipping`);
+            continue;
+          }
+          if (existingVariant.branch_id !== currentBranchId) {
+            console.warn(`⚠️ [API] Variant ${variant.id} belongs to different branch (${existingVariant.branch_id}), skipping`);
+            continue;
+          }
+
+          // Update by ID (most reliable) - now branch-safe
           const { error: updateError } = await supabase
             .from('lats_product_variants')
             .update(variantData)
-            .eq('id', variant.id);
+            .eq('id', variant.id)
+            .eq('branch_id', currentBranchId); // 🔒 Extra safety check
 
           if (updateError) {
             console.error('❌ Update by ID failed:', updateError);
@@ -1627,15 +1927,16 @@ export async function updateProduct(
             throw updateError;
           }
         } else {
-          // Check if variant exists by SKU
-          const existingVariantBySku = safeExistingVariants.find(v => v && v.sku === variant.sku);
+          // Check if variant exists by SKU in CURRENT BRANCH only
+          const existingVariantBySku = safeExistingVariants.find(v => v && v.sku === variant.sku && v.branch_id === currentBranchId);
 
           if (existingVariantBySku && existingVariantBySku.id) {
-            // Update existing variant by SKU
+            // Update existing variant by SKU (branch-filtered)
             const { error: updateError } = await supabase
               .from('lats_product_variants')
               .update(variantData)
-              .eq('id', existingVariantBySku.id);
+              .eq('id', existingVariantBySku.id)
+              .eq('branch_id', currentBranchId); // 🔒 Ensure branch safety
 
             if (updateError) {
               console.error('❌ Update by SKU failed:', updateError);
@@ -1649,10 +1950,9 @@ export async function updateProduct(
               variantData.sku = variant.sku;
             }
             // 🔒 CRITICAL FIX: Include branch_id when creating new variants
-            variantData.branch_id = branchIdForVariants;
-            if (!branchIdForVariants) {
-              console.warn('⚠️ [API] Creating variant without branch_id - this may cause issues');
-            }
+            variantData.branch_id = currentBranchId; // Always use current branch
+            console.log(`🔒 [API] Creating new variant in branch: ${currentBranchId}`);
+
             const { error: insertError } = await supabase
               .from('lats_product_variants')
               .insert(variantData);
@@ -1667,11 +1967,11 @@ export async function updateProduct(
         }
       }
 
-      // Delete variants that are no longer needed (but keep at least one)
+      // Delete variants that are no longer needed (but keep at least one) - BRANCH FILTERED
       if (safeExistingVariants.length > variants.length && safeExistingVariants.length > 1) {
         const variantsToKeep = variants.map(v => v?.sku).filter(Boolean);
         const variantsToDelete = safeExistingVariants
-          .filter(v => v && v.sku && !variantsToKeep.includes(v.sku))
+          .filter(v => v && v.sku && !variantsToKeep.includes(v.sku) && v.branch_id === currentBranchId) // 🔒 Only current branch
           .slice(0, Math.max(0, safeExistingVariants.length - 1)); // Keep at least one variant
         
         for (const variantToDelete of variantsToDelete) {
@@ -1698,7 +1998,105 @@ export async function updateProduct(
               continue;
             }
 
-            // Safe to delete - no stock movements exist
+            // Additional safety: check for references in branch_transfers (and similar tables)
+            try {
+              // Discover available columns on branch_transfers to avoid "column does not exist" errors
+              const { data: cols, error: colsError } = await supabase
+                .from('information_schema.columns')
+                .select('column_name')
+                .eq('table_schema', 'public')
+                .eq('table_name', 'branch_transfers');
+
+              if (colsError) {
+                console.error('❌ Failed to fetch branch_transfers columns:', colsError);
+                // Skip this check to avoid breaking update flow
+              } else {
+                const existingColumns = (cols || []).map((c: any) => (c && c.column_name ? String(c.column_name) : '')).filter(Boolean);
+                const candidateColumns = [
+                  'entity',
+                  'entity_id',
+                  'variant_id',
+                  'source_entity',
+                  'reference_id',
+                  'reference',
+                  'item_id',
+                  'entity_uuid'
+                ];
+
+                const foundCol = candidateColumns.find(c => existingColumns.includes(c));
+
+                if (!foundCol) {
+                  console.warn('⚠️ No known reference column found on branch_transfers; skipping branch_transfers check');
+                } else {
+                  const queryObj: any = {};
+                  // Build dynamic check using the discovered column
+                  const { data: branchTransfers, error: branchTransfersError } = await supabase
+                    .from('branch_transfers')
+                    .select('id')
+                    .eq(foundCol, variantToDelete.id)
+                    .limit(1);
+
+                  if (branchTransfersError) {
+                    console.error('❌ Failed to check branch_transfers references:', branchTransfersError);
+                    // Continue to next variant rather than throwing to avoid breaking the update flow
+                    continue;
+                  }
+
+                  if (branchTransfers && branchTransfers.length > 0) {
+                    console.warn(`⚠️ Cannot delete variant ${variantToDelete.id} (${variantToDelete.sku || variantToDelete.variant_name}): referenced by branch_transfers (column: ${foundCol})`);
+                    continue;
+                  }
+                }
+              }
+            } catch (e) {
+              // Defensive: if the check fails unexpectedly, log and skip deletion
+              console.error('❌ Error while checking branch_transfers for variant deletion:', e);
+              continue;
+            }
+
+            // Check other tables that reference variants
+            const referenceChecks = [
+              { table: 'auto_reorder_log', column: 'variant_id' },
+              { table: 'inventory_items', column: 'variant_id' },
+              { table: 'lats_inventory_adjustments', column: 'variant_id' },
+              { table: 'lats_inventory_items', column: 'variant_id' },
+              { table: 'lats_product_units', column: 'parent_variant_id' },
+              { table: 'lats_product_variants', column: 'parent_variant_id' },
+              { table: 'lats_purchase_order_items', column: 'variant_id' },
+              { table: 'lats_stock_movements', column: 'variant_id' },
+              { table: 'lats_trade_in_prices', column: 'variant_id' },
+              { table: 'lats_trade_in_transactions', column: 'new_variant_id' },
+              { table: 'lats_stock_transfers', column: 'variant_id' },
+              { table: 'variant_images', column: 'variant_id' },
+              { table: 'returns', column: 'variant_id' }
+            ];
+
+            for (const { table, column } of referenceChecks) {
+              try {
+                const { data: references, error: refCheckError } = await supabase
+                  .from(table)
+                  .select('id')
+                  .eq(column, variantToDelete.id)
+                  .limit(1);
+
+                if (refCheckError) {
+                  console.error(`❌ Failed to check ${table} references:`, refCheckError);
+                  // Continue to next reference check instead of throwing
+                  continue;
+                }
+
+                // Skip deletion if variant has references
+                if (references && references.length > 0) {
+                  console.warn(`⚠️ Cannot delete variant ${variantToDelete.id} (${variantToDelete.sku || variantToDelete.variant_name}): referenced by ${table}`);
+                  continue; // Skip this variant and continue with others
+                }
+              } catch (e) {
+                console.error(`❌ Error checking ${table} for variant deletion:`, e);
+                continue;
+              }
+            }
+
+            // Safe to delete - no known referencing records found
             const { error: deleteError } = await supabase
               .from('lats_product_variants')
               .delete()

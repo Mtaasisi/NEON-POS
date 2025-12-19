@@ -381,20 +381,30 @@ export const usePOSStore = create<POSState>()(
           
           if (response.ok) {
             const sale = response.data;
-            
+
             // Clear cart after successful sale
             await get().clearCart();
-            
+
             // Generate receipt
             get().generateReceipt(sale);
-            
+
             // Reload sales
             await get().loadRecentSales();
-            
-            latsAnalytics.track('sale_completed', { 
+
+            // Trigger automatic inventory refresh to show updated stock levels
+            try {
+              const { refreshAfterProductUpdate } = await import('../../../services/productRefreshService');
+              await refreshAfterProductUpdate();
+              console.log('✅ [POS] Inventory refreshed after sale completion');
+            } catch (refreshError) {
+              console.warn('⚠️ [POS] Failed to refresh inventory after sale:', refreshError);
+              // Don't fail the sale if refresh fails
+            }
+
+            latsAnalytics.track('sale_completed', {
               saleId: sale.id,
               total: sale.total,
-              itemCount: sale.items.length 
+              itemCount: sale.items.length
             });
           } else {
             if (response.code === 'INSUFFICIENT_STOCK') {

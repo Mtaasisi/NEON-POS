@@ -32,7 +32,7 @@ const TabletCustomerSelectionModal: React.FC<TabletCustomerSelectionModalProps> 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden">
+      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-900">Select Customer</h2>
           <button
@@ -42,7 +42,7 @@ const TabletCustomerSelectionModal: React.FC<TabletCustomerSelectionModalProps> 
             <X size={20} className="text-gray-600" />
           </button>
         </div>
-        <div className="p-6 space-y-4">
+        <div className="p-6">
           {/* Search */}
           <div className="relative">
             <input
@@ -62,49 +62,82 @@ const TabletCustomerSelectionModal: React.FC<TabletCustomerSelectionModalProps> 
             )}
           </div>
 
-          {/* Customer list */}
-          <div className="border border-gray-200 rounded-xl divide-y divide-gray-200 max-h-[50vh] overflow-y-auto">
-            {filtered.length === 0 && (
-              <div className="p-4 text-sm text-gray-500 text-center">
+          {/* Customer Grid */}
+          <div className="mt-6">
+          <div className="max-h-[60vh] overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="p-8 text-sm text-gray-500 text-center">
                 No customers found
               </div>
-            )}
-            {filtered.map((customer: any) => (
-              <button
-                key={customer.id}
-                onClick={() => handleSelect(customer)}
-                className="w-full text-left p-4 hover:bg-gray-50 flex items-center justify-between"
-              >
-                <div className="flex items-center space-x-3 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">
-                    {customer.name?.[0]?.toUpperCase() || <User size={16} />}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-base font-semibold text-gray-900 truncate">
-                      {customer.name || 'Unnamed customer'}
-                    </p>
-                    <div className="flex items-center space-x-3 text-sm text-gray-600">
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filtered.map((customer: any) => (
+                  <div
+                    key={customer.id}
+                    onClick={() => handleSelect(customer)}
+                    className="border-2 border-gray-200 rounded-2xl bg-white shadow-sm hover:shadow-lg hover:scale-[1.02] hover:border-blue-300 cursor-pointer transition-all duration-300 p-4"
+                  >
+                    {/* Avatar and Name */}
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-lg flex-shrink-0">
+                        {customer.name?.[0]?.toUpperCase() || <User size={18} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-bold text-gray-900 truncate">
+                          {customer.name || 'Unnamed customer'}
+                        </h3>
+                      </div>
+                    </div>
+
+                    {/* Contact Info */}
+                    <div className="space-y-1 mb-3">
                       {customer.phone && (
-                        <span className="flex items-center space-x-1">
-                          <Phone size={14} />
-                          <span>{customer.phone}</span>
-                        </span>
+                        <div className="flex items-center space-x-2 text-xs text-gray-600">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-phone">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                          </svg>
+                          <span className="truncate">{customer.phone}</span>
+                        </div>
                       )}
                       {customer.email && (
-                        <span className="flex items-center space-x-1">
-                          <Mail size={14} />
+                        <div className="flex items-center space-x-2 text-xs text-gray-600">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-mail">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <polyline points="22,6 12,13 2,6"></polyline>
+                          </svg>
                           <span className="truncate">{customer.email}</span>
-                        </span>
+                        </div>
                       )}
                     </div>
+
+                    {/* Stats (if available) */}
+                    {(customer.points !== undefined || customer.total_spent !== undefined) && (
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
+                        <div className="text-center">
+                          <div className="text-xs text-gray-500">Points</div>
+                          <div className="font-semibold text-gray-900 text-sm">{customer.points || 0}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xs text-gray-500">Spent</div>
+                          <div className="font-semibold text-gray-900 text-sm">
+                            TSh {customer.total_spent ? customer.total_spent.toLocaleString() : '0'}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Select Button */}
+                    <button className="w-full mt-3 bg-blue-600 text-white py-2 px-3 rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors">
+                      Select Customer
+                    </button>
                   </div>
-                </div>
-                <span className="text-sm font-semibold text-blue-600">Select</span>
-              </button>
-            ))}
+                ))}
+              </div>
+            )}
+          </div>
           </div>
 
-          <div className="flex justify-between gap-3">
+          <div className="flex justify-between gap-3 mt-6">
             <button
               onClick={onAddNew}
               className="flex-1 bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"

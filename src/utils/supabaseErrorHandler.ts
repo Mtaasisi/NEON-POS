@@ -45,10 +45,10 @@ export const isConnectionError = (error: any): boolean => {
 };
 
 // Safe query wrapper that handles errors
-export const safeQuery = async <T>(
+export const safeQuery = async function<T>(
   queryFn: () => Promise<{ data: T | null; error: any }>,
   fallbackFn?: () => Promise<{ data: T | null; error: any }>
-): Promise<{ data: T | null; error: DatabaseError | null }> => {
+): Promise<{ data: T | null; error: DatabaseError | null }> {
   try {
     const { data, error } = await queryFn();
     if (error) {

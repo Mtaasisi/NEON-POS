@@ -21,7 +21,7 @@ import { usePOSClickSounds } from '../../lats/hooks/usePOSClickSounds';
 import { MobileCard, MobileCardBody } from '../components/MobileCard';
 import MobileButton from '../components/MobileButton';
 import MobileHeader from '../components/MobileHeader';
-import MobilePaymentModal from '../components/MobilePaymentModal';
+import TabletPaymentModal from '../../tablet/components/TabletPaymentModal';
 import MobileVariantSelectionModal from '../components/MobileVariantSelectionModal';
 import MobileCustomerSelectionModal from '../components/MobileCustomerSelectionModal';
 import MobileAddCustomerModal from '../components/MobileAddCustomerModal';
@@ -851,7 +851,7 @@ const MobilePOS: React.FC = () => {
       )}
 
       {showPaymentModal && (
-        <MobilePaymentModal
+        <TabletPaymentModal
           amount={cartTotal}
           discountValue={discount}
           discountType={discountType}

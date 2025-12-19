@@ -16,6 +16,7 @@ interface ProductInformationFormProps {
     condition: string;
     specification?: string;
     isCustomerPortalVisible?: boolean;
+    customerPortalSpecification?: string;
   };
   setFormData: React.Dispatch<React.SetStateAction<any>>;
   categories: any[];
@@ -289,6 +290,37 @@ const ProductInformationForm: React.FC<ProductInformationFormProps> = ({
                 </p>
               )}
             </div>
+          
+          {/* Customer Portal Specifications - shown only when product is visible in customer portal */}
+          {formData.isCustomerPortalVisible !== false && (
+            <div className="mt-4">
+              <label
+                htmlFor="customer-portal-specs"
+                className={`block mb-2 text-xs font-medium ${currentErrors.customerPortalSpecification ? 'text-red-600' : 'text-gray-700'}`}
+              >
+                Customer Portal Specifications (optional)
+              </label>
+              <textarea
+                id="customer-portal-specs"
+                value={formData.customerPortalSpecification || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, customerPortalSpecification: e.target.value }))}
+                placeholder="Advanced specifications for the customer portal — paste or type detailed specs here."
+                className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-all duration-200 resize-vertical ${
+                  currentErrors.customerPortalSpecification
+                    ? 'border-red-500 focus:border-red-600 focus:ring-2 focus:ring-red-200'
+                    : 'border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                }`}
+                rows={4}
+                maxLength={2000}
+              />
+              {currentErrors.customerPortalSpecification && (
+                <p className="mt-1 text-sm text-red-600">{currentErrors.customerPortalSpecification}</p>
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                You can paste larger/advanced specifications here for display in the customer portal.
+              </p>
+            </div>
+          )}
 
             {/* Specification - Only show when not using variants AND when onSpecificationsClick is provided */}
             {!useVariants && onSpecificationsClick && (

@@ -1522,8 +1522,18 @@ export const useInventoryStore = create<InventoryState>()(
           const provider = getLatsProvider();
           const response = await provider.adjustStock(productId, variantId, quantity, reason);
           if (response.ok) {
-            await get().loadProducts();
-            await get().loadStockMovements();
+            // Trigger automatic inventory refresh to show updated stock levels
+            try {
+              const { refreshAfterProductUpdate } = await import('../../../services/productRefreshService');
+              await refreshAfterProductUpdate();
+              console.log('✅ [Inventory] Stock levels refreshed after adjustment');
+            } catch (refreshError) {
+              console.warn('⚠️ [Inventory] Failed to refresh after stock adjustment:', refreshError);
+              // Fallback to manual refresh if automatic fails
+              await get().loadProducts();
+              await get().loadStockMovements();
+            }
+
             latsAnalytics.track('stock_adjusted', { productId, variantId, quantity, reason });
           }
           return response;

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, CreditCard, DollarSign, CheckCircle, Plus } from 'lucide-react';
+import { X, CheckCircle, Calculator } from 'lucide-react';
 import { format } from '../../lats/lib/format';
 import { usePaymentAccounts } from '../../../hooks/usePaymentAccounts';
-import { FinanceAccount } from '../../../lib/financeAccountService';
+import toast from 'react-hot-toast';
+
 
 interface TabletPaymentModalProps {
   amount: number;
@@ -14,14 +15,6 @@ interface TabletPaymentModalProps {
   onComplete: (payments: any[], totalPaid: number) => void;
 }
 
-interface Payment {
-  paymentMethod: string;
-  paymentAccountId?: string;
-  amount: number;
-  reference?: string;
-  timestamp?: string;
-}
-
 const TabletPaymentModal: React.FC<TabletPaymentModalProps> = ({
   amount,
   discountValue,
@@ -31,363 +24,472 @@ const TabletPaymentModal: React.FC<TabletPaymentModalProps> = ({
   onClose,
   onComplete,
 }) => {
+  // Debug logging for payment modal issues
+  console.log('TabletPaymentModal rendered with props:', {
+    amount,
+    discountValue,
+    discountType,
+    hasOnChangeDiscount: !!onChangeDiscount,
+    hasOnChangeDiscountType: !!onChangeDiscountType
+  });
+
   const { paymentAccounts, loading: accountsLoading } = usePaymentAccounts();
 
-  // Helper functions declared before state variables
-  const parseNumber = (value: string) => parseFloat(value.replace(/,/g, '')) || 0;
-  const formatNumber = (value: number) => value.toLocaleString();
+  const [selectedPaymentAccount, setSelectedPaymentAccount] = useState<string>('');
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [referenceNumber, setReferenceNumber] = useState<string>('');
+  const [showDiscount, setShowDiscount] = useState<boolean>(false);
+  const [localDiscountValue, setLocalDiscountValue] = useState<number>(discountValue);
+  const [totalPaid, setTotalPaid] = useState<number>(0);
+  const [paymentHistory, setPaymentHistory] = useState<Array<{method: string, amount: number, reference?: string}>>([]);
 
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [currentPaymentMethod, setCurrentPaymentMethod] = useState<string>('');
-  const [amountInput, setAmountInput] = useState(amount.toLocaleString());
-  const [reference, setReference] = useState('');
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [discountEnabled, setDiscountEnabled] = useState(discountValue > 0);
-  const [discountInput, setDiscountInput] = useState(formatNumber(discountValue || 0));
-
-  const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
-  const remainingAmount = Math.max(0, amount - totalPaid);
-  const change = Math.max(0, totalPaid - amount);
-
-  // Force discount type to TSh (fixed) for tablet flow
-  useEffect(() => {
-    onChangeDiscountType('fixed');
-  }, [onChangeDiscountType]);
-
-  // Sync discount toggle when parent discount value changes
-  useEffect(() => {
-    setDiscountEnabled((discountValue || 0) > 0);
-    // keep local display in sync with incoming value
-    setDiscountInput(formatNumber(discountValue || 0));
-  }, [discountValue]);
-
-  // Keep amount input in sync if parent total changes (e.g., discount edits)
-  useEffect(() => {
-    setAmountInput(formatNumber(amount));
-  }, [amount]);
-
-  // Filter to only show active payment methods
+  // Filter to only show active payment accounts
   const activePaymentAccounts = paymentAccounts.filter(account => account.is_payment_method && account.is_active);
 
-  // Fallback payment methods if no accounts are loaded
-  const fallbackPaymentMethods = [
-    { id: 'cash', name: 'Cash', type: 'cash' },
-    { id: 'card', name: 'Card', type: 'credit_card' },
-    { id: 'mobile_money', name: 'Mobile Money', type: 'mobile_money' },
-    { id: 'bank_transfer', name: 'Bank Transfer', type: 'bank' },
-    { id: 'check', name: 'Check', type: 'other' },
-  ];
+  // Calculate the actual discount amount based on type (only when discount is enabled)
+  const calculatedDiscountAmount = showDiscount ? (discountType === 'percentage'
+    ? (amount * localDiscountValue) / 100
+    : Math.min(localDiscountValue, amount)) : 0;
 
-  // Use fallback if no payment accounts are loaded
-  const availablePaymentMethods = activePaymentAccounts.length > 0 ? activePaymentAccounts : fallbackPaymentMethods;
+  // Calculate final amount after discount
+  const finalAmount = amount - calculatedDiscountAmount;
+  const remainingAmount = finalAmount - totalPaid;
 
-  // Set default payment method when accounts load
+  // Removed forced discount type conversion to avoid conflicts
+
+  // Reset discount when toggle is turned off
   useEffect(() => {
-    if (availablePaymentMethods.length > 0 && !currentPaymentMethod) {
-      setCurrentPaymentMethod(availablePaymentMethods[0].id);
+    if (!showDiscount) {
+      setLocalDiscountValue(0);
+      onChangeDiscount(0);
     }
-  }, [availablePaymentMethods, currentPaymentMethod]);
+  }, [showDiscount, onChangeDiscount]);
 
+  useEffect(() => {
+    console.log('TabletPaymentModal: Initializing form');
 
-  const addPayment = () => {
-    const paymentAmount = parseNumber(amountInput);
-    if (paymentAmount <= 0) return;
+    // Reset form when component mounts
+    const firstAccountId = activePaymentAccounts.length > 0 ? activePaymentAccounts[0].id : null;
+    setSelectedPaymentAccount(firstAccountId || '');
+    setPaymentAmount(0); // Will be auto-filled when remaining amount is calculated
+    setReferenceNumber('');
+    setLocalDiscountValue(discountValue);
+    // Show discount toggle if there's already a discount applied
+    setShowDiscount(discountValue > 0);
+    setTotalPaid(0);
+    setPaymentHistory([]);
 
-    const selectedMethod = availablePaymentMethods.find(method => method.id === currentPaymentMethod);
-    if (!selectedMethod) return;
+    console.log('TabletPaymentModal: Form initialized with first account:', firstAccountId);
+  }, []); // Only run on mount to avoid resetting during prop changes
 
-    const newPayment: Payment = {
-      paymentMethod: selectedMethod.name,
-      paymentAccountId: activePaymentAccounts.length > 0 ? selectedMethod.id : undefined, // Only set accountId if we have real accounts
-      amount: paymentAmount,
-      reference: reference || undefined,
-      timestamp: new Date().toISOString(),
-    };
+  // Auto-fill payment amount when remaining amount changes
+  useEffect(() => {
+    if (remainingAmount > 0 && paymentAmount === 0) {
+      setPaymentAmount(remainingAmount);
+    }
+  }, [remainingAmount, paymentAmount]);
 
-    setPayments([...payments, newPayment]);
-    setAmountInput('0');
-    setReference('');
-  };
+  const handleAddPayment = () => {
+    console.log('Add Payment clicked', { paymentAmount, remainingAmount, selectedPaymentAccount, activePaymentAccounts });
 
-  const removePayment = (index: number) => {
-    setPayments(payments.filter((_, i) => i !== index));
-  };
+    const selectedAccount = activePaymentAccounts.find(account => account.id === selectedPaymentAccount);
 
-  const completePayment = async () => {
-    if (totalPaid < amount) {
-      alert('Total payment must be at least the sale amount');
+    if (!selectedAccount || !selectedPaymentAccount) {
+      console.log('No selected account found', { selectedPaymentAccount, activePaymentAccounts });
+      toast.error('Please select a payment account');
       return;
     }
 
-    setShowSuccess(true);
+    if (paymentAmount <= 0) {
+      console.log('Payment amount <= 0:', paymentAmount);
+      toast.error('Payment amount must be greater than 0');
+      return;
+    }
 
-    // Simulate processing delay
-    setTimeout(() => {
-      onComplete(payments, totalPaid);
-    }, 1500);
+    if (paymentAmount > remainingAmount) {
+      console.log('Payment amount > remaining amount:', { paymentAmount, remainingAmount });
+      toast.error(`Payment amount cannot exceed remaining amount of ${format.currency(remainingAmount)}`);
+      return;
+    }
+
+    // Check if reference is required based on account type
+    const requiresReference = selectedAccount.account_type && ['credit_card', 'mobile_money', 'bank_transfer'].includes(selectedAccount.account_type);
+    if (requiresReference && !referenceNumber.trim()) {
+      toast.error(`Reference number required for ${selectedAccount.name}`);
+      return;
+    }
+
+    // Add payment to history
+    const newPayment = {
+      method: selectedAccount.name,
+      amount: paymentAmount,
+      reference: referenceNumber || undefined
+    };
+
+    console.log('Adding payment:', newPayment);
+    setPaymentHistory(prev => [...prev, newPayment]);
+    setTotalPaid(prev => prev + paymentAmount);
+    setPaymentAmount(0); // Reset input to 0 after adding payment
+    setReferenceNumber('');
+
+    console.log('Payment added successfully');
+    toast.success(`Added ${format.currency(paymentAmount)} payment`);
   };
 
-  if (showSuccess) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-2xl p-8 max-w-sm mx-4 text-center">
-          <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle size={32} className="text-white" />
-          </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Payment Successful!</h2>
-          <p className="text-gray-600 mb-4">
-            Payment of {format.currency(totalPaid)} has been processed successfully.
-          </p>
-          <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
-        </div>
-      </div>
-    );
-  }
+  const handlePayFullAmount = async () => {
+    const selectedAccount = activePaymentAccounts.find(account => account.id === selectedPaymentAccount);
+
+    if (!selectedAccount) {
+      toast.error('Please select a payment account');
+      return;
+    }
+
+    // Use remaining amount for full payment
+    const amountToPay = remainingAmount;
+
+    // Auto-generate reference if required but not provided
+    let finalReference = referenceNumber;
+    const requiresReference = selectedAccount.account_type && ['credit_card', 'mobile_money', 'bank_transfer'].includes(selectedAccount.account_type);
+    if (requiresReference && !finalReference.trim()) {
+      // Auto-generate a simple reference
+      finalReference = `PAY-${Date.now().toString().slice(-6)}`;
+    }
+
+    const payment = {
+      method: selectedAccount.name,
+      amount: amountToPay,
+      reference: finalReference || undefined
+    };
+
+    // Convert to the format expected by onComplete
+    const paymentObjects = [{
+      paymentMethod: payment.method,
+      amount: payment.amount,
+      reference: payment.reference
+    }];
+
+    try {
+      await onComplete(paymentObjects, amountToPay);
+      onClose();
+      toast.success('Payment completed successfully!');
+    } catch (error) {
+      console.error('Payment completion failed:', error);
+      toast.error('Payment failed. Please try again.');
+    }
+  };
+
+  const handleCompletePayment = async () => {
+    const selectedAccount = activePaymentAccounts.find(account => account.id === selectedPaymentAccount);
+
+    if (!selectedAccount) {
+      toast.error('Please select a payment account');
+      return;
+    }
+
+    // For complete payment, add the final payment to complete the transaction
+    const amountToPay = remainingAmount;
+
+    // Check if reference is required based on account type
+    const requiresReference = selectedAccount.account_type && ['credit_card', 'mobile_money', 'bank_transfer'].includes(selectedAccount.account_type);
+    if (requiresReference && !referenceNumber.trim()) {
+      toast.error(`Reference number required for ${selectedAccount.name}`);
+      return;
+    }
+
+    // Add final payment to history before completing
+    if (amountToPay > 0) {
+      const finalPayment = {
+        method: selectedAccount.name,
+        amount: amountToPay,
+        reference: referenceNumber || undefined
+      };
+      setPaymentHistory(prev => [...prev, finalPayment]);
+      setTotalPaid(prev => prev + amountToPay);
+    }
+
+    const allPayments = [...paymentHistory, {
+      method: selectedAccount.name,
+      amount: amountToPay,
+      reference: referenceNumber || undefined
+    }].filter(p => p.amount > 0);
+
+    // Convert to the format expected by onComplete
+    const paymentObjects = allPayments.map(payment => ({
+      paymentMethod: payment.method,
+      amount: payment.amount,
+      reference: payment.reference
+    }));
+
+    const totalPaidAmount = allPayments.reduce((sum, p) => sum + p.amount, 0);
+
+    try {
+      await onComplete(paymentObjects, totalPaidAmount);
+      onClose();
+      toast.success('Payment completed successfully!');
+    } catch (error) {
+      console.error('Payment completion failed:', error);
+      toast.error('Payment failed. Please try again.');
+    }
+  };
+
+
+  const selectedAccount = activePaymentAccounts.find(account => account.id === selectedPaymentAccount);
+  const requiresReference = selectedAccount?.account_type &&
+    ['credit_card', 'mobile_money', 'bank_transfer'].includes(selectedAccount.account_type);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-900">Payment</h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
+            className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center"
           >
             <X size={20} className="text-gray-600" />
           </button>
         </div>
 
-        <div className="flex max-h-[calc(90vh-80px)]">
-          {/* Left Panel - Payment Input */}
-          <div className="flex-1 p-6 border-r border-gray-200">
-            <div className="space-y-6">
-              {/* Amount Summary */}
-              <div className="bg-gray-50 rounded-xl p-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-600">Total Amount</span>
-                  <span className="text-lg font-bold text-gray-900">
-                    {format.currency(amount)}
-                  </span>
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {/* Amount Summary */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6">
+            {/* Amount Due - Primary Focus */}
+            <div className="text-center mb-6 pb-4 border-b border-gray-100">
+              <div className="text-sm text-gray-600 mb-2">Amount Due</div>
+              <div className="text-3xl font-bold text-gray-900">{format.currency(finalAmount)}</div>
+            </div>
+
+            {/* Essential Payment Info */}
+            <div className="space-y-3">
+              {calculatedDiscountAmount > 0 && (
+                <div className="flex justify-between items-center py-2 bg-green-50 -mx-2 px-2 rounded-lg">
+                  <span className="text-green-700 font-medium">Discount Applied</span>
+                  <span className="font-bold text-green-700">-{format.currency(calculatedDiscountAmount)}</span>
                 </div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-600">Paid</span>
-                  <span className="text-lg font-semibold text-green-600">
-                    {format.currency(totalPaid)}
-                  </span>
+              )}
+
+              {remainingAmount > 0 && (
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-600 font-medium">Remaining to Pay</span>
+                  <span className="font-bold text-gray-900">{format.currency(remainingAmount)}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Remaining</span>
-                  <span className="text-lg font-semibold text-orange-600">
-                    {format.currency(remainingAmount)}
-                  </span>
-                </div>
-                {change > 0 && (
-                  <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200">
-                    <span className="text-sm font-semibold text-gray-900">Change</span>
-                    <span className="text-lg font-bold text-blue-600">
-                      {format.currency(change)}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Discount (fixed currency only) */}
-              <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">Discount (TSh)</p>
-                    <p className="text-xs text-gray-500">Toggle to add a discount</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = !discountEnabled;
-                      setDiscountEnabled(next);
-                      if (!next) {
-                        setDiscountInput('0');
-                        onChangeDiscount(0);
-                      }
-                    }}
-                    className={`w-12 h-6 rounded-full transition-all ${
-                      discountEnabled ? 'bg-blue-500' : 'bg-gray-300'
-                    }`}
-                  >
-                    <div
-                      className={`w-5 h-5 bg-white rounded-full shadow transform transition-all ${
-                        discountEnabled ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {discountEnabled && (
-                  <div className="space-y-1.5">
-                    <input
-                      type="text"
-                      value={discountInput}
-                      onChange={(e) => {
-                        const raw = e.target.value.replace(/,/g, '');
-                        const num = parseFloat(raw) || 0;
-                        setDiscountInput(num.toLocaleString());
-                        onChangeDiscount(num);
-                      }}
-                      onFocus={(e) => {
-                        e.target.select();
-                        setDiscountInput('');
-                      }}
-                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="0"
-                      inputMode="decimal"
-                    />
-                    <p className="text-xs text-gray-500">
-                      Applied: {format.currency(discountValue || 0)}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Payment Method */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Payment Method
-                </label>
-                {accountsLoading ? (
-                  <div className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg animate-pulse">
-                    <div className="h-5 bg-gray-300 rounded"></div>
-                  </div>
-                ) : (
-                  <select
-                    value={currentPaymentMethod}
-                    onChange={(e) => setCurrentPaymentMethod(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={accountsLoading}
-                  >
-                    {availablePaymentMethods.map((method) => (
-                      <option key={method.id} value={method.id}>
-                        {method.name} ({method.type.replace('_', ' ')})
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-
-              {/* Amount Input */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Amount
-                </label>
-                <input
-                  type="text"
-                  value={amountInput}
-                  onChange={(e) => {
-                    const raw = e.target.value.replace(/,/g, '');
-                    const num = parseFloat(raw) || 0;
-                    setAmountInput(num.toLocaleString());
-                  }}
-                  onFocus={(e) => {
-                    e.target.select();
-                    setAmountInput('');
-                  }}
-                  className="w-full px-3 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
-                  placeholder="0"
-                  inputMode="decimal"
-                />
-              </div>
-
-              {/* Reference - Only show for bank transfer or mobile money */}
-              {(() => {
-                const selectedMethod = availablePaymentMethods.find(method => method.id === currentPaymentMethod);
-                const shouldShowReference = selectedMethod?.type === 'bank' || selectedMethod?.type === 'mobile_money';
-
-                if (!shouldShowReference) return null;
-
-                return (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      Reference (Required)
-                    </label>
-                    <input
-                      type="text"
-                      value={reference}
-                      onChange={(e) => setReference(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Transaction ID, receipt number, etc."
-                      required
-                    />
-                  </div>
-                );
-              })()}
-
-              {/* Add Payment Button */}
-              <button
-                onClick={addPayment}
-                disabled={!amountInput || parseFloat(amountInput.replace(/,/g, '')) <= 0}
-                className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center space-x-2"
-              >
-                <Plus size={20} />
-                <span>Add Payment</span>
-              </button>
+              )}
             </div>
           </div>
 
-          {/* Right Panel - Payment List */}
-          <div className="w-80 p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Payment Details</h3>
+          {/* Primary Actions */}
+          <div className="space-y-3">
+            {/* Pay Full Amount + Cancel Row */}
+            <div className="grid grid-cols-2 gap-3">
+              {remainingAmount > 0 && (
+                <button
+                  onClick={handlePayFullAmount}
+                  disabled={!selectedPaymentAccount}
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg text-base transition-colors flex items-center justify-center"
+                >
+                  Pay Full Amount
+                </button>
+              )}
 
-            {payments.length === 0 ? (
-              <div className="text-center py-8">
-                <CreditCard size={48} className="text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">No payments added yet</p>
+              <button
+                onClick={onClose}
+                className="border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 px-4 rounded-lg text-base transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+
+            {/* Amount Display in Button */}
+            {remainingAmount > 0 && (
+              <div className="text-center py-2">
+                <div className="text-lg font-bold text-gray-900">{format.currency(remainingAmount)}</div>
+                <div className="text-xs text-gray-500">Full payment amount</div>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {payments.map((payment, index) => (
-                  <div key={index} className="bg-gray-50 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold text-gray-900">
-                        {payment.paymentMethod}
-                      </span>
-                      <button
-                        onClick={() => removePayment(index)}
-                        className="w-6 h-6 bg-red-100 hover:bg-red-200 rounded-full flex items-center justify-center transition-colors"
-                      >
-                        <X size={14} className="text-red-600" />
-                      </button>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Amount</span>
-                      <span className="font-semibold text-gray-900">
-                        {format.currency(payment.amount)}
-                      </span>
-                    </div>
-                    {payment.reference && (
-                      <div className="flex justify-between items-center mt-1">
-                        <span className="text-xs text-gray-500">Ref</span>
-                        <span className="text-xs text-gray-700 font-mono">
-                          {payment.reference}
-                        </span>
-                      </div>
-                    )}
+            )}
+          </div>
+
+          {/* Secondary Options */}
+          <div className="border-t border-gray-100 pt-4 space-y-4">
+            {/* Discount Toggle */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">Add Discount</span>
+              <button
+                onClick={() => setShowDiscount(!showDiscount)}
+                className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  showDiscount ? 'bg-blue-600' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    showDiscount ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+          {/* Discount Input */}
+          {showDiscount && (
+            <div className="mt-3">
+              <input
+                type="number"
+                value={localDiscountValue || ''}
+                onChange={(e) => {
+                  const value = Number(e.target.value) || 0;
+                  const maxValue = discountType === 'percentage' ? 100 : amount;
+                  const clampedValue = Math.max(0, Math.min(value, maxValue));
+                  setLocalDiscountValue(clampedValue);
+                  onChangeDiscount(clampedValue);
+                }}
+                placeholder={discountType === 'percentage' ? 'Discount % (0-100)' : 'Discount amount'}
+                className="w-full border border-gray-200 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                min="0"
+                max={discountType === 'percentage' ? 100 : amount}
+                step={discountType === 'percentage' ? '1' : '0.01'}
+              />
+              {discountType === 'percentage' && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Discount: {format.currency(calculatedDiscountAmount)} ({localDiscountValue}%)
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Payment Account - Auto-selected, minimal UI */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Payment Method
+              </label>
+              {selectedPaymentAccount && (
+                <span className="text-xs text-green-600 font-medium">Auto-selected ✓</span>
+              )}
+            </div>
+            {accountsLoading ? (
+              <div className="flex gap-2">
+                {[1, 2].map((i) => (
+                  <div key={i} className="flex-1 p-2 border border-gray-200 rounded-lg animate-pulse">
+                    <div className="h-3 bg-gray-300 rounded"></div>
                   </div>
                 ))}
               </div>
+            ) : activePaymentAccounts.length > 0 ? (
+              <div className="flex gap-2">
+                {activePaymentAccounts.slice(0, 3).map((account) => (
+                  <button
+                    key={account.id}
+                    onClick={() => setSelectedPaymentAccount(account.id)}
+                    className={`flex-1 p-2 border rounded-lg text-center transition-colors text-xs ${
+                      selectedPaymentAccount === account.id
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                    }`}
+                  >
+                    <div className="font-medium">{account.name}</div>
+                  </button>
+                ))}
+                {activePaymentAccounts.length > 3 && (
+                  <div className="flex-1 p-2 border border-gray-200 rounded-lg text-center text-xs text-gray-500">
+                    +{activePaymentAccounts.length - 3} more
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-2 text-sm text-gray-500">
+                No payment accounts available
+              </div>
             )}
+          </div>
 
-            {/* Complete Payment Button */}
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <button
-                onClick={completePayment}
-                disabled={totalPaid < amount}
-                className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white font-semibold py-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
-              >
-                <CheckCircle size={20} />
-                <span>Complete Payment</span>
-              </button>
+          {/* Manual Payment Controls - For partial payments */}
+          {remainingAmount > 0 && (
+            <div className="border-t border-gray-100 pt-4 mt-4">
+              <div className="text-xs text-gray-500 mb-3 text-center">
+                For partial payments only
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Partial Amount
+                  </label>
+                  <input
+                    type="number"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                    placeholder="Enter partial amount"
+                    className="w-full border border-gray-200 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    min="0"
+                    max={remainingAmount}
+                  />
+                </div>
+
+                {remainingAmount > 0 ? (
+                  <button
+                    onClick={() => {
+                      console.log('Add Payment button clicked, disabled:', paymentAmount <= 0 || paymentAmount > remainingAmount || !selectedPaymentAccount, 'values:', { paymentAmount, remainingAmount, selectedPaymentAccount });
+                      handleAddPayment();
+                    }}
+                    disabled={paymentAmount <= 0 || paymentAmount > remainingAmount || !selectedPaymentAccount}
+                    className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg text-sm font-medium hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Add Partial Payment
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleCompletePayment}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Complete Payment
+                  </button>
+                )}
+              </div>
             </div>
+          )}
+
+          {/* Reference Input - Optional */}
+          {requiresReference && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reference <span className="text-gray-500">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={referenceNumber}
+                onChange={(e) => setReferenceNumber(e.target.value)}
+                placeholder="Auto-generated if empty"
+                className="w-full border border-gray-200 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 mt-1">Leave empty for auto-generated reference</p>
+            </div>
+          )}
+
+          {/* Payment History - Only show if there are partial payments */}
+          {paymentHistory.length > 0 && (
+            <div className="border border-gray-200 rounded-lg">
+              <div className="p-3">
+                <h4 className="text-sm font-semibold text-gray-900 mb-2">Partial Payments</h4>
+                <div className="space-y-1">
+                  {paymentHistory.map((payment, index) => (
+                    <div key={index} className="flex items-center justify-between py-1">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                          <span className="text-white text-xs">✓</span>
+                        </div>
+                        <div className="text-sm text-gray-700">{payment.method}</div>
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900">
+                        {format.currency(payment.amount)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
           </div>
         </div>
+
       </div>
     </div>
   );

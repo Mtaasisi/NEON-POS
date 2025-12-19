@@ -114,6 +114,7 @@ class CustomerPortalService {
           is_customer_portal_visible,
           category_id,
           brand,
+          attributes,
           category:lats_categories!category_id(name)
         `);
 
@@ -250,7 +251,24 @@ class CustomerPortalService {
           images: productImageUrls.length > 0 ? productImageUrls : (product.image_url ? [product.image_url] : []),
           inStock: totalStock > 0,
           stockQuantity: totalStock,
-          specifications: {}, // Specifications not stored in main table - could be added later if needed
+        // Parse product.attributes.specification if available (may be stored as JSON or object)
+        specifications: (() => {
+          try {
+            const raw = product.attributes?.specification;
+            if (!raw) return {};
+            if (typeof raw === 'string') {
+              return JSON.parse(raw);
+            }
+            return raw;
+          } catch (e) {
+            return {};
+          }
+        })(),
+        portalSpecification: (() => {
+          const raw = product.attributes?.customer_portal_specification || null;
+          if (!raw) return null;
+          return typeof raw === 'string' ? raw : JSON.stringify(raw);
+        })(),
           variants: productVariants.map((v: any) => ({
             id: v.id,
             name: v.variant_name,
@@ -303,6 +321,7 @@ class CustomerPortalService {
           is_customer_portal_visible,
           category_id,
           brand,
+          attributes,
           category:lats_categories!category_id(name)
         `)
         .eq('id', productId)
@@ -375,7 +394,21 @@ class CustomerPortalService {
         images: imageUrls.length > 0 ? imageUrls : (productData.image_url ? [productData.image_url] : []),
         inStock: totalStock > 0,
         stockQuantity: totalStock,
-        specifications: {}, // Specifications not stored in main table
+        specifications: (() => {
+          try {
+            const raw = (productData as any).attributes?.specification;
+            if (!raw) return {};
+            if (typeof raw === 'string') return JSON.parse(raw);
+            return raw;
+          } catch {
+            return {};
+          }
+        })(),
+        portalSpecification: (() => {
+          const raw = (productData as any).attributes?.customer_portal_specification || null;
+          if (!raw) return null;
+          return typeof raw === 'string' ? raw : JSON.stringify(raw);
+        })(),
         variants: variants.map((v: any) => ({
           id: v.id,
           name: v.variant_name,

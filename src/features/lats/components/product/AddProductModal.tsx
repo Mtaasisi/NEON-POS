@@ -50,6 +50,7 @@ const productFormSchema = z.object({
   }, {
     message: "Specification must be valid JSON"
   }),
+  customerPortalSpecification: z.string().max(2000, 'Customer portal specification must be less than 2000 characters').optional(),
   sku: z.string().max(50, 'SKU must be less than 50 characters').optional(),
   categoryId: z.string().min(1, 'Category must be selected'),
   condition: z.enum(['new', 'used', 'refurbished'], {
@@ -85,6 +86,7 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
     condition: 'new' as 'new' | 'used' | 'refurbished',
     description: '',
     specification: '',
+    customerPortalSpecification: '',
     isCustomerPortalVisible: true,
     metadata: {},
     variants: []
@@ -437,6 +439,7 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
         condition: 'new',
         description: '',
         specification: '',
+        customerPortalSpecification: '',
         metadata: {},
         variants: []
       });
@@ -516,7 +519,8 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
       // Prepare attributes with specification and condition if available
       const productAttributes = {
         ...(formData.metadata || {}),
-        ...(formData.specification ? { specification: formData.specification } : {}),
+        ...(formData.specification !== undefined ? { specification: formData.specification } : {}),
+        ...(formData.customerPortalSpecification !== undefined ? { customer_portal_specification: formData.customerPortalSpecification } : {}),
         ...(formData.condition ? { condition: formData.condition } : {})
       };
 
@@ -563,6 +567,12 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
       };
 
       console.log('🔄 [AddProductModal] Creating product with data:', productData);
+      
+      // Debug: log attributes being saved (helps confirm customer portal spec is included)
+      console.log('🔍 [AddProductModal] attributes payload:', productData.attributes);
+      try {
+        toast.custom?.(null); // noop to ensure toast lib is available (no-op)
+      } catch {}
 
       // Create product
       const { data: product, error: productError } = await retryWithBackoff(async () => {
@@ -616,6 +626,26 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
       }
 
       console.log('✅ [AddProductModal] Product created successfully:', product);
+
+      // 🔍 DEBUG: Verify database write for customer portal specification
+      try {
+        const { data: dbCheck, error: dbCheckError } = await supabase
+          .from('lats_products')
+          .select('id, name, attributes')
+          .eq('id', product.id)
+          .single();
+
+        if (dbCheckError) {
+          console.error('❌ [DEBUG] Failed to verify DB write:', dbCheckError);
+        } else {
+          const portalSpec = dbCheck.attributes?.customer_portal_specification;
+          console.log('🔍 [DEBUG] DB verification - Portal spec saved:', !!portalSpec);
+          console.log('🔍 [DEBUG] DB verification - Portal spec value:', portalSpec);
+          console.log('🔍 [DEBUG] DB verification - Full attributes:', dbCheck.attributes);
+        }
+      } catch (debugError) {
+        console.error('❌ [DEBUG] Exception during DB verification:', debugError);
+      }
 
       // Create variants if any
       if (product && variants.length > 0) {
@@ -772,17 +802,14 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
       console.log('🔄 [AddProductModal] Clearing all product caches and reloading...');
       productCacheService.clearProducts();
       
-      // Clear query cache and deduplication cache
-      const { invalidateCachePattern } = await import('../../../../lib/queryCache');
-      invalidateCachePattern('products:*');
-      
-      // Clear enhanced cache manager
-      const { smartCache } = await import('../../../../lib/enhancedCacheManager');
-      smartCache.invalidateCache('products');
-      
-      // Force refresh products (bypass all caches)
-      await loadProducts(null, true);
-      console.log('✅ [AddProductModal] Products reloaded successfully');
+      // Trigger automatic data refresh to show changes immediately
+      try {
+        const { refreshAfterProductCreate } = await import('../../../../services/productRefreshService');
+        await refreshAfterProductCreate();
+      } catch (refreshError) {
+        console.warn('⚠️ [AddProductModal] Failed to refresh data after creation:', refreshError);
+        // Don't fail the creation if refresh fails - user can manually refresh if needed
+      }
 
       toast.success('Product created successfully!');
       
@@ -800,6 +827,7 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
         condition: 'new',
         description: '',
         specification: '',
+        customerPortalSpecification: '',
         metadata: {},
         variants: []
       });

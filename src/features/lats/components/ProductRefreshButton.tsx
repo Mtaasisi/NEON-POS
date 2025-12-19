@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { RefreshCw, Database } from 'lucide-react';
 import { useInventoryStore } from '../stores/useInventoryStore';
 import { toast } from 'react-hot-toast';
+import { productRefreshService } from '../../../services/productRefreshService';
 
 interface ProductRefreshButtonProps {
   className?: string;
@@ -17,11 +18,11 @@ const ProductRefreshButton: React.FC<ProductRefreshButtonProps> = ({
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    
+
     try {
       console.log('🔄 Manual product refresh triggered');
-      await forceRefreshProducts();
-      
+      await productRefreshService.refreshAfterProductUpdate();
+
       toast.success(`✅ Products refreshed! Now showing ${products.length} products`, {
         duration: 3000,
         position: 'top-center'

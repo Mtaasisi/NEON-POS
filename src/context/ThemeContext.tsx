@@ -28,6 +28,11 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     // Apply theme to body
     document.body.className = document.body.className.replace(/theme-\w+/g, '');
     document.body.classList.add(`theme-${newTheme}`);
+    
+    // Also toggle the global 'dark' class on the root element so Tailwind/other dark utilities work
+    const root = document.documentElement;
+    const shouldBeDark = newTheme === 'dark' || newTheme === 'dark-cards';
+    root.classList.toggle('dark', shouldBeDark);
   };
 
   const isDark = theme === 'dark' || theme === 'dark-cards';
@@ -36,6 +41,10 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     // Apply initial theme
     document.body.className = document.body.className.replace(/theme-\w+/g, '');
     document.body.classList.add(`theme-${theme}`);
+    // Ensure global dark class matches theme so dark: utilities apply across the app
+    const root = document.documentElement;
+    const shouldBeDark = theme === 'dark' || theme === 'dark-cards';
+    root.classList.toggle('dark', shouldBeDark);
   }, [theme]);
 
   return (

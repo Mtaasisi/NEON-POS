@@ -26,6 +26,7 @@ interface BranchContextType {
   currentBranch: Branch | null;
   availableBranches: Branch[];
   loading: boolean;
+  switchingBranch: boolean;
   switchBranch: (branchId: string) => Promise<void>;
   canAccessBranch: (branchId: string) => boolean;
   isDataShared: (entityType: 'products' | 'customers' | 'inventory' | 'suppliers' | 'categories' | 'employees') => boolean;
@@ -44,6 +45,7 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [currentBranch, setCurrentBranch] = useState<Branch | null>(null);
   const [availableBranches, setAvailableBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [switchingBranch, setSwitchingBranch] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
@@ -188,9 +190,48 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       return;
     }
 
+    // Prevent multiple simultaneous branch switches
+    if (switchingBranch) {
+      toast.error('Branch switch already in progress');
+      return;
+    }
+
+    // Store previous branch for logging
+    const previousBranch = currentBranch;
+
+    // Set switching state and update branch immediately (optimistic update)
+    setSwitchingBranch(true);
     setCurrentBranch(branch);
     localStorage.setItem('current_branch_id', branchId);
-    toast.success(`Switched to ${branch.name}`);
+
+    console.log(`🔄 [BranchSwitch] Switching to branch: ${branch.name} (${branchId})`);
+
+    try {
+      // 🚀 AUTOMATIC DATA SYNC: Clear caches and refresh all stores
+      const { branchSyncService } = await import('../services/branchSyncService');
+      const syncResult = await branchSyncService.syncOnBranchSwitch(branchId, branch.name);
+
+      console.log(`✅ [BranchSwitch] Data sync completed for ${branch.name}:`, {
+        success: syncResult.success,
+        duration: syncResult.duration,
+        refreshedStores: syncResult.refreshedStores.length,
+        errors: syncResult.errors.length
+      });
+
+      // Show appropriate toast based on sync result
+      if (syncResult.success) {
+        toast.success(`Switched to ${branch.name} - all data synced!`);
+      } else {
+        toast.success(`Switched to ${branch.name} (sync had ${syncResult.errors.length} issue(s))`);
+      }
+
+    } catch (syncError) {
+      console.error('❌ [BranchSwitch] Data sync failed:', syncError);
+      toast.error(`Switched to ${branch.name} but data sync failed. Please refresh manually.`);
+      // Don't fail the branch switch if sync fails - user can still use the app
+    } finally {
+      setSwitchingBranch(false);
+    }
 
     // Log branch switch (optional - don't fail if it errors)
     try {
@@ -199,10 +240,13 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         user_id: currentUser?.id,
         action_type: 'BRANCH_SWITCH',
         description: `User switched to branch: ${branch.name}`,
-        metadata: { previous_branch: currentBranch?.id }
+        metadata: {
+          previous_branch: previousBranch?.id,
+          auto_sync_triggered: true
+        }
       });
     } catch (err) {
-
+      console.warn('⚠️ [BranchSwitch] Failed to log branch switch:', err);
     }
   };
 
@@ -261,6 +305,7 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     currentBranch,
     availableBranches,
     loading,
+    switchingBranch,
     switchBranch,
     canAccessBranch,
     isDataShared,
@@ -292,6 +337,7 @@ export const useBranch = (): BranchContextType => {
         currentBranch: null,
         availableBranches: [],
         loading: true,
+        switchingBranch: false,
         switchBranch: async () => {},
         canAccessBranch: () => false,
         isDataShared: () => true,

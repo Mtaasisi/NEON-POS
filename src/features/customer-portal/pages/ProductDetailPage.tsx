@@ -1,22 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import MobileLayout from '../components/MobileLayout';
-import { 
-  Heart, 
-  Share2, 
-  Star,
-  ShoppingCart,
-  Minus,
-  Plus,
-  CheckCircle,
-  Truck,
-  Shield,
-  ChevronRight
-} from 'lucide-react';
 import { CustomerProduct } from '../types';
 import toast from 'react-hot-toast';
 import customerPortalService from '../services/customerPortalService';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import CustomTipModal from '../components/CustomTipModal';
+import TipsModal from '../components/TipsModal';
+import VariantSelectionModal from '../components/VariantSelectionModal';
+import ImageCarousel from '../components/ImageCarousel';
+import StickyBottomBar from '../components/StickyBottomBar';
+import {
+  Smartphone,
+  Monitor,
+  HardDrive,
+  Database,
+  Camera,
+  Battery,
+  Wifi,
+  Settings,
+  Ruler,
+  Headphones,
+  Palette,
+  Laptop,
+  FileText,
+  Wrench,
+  Cpu,
+  Gauge
+} from 'lucide-react';
 
 const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,10 +37,13 @@ const ProductDetailPage: React.FC = () => {
   const [product, setProduct] = useState<CustomerProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
-  const [quantity, setQuantity] = useState(1);
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [selectedImageIndex] = useState(0); // For ImageCarousel compatibility
   const [isFavorite, setIsFavorite] = useState(false);
-  const [showFullDescription, setShowFullDescription] = useState(false);
+  const [selectedTipId, setSelectedTipId] = useState<string | null>(null);
+  const [customTipOpen, setCustomTipOpen] = useState(false);
+  const [customTipAmount, setCustomTipAmount] = useState<number>(0);
+  const [tipsModalOpen, setTipsModalOpen] = useState(false);
+  const [variantModalOpen, setVariantModalOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -112,53 +126,6 @@ const ProductDetailPage: React.FC = () => {
     }
   };
 
-  const handleAddToCart = () => {
-    if (!product) return;
-
-    if (!selectedVariantId && product.variants && product.variants.length > 0) {
-      toast.error('Please select a variant');
-      return;
-    }
-
-    const selectedVariant = product.variants?.find(v => v.id === selectedVariantId);
-    
-    if (selectedVariant && !selectedVariant.inStock) {
-      toast.error('This variant is out of stock');
-      return;
-    }
-
-    // Get existing cart
-    const cartStr = localStorage.getItem('customer_cart');
-    const cart = cartStr ? JSON.parse(cartStr) : [];
-
-    // Add to cart
-    const cartItem = {
-      productId: product.id,
-      productName: product.name,
-      variantId: selectedVariantId,
-      variantName: selectedVariant?.name,
-      quantity,
-      price: selectedVariant?.price || product.price,
-      imageUrl: product.imageUrl
-    };
-
-    // Check if item already in cart
-    const existingIndex = cart.findIndex(
-      (item: any) => item.productId === product.id && item.variantId === selectedVariantId
-    );
-
-    if (existingIndex >= 0) {
-      cart[existingIndex].quantity += quantity;
-    } else {
-      cart.push(cartItem);
-    }
-
-    localStorage.setItem('customer_cart', JSON.stringify(cart));
-    toast.success('Added to cart');
-    
-    // Optional: Navigate to cart
-    // navigate('/customer-portal/cart');
-  };
 
   if (loading) {
     return (
@@ -190,277 +157,173 @@ const ProductDetailPage: React.FC = () => {
   const currentPrice = selectedVariant?.price || product.price;
   const comparePrice = selectedVariant?.compareAtPrice;
   const hasDiscount = comparePrice && comparePrice > currentPrice;
-  const images = product.images?.length > 0 ? product.images : [product.imageUrl].filter(Boolean);
+  const images = (product.images && product.images.length > 0) ? product.images : [product.imageUrl].filter((url): url is string => Boolean(url));
 
   return (
     <MobileLayout title={product.name} showBackButton showBottomNav={false}>
-      {/* Product Image - Matching card design with bleed effect */}
-      <div className="relative px-4 pt-6 pb-4">
-        <div
-          className="relative"
-          style={{
-            marginTop: '-8px',
-            marginBottom: '8px',
-          }}
-        >
-          <div className="relative aspect-square bg-gray-50 overflow-hidden border border-gray-200"
-               style={{ borderRadius: '28px' }}>
-            {images[selectedImageIndex] ? (
-              <img
-                src={images[selectedImageIndex]}
-                alt={product.name}
-                className="w-full h-full object-cover"
-                style={{
-                  marginLeft: '-8px',
-                  marginRight: '-8px',
-                  width: 'calc(100% + 16px)'
-                }}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <ShoppingCart size={64} className="text-gray-300" />
-              </div>
-            )}
+      {/* Image carousel with thumbnails and overlay actions */}
+      <ImageCarousel
+        images={images}
+        initialIndex={selectedImageIndex}
+        isFavorite={isFavorite}
+        onShare={handleShare}
+        onToggleFavorite={toggleFavorite}
+      />
 
-            {/* Action Buttons - Repositioned */}
-            <div className="absolute top-6 right-6 flex gap-2">
-              <button
-                onClick={handleShare}
-                className="bg-white rounded-full p-2 shadow-lg active:scale-90 transition-transform"
-              >
-                <Share2 size={18} className="text-gray-700" />
-              </button>
-              <button
-                onClick={toggleFavorite}
-                className="bg-white rounded-full p-2 shadow-lg active:scale-90 transition-transform"
-              >
-                <Heart
-                  size={18}
-                  className={isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-700'}
-                />
-              </button>
-            </div>
-          </div>
-
-          {/* Floating Add to Cart Button - Matching card design */}
-          <button
-            onClick={handleAddToCart}
-            disabled={!product.inStock}
-            className={`absolute bg-blue-500 hover:bg-blue-600 active:bg-blue-700 rounded-full flex items-center justify-center border border-white transition-all duration-200 shadow-md ${
-              product.inStock ? '' : 'bg-gray-400 cursor-not-allowed'
-            }`}
-            style={{
-              width: '44px',
-              height: '44px',
-              right: '-8px',
-              bottom: '-18px',
-              WebkitTapHighlightColor: 'transparent',
-            }}
-          >
-            <ShoppingCart size={20} className="text-white" />
-          </button>
-        </div>
-
-        {/* Image Thumbnails - Redesigned */}
-        {images.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto py-3">
-            {images.map((img, idx) => (
-              <button
-                key={idx}
-                onClick={() => setSelectedImageIndex(idx)}
-                className={`flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 ${
-                  selectedImageIndex === idx ? 'border-blue-600' : 'border-gray-200'
-                }`}
-              >
-                <img src={img} alt="" className="w-full h-full object-cover" />
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Product Info - Matching card design */}
+      {/* Beautifully Redesigned Product Info */}
       <div className="px-4 pb-6">
-        {/* Price - Prominently displayed first (matching card hierarchy) */}
-        <h1 className="text-xl font-bold text-gray-900 mb-1">
-          Tsh {Math.round(currentPrice).toLocaleString('en-US')}
-        </h1>
+        <div className="max-w-4xl mx-auto">
+          {/* Main Product Card with Flat Design */}
+          <div className="bg-white rounded-[28px] shadow-xl border overflow-hidden mb-6">
+            <div className="p-6 md:p-8">
+              {/* Product Header with Badge */}
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 mb-0">
+                {product.inStock ? 'In Stock' : 'Out of Stock'}
+              </span>
 
-        {/* Product Name - Secondary (matching card design) */}
-        <h2 className="text-lg font-medium text-blue-600 mb-3 truncate">
-          {product.name}
-        </h2>
+              {/* Price Section with Simple Typography */}
+              <div className="mb-0">
+                <div className="flex items-baseline gap-2 mb-0">
+                  <span className="text-4xl md:text-5xl font-black text-gray-900">
+                    Tsh {Math.round(currentPrice).toLocaleString('en-US')}
+                  </span>
+                  {hasDiscount && comparePrice && (
+                    <span className="text-lg text-slate-500 line-through">
+                      Tsh {Math.round(comparePrice).toLocaleString('en-US')}
+                    </span>
+                  )}
+                </div>
+                {hasDiscount && comparePrice && (
+                  <div className="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-700 text-sm font-semibold">
+                    Save {Math.round(((comparePrice - currentPrice) / comparePrice) * 100)}%
+                  </div>
+                )}
+              </div>
 
-        {/* Brand & Category */}
-        <div className="flex items-center gap-1.5 mb-3">
-          {product.brand && (
-            <>
-              <span className="text-sm font-medium text-gray-700">{product.brand}</span>
-              {product.category && <span className="text-gray-400">•</span>}
-            </>
-          )}
-          {product.category && (
-            <span className="text-sm text-gray-600">{product.category}</span>
-          )}
-        </div>
+              {/* Variant Selection Options Info */}
+              <div className="mb-1">
+                <p className="text-slate-700 leading-relaxed text-sm">
+                  📦 Dropdown Style - Like e-commerce sites (Nike, Amazon)<br/>
+                  🔘 Better Radio Buttons - Larger, more prominent selection
+                </p>
+              </div>
 
-        {/* Rating */}
-        {product.rating !== undefined && (
-          <div className="flex items-center gap-1 mb-4">
-            <Star size={14} className="fill-yellow-400 text-yellow-400" />
-            <span className="text-sm text-gray-700 font-medium">{product.rating.toFixed(1)}</span>
-            {product.reviewCount && (
-              <span className="text-sm text-gray-500">({product.reviewCount})</span>
-            )}
-          </div>
-        )}
 
-        {/* Discount display */}
-        {hasDiscount && (
-          <div className="mb-4">
-            <span className="text-base text-gray-500 line-through">
-              Tsh {Math.round(comparePrice!).toLocaleString('en-US')}
-            </span>
-            <span className="inline-block ml-2 px-2 py-1 bg-red-100 text-red-600 text-xs font-bold rounded">
-              Save {Math.round(((comparePrice! - currentPrice) / comparePrice!) * 100)}%
-            </span>
-          </div>
-        )}
+              {/* Customer Portal Specifications */}
+              {product.portalSpecification && (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900">Technical Specifications</h3>
+                  </div>
+                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="divide-y divide-gray-100">
+                      {product.portalSpecification.split('\n').filter(line => line.trim()).map((line, index) => {
+                        const [key, ...valueParts] = line.split(':');
+                        const value = valueParts.join(':').trim();
 
-        {/* Stock Status - Simplified */}
-        <div className="mb-4">
-          {product.inStock ? (
-            <div className="flex items-center gap-2 text-green-600 text-sm">
-              <CheckCircle size={16} />
-              <span className="font-medium">In Stock</span>
-              {product.stockQuantity && product.stockQuantity < 10 && (
-                <span className="text-orange-600 ml-2">
-                  Only {product.stockQuantity} left
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="text-red-600 font-medium text-sm">Out of Stock</div>
-          )}
-        </div>
+                        // Simple flat icons for specifications - unique icons for each type
+                        const getSpecIcon = (key: string) => {
+                          const lowerKey = key.toLowerCase().trim();
+                          if (lowerKey.includes('model')) return <Smartphone className="w-4 h-4 text-gray-600" />;
+                          if (lowerKey.includes('display') || lowerKey.includes('screen')) return <Monitor className="w-4 h-4 text-gray-600" />;
+                          if (lowerKey.includes('processor')) return <Cpu className="w-4 h-4 text-gray-600" />;
+                          if (lowerKey.includes('graphics')) return <Gauge className="w-4 h-4 text-gray-600" />;
+                          if (lowerKey.includes('memory') || lowerKey.includes('ram')) return <Database className="w-4 h-4 text-gray-600" />;
+                          if (lowerKey.includes('storage')) return <HardDrive className="w-4 h-4 text-gray-600" />;
+                          if (lowerKey.includes('camera')) return <Camera className="w-4 h-4 text-gray-600" />;
+                          if (lowerKey.includes('battery')) return <Battery className="w-4 h-4 text-gray-600" />;
+                          if (lowerKey.includes('connectivity') || lowerKey.includes('wifi') || lowerKey.includes('bluetooth')) return <Wifi className="w-4 h-4 text-gray-600" />;
+                          if (lowerKey.includes('sensors')) return <Settings className="w-4 h-4 text-gray-600" />;
+                          if (lowerKey.includes('dimensions') || lowerKey.includes('weight') || lowerKey.includes('size')) return <Ruler className="w-4 h-4 text-gray-600" />;
+                          if (lowerKey.includes('ports') || lowerKey.includes('audio')) return <Headphones className="w-4 h-4 text-gray-600" />;
+                          if (lowerKey.includes('color') || lowerKey.includes('options')) return <Palette className="w-4 h-4 text-gray-600" />;
+                          if (lowerKey.includes('os') || lowerKey.includes('system')) return <Laptop className="w-4 h-4 text-gray-600" />;
+                          if (lowerKey.includes('notes')) return <FileText className="w-4 h-4 text-gray-600" />;
+                          return <Wrench className="w-4 h-4 text-gray-600" />;
+                        };
 
-        {/* Variants Selection - Cleaner design */}
-        {product.variants && product.variants.length > 0 && (
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-900 mb-3">
-              Select Variant
-            </label>
-            <div className="grid grid-cols-1 gap-2">
-              {product.variants.map(variant => (
-                <button
-                  key={variant.id}
-                  onClick={() => setSelectedVariantId(variant.id)}
-                  disabled={!variant.inStock}
-                  className={`p-3 rounded-lg border-2 text-left transition-all ${
-                    selectedVariantId === variant.id
-                      ? 'border-blue-600 bg-blue-50'
-                      : variant.inStock
-                      ? 'border-gray-200 hover:border-gray-300'
-                      : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <div className="font-medium text-sm text-gray-900">{variant.name}</div>
-                    <div className="text-sm font-bold text-gray-900">
-                      Tsh {Math.round(variant.price).toLocaleString('en-US')}
+                        return (
+                          <div key={index} className="p-4 hover:bg-gray-50 transition-colors duration-200">
+                            <div className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                {getSpecIcon(key)}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-gray-900 text-sm mb-1">
+                                  {key.trim()}
+                                </div>
+                                <div className="text-gray-700 text-sm leading-relaxed">
+                                  {value}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                  {!variant.inStock && (
-                    <div className="text-xs text-red-600 mt-1">Out of stock</div>
-                  )}
-                </button>
-              ))}
+                </div>
+              )}
             </div>
-          </div>
-        )}
-
-        {/* Quantity Selector - Cleaner design */}
-        {product.inStock && (
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-900 mb-3">Quantity</label>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center active:scale-90 transition-transform"
-              >
-                <Minus size={16} />
-              </button>
-              <span className="text-lg font-semibold w-8 text-center">{quantity}</span>
-              <button
-                onClick={() => setQuantity(quantity + 1)}
-                className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center active:scale-90 transition-transform"
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Description */}
-      {product.description && (
-        <div className="px-4 pb-6">
-          <h2 className="text-base font-bold text-gray-900 mb-3">Description</h2>
-          <p className={`text-gray-700 text-sm leading-relaxed ${showFullDescription ? '' : 'line-clamp-3'}`}>
-            {product.description}
-          </p>
-          {product.description.length > 150 && (
-            <button
-              onClick={() => setShowFullDescription(!showFullDescription)}
-              className="text-blue-600 font-medium mt-3 text-sm"
-            >
-              {showFullDescription ? 'Show Less' : 'Show More'}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Specifications */}
-      {product.specifications && Object.keys(product.specifications).length > 0 && (
-        <div className="px-4 pb-6">
-          <h2 className="text-base font-bold text-gray-900 mb-3">Specifications</h2>
-          <div className="space-y-3">
-            {Object.entries(product.specifications).map(([key, value]) => (
-              <div key={key} className="flex justify-between py-2 border-b border-gray-100">
-                <span className="text-gray-600 font-medium text-sm">{key}</span>
-                <span className="text-gray-900 text-sm font-medium">{value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Features */}
-      <div className="px-4 pb-6">
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div className="flex flex-col items-center">
-            <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center mb-2">
-              <Truck size={20} className="text-blue-600" />
-            </div>
-            <span className="text-xs text-gray-600">Free Delivery</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center mb-2">
-              <Shield size={20} className="text-blue-600" />
-            </div>
-            <span className="text-xs text-gray-600">Warranty</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center mb-2">
-              <CheckCircle size={20} className="text-blue-600" />
-            </div>
-            <span className="text-xs text-gray-600">Quality</span>
           </div>
         </div>
       </div>
 
-      {/* Bottom spacing */}
-      <div className="h-8"></div>
+
+      
+      <CustomTipModal
+        isOpen={customTipOpen}
+        initialAmount={customTipAmount}
+        onClose={() => setCustomTipOpen(false)}
+        onSave={(amount) => {
+          setCustomTipAmount(amount);
+          setSelectedTipId('custom');
+        }}
+      />
+
+      <TipsModal
+        isOpen={tipsModalOpen}
+        onClose={() => setTipsModalOpen(false)}
+        productPrice={currentPrice}
+        selectedTipId={selectedTipId}
+        onTipSelect={(tipId, amount) => {
+          setSelectedTipId(tipId);
+          setCustomTipAmount(amount);
+          setTipsModalOpen(false);
+        }}
+        onCustomTip={() => {
+          setTipsModalOpen(false);
+          setCustomTipOpen(true);
+        }}
+      />
+
+      <VariantSelectionModal
+        isOpen={variantModalOpen}
+        onClose={() => setVariantModalOpen(false)}
+        product={product}
+        selectedVariantId={selectedVariantId}
+        onVariantSelect={(variantId) => {
+          setSelectedVariantId(variantId);
+        }}
+        onAddToCart={() => {
+          // Handle add to cart logic here
+          toast.success('Added to cart successfully!');
+          setVariantModalOpen(false);
+          setTipsModalOpen(true); // Open tips modal after adding to cart
+        }}
+      />
+
+      <StickyBottomBar
+        price={currentPrice}
+        tipAmount={customTipAmount}
+        onAddToCart={() => setVariantModalOpen(true)}
+        disabled={!product.inStock}
+      />
     </MobileLayout>
   );
 };

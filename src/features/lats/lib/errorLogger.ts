@@ -228,11 +228,11 @@ export const validateProductId = (productId: any, context: string = 'Product ID'
 };
 
 // Enhanced error handling wrapper
-export const withErrorHandling = async <T>(
+export const withErrorHandling = async function<T>(
   operation: () => Promise<T>,
   operationName: string,
   context: Partial<ErrorContext> = {}
-): Promise<{ success: boolean; data?: T; error?: string }> => {
+): Promise<{ success: boolean; data?: T; error?: string }> {
   try {
     console.log(`🔄 Starting ${operationName}...`);
     const result = await operation();

@@ -7,6 +7,7 @@ import GlassCard from '../../../shared/components/ui/GlassCard';
 import GlassSelect from '../../../shared/components/ui/GlassSelect';
 import GlassInput from '../../../shared/components/ui/GlassInput';
 import { format } from '../../../../lib/currencyUtils';
+import { posErrorHandler } from '../../lib/posErrorHandler';
 
 interface PaymentMethod {
   id: string;
@@ -137,14 +138,29 @@ const ComprehensivePaymentModal: React.FC<ComprehensivePaymentModalProps> = ({
   }, [isOpen, finalAmount]);
 
   const handleSinglePayment = async () => {
+    // Validate payment method selection
     if (!selectedPaymentMethod) {
-      toast.error('Please select a payment method');
+      posErrorHandler.handleError({
+        code: 'PAYMENT_METHOD_MISSING',
+        message: 'No payment method selected',
+        userMessage: 'Please select a payment method to continue.',
+        recoveryAction: 'Choose a payment method from the available options.',
+        canRetry: false,
+        severity: 'medium'
+      }, 'Payment Modal - Method Selection');
       return;
     }
 
     const selectedMethod = availablePaymentMethods.find(m => m.id === selectedPaymentMethod);
     if (!selectedMethod) {
-      toast.error('Invalid payment method selected');
+      posErrorHandler.handleError({
+        code: 'PAYMENT_METHOD_INVALID',
+        message: 'Selected payment method not found in available methods',
+        userMessage: 'The selected payment method is not available.',
+        recoveryAction: 'Choose a different payment method.',
+        canRetry: false,
+        severity: 'high'
+      }, 'Payment Modal - Method Validation');
       return;
     }
 
@@ -166,25 +182,53 @@ const ComprehensivePaymentModal: React.FC<ComprehensivePaymentModalProps> = ({
       case 'mobile_money':
       case 'bank_transfer':
         if (selectedMethod.requiresReference && !referenceNumber.trim()) {
-          toast.error(`Please enter reference number for ${selectedMethod.name}`);
+          posErrorHandler.handleError({
+            code: 'MISSING_REFERENCE',
+            message: `Reference number required for ${selectedMethod.name}`,
+            userMessage: `Please enter a reference number for ${selectedMethod.name}.`,
+            recoveryAction: 'Enter the required reference number or transaction ID.',
+            canRetry: false,
+            severity: 'medium'
+          }, 'Payment Modal - Reference Validation');
           return;
         }
         paymentData.reference = referenceNumber;
         break;
       case 'loyalty_points':
         if (loyaltyPoints <= 0) {
-          toast.error('Please enter loyalty points to use');
+          posErrorHandler.handleError({
+            code: 'INVALID_LOYALTY_POINTS',
+            message: 'Loyalty points amount is invalid',
+            userMessage: 'Please enter a valid number of loyalty points to use.',
+            recoveryAction: 'Enter a positive number of loyalty points.',
+            canRetry: false,
+            severity: 'medium'
+          }, 'Payment Modal - Loyalty Points');
           return;
         }
         if (selectedCustomer && loyaltyPoints > selectedCustomer.points) {
-          toast.error('Not enough loyalty points available');
+          posErrorHandler.handleError({
+            code: 'INSUFFICIENT_LOYALTY_POINTS',
+            message: `Customer has ${selectedCustomer.points || 0} points, requested ${loyaltyPoints}`,
+            userMessage: `Not enough loyalty points available. You have ${selectedCustomer.points || 0} points.`,
+            recoveryAction: 'Reduce the loyalty points amount or choose a different payment method.',
+            canRetry: false,
+            severity: 'medium'
+          }, 'Payment Modal - Loyalty Points Balance');
           return;
         }
         paymentData.loyaltyPoints = loyaltyPoints;
         break;
       case 'gift_card':
         if (!giftCardCode.trim()) {
-          toast.error('Please enter gift card code');
+          posErrorHandler.handleError({
+            code: 'MISSING_GIFT_CARD_CODE',
+            message: 'Gift card code is required but not provided',
+            userMessage: 'Please enter your gift card code.',
+            recoveryAction: 'Enter the gift card code or choose a different payment method.',
+            canRetry: false,
+            severity: 'medium'
+          }, 'Payment Modal - Gift Card');
           return;
         }
         paymentData.giftCardCode = giftCardCode;
@@ -195,8 +239,7 @@ const ComprehensivePaymentModal: React.FC<ComprehensivePaymentModalProps> = ({
       await onProcessPayment(paymentData);
       onClose();
     } catch (error) {
-      console.error('Payment processing failed:', error);
-      // Error handling is done in the parent component
+      posErrorHandler.handleError(error, 'Payment Modal - Processing Payment');
     }
   };
 

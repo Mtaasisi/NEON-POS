@@ -216,152 +216,63 @@ const CustomerCard: React.FC<CustomerCardProps> = ({
     );
   }
 
-  // Default variant
+  // Default variant - matching tablet POS design
   return (
-    <GlassCard className={`p-6 hover:bg-lats-surface/50 transition-colors ${selected ? 'ring-2 ring-lats-primary bg-lats-primary/5' : ''} ${className}`}>
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            {onSelect && (
-              <input
-                type="checkbox"
-                checked={selected}
-                onChange={handleSelect}
-                className="rounded border-lats-glass-border text-lats-primary focus:ring-lats-primary/50"
-              />
-            )}
-            
-            {customer.profileImage ? (
-              <img
-                src={customer.profileImage}
-                alt={customer.name}
-                className="w-12 h-12 rounded-full object-cover flex-shrink-0"
-              />
-            ) : (
-              <div className="w-12 h-12 bg-lats-primary/20 rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-lg font-bold text-lats-primary">
-                  {customer.name.charAt(0).toUpperCase()}
-                </span>
-              </div>
-            )}
-            
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg font-semibold text-lats-text truncate">{customer.name}</h3>
-                {getStatusBadge()}
-              </div>
-              <div className="text-sm text-lats-text-secondary truncate">{customer.email}</div>
-              <div className="text-sm text-lats-text-secondary">{customer.phone}</div>
-            </div>
-          </div>
-
-          {showActions && (
-            <div className="flex items-center gap-1">
-              {onView && (
-                <GlassButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onView(customer)}
-                  icon={
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  }
-                />
-              )}
-              {onEdit && (
-                <GlassButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onEdit(customer)}
-                  icon={
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  }
-                />
-              )}
-              {onDelete && (
-                <GlassButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onDelete(customer)}
-                  icon={
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  }
-                />
-              )}
-            </div>
-          )}
+    <div className="border-2 border-gray-200 rounded-2xl bg-white shadow-sm hover:shadow-lg hover:scale-[1.02] hover:border-blue-300 cursor-pointer transition-all duration-300 p-4">
+      {/* Avatar and Name */}
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-lg flex-shrink-0">
+          {customer.name?.[0]?.toUpperCase() || '?'}
         </div>
-
-        {/* Details */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-sm font-medium text-lats-text-secondary">Location</div>
-            <div className="text-sm text-lats-text">{customer.city || 'Not specified'}</div>
-          </div>
-          <div>
-            <div className="text-sm font-medium text-lats-text-secondary">Loyalty Level</div>
-            <div className="text-sm text-lats-text capitalize">{customer.loyaltyLevel}</div>
-          </div>
-          <div>
-            <div className="text-sm font-medium text-lats-text-secondary">Points</div>
-            <div className="text-sm text-lats-text">{customer.points || 0} pts</div>
-          </div>
-          <div>
-            <div className="text-sm font-medium text-lats-text-secondary">Total Spent</div>
-            <div className="text-sm text-lats-text">{format.currency(customer.totalSpent || 0)}</div>
-          </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-bold text-gray-900 truncate">
+            {customer.name || 'Unnamed customer'}
+          </h3>
         </div>
+      </div>
 
-        {/* Additional Info */}
-        <div className="flex items-center gap-2">
-          <GlassBadge variant="ghost" size="sm">
-            {customer.colorTag}
-          </GlassBadge>
-          <span className="text-xs text-lats-text-secondary">
-            Joined {format.date(customer.joinedDate)}
-          </span>
-        </div>
-
-        {/* Contact Actions */}
-        {onContact && (
-          <div className="flex items-center gap-2 pt-2 border-t border-lats-glass-border">
-            <span className="text-sm text-lats-text-secondary">Contact:</span>
-            <GlassButton
-              variant="ghost"
-              size="sm"
-              onClick={() => handleContact('phone')}
-              icon={getContactIcon('phone')}
-              title="Call"
-            />
-            {customer.email && (
-              <GlassButton
-                variant="ghost"
-                size="sm"
-                onClick={() => handleContact('email')}
-                icon={getContactIcon('email')}
-                title="Email"
-              />
-            )}
-            {customer.whatsapp && (
-              <GlassButton
-                variant="ghost"
-                size="sm"
-                onClick={() => handleContact('whatsapp')}
-                icon={getContactIcon('whatsapp')}
-                title="WhatsApp"
-              />
-            )}
+      {/* Contact Info */}
+      <div className="space-y-1 mb-3">
+        {customer.phone && (
+          <div className="flex items-center space-x-2 text-xs text-gray-600">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-phone">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+            </svg>
+            <span className="truncate">{customer.phone}</span>
+          </div>
+        )}
+        {customer.email && (
+          <div className="flex items-center space-x-2 text-xs text-gray-600">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-mail">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+            <span className="truncate">{customer.email}</span>
           </div>
         )}
       </div>
-    </GlassCard>
+
+      {/* Stats (if available) */}
+      {(customer.points !== undefined || customer.totalSpent !== undefined) && (
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
+          <div className="text-center">
+            <div className="text-xs text-gray-500">Points</div>
+            <div className="font-semibold text-gray-900 text-sm">{customer.points || 0}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs text-gray-500">Spent</div>
+            <div className="font-semibold text-gray-900 text-sm">
+              TSh {customer.totalSpent ? customer.totalSpent.toLocaleString() : '0'}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Select Button */}
+      <button className="w-full mt-3 bg-blue-600 text-white py-2 px-3 rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors">
+        Select Customer
+      </button>
+    </div>
   );
 };
 

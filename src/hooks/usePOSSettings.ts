@@ -54,7 +54,7 @@ const defaultGeneralSettings: GeneralSettings = {
   cache_duration: 300,
   enable_lazy_loading: true,
   max_search_results: 50,
-  enable_tax: false,
+  enable_tax: true,
   tax_rate: 16,
   day_closing_passcode: '1234'
 };
@@ -455,19 +455,21 @@ export function usePOSSettings<T>(
       }
       
       if (loadedSettings) {
-        // Only log occasionally to reduce spam
-        if (Math.random() < 0.1) { // 10% chance to log
-          console.log(`✅ Loaded ${settingsType} settings:`, loadedSettings);
-        }
+        console.log(`✅ Loaded ${settingsType} settings successfully:`, {
+          taxRate: loadedSettings.tax_rate,
+          enableTax: loadedSettings.enable_tax,
+          currency: loadedSettings.currency,
+          totalSettings: Object.keys(loadedSettings).length
+        });
         setSettings(loadedSettings as T);
-        
+
         // Dispatch event to notify context that settings have been loaded
-        window.dispatchEvent(new CustomEvent('posSettingsLoaded', { 
-          detail: { type: settingsType, settings: loadedSettings } 
+        window.dispatchEvent(new CustomEvent('posSettingsLoaded', {
+          detail: { type: settingsType, settings: loadedSettings }
         }));
       } else {
         // Use default settings if none found
-        console.log(`No ${settingsType} settings found, using defaults`);
+        console.warn(`⚠️ No ${settingsType} settings found in database, using defaults`);
         setSettings(defaultSettings);
       }
     } catch (err) {

@@ -10,8 +10,21 @@ import {
   X,
   TrendingUp,
   Grid,
-  List
+  List,
+  ShoppingCart,
+  Package,
+  Home,
+  ShoppingBag,
+  Laptop,
+  Smartphone,
+  Headphones,
+  Speaker,
+  Camera,
+  Watch,
+  Plug,
+  Bluetooth
 } from 'lucide-react';
+import CategoryChips from '../components/CategoryChips';
 import { CustomerProduct } from '../types';
 import toast from 'react-hot-toast';
 import customerPortalService from '../services/customerPortalService';
@@ -28,6 +41,7 @@ const ProductsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 100000]);
   const [sortBy, setSortBy] = useState<'popular' | 'price-low' | 'price-high' | 'newest'>('popular');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
@@ -40,6 +54,28 @@ const ProductsPage: React.FC = () => {
   useEffect(() => {
     loadProducts();
   }, []);
+
+  const getIconForCategory = (category: string | null | undefined) => {
+  if (!category) return <ShoppingCart size={14} />;
+    const key = category.toLowerCase();
+    if (key.includes('table') || key.includes('tables')) return <Package size={14} />;
+    if (key.includes('bed') || key.includes('beds')) return <Home size={14} />;
+    if (key.includes('chair') || key.includes('chairs')) return <ShoppingBag size={14} />;
+    if (key.includes('sofa') || key.includes('sofas') || key.includes('couch')) return <ShoppingCart size={14} />;
+    if (key.includes('laptop')) return <Laptop size={14} />;
+    if (key.includes('accessor') || key.includes('accessories') || key.includes('accessory')) return <Package size={14} />;
+    if (key.includes('bluetooth')) return <Bluetooth size={14} />;
+    if (key.includes('phone') || key.includes('mobile') || key.includes('smartphone')) return <Smartphone size={14} />;
+    if (key.includes('head') || key.includes('ear') || key.includes('earbud') || key.includes('headphone')) return <Headphones size={14} />;
+    if (key.includes('speaker')) return <Speaker size={14} />;
+    if (key.includes('camera')) return <Camera size={14} />;
+    if (key.includes('watch')) return <Watch size={14} />;
+    if (key.includes('charger') || key.includes('cable') || key.includes('adapter') || key.includes('usb')) return <Plug size={14} />;
+    // fallback
+    return <ShoppingCart size={14} />;
+  };
+
+  const uiCategories = categories.map((c) => ({ id: c, label: c, icon: getIconForCategory(c) }));
 
   const loadProducts = async (isRetry = false) => {
     const jobId = startLoading('Loading products...');
@@ -138,6 +174,12 @@ const ProductsPage: React.FC = () => {
         break;
     }
 
+    // Price range filter
+    filtered = filtered.filter(p => {
+      const price = Number(p.variants?.[0]?.price ?? p.price ?? 0);
+      return price >= priceRange[0] && price <= priceRange[1];
+    });
+
     return filtered;
   }, [products, searchQuery, selectedCategory, selectedBrand, sortBy]);
 
@@ -184,6 +226,15 @@ const ProductsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Categories */}
+      <CategoryChips
+        categories={uiCategories}
+        selectedId={selectedCategory !== 'all' ? selectedCategory : null}
+        onSelect={(id) => {
+          setSelectedCategory(id === 'all' ? 'all' : id);
+        }}
+      />
+
       {/* Filters Panel */}
       {showFilters && (
         <div className="bg-white border-b border-gray-200 p-4 space-y-4">
@@ -207,6 +258,59 @@ const ProductsPage: React.FC = () => {
               >
                 <List size={18} />
               </button>
+            </div>
+          </div>
+          {/* Price Range */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Price Range</label>
+            <div className="flex gap-2 items-center">
+              <input
+                type="number"
+                min={0}
+                value={priceRange[0]}
+                onChange={(e) => {
+                  const minVal = Math.max(0, Number(e.target.value || 0));
+                  setPriceRange([Math.min(minVal, priceRange[1]), priceRange[1]]);
+                }}
+                className="w-1/2 p-2 border border-gray-300 rounded-lg focus:outline-none"
+              />
+              <input
+                type="number"
+                min={0}
+                value={priceRange[1]}
+                onChange={(e) => {
+                  const maxVal = Math.max(0, Number(e.target.value || 0));
+                  setPriceRange([priceRange[0], Math.max(priceRange[0], maxVal)]);
+                }}
+                className="w-1/2 p-2 border border-gray-300 rounded-lg focus:outline-none"
+              />
+            </div>
+            <div className="mt-2 flex gap-2 items-center">
+              <input
+                type="range"
+                min={0}
+                max={100000}
+                value={priceRange[0]}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setPriceRange([Math.min(val, priceRange[1]), priceRange[1]]);
+                }}
+                className="w-1/2"
+              />
+              <input
+                type="range"
+                min={0}
+                max={100000}
+                value={priceRange[1]}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setPriceRange([priceRange[0], Math.max(priceRange[0], val)]);
+                }}
+                className="w-1/2"
+              />
+            </div>
+            <div className="text-sm text-gray-600 mt-1">
+              Showing prices between {priceRange[0].toLocaleString()} and {priceRange[1].toLocaleString()}
             </div>
           </div>
 
@@ -262,6 +366,7 @@ const ProductsPage: React.FC = () => {
               setSelectedBrand('all');
               setSortBy('popular');
               setSearchQuery('');
+              setPriceRange([0, 100000]);
             }}
             className="w-full py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition-colors"
           >
@@ -341,7 +446,8 @@ const ProductsPage: React.FC = () => {
         <div
           className="px-4 pt-6 pb-4 sm:px-5 md:px-6 lg:px-8 grid gap-4 sm:gap-5 md:gap-6 auto-rows-fr max-w-6xl mx-auto"
           style={{
-            gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+            backgroundColor: 'rgba(0,0,0,1)'
           }}
         >
           {filteredProducts.map(product => (

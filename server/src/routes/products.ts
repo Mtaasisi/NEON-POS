@@ -24,13 +24,55 @@ const searchSchema = z.object({
 router.get('/', authenticateToken, validateQuery(searchSchema), async (req: AuthRequest, res, next) => {
   try {
     const { q, category, limit = 50, offset = 0 } = req.query as any;
+    const currentBranchId = req.user?.branchId;
+
+    // 🔒 BRANCH ISOLATION SAFEGUARD: Ensure user has a branch assigned
+    if (!currentBranchId) {
+      console.warn('⚠️ [ProductsAPI] User has no branch assigned - this may cause data leakage');
+      return res.status(400).json({
+        success: false,
+        error: 'Branch not assigned',
+        message: 'You must be assigned to a branch to view products'
+      });
+    }
+
+    // Get branch isolation settings
+    let branchSettings = null;
+    if (currentBranchId) {
+      const settingsResult = await sql`
+        SELECT data_isolation_mode, share_inventory
+        FROM store_locations
+        WHERE id = ${currentBranchId}
+        LIMIT 1
+      `;
+      branchSettings = settingsResult[0];
+    }
+
+    // Build variant filter clause based on branch isolation settings
+    let variantFilter = '';
+    if (branchSettings) {
+      if (branchSettings.data_isolation_mode === 'isolated') {
+        // Isolated mode: Only show variants from this branch
+        variantFilter = sql`AND v.branch_id = ${currentBranchId}`;
+      } else if (branchSettings.data_isolation_mode === 'hybrid') {
+        if (!branchSettings.share_inventory) {
+          // Hybrid mode with isolated inventory: Only show variants from this branch
+          variantFilter = sql`AND v.branch_id = ${currentBranchId}`;
+        }
+        // Hybrid mode with shared inventory: No additional filter needed
+      }
+      // Shared mode: No additional filter needed
+    } else if (currentBranchId) {
+      // Default fallback: filter by current branch
+      variantFilter = sql`AND v.branch_id = ${currentBranchId}`;
+    }
 
     let query;
 
     if (q || category) {
       // Search with filters
       query = sql`
-        SELECT 
+        SELECT
           p.*,
           c.name as category_name,
           (
@@ -49,9 +91,10 @@ router.get('/', authenticateToken, validateQuery(searchSchema), async (req: Auth
               'parent_variant_id', v.parent_variant_id
             ))
             FROM lats_product_variants v
-            WHERE v.product_id = p.id 
+            WHERE v.product_id = p.id
               AND v.is_active = true
               AND v.parent_variant_id IS NULL
+              ${variantFilter}
           ) as variants
         FROM lats_products p
         LEFT JOIN lats_categories c ON p.category_id = c.id
@@ -65,7 +108,7 @@ router.get('/', authenticateToken, validateQuery(searchSchema), async (req: Auth
     } else {
       // Get all active products
       query = sql`
-        SELECT 
+        SELECT
           p.*,
           c.name as category_name,
           (
@@ -84,9 +127,10 @@ router.get('/', authenticateToken, validateQuery(searchSchema), async (req: Auth
               'parent_variant_id', v.parent_variant_id
             ))
             FROM lats_product_variants v
-            WHERE v.product_id = p.id 
+            WHERE v.product_id = p.id
               AND v.is_active = true
               AND v.parent_variant_id IS NULL
+              ${variantFilter}
           ) as variants
         FROM lats_products p
         LEFT JOIN lats_categories c ON p.category_id = c.id
@@ -115,9 +159,41 @@ router.get('/', authenticateToken, validateQuery(searchSchema), async (req: Auth
 router.get('/:id', authenticateToken, async (req: AuthRequest, res, next) => {
   try {
     const { id } = req.params;
+    const currentBranchId = req.user?.branchId;
+
+    // Get branch isolation settings
+    let branchSettings = null;
+    if (currentBranchId) {
+      const settingsResult = await sql`
+        SELECT data_isolation_mode, share_inventory
+        FROM store_locations
+        WHERE id = ${currentBranchId}
+        LIMIT 1
+      `;
+      branchSettings = settingsResult[0];
+    }
+
+    // Build variant filter clause based on branch isolation settings
+    let variantFilter = '';
+    if (branchSettings) {
+      if (branchSettings.data_isolation_mode === 'isolated') {
+        // Isolated mode: Only show variants from this branch
+        variantFilter = sql`AND v.branch_id = ${currentBranchId}`;
+      } else if (branchSettings.data_isolation_mode === 'hybrid') {
+        if (!branchSettings.share_inventory) {
+          // Hybrid mode with isolated inventory: Only show variants from this branch
+          variantFilter = sql`AND v.branch_id = ${currentBranchId}`;
+        }
+        // Hybrid mode with shared inventory: No additional filter needed
+      }
+      // Shared mode: No additional filter needed
+    } else if (currentBranchId) {
+      // Default fallback: filter by current branch
+      variantFilter = sql`AND v.branch_id = ${currentBranchId}`;
+    }
 
     const products = await sql`
-      SELECT 
+      SELECT
         p.*,
         c.name as category_name,
         (
@@ -138,6 +214,7 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res, next) => {
           FROM lats_product_variants v
           WHERE v.product_id = p.id
             AND v.parent_variant_id IS NULL
+            ${variantFilter}
         ) as variants
       FROM lats_products p
       LEFT JOIN lats_categories c ON p.category_id = c.id

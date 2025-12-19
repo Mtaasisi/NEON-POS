@@ -1892,13 +1892,22 @@ export const updateSparePartWithVariants = async (id: string, sparePartData: any
     // Handle variants update
     if (useVariants && variants.length > 0) {
       console.log('🔍 [DEBUG] Updating variants for spare part:', id);
-      
-      // First, delete existing variants
+
+      // 🔒 BRANCH-AWARE FIX: Get current branch ID to ensure isolation
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      if (!currentBranchId) {
+        throw new Error('No branch selected. Please select a branch before updating variants.');
+      }
+
+      console.log('🔒 [DEBUG] Branch-aware update for branch:', currentBranchId);
+
+      // First, delete existing variants ONLY FROM CURRENT BRANCH (not all branches!)
       const { error: deleteError } = await supabase
         .from('lats_spare_part_variants')
         .delete()
-        .eq('spare_part_id', id);
-      
+        .eq('spare_part_id', id)
+        .eq('branch_id', currentBranchId); // 🔒 CRITICAL: Only current branch!
+
       if (deleteError) {
         console.error('❌ [DEBUG] Error deleting existing variants:', deleteError);
       }
@@ -1923,6 +1932,7 @@ export const updateSparePartWithVariants = async (id: string, sparePartData: any
         
         return {
           spare_part_id: id,
+          branch_id: currentBranchId, // 🔒 CRITICAL: Assign to current branch only!
           name: variant.name,
           sku: variant.sku,
           cost_price: variant.cost_price,

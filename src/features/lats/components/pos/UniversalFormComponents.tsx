@@ -2,9 +2,9 @@
 import React from 'react';
 import HelpTooltip from './HelpTooltip';
 
-// Toggle Switch Component
+// Toggle Switch Component - iOS 26 Flat Pill Style
 interface ToggleSwitchProps {
-  id: string;
+  id?: string;
   label: string;
   description?: string;
   helpText?: string | React.ReactNode;
@@ -22,6 +22,48 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
   onChange,
   disabled = false
 }) => {
+  const switchId = id || `switch-${Math.random().toString(36).substr(2, 9)}`;
+
+  // iOS Switch exact dimensions: 51px × 31px
+  // Handle: ~60-65% of width = 32px, height = track height - 8px padding = 23px
+  // Travel distance: 51 - 32 - 4 = 15px
+
+  const trackStyle = {
+    position: 'absolute' as const,
+    inset: 0,
+    borderRadius: '999px',
+    background: checked ? '#34C759' : '#929197',
+    boxShadow: checked
+      ? 'inset 0 0 0 1px rgba(52, 199, 89, 0.6)'
+      : 'inset 0 0 0 1px #929197',
+    transition: 'background-color 0.16s cubic-bezier(0.2, 0.6, 0.2, 1), box-shadow 0.16s cubic-bezier(0.2, 0.6, 0.2, 1)',
+  };
+
+  const handleStyle = {
+    position: 'absolute' as const,
+    left: '2px',
+    top: '4px',
+    width: '27px',
+    height: '23px',
+    borderRadius: '999px',
+    background: '#ffffff',
+    transform: checked ? 'translateX(20px)' : 'translateX(0)',
+    transition: 'transform 0.16s cubic-bezier(0.2, 0.6, 0.2, 1)',
+    boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.1)',
+  };
+
+  const labelStyle = {
+    position: 'relative' as const,
+    display: 'inline-block',
+    width: '51px',
+    height: '31px',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    verticalAlign: 'middle',
+    opacity: disabled ? 0.5 : 1,
+    borderRadius: '999px',
+    outline: 'none',
+  };
+
   return (
     <div className="flex items-center justify-between">
       <div className="flex-1">
@@ -31,17 +73,22 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
         </div>
         {description && <div className="text-sm text-gray-600 mt-1">{description}</div>}
       </div>
-      <label className="relative inline-flex items-center cursor-pointer ml-4">
+      <div className="inline-flex items-center ml-4">
         <input
           type="checkbox"
-          id={id}
+          id={switchId}
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
           disabled={disabled}
-          className="sr-only peer"
+          className="absolute opacity-0 w-0 h-0"
+          role="switch"
+          aria-label={label}
         />
-        <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}></div>
-      </label>
+        <label style={labelStyle} htmlFor={switchId}>
+          <span style={trackStyle}></span>
+          <span style={handleStyle}></span>
+        </label>
+      </div>
     </div>
   );
 };

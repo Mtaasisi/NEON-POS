@@ -503,11 +503,8 @@ const UnifiedInventoryPage: React.FC = () => {
           return variantSum + variantValue;
         }, 0);
       } else {
-        // Product has no variants - use product-level stock and cost
-        const productStock = product.stockQuantity || 
-                            (product as any).stock_quantity || 
-                            (product as any).total_quantity ||
-                            0;
+        // Product has no variants in current branch - calculate from available variants
+        const productStock = product.variants?.filter(v => !v.isParent && !v.is_parent).reduce((sum, v) => sum + (v.quantity || 0), 0) || 0;
         const productCost = product.costPrice || 
                            (product as any).cost_price || 
                            (product as any).unit_cost ||
@@ -543,11 +540,8 @@ const UnifiedInventoryPage: React.FC = () => {
         return variantSum + (sellingPrice * quantity);
         }, 0);
       } else {
-        // Product has no variants - use product-level stock and selling price
-        const productStock = product.stockQuantity || 
-                            (product as any).stock_quantity || 
-                            (product as any).total_quantity ||
-                            0;
+        // Product has no variants in current branch - calculate from available variants
+        const productStock = product.variants?.filter(v => !v.isParent && !v.is_parent).reduce((sum, v) => sum + (v.quantity || 0), 0) || 0;
         const productSellingPrice = product.sellingPrice || 
                                    product.price || 
                                    (product as any).selling_price || 
@@ -879,6 +873,15 @@ const UnifiedInventoryPage: React.FC = () => {
           try {
             const deletePromises = selectedProducts.map(productId => deleteProduct(productId));
             await Promise.all(deletePromises);
+
+            // Trigger automatic data refresh to show changes immediately
+            try {
+              const { refreshAfterProductDelete } = await import('../../../services/productRefreshService');
+              await refreshAfterProductDelete();
+            } catch (refreshError) {
+              console.warn('⚠️ [UnifiedInventoryPage] Failed to refresh data after deletion:', refreshError);
+            }
+
             toast.success(`Successfully deleted ${selectedProducts.length} products`);
             setSelectedProducts([]);
           } catch (error) {

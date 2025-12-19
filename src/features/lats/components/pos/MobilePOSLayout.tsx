@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ShoppingCart, 
-  Search, 
-  Scan, 
-  User, 
-  Settings, 
+import {
+  ShoppingCart,
+  Search,
+  Scan,
+  User,
+  Settings,
   Package,
   CreditCard,
   Receipt,
@@ -14,7 +14,9 @@ import {
   Minus,
   X,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
@@ -44,6 +46,8 @@ interface MobilePOSLayoutProps {
   // States
   isProcessingPayment: boolean;
   hasSelectedCustomer: boolean;
+  isOffline?: boolean;
+  offlinePaymentCount?: number;
 }
 
 const MobilePOSLayout: React.FC<MobilePOSLayoutProps> = ({
@@ -60,7 +64,9 @@ const MobilePOSLayout: React.FC<MobilePOSLayoutProps> = ({
   onToggleSettings,
   children,
   isProcessingPayment,
-  hasSelectedCustomer
+  hasSelectedCustomer,
+  isOffline = false,
+  offlinePaymentCount = 0
 }) => {
   const { currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'products' | 'cart' | 'customers' | 'settings'>('products');
@@ -68,12 +74,40 @@ const MobilePOSLayout: React.FC<MobilePOSLayoutProps> = ({
   const [showSearchSheet, setShowSearchSheet] = useState(false);
 
   // Initialize click sounds
-  const { 
-    playClickSound, 
-    playCartAddSound, 
-    playPaymentSound, 
-    playDeleteSound 
+  const {
+    playClickSound,
+    playCartAddSound,
+    playPaymentSound,
+    playDeleteSound
   } = usePOSClickSounds();
+
+  // Offline status indicator
+  const OfflineIndicator = () => {
+    if (!isOffline && offlinePaymentCount === 0) return null;
+
+    return (
+      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 mb-4">
+        <div className="flex items-center">
+          <div className="flex-shrink-0">
+            {isOffline ? (
+              <WifiOff className="h-5 w-5 text-yellow-400" />
+            ) : (
+              <Wifi className="h-5 w-5 text-green-400" />
+            )}
+          </div>
+          <div className="ml-3">
+            <p className="text-sm text-yellow-700">
+              {isOffline ? (
+                'You are offline - payments will be saved locally'
+              ) : offlinePaymentCount > 0 ? (
+                `${offlinePaymentCount} offline payment${offlinePaymentCount > 1 ? 's' : ''} queued for sync`
+              ) : null}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Customer Care Bottom Navigation
   const BottomNavigation = () => (
@@ -400,6 +434,7 @@ const MobilePOSLayout: React.FC<MobilePOSLayoutProps> = ({
       <div className="flex-1 overflow-hidden">
         {activeTab === 'products' && (
           <div className="h-full overflow-y-auto p-3 mobile-scroll">
+            <OfflineIndicator />
             {children}
           </div>
         )}

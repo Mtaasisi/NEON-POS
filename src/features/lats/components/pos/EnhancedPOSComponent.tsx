@@ -11,6 +11,7 @@ import VariantCartItem from './VariantCartItem';
 import ZenoPayPaymentButton from './ZenoPayPaymentButton';
 import CustomerSelectionModal from './CustomerSelectionModal';
 import POSInstallmentModal from './POSInstallmentModal';
+import QuickPaymentModal from './QuickPaymentModal';
 import { format } from '../../lib/format';
 import { ProductSearchResult, ProductSearchVariant, CartItem, Sale } from '../../types/pos';
 import { Customer } from '../../../customers/types';
@@ -83,6 +84,7 @@ const EnhancedPOSComponent: React.FC = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showCustomerSelection, setShowCustomerSelection] = useState(false);
   const [showInstallmentModal, setShowInstallmentModal] = useState(false);
+  const [showQuickPaymentModal, setShowQuickPaymentModal] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [showDebug, setShowDebug] = useState(false);
 
@@ -403,6 +405,88 @@ const EnhancedPOSComponent: React.FC = () => {
     } catch (error) {
       console.error('Error processing sale:', error);
       toast.error('Failed to process sale. Please try again.');
+    }
+  };
+
+  // Handle quick payment processing
+  const handleQuickPayment = async (paymentData: any) => {
+    if (cartItems.length === 0) {
+      toast.error('Cart is empty');
+      return;
+    }
+
+    if (!selectedCustomer && !customerName) {
+      toast.error('Please select a customer or enter customer name');
+      return;
+    }
+
+    try {
+      // Process the sale using the service
+      const result = await saleProcessingService.processSale({
+        items: cartItems.map(item => ({
+          productId: item.productId,
+          variantId: item.variantId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+          productName: item.productName,
+          variantName: item.variantName,
+          sku: item.sku
+        })),
+        customer: selectedCustomer || {
+          id: `walk_in_${Date.now()}`,
+          name: customerName,
+          phone: customerPhone,
+          email: customerEmail,
+          loyaltyLevel: 'Bronze',
+          totalSpent: 0
+        },
+        payment: {
+          method: paymentData.method,
+          amount: paymentData.amount,
+          totalAmount: paymentData.totalAmount,
+          discountAmount: paymentData.discountAmount,
+          remainingAmount: paymentData.remainingAmount,
+          reference: paymentData.reference,
+          type: paymentData.method,
+          details: {},
+          paymentStatus: paymentData.remainingAmount > 0 ? 'partial' : 'completed'
+        },
+        saleType: 'pos',
+        notes: paymentData.discountAmount > 0 ? `Discount applied: ${format.money(paymentData.discountAmount)}` : '',
+        soldBy: currentUser?.name || currentUser?.email || 'POS User',
+        subtotal: cartTotals.subtotal,
+        tax: cartTotals.tax,
+        discount: cartTotals.discountAmount,
+        total: cartTotals.total
+      });
+
+      if (result.success && result.sale) {
+        // Clear form
+        setCartItems([]);
+        setCustomerName('');
+        setCustomerPhone('');
+        setCustomerEmail('');
+        setSelectedCustomer(null);
+        setDiscountValue('');
+        setDiscountDescription('');
+
+        // Show success message
+        if (paymentData.remainingAmount > 0) {
+          toast.success(`Partial payment processed! Remaining: ${format.money(paymentData.remainingAmount)}`);
+        } else {
+          toast.success(`Payment completed! Sale #${result.sale?.saleNumber}`);
+        }
+
+        // Smart inventory update
+        updateLocalInventory(cartItems);
+
+      } else {
+        toast.error('Failed to process payment. Please try again.');
+      }
+    } catch (error) {
+      console.error('Quick payment processing failed:', error);
+      toast.error('Failed to process payment. Please try again.');
     }
   };
 
@@ -762,81 +846,57 @@ const EnhancedPOSComponent: React.FC = () => {
               )}
             </div>
 
-            {/* Payment Method */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Payment Method
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { id: 'cash', label: 'Cash', type: 'cash' },
-                  { id: 'card', label: 'Card', type: 'credit_card' },
-                  { id: 'mpesa', label: 'M-Pesa', type: 'mobile_money' },
-                  { id: 'bank', label: 'Bank Transfer', type: 'bank_transfer' }
-                ].map((method) => {
-                  return (
-                    <button
-                      key={method.id}
-                      onClick={() => setSelectedPaymentMethod(method.id)}
-                      className={`p-4 border-2 rounded-xl flex items-center gap-3 transition-all duration-200 transform hover:scale-105 ${
-                        selectedPaymentMethod === method.id
-                          ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 text-blue-800 shadow-lg ring-2 ring-blue-200'
-                          : 'border-gray-300 hover:border-gray-400 hover:shadow-md'
-                      }`}
-                    >
-                      <PaymentMethodIcon type={method.type} name={method.label} size="sm" />
-                      <span className={`text-sm font-semibold ${selectedPaymentMethod === method.id ? 'text-blue-800' : 'text-gray-700'}`}>{method.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
+            {/* Quick Payment Section */}
+            <div className="space-y-4">
+              {/* Quick Pay Button - Main Action */}
+              <GlassButton
+                onClick={() => setShowQuickPaymentModal(true)}
+                className="w-full py-4 text-lg font-semibold flex items-center justify-center gap-3 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
+                disabled={cartItems.length === 0}
+                title={cartItems.length === 0 ? "Add items to cart first" : "Process quick payment"}
+              >
+                <DollarSign className="w-6 h-6" />
+                Quick Pay - {format.money(cartTotals.total)}
+              </GlassButton>
+
+              {/* Alternative Payment Options */}
+              <div className="text-center">
+                <span className="text-sm text-gray-500">Or choose other payment options:</span>
             </div>
 
-            {/* Payment Buttons */}
-            <div className="space-y-3">
-              {/* ZenoPay Payment Button */}
-              <ZenoPayPaymentButton
-                cartItems={cartItems}
-                total={cartTotals.total}
-                customer={
-                  customerName && customerEmail && customerPhone
-                    ? {
-                        id: `customer_${Date.now()}`,
-                        name: customerName,
-                        email: customerEmail,
-                        phone: customerPhone
-                      }
-                    : undefined
-                }
-                onPaymentComplete={handlePaymentComplete}
-                disabled={cartItems.length === 0 || !selectedCustomer}
-                className="w-full"
-                size="lg"
-              />
+              <div className="space-y-2">
+                {/* ZenoPay Payment Button */}
+                <ZenoPayPaymentButton
+                  cartItems={cartItems}
+                  total={cartTotals.total}
+                  customer={
+                    customerName && customerEmail && customerPhone
+                      ? {
+                          id: `customer_${Date.now()}`,
+                          name: customerName,
+                          email: customerEmail,
+                          phone: customerPhone
+                        }
+                      : undefined
+                  }
+                  onPaymentComplete={handlePaymentComplete}
+                  disabled={cartItems.length === 0 || !selectedCustomer}
+                  className="w-full"
+                  size="sm"
+                />
 
-              {/* Installment Plan Button */}
-              <GlassButton
-                onClick={() => setShowInstallmentModal(true)}
-                className="w-full flex items-center justify-center gap-2 py-3"
-                disabled={cartItems.length === 0 || !selectedCustomer}
-                variant="gradient"
-                title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Create installment plan"}
-              >
-                <CreditCard className="w-5 h-5" />
-                Installment Plan - {format.money(cartTotals.total)}
-              </GlassButton>
-
-              {/* Regular Process Sale Button */}
-              <GlassButton
-                onClick={handleProcessSale}
-                className="w-full flex items-center justify-center gap-2 py-3"
-                disabled={cartItems.length === 0 || !selectedCustomer}
-                variant="outline"
-                title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Process payment"}
-              >
-                <Receipt className="w-5 h-5" />
-                Other Payment Methods - {format.money(cartTotals.total)}
-              </GlassButton>
+                {/* Installment Plan Button */}
+                <GlassButton
+                  onClick={() => setShowInstallmentModal(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2 text-sm"
+                  disabled={cartItems.length === 0 || !selectedCustomer}
+                  variant="outline"
+                  title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Create installment plan"}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  Installment Plan
+                </GlassButton>
+              </div>
             </div>
           </GlassCard>
         )}
@@ -865,6 +925,14 @@ const EnhancedPOSComponent: React.FC = () => {
             currentUser={currentUser}
           />
         )}
+
+        {/* Quick Payment Modal */}
+        <QuickPaymentModal
+          isOpen={showQuickPaymentModal}
+          onClose={() => setShowQuickPaymentModal(false)}
+          totalAmount={cartTotals.total}
+          onProcessPayment={handleQuickPayment}
+        />
       </div>
     </div>
   );

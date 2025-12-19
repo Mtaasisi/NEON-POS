@@ -293,11 +293,20 @@ export const usePurchaseOrderStore = create<PurchaseOrderState>()(
         try {
           const inventoryStore = useInventoryStore.getState();
           const response = await inventoryStore.receivePurchaseOrder(id);
-          
+
           if (response.ok) {
             await get().loadPurchaseOrders();
+
+            // Trigger automatic inventory refresh since stock levels changed
+            try {
+              const { refreshAfterProductUpdate } = await import('../../../services/productRefreshService');
+              await refreshAfterProductUpdate();
+              console.log('✅ [PurchaseOrder] Inventory refreshed after receiving order');
+            } catch (refreshError) {
+              console.warn('⚠️ [PurchaseOrder] Failed to refresh inventory after receiving:', refreshError);
+            }
           }
-          
+
           set({ isUpdating: false });
           return response;
         } catch (error) {

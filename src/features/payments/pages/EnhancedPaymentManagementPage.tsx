@@ -160,13 +160,34 @@ const EnhancedPaymentManagementPage: React.FC = () => {
         return;
       }
 
-      const { data: transactions, error } = await supabase
-        .from('account_transactions')
-        .select('*, finance_accounts!account_id(id, name, type, currency)')
-        .eq('transaction_type', 'expense')
-        .in('account_id', accountIdsForBranch)
-        .order('created_at', { ascending: false })
-        .limit(500);
+      const rawSqlQuery = `
+        SELECT
+          at.*,
+          json_build_object(
+            'id', fa.id,
+            'name', fa.name,
+            'type', fa.type,
+            'currency', fa.currency
+          ) AS finance_accounts
+        FROM
+          account_transactions at
+        LEFT JOIN
+          finance_accounts fa ON at.account_id = fa.id
+        WHERE
+          at.transaction_type = 'expense'
+          AND at.account_id IN (${accountIdsForBranch.map(id => `'${id}'`).join(',')})
+        ORDER BY
+          at.created_at DESC
+        LIMIT 500;
+      `;
+
+      const { data: result, error } = await supabase.rpc('run_sql_query', {
+        query: rawSqlQuery,
+      });
+
+      if (error) throw error;
+
+      const transactions = result;
 
       if (error) throw error;
 

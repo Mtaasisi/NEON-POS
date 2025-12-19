@@ -86,7 +86,7 @@ export const useMobileBranch = (): UseMobileBranchReturn => {
   // Switch to a different branch
   const switchBranch = useCallback(async (branchId: string) => {
     const branch = availableBranches.find(b => b.id === branchId);
-    
+
     if (!branch) {
       toast.error('Branch not found');
       return;
@@ -95,31 +95,50 @@ export const useMobileBranch = (): UseMobileBranchReturn => {
     setCurrentBranch(branch);
     localStorage.setItem('current_branch_id', branchId);
     console.log('🔄 [Mobile] Switched to branch:', branch.name);
-    
-    // 🔥 Clear cache for branch-specific data before reloading
+
+    // 🚀 AUTOMATIC DATA SYNC: Use the branch sync service for comprehensive data refresh
     try {
-      console.log('🗑️ [Mobile] Clearing cache for branch switch...');
-      const { smartCache } = await import('../../../lib/enhancedCacheManager');
-      await Promise.all([
-        smartCache.invalidateCache('products'),
-        smartCache.invalidateCache('customers'),
-        smartCache.invalidateCache('sales'),
-      ]);
-      console.log('✅ [Mobile] Cache cleared for new branch');
-    } catch (error) {
-      console.error('❌ [Mobile] Failed to clear cache:', error);
+      console.log('🔄 [Mobile] Starting automatic data sync...');
+      const { branchSyncService } = await import('../../../services/branchSyncService');
+      const syncResult = await branchSyncService.syncOnBranchSwitch(branchId, branch.name);
+
+      console.log(`✅ [Mobile] Data sync completed:`, {
+        success: syncResult.success,
+        duration: syncResult.duration,
+        errors: syncResult.errors.length
+      });
+
+      if (syncResult.success) {
+        toast.success(`Switched to ${branch.name} - data synced!`);
+      } else {
+        toast.success(`Switched to ${branch.name} (sync had ${syncResult.errors.length} issues)`);
+      }
+
+    } catch (syncError) {
+      console.error('❌ [Mobile] Data sync failed:', syncError);
+      toast.error(`Switched to ${branch.name} but sync failed. Reloading...`);
+
+      // Fallback: Clear cache and reload if sync fails
+      try {
+        const { smartCache } = await import('../../../lib/enhancedCacheManager');
+        await Promise.all([
+          smartCache.invalidateCache('products'),
+          smartCache.invalidateCache('customers'),
+          smartCache.invalidateCache('sales'),
+        ]);
+      } catch (cacheError) {
+        console.error('❌ [Mobile] Fallback cache clear failed:', cacheError);
+      }
     }
-    
-    toast.success(`Switching to ${branch.name}...`, { duration: 1500 });
 
     // Trigger page refresh by dispatching custom event
     window.dispatchEvent(new CustomEvent('branchChanged', { detail: { branchId } }));
-    
-    // Reload page after a short delay to fetch fresh data for new branch
+
+    // Reload page after a short delay to ensure UI updates
     setTimeout(() => {
       console.log('🔄 [Mobile] Reloading app for branch change...');
       window.location.reload();
-    }, 500);
+    }, 1000); // Increased delay for sync completion
   }, [availableBranches]);
 
   // Check if data is shared for a specific entity type

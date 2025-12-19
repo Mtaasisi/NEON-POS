@@ -77,22 +77,27 @@ const MobileProductGrid: React.FC<MobileProductGridProps> = ({
           />
           
           {/* Stock Badge */}
-          {product.stock_quantity !== undefined && (
-            <div className={`absolute top-0.5 left-0.5 px-1 sm:px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium shadow-sm ${
-              product.stock_quantity > 10 
-                ? 'bg-green-100 text-green-700 border border-green-200' 
-                : product.stock_quantity > 0 
-                  ? 'bg-yellow-100 text-yellow-700 border border-yellow-200'
-                  : 'bg-red-100 text-red-700 border border-red-200'
-            }`}>
-              <span className="hidden sm:inline">
-                {product.stock_quantity > 0 ? `${product.stock_quantity} in stock` : 'Out of stock'}
-              </span>
-              <span className="sm:hidden">
-                {product.stock_quantity > 0 ? `${product.stock_quantity}` : '0'}
-              </span>
-            </div>
-          )}
+          {(() => {
+            // For IMEI products, only count child variants (physical devices), not parent variants
+            const childVariants = product.variants?.filter(v => !v.isParent && !v.is_parent) || [];
+            const totalStock = childVariants.reduce((sum, variant) => sum + (variant.quantity || 0), 0);
+            return totalStock >= 0 ? (
+              <div className={`absolute top-0.5 left-0.5 px-1 sm:px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium shadow-sm ${
+                totalStock > 10
+                  ? 'bg-green-100 text-green-700 border border-green-200'
+                  : totalStock > 0
+                    ? 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                    : 'bg-red-100 text-red-700 border border-red-200'
+              }`}>
+                <span className="hidden sm:inline">
+                  {totalStock > 0 ? `${totalStock} in stock` : 'Out of stock'}
+                </span>
+                <span className="sm:hidden">
+                  {totalStock > 0 ? `${totalStock}` : '0'}
+                </span>
+              </div>
+            ) : null;
+          })()}
         </div>
 
         {/* Product Info */}
@@ -156,13 +161,21 @@ const MobileProductGrid: React.FC<MobileProductGridProps> = ({
           </div>
 
           {/* Add to Cart Button */}
-          <button
-            onClick={handleAddToCart}
-            disabled={product.stock_quantity === 0}
-            className="w-full py-1 sm:py-1.5 bg-blue-500 text-white font-medium rounded-sm active:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-[11px] sm:text-xs touch-button shadow-sm"
-          >
-            {product.stock_quantity === 0 ? 'Out of Stock' : 'Add to Cart'}
-          </button>
+          {(() => {
+            // For IMEI products, only count child variants (physical devices), not parent variants
+            const childVariants = product.variants?.filter(v => !v.isParent && !v.is_parent) || [];
+            const totalStock = childVariants.reduce((sum, variant) => sum + (variant.quantity || 0), 0);
+            const isOutOfStock = totalStock === 0;
+            return (
+              <button
+                onClick={handleAddToCart}
+                disabled={isOutOfStock}
+                className="w-full py-1 sm:py-1.5 bg-blue-500 text-white font-medium rounded-sm active:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-[11px] sm:text-xs touch-button shadow-sm"
+              >
+                {isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
+              </button>
+            );
+          })()}
         </div>
       </div>
     );

@@ -702,7 +702,8 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                   return !isImeiChild;
                 })
                 .reduce((sum: any, variant: any) => sum + (variant.quantity || 0), 0) : 0;
-              const totalStock = hasVariants ? variantStock : (product.stockQuantity || product.stock_quantity || 0);
+              // Always calculate stock from variants only (products don't have stock)
+              const totalStock = variantStock;
               const reservedStock = product.variants?.reduce((sum: any, variant: any) => sum + (variant.reservedQuantity || variant.reserved_quantity || 0), 0) || 0;
               const availableStock = totalStock - reservedStock;
               const stockStatus = availableStock <= 0 ? 'out-of-stock' : availableStock <= 10 ? 'low-stock' : 'in-stock';

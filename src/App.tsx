@@ -87,6 +87,8 @@ import InlineLoader from './components/ui/InlineLoader';
 const AdminSettingsPage = lazy(() => import('./features/admin/pages/AdminSettingsPage'));
 const IntegrationsTestPage = lazy(() => import('./features/admin/pages/IntegrationsTestPage'));
 const ErrorLogsPage = lazy(() => import('./features/admin/pages/ErrorLogsPage'));
+const SalesManagementPage = lazy(() => import('./features/admin/pages/SalesManagementPage'));
+const DeliveryManagementPage = lazy(() => import('./features/admin/pages/DeliveryManagementPage'));
 const UserManagementPage = lazy(() => import('./features/users/pages/UserManagementPage'));
 const EnhancedSupplierManagementPage = lazy(() => import('./features/settings/pages/EnhancedSupplierManagementPage'));
 import { SuppliersProvider } from './context/SuppliersContext';
@@ -476,7 +478,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
   }
   
   // Enable keyboard shortcuts (moved here to have access to router context)
-  useKeyboardShortcuts();
+  useKeyboardShortcuts([]);
 
   // Initialize database check on app startup
   useEffect(() => {
@@ -912,6 +914,8 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
 
           <Route path="/lats/sales-reports" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><SalesReportsPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/admin/reports" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Suspense fallback={<DynamicPageLoader />}><ReportsPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/admin/sales" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><SalesManagementPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/admin/deliveries" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><DeliveryManagementPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/lats/loyalty" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><LoyaltyManagementPage /></Suspense></RoleProtectedRoute>} />
 
           <Route path="/lats/purchase-orders" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><PurchaseOrdersPage /></Suspense></RoleProtectedRoute>} />

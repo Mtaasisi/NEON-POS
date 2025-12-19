@@ -164,11 +164,13 @@ const ExpenseManagement: React.FC = () => {
       const accountIdsForBranch = [...new Set(branchAccounts.map(a => a.id))];
 
       if (accountIdsForBranch.length === 0) {
-        addDebugLog('info', 'FETCH_EXPENSES', 'No accounts for current branch; returning empty list');
+        addDebugLog('info', 'FETCH_EXPENSES', 'No accounts for current branch; returning empty list', { branchAccountsCount: branchAccounts.length });
         setExpenses([]);
         setIsLoading(false);
         return;
       }
+
+      addDebugLog('info', 'FETCH_EXPENSES', 'Fetching transactions for account IDs', { accountIds: accountIdsForBranch });
 
       const { data: transactions, error } = await supabase
         .from('account_transactions')

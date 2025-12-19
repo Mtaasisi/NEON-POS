@@ -22,6 +22,7 @@ interface QuickExpenseModalProps {
 const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { currentUser } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [paymentAccounts, setPaymentAccounts] = useState<FinanceAccount[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<any[]>([]);
   const [dailySalesAmount, setDailySalesAmount] = useState(0);
@@ -41,6 +42,13 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
   // Check user role
   const isCustomerCare = currentUser?.role === 'customer-care';
   const isAdmin = currentUser?.role === 'admin';
+
+  console.log('👤 [QuickExpense] User role detection:', {
+    currentUser: currentUser?.id,
+    role: currentUser?.role,
+    isCustomerCare,
+    isAdmin
+  });
 
   // Fetch daily sales for customer care
   const fetchDailySales = async () => {
@@ -74,12 +82,13 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
   useEffect(() => {
     if (isOpen) {
       // Load data in parallel for better performance
-      const loadDataOptimized = async () => {
-        if (import.meta.env.MODE === 'development') {
-          console.log('🔄 [QuickExpenseModal] Starting optimized parallel data loading...');
-        }
+        setIsLoading(true);
+        const loadDataOptimized = async () => {
+          if (import.meta.env.MODE === 'development') {
+            console.log('🔄 [QuickExpenseModal] Starting optimized parallel data loading...');
+          }
 
-        const [accountsResult, categoriesResult, dailySalesResult] = await Promise.allSettled([
+          const [accountsResult, categoriesResult, dailySalesResult] = await Promise.allSettled([
           // Load payment accounts and categories in parallel
           fetchData().catch(err => {
             console.error('❌ Failed to load accounts/categories:', err);
@@ -95,14 +104,26 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
         }
       };
 
-      loadDataOptimized();
+      loadDataOptimized().finally(() => {
+        setIsLoading(false);
+      });
     }
   }, [isOpen, isCustomerCare]);
 
+  // Ensure account is selected when payment accounts change
+  useEffect(() => {
+    if (paymentAccounts.length > 0 && !formData.account_id && !isLoading) {
+      console.log('🔄 [QuickExpense] Auto-selecting account on accounts change:', paymentAccounts[0].id);
+      setFormData(prev => ({ ...prev, account_id: paymentAccounts[0].id }));
+    }
+  }, [paymentAccounts, formData.account_id, isLoading]);
+
   const fetchData = async () => {
     try {
+      console.log('🔄 [QuickExpense] Starting fetchData...');
       // Fetch payment accounts based on role
       const allAccounts = await financeAccountService.getPaymentMethods();
+      console.log('📊 [QuickExpense] Fetched accounts from service:', allAccounts?.length || 0);
       
       // Customer care: Only Cash account
       // Admin: All accounts
@@ -114,9 +135,35 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
       
       setPaymentAccounts(accountsToShow);
 
+      // Debug logging
+      console.log('🔍 [QuickExpense] Loaded accounts:', {
+        totalAccounts: allAccounts.length,
+        accountsToShow: accountsToShow.length,
+        isCustomerCare,
+        isAdmin,
+        currentUserRole: currentUser?.role,
+        currentFormAccountId: formData.account_id,
+        accountsToShowDetails: accountsToShow.map(acc => ({ id: acc.id, name: acc.name, type: acc.type }))
+      });
+
+      // Additional debug: Check paymentAccounts state
+      setTimeout(() => {
+        console.log('🔍 [QuickExpense] Payment accounts state after load:', {
+          paymentAccountsLength: paymentAccounts.length,
+          formAccountId: formData.account_id
+        });
+      }, 100);
+
       // Auto-select first account
       if (accountsToShow.length > 0 && !formData.account_id) {
-        setFormData(prev => ({ ...prev, account_id: accountsToShow[0].id }));
+        console.log('🔄 [QuickExpense] Auto-selecting account:', accountsToShow[0].id);
+        const newAccountId = accountsToShow[0].id;
+        setFormData(prev => {
+          console.log('🔄 [QuickExpense] Form data updated with account:', newAccountId);
+          return { ...prev, account_id: newAccountId };
+        });
+      } else if (accountsToShow.length === 0) {
+        console.warn('⚠️ [QuickExpense] No accounts available to auto-select');
       }
 
       // Fetch expense categories
@@ -169,6 +216,7 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
   };
 
   const handleSelectAccount = (accountId: string) => {
+    console.log('🔄 [QuickExpense] Manual account selection:', accountId);
     setFormData(prev => ({ ...prev, account_id: accountId }));
   };
 
@@ -204,9 +252,37 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
 
   const handleSubmit = async () => {
     try {
-      // Validate
-      if (!formData.account_id || !formData.amount || !formData.description) {
-        toast.error('Please fill in amount and description');
+      // Prevent submission while data is loading
+      if (isLoading) {
+        toast.error('Please wait for data to load');
+        return;
+      }
+
+      // Debug logging for troubleshooting
+      console.log('🔍 [QuickExpense] Submitting with form data:', {
+        account_id: formData.account_id,
+        amount: formData.amount,
+        description: formData.description,
+        category: formData.category
+      });
+
+      // Validate required fields
+      if (!formData.account_id) {
+        console.error('❌ [QuickExpense] Validation failed - no account selected:', {
+          availableAccounts: paymentAccounts.length,
+          isLoading,
+          isCustomerCare,
+          currentUserRole: currentUser?.role
+        });
+        toast.error('Please select a payment account');
+        return;
+      }
+      if (!formData.amount || formData.amount.trim() === '') {
+        toast.error('Please enter an amount');
+        return;
+      }
+      if (!formData.description || formData.description.trim() === '') {
+        toast.error('Please enter a description');
         return;
       }
 
@@ -527,7 +603,13 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
           </div>
         )}
 
-        {/* Customer Care: Cash Account (Auto-selected) - Simple Design */}
+        {/* Conditional rendering for multiple accounts (Admin/Manager) */}
+        {!isCustomerCare && paymentAccounts.length > 1 && (() => {
+          if (isCustomerCare && paymentAccounts.length > 0) {
+            console.log('💰 [QuickExpense] Showing customer care account:', paymentAccounts[0]);
+          }
+          return null;
+        })()}
         {isCustomerCare && paymentAccounts.length > 0 && (
           <div>
             <label className="block text-gray-700 mb-2 font-medium">
@@ -682,13 +764,18 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isSubmitting || (isCustomerCare && parseFloat(formData.amount) > dailySalesAmount)}
+            disabled={isSubmitting || isLoading || (isCustomerCare && parseFloat(formData.amount) > dailySalesAmount)}
             className="flex-1 px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-red-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isSubmitting ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                 Recording...
+              </>
+            ) : isLoading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                Loading...
               </>
             ) : (
               <>

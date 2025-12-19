@@ -26,6 +26,28 @@ export interface SaleItem {
   partNumber?: string; // Part number for spare parts
 }
 
+export interface DeliveryData {
+  deliveryMethod: 'boda' | 'bus' | 'air' | '';
+  deliveryAddress: string;
+  deliveryPhone: string;
+  deliveryTime: string;
+  deliveryNotes: string;
+  deliveryFee: number;
+
+  // Method-specific fields
+  bodaDestination?: string;
+  bodaPrice?: number;
+  busName?: string;
+  busContacts?: string;
+  arrivalDate?: string;
+  busOfficeLocation?: string;
+  busDestination?: string;
+  flightName?: string;
+  flightArrivalTime?: string;
+  airOfficeLocation?: string;
+  airDestination?: string;
+}
+
 export interface SaleData {
   id: string;
   saleNumber: string;
@@ -50,6 +72,7 @@ export interface SaleData {
   soldAt: string;
   createdAt: string;
   notes?: string;
+  delivery?: DeliveryData; // Add delivery information
 }
 
 export interface ProcessSaleResult {
@@ -1491,6 +1514,15 @@ class SaleProcessingService {
       };
 
       console.log('✅ Sale saved to database:', sale.id);
+
+      // 🚚 NOTE: Delivery creation has been decoupled from sales
+      // Deliveries are now created separately after sales are completed
+      // This allows for more flexible delivery management and doesn't block sales
+      if (saleData.delivery) {
+        console.log('ℹ️ [SaleProcessing] Delivery data provided but not processed during sale');
+        console.log('💡 [SaleProcessing] Create delivery separately using DeliveryService.createFromSale()');
+      }
+
       return { success: true, saleId: sale.id, sale: completeSale };
 
     } catch (error) {
@@ -1504,6 +1536,151 @@ class SaleProcessingService {
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to save sale to database' 
       };
+    }
+  }
+
+  // Create delivery order for a sale
+  private async createDeliveryOrder(
+    saleId: string,
+    deliveryData: DeliveryData,
+    customerId?: string
+  ): Promise<{ success: boolean; deliveryId?: string; trackingNumber?: string; error?: string }> {
+    try {
+      console.log('🚚 Creating delivery order for sale:', saleId);
+
+      // Get current user and branch for delivery assignment
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        console.warn('⚠️ No authenticated user for delivery creation');
+      }
+
+      // Get current branch
+      const { currentBranch } = await this.getCurrentBranch();
+
+      console.log('🚚 [Delivery Creation] Current branch:', currentBranch?.name, 'ID:', currentBranch?.id);
+
+      const deliveryInsertData = {
+        sale_id: saleId,
+        customer_id: customerId || null,
+        delivery_method: deliveryData.deliveryMethod,
+        delivery_address: deliveryData.deliveryAddress,
+        delivery_phone: deliveryData.deliveryPhone,
+        delivery_time: deliveryData.deliveryTime,
+        delivery_notes: deliveryData.deliveryNotes,
+        delivery_fee: deliveryData.deliveryFee,
+        branch_id: currentBranch?.id || '00000000-0000-0000-0000-000000000001',
+
+        // Method-specific fields
+        ...(deliveryData.bodaDestination && { boda_destination: deliveryData.bodaDestination }),
+        ...(deliveryData.bodaPrice && { boda_price: deliveryData.bodaPrice }),
+        ...(deliveryData.busName && { bus_name: deliveryData.busName }),
+        ...(deliveryData.busContacts && { bus_contacts: deliveryData.busContacts }),
+        ...(deliveryData.arrivalDate && { arrival_date: deliveryData.arrivalDate }),
+        ...(deliveryData.busOfficeLocation && { bus_office_location: deliveryData.busOfficeLocation }),
+        ...(deliveryData.busDestination && { bus_destination: deliveryData.busDestination }),
+        ...(deliveryData.flightName && { flight_name: deliveryData.flightName }),
+        ...(deliveryData.flightArrivalTime && { flight_arrival_time: deliveryData.flightArrivalTime }),
+        ...(deliveryData.airOfficeLocation && { air_office_location: deliveryData.airOfficeLocation }),
+        ...(deliveryData.airDestination && { air_destination: deliveryData.airDestination }),
+
+        created_by: user?.id,
+        created_by_name: user?.email || 'Tablet POS User'
+      };
+
+      console.log('🚚 Delivery insert data:', deliveryInsertData);
+
+      const { data: deliveryOrder, error: deliveryError } = await supabase
+        .from('lats_delivery_orders')
+        .insert([deliveryInsertData])
+        .select('id, tracking_number')
+        .single();
+
+      if (deliveryError) {
+        console.error('❌ Delivery order creation failed:', deliveryError);
+        return {
+          success: false,
+          error: `Failed to create delivery order: ${deliveryError.message}`
+        };
+      }
+
+      console.log('✅ Delivery order created successfully:', deliveryOrder.id);
+
+      // Trigger initial status update to 'confirmed'
+      const statusUpdateResult = await this.updateDeliveryStatus(
+        deliveryOrder.id,
+        'confirmed',
+        user?.id,
+        'Delivery order created from sale'
+      );
+
+      if (!statusUpdateResult) {
+        console.warn('⚠️ Failed to update delivery status to confirmed');
+      }
+
+      return {
+        success: true,
+        deliveryId: deliveryOrder.id,
+        trackingNumber: deliveryOrder.tracking_number
+      };
+
+    } catch (error) {
+      console.error('❌ Error creating delivery order:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error creating delivery order'
+      };
+    }
+  }
+
+  // Update delivery status (calls the database function)
+  private async updateDeliveryStatus(
+    deliveryId: string,
+    newStatus: string,
+    changedBy?: string,
+    notes?: string
+  ): Promise<boolean> {
+    try {
+      const { data, error } = await supabase.rpc('update_delivery_status', {
+        delivery_order_id: deliveryId,
+        new_status: newStatus,
+        changed_by: changedBy,
+        notes: notes
+      });
+
+      if (error) {
+        console.error('❌ Failed to update delivery status:', error);
+        return false;
+      }
+
+      console.log('✅ Delivery status updated successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Error updating delivery status:', error);
+      return false;
+    }
+  }
+
+  // Helper method to get current branch
+  private async getCurrentBranch(): Promise<{ currentBranch?: any }> {
+    try {
+      // Try to get from localStorage or context
+      const branchId = localStorage.getItem('current_branch_id') || '00000000-0000-0000-0000-000000000001';
+
+      const { data: branch, error } = await supabase
+        .from('lats_branches')
+        .select('*')
+        .eq('id', branchId)
+        .single();
+
+      if (error) {
+        console.warn('⚠️ Could not fetch current branch:', error);
+        return {};
+      }
+
+      return { currentBranch: branch };
+    } catch (error) {
+      console.warn('⚠️ Error getting current branch:', error);
+      return {};
     }
   }
 

@@ -479,120 +479,90 @@ interface CustomerCardProps {
 const CustomerCard: React.FC<CustomerCardProps> = ({ customer, onSelect, isSelected, searchQuery }) => {
   const formatMoney = (amount: number) => {
     const realAmount = amount || 0;
-    
+
     // Safety check: Detect unrealistic amounts
     const MAX_REALISTIC_AMOUNT = 1_000_000_000_000; // 1 trillion
     const isCorrupt = Math.abs(realAmount) > MAX_REALISTIC_AMOUNT;
-    
+
     if (isCorrupt) {
       console.warn(`⚠️ Customer ${customer.name} (${customer.id}) has CORRUPT amount: ${realAmount}`);
     }
-    
+
     // Safety check: Handle NaN and Infinity
     if (!isFinite(realAmount)) {
       console.warn(`⚠️ Customer ${customer.name} has invalid amount: ${amount}.`);
       return 'TZS 0 ⚠️ INVALID';
     }
-    
+
     const formatted = new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'TZS',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(realAmount);
-    
+
     // Add corruption indicator
     return isCorrupt ? `${formatted} ⚠️` : formatted;
   };
 
-
-  const isVIP = customer.loyaltyLevel?.toLowerCase() === 'vip' || customer.loyaltyLevel?.toLowerCase() === 'premium';
-
   return (
     <div
-      className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.02] cursor-pointer relative ${
-        isSelected || isVIP
-          ? 'border-blue-400 shadow-lg' 
-          : 'border-gray-200 hover:border-blue-300'
-      }`}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect(customer);
-      }}
+      className="border-2 border-gray-200 rounded-2xl bg-white shadow-sm hover:shadow-lg hover:scale-[1.02] hover:border-blue-300 cursor-pointer transition-all duration-300 p-4"
+      onClick={() => onSelect(customer)}
     >
-      {/* Info Icon Button - Top Right Corner */}
-      {customer.email || customer.city ? (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            // Could add customer details modal here
-          }}
-          className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-blue-500 text-gray-600 hover:text-white rounded-lg transition-all duration-200 shadow-sm hover:shadow-md z-10"
-          title="View customer details"
-        >
-          <Info className="w-4 h-4" />
-        </button>
-      ) : null}
-
-      <div className="p-4 flex flex-col h-full">
-        {/* Header with Avatar and Name - Left Aligned */}
-        <div className="flex items-center gap-3 mb-4">
-          {/* Avatar */}
-          <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg flex-shrink-0 ${
-            isVIP 
-              ? 'bg-gradient-to-br from-blue-500 via-blue-400 to-blue-600'
-              : 'bg-gradient-to-br from-blue-500 to-blue-600'
-          }`}>
-            {customer.name.charAt(0).toUpperCase()}
-          </div>
-          
-          {/* Name */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="text-base font-bold text-gray-900 truncate">
-                {customer.name}
-              </h3>
-              {isVIP && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-green-500 text-white shadow-sm flex-shrink-0">
-                  <CheckCircle className="w-3 h-3" />
-                </span>
-              )}
-            </div>
-            {customer.phone && (
-              <p className="text-xs text-gray-600 truncate mt-1">{customer.phone}</p>
-            )}
-          </div>
+      {/* Avatar and Name */}
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-lg flex-shrink-0">
+          {customer.name?.[0]?.toUpperCase() || <User size={18} />}
         </div>
-
-        {/* Empty space for flex-1 */}
-        <div className="space-y-2 mb-4 flex-1"></div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-3 mb-4 pt-3 border-t border-gray-100">
-          <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">Points</div>
-            <div className="font-bold text-gray-900 text-sm">{customer.points || 0}</div>
-            </div>
-          <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">Spent</div>
-            <div className="font-bold text-gray-900 text-sm">
-              {formatMoney(customer.totalSpent || 0).replace('TZS', '').trim()}
-            </div>
-          </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-bold text-gray-900 truncate">
+            {customer.name || 'Unnamed customer'}
+          </h3>
         </div>
-
-        {/* Action Button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(customer);
-          }}
-          className="w-full py-2.5 px-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-md hover:shadow-lg font-semibold text-sm flex items-center justify-center gap-2 mt-auto"
-        >
-          <CheckCircle className="w-4 h-4" />
-          Select
-        </button>
       </div>
+
+      {/* Contact Info */}
+      <div className="space-y-1 mb-3">
+        {customer.phone && (
+          <div className="flex items-center space-x-2 text-xs text-gray-600">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-phone">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+            </svg>
+            <span className="truncate">{customer.phone}</span>
+          </div>
+        )}
+        {customer.email && (
+          <div className="flex items-center space-x-2 text-xs text-gray-600">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-mail">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+            <span className="truncate">{customer.email}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Stats (if available) */}
+      {(customer.points !== undefined || customer.totalSpent !== undefined) && (
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
+          <div className="text-center">
+            <div className="text-xs text-gray-500">Points</div>
+            <div className="font-semibold text-gray-900 text-sm">{customer.points || 0}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs text-gray-500">Spent</div>
+            <div className="font-semibold text-gray-900 text-sm">
+              TSh {customer.totalSpent ? customer.totalSpent.toLocaleString() : '0'}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Select Button */}
+      <button className="w-full mt-3 bg-blue-600 text-white py-2 px-3 rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors">
+        Select Customer
+      </button>
     </div>
   );
 };

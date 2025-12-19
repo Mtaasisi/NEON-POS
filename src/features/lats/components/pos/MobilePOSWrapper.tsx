@@ -37,10 +37,13 @@ import {
   Download,
   Star,
   TrendingUp,
-  Trash2
+  Trash2,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
+import { posErrorHandler } from '../../lib/posErrorHandler';
 import { useAuth } from '../../../../context/AuthContext';
 import { supabase } from '../../../../lib/supabaseClient';
 import { useBranch } from '../../../../context/BranchContext';
@@ -93,6 +96,10 @@ interface MobilePOSWrapperProps {
   isTaxEnabled?: boolean;
   taxRate?: number;
   isQrCodeScannerEnabled?: boolean;
+
+  // Offline status
+  isOffline?: boolean;
+  offlinePaymentCount?: number;
 }
 
 const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
@@ -122,7 +129,9 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
   todaysSales,
   isTaxEnabled,
   taxRate,
-  isQrCodeScannerEnabled
+  isQrCodeScannerEnabled,
+  isOffline = false,
+  offlinePaymentCount = 0
 }) => {
   const { currentUser } = useAuth();
   const { currentBranch } = useBranch();
@@ -447,13 +456,10 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
     return `TZS ${amount.toLocaleString()}`;
   };
 
-  // Render customer card
+  // Render customer card - matching tablet POS design
   const renderCustomerCard = (customer: any) => {
-    const initial = customer.name.charAt(0).toUpperCase();
-    const location = customer.location || customer.city || 'N/A';
-    
     return (
-      <div 
+      <div
         key={customer.id}
         onClick={() => {
           playClickSound();
@@ -464,38 +470,61 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
           });
           setShowCustomerDetails(true);
         }}
-        className={`relative bg-white border border-gray-200 rounded-lg cursor-pointer transition-all duration-200 hover:border-${customer.tierColor}-500`}
+        className="border-2 border-gray-200 rounded-2xl bg-white shadow-sm hover:shadow-lg hover:scale-[1.02] hover:border-blue-300 cursor-pointer transition-all duration-300 p-4"
       >
-        <div className="p-3">
-          <div className="flex items-center gap-2 mb-3">
-            <div className={`w-10 h-10 ${getTierColorClass(customer.tierColor)} rounded-lg flex items-center justify-center text-white font-bold text-sm`}>
-              {initial}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h4 className="font-semibold text-gray-900 truncate text-sm">{customer.name}</h4>
-              <p className="text-xs text-blue-600 font-medium truncate">{customer.phone}</p>
-            </div>
+        {/* Avatar and Name */}
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-lg flex-shrink-0">
+            {customer.name?.[0]?.toUpperCase() || '?'}
           </div>
-          <div className="flex items-center gap-1 mb-2 justify-center">
-            <Star className={`w-3 h-3 text-${customer.tierColor}-500 fill-current`} />
-            <span className="text-xs text-gray-700 font-semibold capitalize">{customer.loyaltyTier}</span>
-          </div>
-          {location !== 'N/A' && (
-            <div className="space-y-1 mb-3">
-              <div className="flex items-center gap-2 text-xs text-gray-600">
-                <span className="text-gray-400">📍</span>
-                <span className="truncate">{location}</span>
-              </div>
-            </div>
-          )}
-          <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-            <div className="flex items-center gap-1">
-              <Star className="w-3 h-3 text-gray-400" />
-              <span className="text-xs text-gray-600 font-medium">{customer.loyalty_points || 0} pts</span>
-            </div>
-            <div className="text-xs font-bold text-gray-900">{formatCurrency(customer.totalSpent)}</div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-bold text-gray-900 truncate">
+              {customer.name || 'Unnamed customer'}
+            </h3>
           </div>
         </div>
+
+        {/* Contact Info */}
+        <div className="space-y-1 mb-3">
+          {customer.phone && (
+            <div className="flex items-center space-x-2 text-xs text-gray-600">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-phone">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+              </svg>
+              <span className="truncate">{customer.phone}</span>
+            </div>
+          )}
+          {customer.email && (
+            <div className="flex items-center space-x-2 text-xs text-gray-600">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-mail">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                <polyline points="22,6 12,13 2,6"></polyline>
+              </svg>
+              <span className="truncate">{customer.email}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Stats (if available) */}
+        {(customer.loyalty_points !== undefined || customer.totalSpent !== undefined) && (
+          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
+            <div className="text-center">
+              <div className="text-xs text-gray-500">Points</div>
+              <div className="font-semibold text-gray-900 text-sm">{customer.loyalty_points || 0}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-gray-500">Spent</div>
+              <div className="font-semibold text-gray-900 text-sm">
+                TSh {customer.totalSpent ? customer.totalSpent.toLocaleString() : '0'}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Select Button */}
+        <button className="w-full mt-3 bg-blue-600 text-white py-2 px-3 rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors">
+          Select Customer
+        </button>
       </div>
     );
   };
@@ -893,7 +922,33 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
                 )}
               </div>
             </div>
-            
+
+            {/* Offline Status Indicator */}
+            {(isOffline || offlinePaymentCount > 0) && (
+              <div className="mx-4 mb-3">
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-r-lg">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      {isOffline ? (
+                        <WifiOff className="h-5 w-5 text-yellow-400" />
+                      ) : (
+                        <Wifi className="h-5 w-5 text-green-400" />
+                      )}
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-yellow-700">
+                        {isOffline ? (
+                          'You are offline - payments will be saved locally'
+                        ) : offlinePaymentCount > 0 ? (
+                          `${offlinePaymentCount} offline payment${offlinePaymentCount > 1 ? 's' : ''} queued for sync`
+                        ) : null}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Products Grid */}
             <div className="flex-1 overflow-y-auto pb-20 mobile-scroll">
               {filteredProducts.length === 0 ? (

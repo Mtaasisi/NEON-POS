@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { X, Plus, Minus, CreditCard, ChevronDown, ChevronUp, Truck, Printer, Trash2, MapPin, Clock, Phone, FileText, Users } from 'lucide-react';
 import { format } from '../../lats/lib/format';
-import GlassButton from '../../../features/shared/components/ui/GlassButton';
-import GlassCard from '../../../features/shared/components/ui/GlassCard';
+// Using regular buttons instead of GlassButton/GlassCard for compatibility
 
 interface CartItem {
   id: string;
@@ -36,6 +35,7 @@ interface TabletCartSidebarProps {
   onProceedToPayment: () => void;
   onClearCart: () => void;
   onDeliveryConfirm?: (deliveryData: any) => void;
+  onAdvancedDelivery?: () => void; // For advanced delivery section
   customerSelected?: boolean;
   sizes: any;
 }
@@ -58,6 +58,7 @@ const TabletCartSidebar: React.FC<TabletCartSidebarProps> = ({
   onProceedToPayment,
   onClearCart,
   onDeliveryConfirm,
+  onAdvancedDelivery,
   customerSelected = false,
   sizes,
 }) => {
@@ -223,7 +224,6 @@ const TabletCartSidebar: React.FC<TabletCartSidebarProps> = ({
     // You might want to update the order with customer information
   };
 
-
   // Delivery Modal Component
   const DeliveryModal = () => {
     const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -245,7 +245,7 @@ const TabletCartSidebar: React.FC<TabletCartSidebarProps> = ({
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <GlassCard className="max-w-md w-full p-6">
+        <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Delivery Setup</h3>
             <button
@@ -307,24 +307,10 @@ const TabletCartSidebar: React.FC<TabletCartSidebarProps> = ({
                   <option value="asap">ASAP (30-45 mins)</option>
                   <option value="1hour">Within 1 hour</option>
                   <option value="2hours">Within 2 hours</option>
-                  <option value="today">Later today</option>
+                  <option value="today">Today</option>
                   <option value="tomorrow">Tomorrow</option>
                 </select>
               </div>
-            </div>
-
-            {/* Delivery Fee */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Delivery Fee
-              </label>
-              <input
-                type="number"
-                value={deliveryFee}
-                onChange={(e) => setDeliveryFee(Number(e.target.value))}
-                placeholder="Delivery fee"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
             </div>
 
             {/* Delivery Notes */}
@@ -336,29 +322,35 @@ const TabletCartSidebar: React.FC<TabletCartSidebarProps> = ({
                 value={deliveryNotes}
                 onChange={(e) => setDeliveryNotes(e.target.value)}
                 placeholder="Special delivery instructions..."
-                rows={2}
+                rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               />
             </div>
-          </div>
 
-          <div className="flex gap-3 mt-6">
-            <GlassButton
-              onClick={() => setShowDeliveryModal(false)}
-              variant="secondary"
-              className="flex-1"
-            >
-              Cancel
-            </GlassButton>
-            <GlassButton
+            {/* Delivery Fee */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Delivery Fee
+              </label>
+              <input
+                type="number"
+                value={deliveryFee}
+                onChange={(e) => setDeliveryFee(Number(e.target.value))}
+                min="0"
+                step="100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Confirm Button */}
+            <button
               onClick={handleConfirm}
-              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
-              disabled={!deliveryAddress || !deliveryPhone}
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-lg transition-colors"
             >
-              Confirm Delivery
-            </GlassButton>
+              Confirm Delivery Setup
+            </button>
           </div>
-        </GlassCard>
+        </div>
       </div>
     );
   };
@@ -367,7 +359,7 @@ const TabletCartSidebar: React.FC<TabletCartSidebarProps> = ({
   const HeldOrdersModal = () => {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <GlassCard className="max-w-lg w-full p-6 max-h-96 overflow-y-auto">
+        <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Held Orders</h3>
             <button
@@ -381,65 +373,39 @@ const TabletCartSidebar: React.FC<TabletCartSidebarProps> = ({
           {heldOrders.length === 0 ? (
             <p className="text-gray-500 text-center py-8">No held orders</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-3 max-h-80 overflow-y-auto">
               {heldOrders.map((order) => (
-                <div key={order.id} className="p-4 bg-gray-50 rounded-lg border">
+                <div key={order.id} className="border border-gray-200 rounded-lg p-3">
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <h4 className="font-semibold text-gray-900">Order #{order.orderNumber}</h4>
-                      <p className="text-sm text-gray-600">{order.heldAt}</p>
+                      <p className="font-medium text-gray-900">Order #{order.orderNumber}</p>
+                      <p className="text-sm text-gray-500">{order.heldAt}</p>
                     </div>
-                    <span className="text-lg font-bold text-gray-900">{format.currency(order.cartTotal)}</span>
+                    <p className="font-semibold text-gray-900">{format.currency(order.cartTotal)}</p>
                   </div>
-                  <div className="text-sm text-gray-600 mb-3">
-                    {order.cart.length} item(s)
-                  </div>
-                  <GlassButton
+                  <p className="text-sm text-gray-600 mb-3">
+                    {order.cart.length} item{order.cart.length !== 1 ? 's' : ''}
+                  </p>
+                  <button
                     onClick={() => handleRecallOrderConfirm(order.id)}
-                    className="w-full bg-blue-500 hover:bg-blue-600 text-white"
-                    size="sm"
+                    className="w-full bg-green-500 hover:bg-green-600 text-white text-sm font-semibold py-2 rounded-lg transition-colors"
                   >
                     Recall Order
-                  </GlassButton>
+                  </button>
                 </div>
               ))}
             </div>
           )}
-
-          <div className="flex gap-3 mt-6">
-            <GlassButton
-              onClick={() => setShowHeldOrdersModal(false)}
-              variant="secondary"
-              className="flex-1"
-            >
-              Close
-            </GlassButton>
-          </div>
-        </GlassCard>
+        </div>
       </div>
     );
   };
 
   // Customer Modal Component
   const CustomerModal = () => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
-
-    // Mock customer data - in real app, this would come from API
-    const mockCustomers = [
-      { id: 1, name: 'John Doe', phone: '+255 712 345 678', email: 'john@example.com' },
-      { id: 2, name: 'Jane Smith', phone: '+255 765 432 109', email: 'jane@example.com' },
-      { id: 3, name: 'Bob Johnson', phone: '+255 789 012 345', email: 'bob@example.com' },
-    ];
-
-    const filteredCustomers = mockCustomers.filter(customer =>
-      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.phone.includes(searchTerm)
-    );
-
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <GlassCard className="max-w-md w-full p-6 max-h-96 overflow-y-auto">
+        <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Select Customer</h3>
             <button
@@ -450,206 +416,155 @@ const TabletCartSidebar: React.FC<TabletCartSidebarProps> = ({
             </button>
           </div>
 
-          {/* Search */}
-          <div className="mb-4">
-            <input
-              type="text"
-              placeholder="Search customers..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+          <div className="space-y-4">
+            <div className="text-center py-8">
+              <Users size={48} className="text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">Customer selection would be implemented here</p>
+              <p className="text-sm text-gray-400 mt-2">This is a placeholder for customer selection functionality</p>
+            </div>
 
-          {/* Customer List */}
-          <div className="space-y-2 mb-4">
-            {filteredCustomers.map((customer) => (
-              <div
-                key={customer.id}
-                onClick={() => setSelectedCustomer(customer)}
-                className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                  selectedCustomer?.id === customer.id
-                    ? 'bg-blue-50 border-blue-300'
-                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                }`}
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowCustomerModal(false)}
+                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-3 rounded-lg transition-colors"
               >
-                <div className="font-medium text-gray-900">{customer.name}</div>
-                <div className="text-sm text-gray-600">{customer.phone}</div>
-                <div className="text-sm text-gray-500">{customer.email}</div>
-              </div>
-            ))}
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleCustomerConfirm({ name: 'Walk-in Customer', phone: 'N/A' });
+                }}
+                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-lg transition-colors"
+              >
+                Continue as Guest
+              </button>
+            </div>
           </div>
-
-          <div className="flex gap-3">
-            <GlassButton
-              onClick={() => setShowCustomerModal(false)}
-              variant="secondary"
-              className="flex-1"
-            >
-              Cancel
-            </GlassButton>
-            <GlassButton
-              onClick={() => {
-                if (selectedCustomer) {
-                  handleCustomerConfirm(selectedCustomer);
-                }
-              }}
-              className="flex-1 bg-purple-500 hover:bg-purple-600 text-white"
-              disabled={!selectedCustomer}
-            >
-              Select Customer
-            </GlassButton>
-          </div>
-        </GlassCard>
+        </div>
       </div>
     );
   };
 
   return (
-    <>
-      {showDeliveryModal && <DeliveryModal />}
-      {showHeldOrdersModal && <HeldOrdersModal />}
-      {showCustomerModal && <CustomerModal />}
-      <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full bg-white">
       {/* Cart Header */}
-      <div
-        className="border-b border-gray-200 bg-gray-50"
-        style={{
-          padding: `${sizes.spacing3}px ${sizes.spacing3}px`,
-        }}
-      >
+      <div className="flex items-center justify-between p-4 border-b border-gray-200">
         <h2 style={{ fontSize: `${cartSizes.textXl}px` }} className="font-bold text-gray-900">
-          Cart ({cart.length})
+          Cart
         </h2>
+        {cart.length > 0 && (
+          <button
+            onClick={onClearCart}
+            className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50"
+            title="Clear Cart"
+          >
+            <Trash2 size={18} />
+          </button>
+        )}
       </div>
 
       {/* Cart Items */}
-      <div
-        className="flex-1 overflow-y-auto min-h-0 text-blue-600 bg-gray-100"
-        style={{ overscrollBehavior: 'contain' }}
-      >
+      <div className="flex-1 overflow-y-auto">
         {cart.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center p-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <CreditCard size={32} className="text-gray-400" />
-              </div>
-              <p style={{ fontSize: `${cartSizes.textBase}px` }} className="text-gray-500">
-                Your cart is empty
-              </p>
-              <p style={{ fontSize: `${cartSizes.textSm}px` }} className="text-gray-400 mt-1">
-                Add items from the left panel
-              </p>
-            </div>
+          <div className="flex flex-col items-center justify-center h-full text-gray-500 py-12">
+            <div className="text-6xl mb-4">🛒</div>
+            <p style={{ fontSize: `${cartSizes.textLg}px` }} className="font-medium">Your cart is empty</p>
+            <p style={{ fontSize: `${cartSizes.textBase}px` }} className="text-gray-400 mt-1">Add some products to get started</p>
           </div>
         ) : (
-          <div className="p-3 space-y-3">
-            {cart.map((item, index) => (
-              <div
-                key={item.id}
-                className="bg-white rounded-[20px] border border-gray-100 hover:border-blue-400 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer active:scale-[0.98] select-none relative shadow-sm"
-                style={{
-                  WebkitTapHighlightColor: 'transparent',
-                }}
-              >
-                <div className="flex p-4 space-x-3">
-                  {/* Product Image - Left side */}
+          <div className="p-4 space-y-3">
+            {cart.map((item) => {
+              console.log('🎯 [TabletCartSidebar] Rendering cart item:', {
+                id: item.id,
+                productName: item.productName,
+                variantName: item.variantName,
+                unitPrice: item.unitPrice,
+                quantity: item.quantity
+              });
+
+              return (
+                <div key={item.id} className="bg-white rounded-2xl border-2 border-gray-200 hover:border-blue-400 hover:shadow-sm transition-all duration-200 p-4 relative shadow-sm">
+                  {/* Product Image */}
                   {item.image && (
-                    <div className="flex-shrink-0">
-                      <div
-                        className="w-20 h-20 bg-gray-50 rounded-xl overflow-hidden border border-gray-200"
-                        style={{ borderRadius: `${sizes.radiusMd}px` }}
-                      >
-                        <img
-                          src={item.image}
-                          alt={item.productName}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
+                    <div className="absolute top-4 left-4 w-12 h-12 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+                      <img
+                        src={item.image}
+                        alt={item.productName}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                   )}
 
-                  {/* Product Details - Right side */}
+                  {/* Product Header */}
+                  <div className="flex items-start justify-between mb-3 pl-16">
                   <div className="flex-1 min-w-0">
-                    {/* Top row: Product name and remove button */}
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <h4
-                          style={{ fontSize: `${cartSizes.textBase}px` }}
-                          className="font-semibold text-gray-900 truncate"
-                          title={item.productName}
-                        >
-                          {item.productName}
-                        </h4>
-                        {item.variantName !== 'Default' && (
-                          <p
-                            style={{ fontSize: `${cartSizes.textSm}px` }}
-                            className="text-gray-500 truncate"
-                          >
-                            {item.variantName}
-                          </p>
-                        )}
-                      </div>
+                    <h4 style={{ fontSize: `${cartSizes.textBase}px` }} className="font-semibold text-gray-900 leading-tight">
+                      {item.productName || 'Unknown Product'}
+                    </h4>
+                    {(item.variantName && item.variantName !== 'Default') && (
+                      <p style={{ fontSize: `${cartSizes.textXs}px` }} className="text-gray-600 mt-1 font-medium">
+                        {item.variantName}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => onRemoveFromCart(item.id)}
+                    className="flex-shrink-0 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200"
+                    title="Remove item"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
 
-                      {/* Remove Button */}
-                      <button
-                        onClick={() => onRemoveFromCart(item.id)}
-                        className="w-7 h-7 bg-red-100 hover:bg-red-200 rounded-full flex items-center justify-center transition-colors ml-2 flex-shrink-0"
-                        style={{ WebkitTapHighlightColor: 'transparent' }}
-                      >
-                        <X size={14} className="text-red-600" />
-                      </button>
-                    </div>
-
-                    {/* Bottom row: Price and quantity controls */}
-                    <div className="flex items-center justify-between">
-                      {/* Price and unit info */}
-                      <div>
-                        <div
-                          style={{ fontSize: `${cartSizes.textLg}px` }}
-                          className="font-bold text-gray-900"
-                        >
-                          {format.currency(item.totalPrice)}
-                        </div>
-                        <div
-                          style={{ fontSize: `${cartSizes.textXs}px` }}
-                          className="text-gray-400"
-                        >
-                          {format.currency(item.unitPrice)} × {item.quantity}
-                        </div>
-                      </div>
-
-                      {/* Quantity Controls */}
-                      <div className="flex items-center space-x-1 bg-gray-50 rounded-full p-1 border border-gray-200">
-                        <button
-                          onClick={() => onUpdateQuantity(item.id, -1)}
-                          className="w-6 h-6 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center transition-colors"
-                          style={{ WebkitTapHighlightColor: 'transparent' }}
-                        >
-                          <Minus size={12} className="text-gray-600" />
-                        </button>
-
-                        <span
-                          style={{ fontSize: `${cartSizes.textSm}px` }}
-                          className="font-semibold text-gray-900 min-w-[1.5rem] text-center"
-                        >
-                          {item.quantity}
-                        </span>
-
-                        <button
-                          onClick={() => onUpdateQuantity(item.id, 1)}
-                          disabled={item.quantity >= item.availableQuantity}
-                          className="w-6 h-6 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-200 rounded-full flex items-center justify-center transition-colors"
-                          style={{ WebkitTapHighlightColor: 'transparent' }}
-                        >
-                          <Plus size={12} className="text-white disabled:text-blue-400" />
-                        </button>
-                      </div>
+                {/* Price Information */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-baseline gap-2">
+                    <span style={{ fontSize: `${cartSizes.textSm}px` }} className="font-medium text-gray-700">
+                      {format.currency(item.unitPrice)}
+                    </span>
+                    <span style={{ fontSize: `${cartSizes.textXs}px` }} className="text-gray-500">
+                      each
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-center gap-2">
+                      <span style={{ fontSize: `${cartSizes.textXs}px` }} className="text-gray-500">
+                        Total:
+                      </span>
+                      <span style={{ fontSize: `${cartSizes.textBase}px` }} className="font-bold text-gray-900">
+                        {format.currency(item.totalPrice)}
+                      </span>
                     </div>
                   </div>
                 </div>
+
+                {/* Quantity Controls */}
+                <div className="flex items-center justify-center">
+                  <div className="flex items-center gap-1 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl px-4 py-2 border border-blue-100 shadow-sm">
+                    <button
+                      onClick={() => onUpdateQuantity(item.id, -1)}
+                      className="w-8 h-8 flex items-center justify-center bg-white hover:bg-blue-50 text-blue-600 rounded-lg transition-all duration-200 shadow-sm"
+                      disabled={item.quantity <= 1}
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <div className="flex items-center justify-center min-w-[44px] px-3">
+                      <span style={{ fontSize: `${cartSizes.textBase}px` }} className="font-bold text-gray-900">
+                        {item.quantity}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => onUpdateQuantity(item.id, 1)}
+                      className="w-8 h-8 flex items-center justify-center bg-white hover:bg-blue-50 text-blue-600 rounded-lg transition-all duration-200 shadow-sm"
+                      disabled={item.quantity >= item.availableQuantity}
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -740,7 +655,11 @@ const TabletCartSidebar: React.FC<TabletCartSidebarProps> = ({
                 {/* Delivery Button */}
                 <button
                   onClick={() => {
-                    handleDeliverySetup();
+                    if (onAdvancedDelivery) {
+                      onAdvancedDelivery(); // Use advanced delivery section
+                    } else {
+                      handleDeliverySetup(); // Fallback to simple modal
+                    }
                   }}
                   className="flex flex-col items-center justify-center p-2 bg-white hover:bg-orange-50 active:bg-orange-100 rounded-lg border border-gray-200 transition-all duration-150 group"
                   style={{ WebkitTapHighlightColor: 'transparent' }}
@@ -830,7 +749,6 @@ const TabletCartSidebar: React.FC<TabletCartSidebarProps> = ({
             </div>
           </div>
 
-
           {/* Payment Button */}
           <button
             onClick={onProceedToPayment}
@@ -843,15 +761,19 @@ const TabletCartSidebar: React.FC<TabletCartSidebarProps> = ({
               WebkitTapHighlightColor: 'transparent',
               fontSize: `${cartSizes.textLg}px`,
             }}
-          disabled={!customerSelected}
+            disabled={!customerSelected}
           >
             <CreditCard size={20} />
             <span>Proceed to Payment</span>
           </button>
         </div>
       )}
+
+      {/* Modals */}
+      {showDeliveryModal && <DeliveryModal />}
+      {showHeldOrdersModal && <HeldOrdersModal />}
+      {showCustomerModal && <CustomerModal />}
     </div>
-    </>
   );
 };
 

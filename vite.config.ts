@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import commonjs from 'vite-plugin-commonjs';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
@@ -91,8 +92,10 @@ export default defineConfig(({ command, mode }) => {
     base: process.env.CAPACITOR_BUILD === 'true' ? './' : (command === 'serve' ? '/' : (env.VITE_BASE_PATH || '/')),
     plugins: [
       react({
-        jsxRuntime: 'automatic'
+        jsxRuntime: 'automatic',
+        parserPlugins: ['typescript', 'jsx'], // Specify parser plugins
       }),
+      commonjs(),
     ],
     optimizeDeps: {
       exclude: ['lucide-react'],
@@ -103,6 +106,10 @@ export default defineConfig(({ command, mode }) => {
       // Add esbuild options for better dependency handling
       esbuildOptions: {
         target: 'es2020',
+        loader: {
+          '.ts': 'tsx',
+          '.tsx': 'tsx',
+        },
       },
     },
     build: {
@@ -154,6 +161,7 @@ export default defineConfig(({ command, mode }) => {
     // Add define to prevent issues with module resolution
     define: {
       __DEV__: process.env.NODE_ENV === 'development',
+      __HMR_CONFIG_NAME__: JSON.stringify('client'),
     },
     // Expose env variables properly
     envPrefix: 'VITE_',
@@ -169,8 +177,6 @@ export default defineConfig(({ command, mode }) => {
       legalComments: 'none',
       charset: 'utf8',
       sourcemap: false, // Disable source maps to avoid CORS issues
-      // Temporarily disable TypeScript checking to resolve compilation errors
-      logLevel: 'silent',
     },
     // Development-specific configuration
     ...(command === 'serve' && {

@@ -541,18 +541,17 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
             onChange={(checked) => handleSettingChange('enable_tax', checked)}
             helpText="Calculate na ongeza tax automatically kwa sales."
           />
-          
-          {settings.enable_tax && (
-            <NumberInput
-              label="Tax Rate (%)"
-              value={settings.tax_rate}
-              onChange={(value) => handleSettingChange('tax_rate', value)}
-              min={0}
-              max={50}
-              step={0.1}
-              helpText="Percent ya tax kwa sales (mfano: 18 kwa 18% VAT)."
-            />
-          )}
+
+          <NumberInput
+            label="Tax Rate (%)"
+            value={settings.tax_rate}
+            onChange={(value) => handleSettingChange('tax_rate', value)}
+            min={0}
+            max={50}
+            step={0.1}
+            helpText="Percent ya tax kwa sales (mfano: 18 kwa 18% VAT)."
+            disabled={!settings.enable_tax}
+          />
         </div>
       </SettingsSection>
 
