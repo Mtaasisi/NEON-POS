@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { X, User, Phone, Mail } from 'lucide-react';
+import { X, Phone, MapPin, Crown } from 'lucide-react';
+import { format } from '../../lats/lib/format';
 
 interface TabletCustomerSelectionModalProps {
   customers: any[];
@@ -75,61 +76,56 @@ const TabletCustomerSelectionModal: React.FC<TabletCustomerSelectionModalProps> 
                   <div
                     key={customer.id}
                     onClick={() => handleSelect(customer)}
-                    className="border-2 border-gray-200 rounded-2xl bg-white shadow-sm hover:shadow-lg hover:scale-[1.02] hover:border-blue-300 cursor-pointer transition-all duration-300 p-4"
+                    className="bg-white rounded-xl p-5 shadow-sm hover:shadow-lg border border-gray-200 hover:border-blue-300 cursor-pointer transition-all duration-200"
                   >
-                    {/* Avatar and Name */}
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-lg flex-shrink-0">
-                        {customer.name?.[0]?.toUpperCase() || <User size={18} />}
+                    <div className="flex items-center gap-4 mb-3">
+                      <div className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span className="text-white font-bold text-xl">{customer.name?.[0]?.toUpperCase() || '?'}</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-bold text-gray-900 truncate">
-                          {customer.name || 'Unnamed customer'}
-                        </h3>
+                        <div className="flex items-baseline gap-2 mb-1">
+                          <h3 className="font-semibold text-gray-800 text-lg truncate">{customer.name || 'Unnamed Customer'}</h3>
+                          {customer.loyaltyLevel && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full capitalize">
+                              <Crown size={12} className="text-yellow-600" />
+                              {customer.loyaltyLevel}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-1">
+                      {customer.phone && (
+                            <a href={`tel:${customer.phone}`} className="flex items-center gap-2 text-base text-gray-700 hover:text-blue-600 transition-colors">
+                              <Phone size={16} className="text-gray-500" />
+                              <span>{customer.phone}</span>
+                            </a>
+                          )}
+                          {customer.city && (
+                            <div className="flex items-center gap-2 text-base text-gray-600">
+                              <MapPin size={16} className="text-gray-500" />
+                              <span>{customer.city}</span>
+                        </div>
+                      )}
+                        </div>
                       </div>
                     </div>
-
-                    {/* Contact Info */}
-                    <div className="space-y-1 mb-3">
-                      {customer.phone && (
-                        <div className="flex items-center space-x-2 text-xs text-gray-600">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-phone">
-                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                          </svg>
-                          <span className="truncate">{customer.phone}</span>
-                        </div>
-                      )}
-                      {customer.email && (
-                        <div className="flex items-center space-x-2 text-xs text-gray-600">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-mail">
-                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                            <polyline points="22,6 12,13 2,6"></polyline>
-                          </svg>
-                          <span className="truncate">{customer.email}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Stats (if available) */}
                     {(customer.points !== undefined || customer.total_spent !== undefined) && (
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
-                        <div className="text-center">
-                          <div className="text-xs text-gray-500">Points</div>
-                          <div className="font-semibold text-gray-900 text-sm">{customer.points || 0}</div>
+                      <div className="flex justify-between items-center pt-4 mt-4 border-t border-gray-100">
+                        {customer.points !== undefined && (
+                          <div className="flex flex-col items-start">
+                          <div className="text-xs text-gray-500">Customer Points</div>
+                            <div className="text-blue-600 font-bold text-lg">{customer.points || 0}</div>
                         </div>
-                        <div className="text-center">
-                          <div className="text-xs text-gray-500">Spent</div>
-                          <div className="font-semibold text-gray-900 text-sm">
-                            TSh {customer.total_spent ? customer.total_spent.toLocaleString() : '0'}
+                        )}
+                        {customer.total_spent !== undefined && (
+                          <div className="flex flex-col items-end">
+                          <div className="text-xs text-gray-500">Customer Spent</div>
+                            <div className="text-green-600 font-bold text-lg">
+                              {format.money(customer.total_spent || 0, { short: true })}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     )}
-
-                    {/* Select Button */}
-                    <button className="w-full mt-3 bg-blue-600 text-white py-2 px-3 rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors">
-                      Select Customer
-                    </button>
                   </div>
                 ))}
               </div>
@@ -143,12 +139,6 @@ const TabletCustomerSelectionModal: React.FC<TabletCustomerSelectionModalProps> 
               className="flex-1 bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"
             >
               Add New Customer
-            </button>
-            <button
-              onClick={onClose}
-              className="px-4 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-semibold"
-            >
-              Close
             </button>
           </div>
         </div>

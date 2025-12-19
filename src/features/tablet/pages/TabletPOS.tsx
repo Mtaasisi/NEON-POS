@@ -124,6 +124,18 @@ const TabletPOSFallback: React.FC = () => {
 const TabletPOS: React.FC = () => {
   const navigate = useNavigate();
 
+  let screenInfo = { width: 1024, height: 768, deviceCategory: 'tablet' };
+  try {
+    screenInfo = useScreenInfo();
+  } catch (error) {
+    console.warn('⚠️ [TabletPOS] useScreenInfo failed:', error);
+  }
+
+  // Check if it's a production environment AND a tablet device
+  const isProduction = process.env.NODE_ENV === 'production';
+  const isTabletOrIpad = screenInfo.deviceCategory === 'tablet';
+
+
   // Safe hook calls with fallbacks
   let currentUser, currentBranch, availableBranches, switchBranch, customers, refreshCustomers, dbProducts, loadProducts;
   let successModal;
@@ -184,7 +196,6 @@ const TabletPOS: React.FC = () => {
 
   // Tablet-specific responsive sizing with fallbacks
   let sizes = { scale: 1, spacing4: 16, spacing6: 24, iconSize: 20, textSm: 14, textLg: 16, textXl: 20 };
-  let screenInfo = { width: 1024, height: 768, deviceCategory: 'tablet' };
 
   try {
     sizes = useTabletSizes();
