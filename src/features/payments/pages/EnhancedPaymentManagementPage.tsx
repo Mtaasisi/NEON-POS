@@ -182,7 +182,7 @@ const EnhancedPaymentManagementPage: React.FC = () => {
       `;
 
       const { data: result, error } = await supabase.rpc('run_sql_query', {
-        query: rawSqlQuery,
+        query: rawSqlQuery.trim(),
       });
 
       if (error) throw error;
