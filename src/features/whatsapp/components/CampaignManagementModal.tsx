@@ -24,7 +24,7 @@ interface Campaign {
   status: 'paused' | 'completed' | 'stopped' | 'failed' | 'active' | 'pending' | 'draft' | 'sending';
   timestamp: string;
   pauseTimestamp?: string;
-  selectedRecipients: string[];
+  selectedRecipients: Array<{phone: string, name: string}>;
   sentPhones?: string[];
   bulkMessage: string;
   bulkMessageType: string;
@@ -41,7 +41,7 @@ interface Campaign {
 interface CurrentActiveCampaign {
   name: string;
   status: 'active' | 'paused' | 'stopped';
-  selectedRecipients: string[];
+  selectedRecipients: Array<{phone: string, name: string}>;
   sentPhones: string[];
   bulkMessage: string;
   bulkMessageType: string;

@@ -12,22 +12,25 @@
 // Map of permission strings to permission categories
 export const PERMISSION_MAP = {
   // General permissions
-  all: 'all',
-  
+  all: 'general',
+  view_dashboard: 'general',
+  access_pos: 'general',
+  view_reports: 'general',
+  manage_settings: 'general',
+
   // Device permissions
   view_devices: 'devices',
-  add_device: 'devices',
-  edit_device: 'devices',
-  delete_device: 'devices',
-  update_device_status: 'devices',
-  assign_devices: 'devices',
-  
+  add_devices: 'devices',
+  edit_devices: 'devices',
+  spare_parts: 'devices',
+
   // Customer permissions
   view_customers: 'customers',
-  create_customers: 'customers',
+  add_customers: 'customers',
   edit_customers: 'customers',
   delete_customers: 'customers',
-  
+  view_customer_history: 'customers',
+
   // Inventory permissions
   view_inventory: 'inventory',
   add_products: 'inventory',
@@ -35,47 +38,69 @@ export const PERMISSION_MAP = {
   delete_products: 'inventory',
   adjust_stock: 'inventory',
   view_stock_history: 'inventory',
-  
-  // POS permissions
-  access_pos: 'pos',
-  process_sales: 'pos',
-  process_refunds: 'pos',
-  apply_discounts: 'pos',
-  
-  // Reports permissions
-  view_reports: 'reports',
-  view_financial_reports: 'reports',
-  daily_close: 'reports',
-  
-  // Settings permissions
-  view_settings: 'settings',
-  edit_settings: 'settings',
-  manage_users: 'settings',
-  
-  // Purchase orders
-  view_purchase_orders: 'purchase_orders',
-  create_purchase_orders: 'purchase_orders',
-  edit_purchase_orders: 'purchase_orders',
-  delete_purchase_orders: 'purchase_orders',
-  approve_purchase_orders: 'purchase_orders',
-  
-  // Spare parts
-  view_spare_parts: 'spare_parts',
-  create_spare_parts: 'spare_parts',
-  edit_spare_parts: 'spare_parts',
-  delete_spare_parts: 'spare_parts'
+
+  // Financial permissions
+  process_sales: 'financial',
+  process_refunds: 'financial',
+  apply_discounts: 'financial',
+  financial_reports: 'financial',
+  manage_pricing: 'financial',
+  view_payments: 'financial',
+
+  // User management permissions
+  view_users: 'user_management',
+  create_users: 'user_management',
+  edit_users: 'user_management',
+  delete_users: 'user_management',
+  manage_roles: 'user_management',
+
+  // System administration
+  view_audit_logs: 'system_admin',
+  backup_data: 'system_admin',
+  restore_data: 'system_admin',
+  manage_integrations: 'system_admin',
+  database_setup: 'system_admin',
+
+  // Additional features
+  appointments: 'additional',
+  whatsapp_integration: 'additional',
+  sms_features: 'additional',
+  loyalty_program: 'additional',
+  employee_management: 'additional',
+
+  // Legacy permissions (keeping for compatibility)
+  add_device: 'devices',
+  edit_device: 'devices',
+  delete_device: 'devices',
+  update_device_status: 'devices',
+  assign_devices: 'devices',
+  create_customers: 'customers',
+  view_spare_parts: 'devices',
+  create_spare_parts: 'devices',
+  edit_spare_parts: 'devices',
+  delete_spare_parts: 'devices',
+  view_purchase_orders: 'inventory',
+  create_purchase_orders: 'inventory',
+  edit_purchase_orders: 'inventory',
+  delete_purchase_orders: 'inventory',
+  approve_purchase_orders: 'inventory',
+  view_financial_reports: 'financial',
+  daily_close: 'financial',
+  view_settings: 'general',
+  edit_settings: 'general',
+  manage_users: 'user_management'
 } as const;
 
 // Permission categories with their required permissions
 export const PERMISSION_CATEGORIES = {
-  devices: ['view_devices', 'add_device', 'edit_device', 'delete_device', 'update_device_status', 'assign_devices'],
-  customers: ['view_customers', 'create_customers', 'edit_customers', 'delete_customers'],
+  general: ['all', 'view_dashboard', 'access_pos', 'view_reports', 'manage_settings'],
+  devices: ['view_devices', 'add_devices', 'edit_devices', 'spare_parts'],
+  customers: ['view_customers', 'add_customers', 'edit_customers', 'delete_customers', 'view_customer_history'],
   inventory: ['view_inventory', 'add_products', 'edit_products', 'delete_products', 'adjust_stock', 'view_stock_history'],
-  pos: ['access_pos', 'process_sales', 'process_refunds', 'apply_discounts'],
-  reports: ['view_reports', 'view_financial_reports', 'daily_close'],
-  settings: ['view_settings', 'edit_settings', 'manage_users'],
-  purchase_orders: ['view_purchase_orders', 'create_purchase_orders', 'edit_purchase_orders', 'delete_purchase_orders', 'approve_purchase_orders'],
-  spare_parts: ['view_spare_parts', 'create_spare_parts', 'edit_spare_parts', 'delete_spare_parts']
+  financial: ['process_sales', 'process_refunds', 'apply_discounts', 'financial_reports', 'manage_pricing', 'view_payments'],
+  user_management: ['view_users', 'create_users', 'edit_users', 'delete_users', 'manage_roles'],
+  system_admin: ['view_audit_logs', 'backup_data', 'restore_data', 'manage_integrations', 'database_setup'],
+  additional: ['appointments', 'whatsapp_integration', 'sms_features', 'loyalty_program', 'employee_management']
 } as const;
 
 // Role-based default permissions (fallback when user.permissions is not set)
@@ -83,32 +108,31 @@ export const ROLE_PERMISSIONS = {
   admin: ['all'],
   manager: ['all'],
   'customer-care': [
-    'view_devices', 'add_device', 'edit_device', 'assign_devices',
-    'view_customers', 'create_customers', 'edit_customers',
+    'view_dashboard', 'view_devices', 'add_devices', 'edit_devices', 'spare_parts',
+    'view_customers', 'add_customers', 'edit_customers', 'view_customer_history',
     'access_pos', 'process_sales', 'apply_discounts',
-    'view_reports'
+    'view_reports', 'financial_reports'
   ],
   technician: [
-    'view_devices', 'update_device_status',
-    'view_customers',
+    'view_dashboard', 'view_devices', 'add_devices', 'edit_devices', 'spare_parts',
+    'view_customers', 'view_customer_history',
     'view_inventory', 'view_stock_history',
-    'view_spare_parts'
-  ],
-  sales: [
-    'view_customers', 'create_customers', 'edit_customers',
-    'access_pos', 'process_sales', 'apply_discounts',
     'view_reports'
   ],
+  sales: [
+    'view_dashboard', 'view_customers', 'add_customers', 'edit_customers', 'view_customer_history',
+    'access_pos', 'process_sales', 'apply_discounts', 'manage_pricing',
+    'view_reports', 'financial_reports', 'view_payments',
+    'loyalty_program'
+  ],
   'store-keeper': [
-    'view_inventory',
-    'view_stock_history',
-    'adjust_stock',
-    'view_purchase_orders',
-    'edit_purchase_orders', // For receiving stock
-    'view_reports' // Inventory reports only
+    'view_dashboard', 'view_inventory', 'add_products', 'edit_products', 'adjust_stock', 'view_stock_history',
+    'view_purchase_orders', 'edit_purchase_orders',
+    'view_reports',
+    'employee_management'
   ],
   user: [
-    'view_devices', 'view_customers'
+    'view_dashboard', 'view_devices', 'view_customers', 'view_customer_history'
   ]
 } as const;
 

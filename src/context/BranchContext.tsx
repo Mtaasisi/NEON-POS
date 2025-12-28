@@ -51,6 +51,34 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [currentUser]);
 
+  // Apply branch-specific background when branch is set/switched
+  const applyBranchBackground = async (branchId: string | undefined | null) => {
+    if (!branchId) return;
+    try {
+      const { loadBranchBackgroundFromDatabase, getCurrentWallpaper, changeWallpaper } = await import('../lib/backgroundUtils');
+
+      // Prefer DB background
+      const dbBackground = await loadBranchBackgroundFromDatabase(branchId);
+      if (dbBackground) {
+        changeWallpaper(dbBackground, branchId);
+        return;
+      }
+
+      // Fall back to localStorage branch-specific
+      const localBranchBg = getCurrentWallpaper(branchId);
+      if (localBranchBg && localBranchBg !== 'default') {
+        changeWallpaper(localBranchBg, branchId);
+        return;
+      }
+
+      // Finally fallback to global
+      const globalBg = getCurrentWallpaper();
+      changeWallpaper(globalBg);
+    } catch (err) {
+      console.warn('Failed to apply branch background:', err);
+    }
+  };
+
   const loadBranches = async () => {
     try {
       setLoading(true);
@@ -82,6 +110,8 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
         
         setCurrentBranch(selectedBranch);
+        // apply branch-specific background
+        applyBranchBackground(selectedBranch?.id);
         setLoading(false);
         return;
       }
@@ -137,6 +167,7 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }
           
           setCurrentBranch(branchData);
+          applyBranchBackground(branchData?.id);
           
           // Filter available branches to only assigned ones
           const assignedBranchIds = assignments.map(a => a.branch_id);
@@ -153,6 +184,7 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }
           
           setCurrentBranch(selectedBranch);
+          applyBranchBackground(selectedBranch?.id);
         }
       } catch (err) {
         console.error('Error in branch assignments:', err);
@@ -167,6 +199,7 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
         
         setCurrentBranch(fallbackBranch);
+        applyBranchBackground(fallbackBranch?.id);
       }
     } catch (error) {
       console.error('Error loading branches:', error);
@@ -188,8 +221,73 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       return;
     }
 
+    // Store previous branch for logging
+    const previousBranch = currentBranch;
+
     setCurrentBranch(branch);
+    // apply branch-specific background after switching
+    applyBranchBackground(branch.id);
     localStorage.setItem('current_branch_id', branchId);
+
+    // 🔄 CLEAR ALL PRODUCT CACHES when switching branches
+    // This ensures fresh data is loaded for the new branch
+    try {
+      console.log(`🔄 [BranchSwitch] Clearing product caches for branch switch to ${branch.name}`);
+
+      // Import and call the cache invalidation function
+      const { invalidateAllProductCaches } = await import('../lib/latsProductApi');
+      await invalidateAllProductCaches();
+
+      // Also clear child variants cache (branch-specific)
+      try {
+        const { childVariantsCacheService } = await import('../services/childVariantsCacheService');
+        if (childVariantsCacheService && typeof childVariantsCacheService.clear === 'function') {
+          childVariantsCacheService.clear();
+          console.log('✅ [BranchSwitch] Child variants cache cleared');
+        }
+      } catch (error) {
+        console.warn('⚠️ [BranchSwitch] Failed to clear child variants cache:', error);
+      }
+
+      // Clear offline cache if it exists
+      try {
+        const { mobileOfflineCache } = await import('../lib/mobileOfflineCache');
+        if (mobileOfflineCache && typeof mobileOfflineCache.clearProducts === 'function') {
+          mobileOfflineCache.clearProducts();
+          console.log('✅ [BranchSwitch] Mobile offline cache cleared');
+        }
+      } catch (error) {
+        console.warn('⚠️ [BranchSwitch] Failed to clear mobile offline cache:', error);
+      }
+
+      // Clear data preload service cache
+      try {
+        const { dataPreloadService } = await import('../services/dataPreloadService');
+        if (dataPreloadService && typeof dataPreloadService.clearAll === 'function') {
+          dataPreloadService.clearAll();
+          console.log('✅ [BranchSwitch] Data preload cache cleared');
+        }
+      } catch (error) {
+        console.warn('⚠️ [BranchSwitch] Failed to clear data preload cache:', error);
+      }
+
+      // Clear enhanced cache manager (products, customers, sales, etc.)
+      try {
+        const { smartCache } = await import('../lib/enhancedCacheManager');
+        if (smartCache && typeof smartCache.clearAllCache === 'function') {
+          await smartCache.clearAllCache();
+          console.log('✅ [BranchSwitch] Enhanced cache manager cleared');
+        }
+      } catch (error) {
+        console.warn('⚠️ [BranchSwitch] Failed to clear enhanced cache manager:', error);
+      }
+
+      console.log(`✅ [BranchSwitch] All caches cleared for branch ${branch.name}`);
+    } catch (cacheError) {
+      console.warn('⚠️ [BranchSwitch] Failed to clear caches:', cacheError);
+      // Don't fail the branch switch if cache clearing fails
+    }
+
     toast.success(`Switched to ${branch.name}`);
 
     // Log branch switch (optional - don't fail if it errors)
@@ -199,10 +297,13 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         user_id: currentUser?.id,
         action_type: 'BRANCH_SWITCH',
         description: `User switched to branch: ${branch.name}`,
-        metadata: { previous_branch: currentBranch?.id }
+        metadata: {
+          previous_branch: previousBranch?.id,
+          caches_cleared: true
+        }
       });
     } catch (err) {
-
+      console.warn('⚠️ [BranchSwitch] Failed to log branch switch:', err);
     }
   };
 

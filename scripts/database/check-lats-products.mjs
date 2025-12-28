@@ -132,7 +132,16 @@ async function checkProducts() {
     `;
     
     console.log(`Total columns: ${columns.length}`);
-    const importantColumns = ['id', 'name', 'sku', 'selling_price', 'stock_quantity', 'is_active', 'branch_id', 'is_shared'];
+
+    // Show all columns
+    console.log('\nAll columns:');
+    columns.forEach(col => {
+      console.log(`   - ${col.column_name}: ${col.data_type}`);
+    });
+
+    // Check specific important columns including brand_id
+    console.log('\nChecking specific columns:');
+    const importantColumns = ['id', 'name', 'sku', 'selling_price', 'stock_quantity', 'is_active', 'branch_id', 'is_shared', 'brand_id', 'category_id', 'supplier_id'];
     importantColumns.forEach(colName => {
       const col = columns.find(c => c.column_name === colName);
       if (col) {

@@ -725,7 +725,7 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
 
   return (
     <div className="h-full flex flex-col">
-      <GlassCard className="p-6 h-full flex flex-col overflow-hidden">
+      <GlassCard className="p-0 h-full flex flex-col overflow-hidden rounded-none">
         {/* Fixed Search Section */}
         <div className="flex-shrink-0 mb-4">
           {/* Main Search and Quick Filters */}
@@ -750,10 +750,11 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                         playClickSound();
                         onAddExternalProduct();
                       }}
-                      className="p-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all duration-200 shadow-sm hover:shadow-md"
-                      title="Add Product"
+                      className="px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all duration-200 shadow-sm hover:shadow-md text-xs font-medium flex items-center gap-1"
+                      title="Add Product (Ctrl+P)"
                     >
-                      <Package className="w-5 h-5" />
+                      <Package className="w-4 h-4" />
+                      <span className="hidden sm:inline">Add</span>
                     </button>
                   )}
                   <button
@@ -763,7 +764,7 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                         handleUnifiedSearch(searchQuery.trim());
                       }
                     }}
-                    className="p-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all duration-200 shadow-sm hover:shadow-md"
+                    className="p-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
                     title="Scan Barcode"
                   >
                     <QrCode className="w-5 h-5" />
@@ -1133,8 +1134,8 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                     // Use normalized variant stock
                     productStock = primaryVariant.stockQuantity || 0;
                   } else {
-                    // Fallback to product-level stock
-                    productStock = product.stockQuantity ?? product.totalQuantity ?? 0;
+                    // Calculate stock from variants instead of using product-level stock
+                    productStock = product.variants?.filter(v => !v.isParent && !v.is_parent).reduce((sum, v) => sum + (v.quantity || 0), 0) || 0;
                   }
                   
                   const isOutOfStock = productStock <= 0;

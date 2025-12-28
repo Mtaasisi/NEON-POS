@@ -256,41 +256,46 @@ export const defaultInventorySettings: InventorySettings = {
  */
 export const getInventorySettings = async (): Promise<InventorySettings> => {
   try {
-    const { data, error } = await supabase
-      .from('admin_settings')
-      .select('setting_key, setting_value, setting_type')
-      .eq('category', 'inventory')
-      .eq('is_active', true);
+    // Import unified settings service dynamically
+    const { unifiedSettingsService } = await import('./unifiedSettingsService');
 
-    if (error) {
-      console.error('Error fetching inventory settings:', error);
-      throw error;
-    }
+    // Get inventory settings from unified table
+    const settings = await unifiedSettingsService.getSettingsByCategory('system', 'inventory');
 
-    if (!data || data.length === 0) {
+    if (!settings || Object.keys(settings).length === 0) {
       // No settings in database is expected for new installations - use defaults silently
       return defaultInventorySettings;
     }
 
-    // Convert array of settings to object
-    const settings: any = { ...defaultInventorySettings };
-    
-    data.forEach((setting) => {
-      const key = setting.setting_key;
-      const value = setting.setting_value;
-      const type = setting.setting_type;
+    // Convert unified settings format to inventory settings object
+    const inventorySettings: any = { ...defaultInventorySettings };
 
-      // Type conversion based on setting_type
-      if (type === 'boolean') {
-        settings[key] = value === 'true' || value === true;
-      } else if (type === 'number') {
-        settings[key] = parseFloat(value) || 0;
-      } else {
-        settings[key] = value;
+    // Map individual settings to the inventory object
+    Object.entries(settings).forEach(([key, setting]) => {
+      if (setting && typeof setting === 'object' && 'value' in setting) {
+        const value = setting.value;
+
+        // Type conversion based on the value type
+        if (typeof value === 'boolean') {
+          inventorySettings[key] = value;
+        } else if (typeof value === 'number') {
+          inventorySettings[key] = value;
+        } else if (typeof value === 'string') {
+          // For string values, check if they should be boolean or number
+          if (value === 'true') {
+            inventorySettings[key] = true;
+          } else if (value === 'false') {
+            inventorySettings[key] = false;
+          } else if (!isNaN(Number(value))) {
+            inventorySettings[key] = Number(value);
+          } else {
+            inventorySettings[key] = value;
+          }
+        }
       }
     });
 
-    return settings as InventorySettings;
+    return inventorySettings as InventorySettings;
   } catch (error) {
     console.error('Error in getInventorySettings:', error);
     return defaultInventorySettings;
@@ -320,23 +325,16 @@ export const updateInventorySetting = async (
       ? 'number' 
       : 'string';
 
-    const { error } = await supabase
-      .from('admin_settings')
-      .update({ 
-        setting_value: stringValue,
-        setting_type: settingType,
-        updated_at: new Date().toISOString() 
-      })
-      .eq('category', 'inventory')
-      .eq('setting_key', key);
+    // Import unified settings service dynamically
+    const { unifiedSettingsService } = await import('./unifiedSettingsService');
 
-    if (error) {
-      console.error(`Error updating inventory setting ${key}:`, error);
-      throw error;
+    const success = await unifiedSettingsService.setSetting('system', 'inventory', key as string, value, settingType);
+
+    if (success) {
+      console.log(`✅ Updated inventory setting: ${key} = ${value}`);
     }
 
-    console.log(`✅ Updated inventory setting: ${key} = ${stringValue}`);
-    return true;
+    return success;
   } catch (error) {
     console.error(`Error in updateInventorySetting for ${key}:`, error);
     throw error;
@@ -351,64 +349,28 @@ export const updateInventorySettings = async (
   reason?: string
 ): Promise<boolean> => {
   try {
-    // Process each setting individually to avoid upsert conflicts
-    const updatePromises = Object.entries(settings).map(async ([key, value]) => {
-      const stringValue = typeof value === 'boolean' 
-        ? value.toString() 
-        : typeof value === 'number' 
-        ? value.toString() 
-        : String(value);
+    // Import unified settings service dynamically
+    const { unifiedSettingsService } = await import('./unifiedSettingsService');
 
-      const settingType = typeof value === 'boolean' 
-        ? 'boolean' 
-        : typeof value === 'number' 
-        ? 'number' 
+    // Process each setting using unified settings service
+    const updatePromises = Object.entries(settings).map(async ([key, value]) => {
+      const settingType = typeof value === 'boolean'
+        ? 'boolean'
+        : typeof value === 'number'
+        ? 'number'
         : 'string';
 
-      // First, try to update existing record
-      const { data: existing } = await supabase
-        .from('admin_settings')
-        .select('id')
-        .eq('category', 'inventory')
-        .eq('setting_key', key)
-        .single();
-
-      if (existing) {
-        // Update existing record
-        const { error } = await supabase
-          .from('admin_settings')
-          .update({ 
-            setting_value: stringValue,
-            setting_type: settingType,
-            updated_at: new Date().toISOString()
-          })
-          .eq('category', 'inventory')
-          .eq('setting_key', key);
-
-        if (error) throw error;
-      } else {
-        // Insert new record
-        const { error } = await supabase
-          .from('admin_settings')
-          .insert({
-            category: 'inventory',
-            setting_key: key,
-            setting_value: stringValue,
-            setting_type: settingType,
-            updated_at: new Date().toISOString()
-          });
-
-        if (error) throw error;
-      }
+      return unifiedSettingsService.setSetting('system', 'inventory', key, value, settingType);
     });
 
-    await Promise.all(updatePromises);
+    // Wait for all updates to complete
+    const results = await Promise.all(updatePromises);
 
     console.log(`✅ Updated ${Object.keys(settings).length} inventory settings`);
-    return true;
+    return results.every(result => result);
   } catch (error) {
     console.error('Error in updateInventorySettings:', error);
-    throw error;
+    return false;
   }
 };
 
@@ -429,19 +391,11 @@ export const resetInventorySettings = async (): Promise<boolean> => {
  */
 export const getInventorySetting = async (key: keyof InventorySettings): Promise<any> => {
   try {
-    const { data, error } = await supabase
-      .from('admin_settings')
-      .select('setting_value, setting_type')
-      .eq('category', 'inventory')
-      .eq('setting_key', key)
-      .single();
+    // ✅ FIX: admin_settings table was consolidated, use unified settings service
+    const { unifiedSettingsService } = await import('./unifiedSettingsService');
+    const settingValue = await unifiedSettingsService.getSetting('system', 'inventory', key);
 
-    if (error) {
-      console.error(`Error fetching inventory setting ${key}:`, error);
-      return defaultInventorySettings[key];
-    }
-
-    if (!data) {
+    if (settingValue === null || settingValue === undefined) {
       return defaultInventorySettings[key];
     }
 

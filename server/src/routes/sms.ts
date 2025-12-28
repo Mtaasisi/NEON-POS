@@ -24,7 +24,7 @@ router.post('/sms-proxy', async (req, res) => {
       priority = 'High',
       countryCode = 'ALL',
       timeout = 30000,
-      maxRetries = 3
+      maxRetries = 3 // eslint-disable-line no-unused-vars
     } = req.body;
 
     // Validate required fields
@@ -65,7 +65,7 @@ router.post('/sms-proxy', async (req, res) => {
         normalizedPhone = '255' + normalizedPhone.substring(1);
       } else if (normalizedPhone.startsWith('255')) {
         // Already in international format
-        normalizedPhone = normalizedPhone;
+        // normalizedPhone is already correct
       } else if (normalizedPhone.length === 9) {
         // 9 digits without country code -> add 255
         normalizedPhone = '255' + normalizedPhone;

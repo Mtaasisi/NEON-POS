@@ -1,5 +1,4 @@
 import React, { lazy, Suspense } from 'react';
-import { useDeviceDetection } from '../../../hooks/useDeviceDetection';
 
 // Check for force tablet mode (for testing)
 const getForceTabletMode = () => {
@@ -20,25 +19,19 @@ const TabletPOS = lazy(() => import('../../tablet/pages/TabletPOS'));
 /**
  * Conditional POS Component
  *
- * Automatically routes to the appropriate POS interface based on device type:
- * - iPad/Tablet: Specialized TabletPOS with two-column layout (optimized for touch)
- * - Mobile: Touch-optimized MobilePOS with mobile-first design (single-column, compact)
- * - Desktop: Full-featured POSPageOptimized (mouse/keyboard optimized)
+ * Routes to POS interfaces based on user selection from sidebar:
+ * - POS System (default): Desktop POS with full features
+ * - Tablet POS (forced): Specialized tablet interface
  */
 const ConditionalPOS: React.FC = () => {
-  const { deviceType, screenWidth, isTouchDevice } = useDeviceDetection();
-
-  // Also check for iPad-sized viewports (for browser testing)
-  const isIPadViewport = screenWidth >= 768 && screenWidth <= 1366;
-
-  // Check for forced tablet mode (for testing)
+  // Check for forced tablet mode (set by sidebar navigation)
   const forceTabletMode = getForceTabletMode();
 
-  console.log('🎯 [ConditionalPOS] Device type:', deviceType, 'Width:', screenWidth, 'Touch:', isTouchDevice, 'iPad Viewport:', isIPadViewport, 'Force Tablet:', forceTabletMode);
+  console.log('🎯 [ConditionalPOS] Force Tablet Mode:', forceTabletMode);
 
-  // Force tablet mode for testing (overrides all other conditions)
+  // If tablet mode is forced, serve tablet POS
   if (forceTabletMode) {
-    console.log('🔧 [ConditionalPOS] FORCED TabletPOS mode enabled');
+    console.log('📱 [ConditionalPOS] Serving TabletPOS (forced by sidebar)');
     return (
       <Suspense fallback={
         <div className="flex items-center justify-center min-h-screen">
@@ -50,36 +43,8 @@ const ConditionalPOS: React.FC = () => {
     );
   }
 
-  // Route to appropriate POS based on device
-  // iPad and tablet devices get the specialized TabletPOS
-  if (deviceType === 'ipad' || isIPadViewport) {
-    console.log('📱 [ConditionalPOS] Serving TabletPOS for iPad/tablet');
-    return (
-      <Suspense fallback={
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        </div>
-      }>
-        <TabletPOS />
-      </Suspense>
-    );
-  }
-
-  if (deviceType === 'mobile') {
-    console.log('📱 [ConditionalPOS] Serving MobilePOS for mobile device');
-    return (
-      <Suspense fallback={
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        </div>
-      }>
-        <MobilePOS />
-      </Suspense>
-    );
-  }
-
-  // Desktop and other devices get the full POS
-  console.log('🖥️ [ConditionalPOS] Serving POSPageOptimized for desktop/tablet');
+  // Default to desktop POS for "POS System" selection
+  console.log('🖥️ [ConditionalPOS] Serving POSPageOptimized (desktop POS)');
   return (
     <Suspense fallback={
       <div className="flex items-center justify-center min-h-screen">

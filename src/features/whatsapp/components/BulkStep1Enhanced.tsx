@@ -3,14 +3,15 @@
  * Professional, clean UI matching SetPricingModal style
  */
 
-import React from 'react';
-import { 
-  Users, Filter, X, BarChart3, Eye, Upload, CheckCheck, 
+import React, { useRef } from 'react';
+import {
+  Users, Filter, X, BarChart3, Eye, Upload, CheckCheck,
   RefreshCw, AlertCircle, Database, FolderOpen, Save,
   Search, TrendingUp, Star, Award, Zap, HelpCircle, Phone, ChevronDown,
-  Clock, UserX, MessageCircle, User
+  Clock, UserX, MessageCircle, User, Download
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { supabase } from '../../../lib/supabase';
 import type { Conversation } from '../pages/WhatsAppInboxPage';
 import type { BlacklistEntry } from '../../../types/whatsapp-advanced';
 import type { SegmentFilter } from '../utils/recipientSegmentation';
@@ -19,7 +20,7 @@ import RecipientSegmentationPanel from './RecipientSegmentationPanel';
 interface Props {
   // Data
   filteredConversations: Conversation[];
-  selectedRecipients: string[];
+  selectedRecipients: Array<{phone: string, name: string}>;
   csvRecipients: Array<{ phone: string; name: string }>;
   blacklist: BlacklistEntry[];
   savedLists: Array<{ id: string; name: string; recipients: string[]; createdAt: string }>;
@@ -44,7 +45,7 @@ interface Props {
   // Handlers
   setCampaignName: (name: string) => void;
   setRecipientSearch: (search: string) => void;
-  setSelectedRecipients: (recipients: string[]) => void;
+  setSelectedRecipients: (recipients: Array<{phone: string, name: string}>) => void;
   applyQuickFilter: (filter: string) => void;
   clearQuickFilter: () => void;
   handleCsvUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -52,6 +53,7 @@ interface Props {
   setShowCsvPreviewModal: (show: boolean) => void;
   setShowCsvTooltip: (show: boolean) => void;
   setShowSaveListModal: (show: boolean) => void;
+  fileInputKey?: number;
   setShowCustomerImport: (show: boolean) => void;
   setShowImportSection: (show: boolean) => void;
   loadRecipientList: (id: string) => void;
@@ -65,9 +67,14 @@ interface Props {
   segmentFilter: SegmentFilter | null;
   applySegmentation: (filter: SegmentFilter) => void;
   clearSegmentation: () => void;
+
+  // Navigation
+  onNextStep?: () => void;
 }
 
 export default function BulkStep1Enhanced(props: Props) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const {
     filteredConversations,
     selectedRecipients,
@@ -97,6 +104,7 @@ export default function BulkStep1Enhanced(props: Props) {
     setShowCsvPreviewModal,
     setShowCsvTooltip,
     setShowSaveListModal,
+    fileInputKey = 0,
     setShowCustomerImport,
     setShowImportSection,
     loadRecipientList,
@@ -107,8 +115,29 @@ export default function BulkStep1Enhanced(props: Props) {
     isValidPhone,
     segmentFilter,
     applySegmentation,
-    clearSegmentation
+    clearSegmentation,
+    onNextStep
   } = props;
+
+  // Expose file input reset function
+  const resetFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Debug logging
+  console.log('BulkStep1Enhanced render:', {
+    csvFile: csvFile?.name,
+    csvRecipientsCount: csvRecipients.length,
+    csvUploading,
+    condition: csvRecipients.length > 0
+  });
+
+  // Local UI state: switch between recent conversations, database customers, and CSV recipients
+  const [recipientsSource, setRecipientsSource] = React.useState<'recents' | 'database' | 'csv'>('recents');
+  const [dbCustomers, setDbCustomers] = React.useState<Array<{ phone: string; name?: string }>>([]);
+  const [loadingDbCustomers, setLoadingDbCustomers] = React.useState(false);
 
   // Filter conversations based on search AND exclude already-sent contacts
   const searchFilteredConversations = filteredConversations.filter(conv => {
@@ -129,21 +158,22 @@ export default function BulkStep1Enhanced(props: Props) {
   // Calculate statistics
   const stats = {
     total: selectedRecipients.length,
-    valid: selectedRecipients.filter(isValidPhone).length,
-    invalid: selectedRecipients.filter(p => !isValidPhone(p)).length,
-    blacklisted: selectedRecipients.filter(isPhoneBlacklisted).length,
-    duplicates: selectedRecipients.length - new Set(selectedRecipients).size,
-    withNames: selectedRecipients.filter(phone => {
-      const conv = filteredConversations.find(c => c.phone === phone);
-      const csvRec = csvRecipients.find(r => r.phone === phone);
-      return (conv?.customer_name && conv.customer_name !== 'Unknown') || 
-             (csvRec?.name && csvRec.name !== 'Unknown');
+    valid: selectedRecipients.filter(recipient => isValidPhone(recipient.phone)).length,
+    invalid: selectedRecipients.filter(recipient => !isValidPhone(recipient.phone)).length,
+    blacklisted: selectedRecipients.filter(recipient => isPhoneBlacklisted(recipient.phone)).length,
+    duplicates: selectedRecipients.length - new Set(selectedRecipients.map(r => r.phone)).size,
+    withNames: selectedRecipients.filter(recipient => {
+      const conv = filteredConversations.find(c => c.phone === recipient.phone);
+      const csvRec = csvRecipients.find(r => r.phone === recipient.phone);
+      return (conv?.customer_name && conv.customer_name !== 'Unknown') ||
+             (csvRec?.name && csvRec.name !== 'Unknown') ||
+             (recipient.name && recipient.name !== 'Unknown');
     }).length,
-    fromConversations: selectedRecipients.filter(phone => 
-      filteredConversations.find(c => c.phone === phone)
+    fromConversations: selectedRecipients.filter(recipient =>
+      filteredConversations.find(c => c.phone === recipient.phone)
     ).length,
-    fromCsv: selectedRecipients.filter(phone => 
-      csvRecipients.find(r => r.phone === phone)
+    fromCsv: selectedRecipients.filter(recipient =>
+      csvRecipients.find(r => r.phone === recipient.phone)
     ).length,
   };
 
@@ -154,8 +184,8 @@ export default function BulkStep1Enhanced(props: Props) {
   if (stats.duplicates > 0) warnings.push(`${stats.duplicates} duplicate phone numbers`);
   
   // Check recently contacted
-  const recentlyContacted = selectedRecipients.filter(phone => {
-    const conv = filteredConversations.find(c => c.phone === phone);
+  const recentlyContacted = selectedRecipients.filter(recipient => {
+    const conv = filteredConversations.find(c => c.phone === recipient.phone);
     if (!conv) return false;
     const lastMsg = conv.messages[conv.messages.length - 1];
     if (!lastMsg || lastMsg.type !== 'sent') return false;
@@ -177,6 +207,45 @@ export default function BulkStep1Enhanced(props: Props) {
     const seconds = Math.floor(totalSeconds % 60);
     return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
   })();
+
+  // Lazy-load DB customers when the Database tab is selected
+  React.useEffect(() => {
+    if (recipientsSource !== 'database') return;
+    if (dbCustomers.length > 0) return; // already loaded
+
+    let mounted = true;
+    const loadCustomersInline = async () => {
+      try {
+        setLoadingDbCustomers(true);
+        // Fetch up to 2000 customers (adjust as needed)
+        const { data, error } = await supabase
+          .from('customers')
+          .select('name, phone, whatsapp')
+          .limit(2000);
+
+        if (error) throw error;
+
+        const customers: Array<{ phone: string; name?: string }> = [];
+        (data || []).forEach((c: any) => {
+          const raw = c.whatsapp || c.phone || '';
+          const clean = (raw || '').toString().replace(/[\s\-\(\)]/g, '');
+          if (clean) {
+            customers.push({ phone: clean, name: c.name || 'Unknown' });
+          }
+        });
+
+        if (mounted) setDbCustomers(customers);
+      } catch (err) {
+        console.error('Failed to load DB customers inline:', err);
+        toast.error('Failed to load database customers');
+      } finally {
+        if (mounted) setLoadingDbCustomers(false);
+      }
+    };
+
+    loadCustomersInline();
+    return () => { mounted = false; };
+  }, [recipientsSource, dbCustomers.length]);
 
   return (
     <div>
@@ -329,6 +398,7 @@ export default function BulkStep1Enhanced(props: Props) {
         </div>
       </div>
 
+    
       {/* Statistics - Compact */}
       {selectedRecipients.length > 0 && (
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
@@ -387,47 +457,131 @@ export default function BulkStep1Enhanced(props: Props) {
           <div className="mt-2 p-4 bg-white border border-gray-200 rounded-xl space-y-3">
             {/* CSV Upload */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">CSV File</label>
-              <label className="cursor-pointer block">
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleCsvUpload}
-                  disabled={csvUploading || bulkSending}
-                  className="hidden"
-                />
-                <div className="px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2 font-medium">
-                  {csvUploading ? (
-                    <>
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                      Processing...
-                    </>
-                  ) : csvFile ? (
-                    <>
-                      <CheckCheck className="w-5 h-5" />
-                      {csvFile.name}
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-5 h-5" />
-                      Choose CSV
-                    </>
-                  )}
-                </div>
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700">CSV File</label>
+                <button
+                  onClick={() => {
+                    // Create and download a sample CSV template
+                    const csvContent = 'Name,Phone\nJohn Doe,+255700000001\nJane Smith,+255700000002\n';
+                    const blob = new Blob([csvContent], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'whatsapp-recipients-template.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                  title="Download CSV template"
+                >
+                  <Download className="w-3 h-3" />
+                  Template
+                </button>
+              </div>
+              <div className="space-y-2">
+                {/* Always visible Choose CSV button */}
+                <label
+                  htmlFor="csv-file-input"
+                  className="cursor-pointer block"
+                  onClick={() => console.log('CSV button clicked, disabled:', csvUploading || bulkSending)}
+                >
+                  <input
+                    ref={fileInputRef}
+                    id="csv-file-input"
+                    type="file"
+                    accept=".csv"
+                    key={`csv-input-${fileInputKey}`} // Force re-render when key changes
+                    onChange={(e) => {
+                      console.log('CSV file selected:', e.target.files?.[0]);
+                      if (handleCsvUpload) {
+                        handleCsvUpload(e);
+                      } else {
+                        console.error('handleCsvUpload function not provided');
+                      }
+                    }}
+                    disabled={csvUploading || bulkSending}
+                    className="hidden"
+                  />
+                  <div className={`px-4 py-3 rounded-xl transition-all flex items-center justify-center gap-2 font-medium ${
+                    csvUploading || bulkSending
+                      ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer'
+                  }`}>
+                    <Upload className="w-5 h-5" />
+                    Choose CSV
+                  </div>
+                </label>
+
+                {/* CSV Status Display - only show when there's something to display */}
+                {(csvUploading || csvRecipients.length > 0 || csvFile) && (
+                  <div className={`px-4 py-3 bg-gray-100 text-gray-700 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center gap-2 font-medium ${
+                    csvRecipients.length > 0 ? 'flex-col' : 'flex-row'
+                  }`}>
+                    {csvUploading ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        Processing...
+                      </>
+                    ) : csvRecipients.length > 0 ? (
+                      <div className="w-full text-center py-1">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <CheckCheck className="w-4 h-4 text-green-600" />
+                          <span className="font-medium">{csvRecipients.length} Recipients Loaded</span>
+                        </div>
+                        <div className="text-xs opacity-75 space-y-1">
+                          {csvRecipients.slice(0, 2).map((r, i) => (
+                            <div key={i} className="truncate">
+                              {r.name || 'Unknown'} • {r.phone}
+                            </div>
+                          ))}
+                          {csvRecipients.length > 2 && (
+                            <div>+{csvRecipients.length - 2} more...</div>
+                          )}
+                        </div>
+                      </div>
+                    ) : csvFile ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        Processing {csvFile.name}...
+                      </>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* CSV Recipients Actions */}
+                {csvRecipients.length > 0 && !csvUploading && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowCsvPreviewModal(true)}
+                      className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 font-medium text-sm"
+                      title="Preview and edit CSV recipients"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Preview ({csvRecipients.length})
+                    </button>
+                    <button
+                      onClick={clearCsvImport}
+                      className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center font-medium text-sm"
+                      title="Clear CSV import"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                {/* CSV Format Help */}
+                {!csvFile && !csvUploading && (
+                  <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded-lg">
+                    <p className="font-medium mb-1">CSV Format:</p>
+                    <p>• First row: headers (optional)</p>
+                    <p>• Columns: Name, Phone (or Phone, Name)</p>
+                    <p>• Phone format: +255XXXXXXXXX or 255XXXXXXXXX</p>
+                  </div>
+                )}
+              </div>
             </div>
             
-            {/* Import from Database */}
-            <button
-              onClick={() => {
-                setShowCustomerImport(true);
-                loadAllCustomers();
-              }}
-              className="w-full px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-medium flex items-center justify-center gap-2"
-            >
-              <Database className="w-5 h-5" />
-              Customer Database
-            </button>
+            {/* Import from Database (removed per request) */}
           </div>
         )}
       </div>
@@ -435,12 +589,62 @@ export default function BulkStep1Enhanced(props: Props) {
       {/* Recipient List */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <label className="block text-sm font-medium text-gray-700">
-            {sentPhones.length > 0 ? 'Pending Recipients' : 'Recipients'} ({selectedRecipients.length} selected)
-          </label>
+          {/* Tabs: Recents vs Database */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setRecipientsSource('recents')}
+                className={`px-3 py-1.5 rounded-lg font-medium text-sm ${recipientsSource === 'recents' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
+              >
+                Recents
+              </button>
+              <button
+                onClick={() => {
+                  setRecipientsSource('database');
+                  // trigger parent to load customers (opens DB import modal elsewhere)
+                  try {
+                    loadAllCustomers();
+                  } catch (e) {
+                    // noop
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-lg font-medium text-sm ${recipientsSource === 'database' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
+              >
+                Database
+              </button>
+              {csvRecipients.length > 0 && (
+                <button
+                  onClick={() => setRecipientsSource('csv')}
+                  className={`px-3 py-1.5 rounded-lg font-medium text-sm ${recipientsSource === 'csv' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
+                >
+                  CSV ({csvRecipients.length})
+                </button>
+              )}
+            </div>
+
+            <label className="block text-sm font-medium text-gray-700 ml-4">
+              {sentPhones.length > 0 ? 'Pending Recipients' : 'Recipients'} ({selectedRecipients.length} selected)
+              {recipientsSource === 'csv' && ` • ${csvRecipients.length} from CSV`}
+            </label>
+          </div>
+
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setSelectedRecipients(searchFilteredConversations.filter(c => !isPhoneBlacklisted(c.phone)).map(c => c.phone))}
+              onClick={() => {
+                let visibleList: Array<{ phone: string; name?: string }> = [];
+                if (recipientsSource === 'recents') {
+                  visibleList = searchFilteredConversations;
+                } else if (recipientsSource === 'database') {
+                  visibleList = dbCustomers;
+                } else if (recipientsSource === 'csv') {
+                  visibleList = csvRecipients;
+                }
+                setSelectedRecipients(visibleList.filter(c => !isPhoneBlacklisted(c.phone)).map(c => {
+                  // Handle different data structures
+                  const name = (c as any).name || (c as any).customer_name || 'Unknown';
+                  return {phone: c.phone, name};
+                }));
+              }}
               className="text-sm px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
             >
               Select All
@@ -455,14 +659,85 @@ export default function BulkStep1Enhanced(props: Props) {
         </div>
         
         <div className="max-h-96 overflow-y-auto border-2 border-gray-300 rounded-xl p-3 bg-gray-50">
-          {searchFilteredConversations.length === 0 ? (
-            <div className="text-center py-8">
-              <Search className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">No recipients match your search</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {searchFilteredConversations.map((conversation) => {
+          {recipientsSource === 'csv' ? (
+            // CSV Recipients view
+            csvRecipients.length === 0 ? (
+              <div className="text-center py-8">
+                <Upload className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">No CSV recipients uploaded</p>
+                <p className="text-xs text-gray-400 mt-1">Upload a CSV file to see recipients here</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {csvRecipients.map((recipient, index) => {
+                  const isBlacklisted = isPhoneBlacklisted(recipient.phone);
+                  const isInvalid = !isValidPhone(recipient.phone);
+                  return (
+                    <label
+                      key={`${recipient.phone}-${index}`}
+                      className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all border ${
+                        isBlacklisted
+                          ? 'bg-red-50 border-red-200 opacity-60 cursor-not-allowed'
+                          : isInvalid
+                            ? 'bg-orange-50 border-orange-200'
+                            : 'bg-white border-gray-200 hover:bg-blue-50 hover:border-blue-300'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedRecipients.some(r => r.phone === recipient.phone)}
+                        onChange={(e) => {
+                          if (isBlacklisted) {
+                            toast.error('Cannot select blacklisted number');
+                            return;
+                          }
+
+                          if (e.target.checked) {
+                            setSelectedRecipients(prev => [...prev, {phone: recipient.phone, name: recipient.name || 'Unknown'}]);
+                          } else {
+                            setSelectedRecipients(prev => prev.filter(r => r.phone !== recipient.phone));
+                          }
+                        }}
+                        disabled={bulkSending || isBlacklisted}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                      />
+
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${
+                        isBlacklisted ? 'bg-gray-400' : 'bg-green-600'
+                      }`}>
+                        {recipient.name ? getInitials(recipient.name) : <User className="w-5 h-5" />}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="font-semibold text-gray-900 text-sm truncate">
+                            {recipient.name || 'Unknown'}
+                          </p>
+                          {isBlacklisted && (
+                            <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded font-medium flex-shrink-0">
+                              Blocked
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-gray-600">
+                          <Phone className="w-3 h-3" />
+                          <span className="font-mono">{recipient.phone}</span>
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )
+          ) : recipientsSource === 'recents' ? (
+            searchFilteredConversations.length === 0 ? (
+              <div className="text-center py-8">
+                <Search className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">No recipients match your search</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {searchFilteredConversations.map((conversation) => {
                 const isBlacklisted = isPhoneBlacklisted(conversation.phone);
                 const engagement = getEngagementScore(conversation);
                 const isInvalid = !isValidPhone(conversation.phone);
@@ -480,17 +755,17 @@ export default function BulkStep1Enhanced(props: Props) {
                   >
                     <input
                       type="checkbox"
-                      checked={selectedRecipients.includes(conversation.phone)}
+                      checked={selectedRecipients.some(r => r.phone === conversation.phone)}
                       onChange={(e) => {
                         if (isBlacklisted) {
                           toast.error('Cannot select blacklisted number');
                           return;
                         }
-                        
+
                         if (e.target.checked) {
-                          setSelectedRecipients(prev => [...prev, conversation.phone]);
+                          setSelectedRecipients(prev => [...prev, {phone: conversation.phone, name: conversation.customer_name || 'Unknown'}]);
                         } else {
-                          setSelectedRecipients(prev => prev.filter(p => p !== conversation.phone));
+                          setSelectedRecipients(prev => prev.filter(r => r.phone !== conversation.phone));
                         }
                       }}
                       disabled={bulkSending || isBlacklisted}
@@ -522,10 +797,104 @@ export default function BulkStep1Enhanced(props: Props) {
                     </div>
                   </label>
                 );
-              })}
-            </div>
+                })}
+              </div>
+            )
+          ) : (
+            // Database customers view
+            dbCustomers.length === 0 ? (
+              <div className="text-center py-8">
+                <FolderOpen className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-500 mb-3">No database customers loaded.</p>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => {
+                      setShowCustomerImport(true);
+                      try { loadAllCustomers(); } catch (e) {}
+                    }}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg"
+                  >
+                    Open Customer Database
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {dbCustomers.map((cust) => {
+                  const isBlacklisted = isPhoneBlacklisted(cust.phone);
+                  const isInvalid = !isValidPhone(cust.phone);
+                  return (
+                    <label
+                      key={cust.phone}
+                      className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all border ${
+                        isBlacklisted ? 'bg-red-50 border-red-200 opacity-60 cursor-not-allowed' :
+                        isInvalid ? 'bg-orange-50 border-orange-200' : 'bg-white border-gray-200 hover:bg-blue-50 hover:border-blue-300'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedRecipients.some(r => r.phone === cust.phone)}
+                        onChange={(e) => {
+                          if (isBlacklisted) {
+                            toast.error('Cannot select blacklisted number');
+                            return;
+                          }
+
+                          if (e.target.checked) {
+                            setSelectedRecipients(prev => [...prev, {phone: cust.phone, name: cust.name || 'Unknown'}]);
+                          } else {
+                            setSelectedRecipients(prev => prev.filter(r => r.phone !== cust.phone));
+                          }
+                        }}
+                        disabled={bulkSending || isBlacklisted}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                      />
+                      
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${isBlacklisted ? 'bg-gray-400' : 'bg-blue-600'}`}>
+                        {cust.name ? getInitials(cust.name) : <User className="w-5 h-5" />}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="font-semibold text-gray-900 text-sm truncate">{cust.name}</p>
+                          {isBlacklisted && (
+                            <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded font-medium flex-shrink-0">
+                              Blocked
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-gray-600">
+                          <Phone className="w-3 h-3" />
+                          <span className="font-mono">{cust.phone}</span>
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )
           )}
         </div>
+
+        {/* Next Step Button */}
+        {onNextStep && (
+          <div className="flex justify-end pt-4 border-t border-gray-200">
+            <button
+              onClick={() => {
+                if (selectedRecipients.length === 0) {
+                  toast.error('Please select at least one recipient');
+                  return;
+                }
+                onNextStep();
+              }}
+              disabled={selectedRecipients.length === 0 || bulkSending}
+              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              Next: Compose Message
+              <ChevronDown className="w-5 h-5 rotate-[-90deg]" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

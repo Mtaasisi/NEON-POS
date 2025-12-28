@@ -384,7 +384,7 @@ export class BulkWhatsAppQueueService {
   private async getWhatsAppService() {
     // This would import your existing WhatsApp service
     return {
-      sendMessage: async (phone: string, message: string, options?: any) => {
+      sendMessage: async (phone: string, message: string, options?: any) => { // eslint-disable-line no-unused-vars
         // Implement actual WhatsApp sending logic
         return { success: true };
       }

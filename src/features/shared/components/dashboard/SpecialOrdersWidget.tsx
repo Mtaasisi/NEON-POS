@@ -42,15 +42,12 @@ export const SpecialOrdersWidget: React.FC<SpecialOrdersWidgetProps> = ({ classN
       setIsLoading(true);
       const currentBranchId = getCurrentBranchId();
       
-      let query = supabase
-        .from('customer_special_orders')
-        .select('id, status, total_amount, created_at');
+      // customer_special_orders table was consolidated - returning empty data
+      console.log('ℹ️ customer_special_orders table was consolidated - returning empty data');
 
-      // ✅ Use addBranchFilter for proper isolation support
-      const { addBranchFilter } = await import('../../../../lib/branchAwareApi');
-      query = await addBranchFilter(query, 'special_orders');
-
-      const { data: orders, error } = await query;
+      // Return empty data since table was consolidated
+      const orders = [];
+      const error = null;
 
       // Handle missing table gracefully
       if (error) {

@@ -431,29 +431,54 @@ class DataPreloadService {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .order('name', { ascending: true })
-        .limit(1000); // Adjust limit as needed
+      let data, error;
 
-      if (error) throw error;
+      // Try lats_customers table first (primary table)
+      try {
+        ({ data, error } = await supabase
+          .from('lats_customers')
+          .select('*')
+          .order('name', { ascending: true })
+          .limit(1000));
 
-      dataStore.setCustomers(data || []);
-      if (import.meta.env.DEV) console.log(`✅ Preloaded ${data?.length || 0} customers`);
+        if (error) throw error;
+        if (import.meta.env.DEV) console.log(`✅ Preloaded ${data?.length || 0} customers from lats_customers table`);
+      } catch (latsError: any) {
+        // If lats_customers fails, try customers table as fallback
+        console.warn('⚠️ Error fetching from lats_customers, trying customers table:', latsError.message);
+
+        ({ data, error } = await supabase
+          .from('customers')
+          .select('*')
+          .order('name', { ascending: true })
+          .limit(1000));
+
+        if (error) throw error;
+        if (import.meta.env.DEV) console.log(`✅ Preloaded ${data?.length || 0} customers from customers table`);
+      }
+
+      // Transform data to ensure consistent format
+      const transformedData = (data || []).map(customer => ({
+        ...customer,
+        // Ensure name field exists (some tables might have first_name + last_name)
+        name: customer.name || `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || 'Unknown Customer'
+      }));
+
+      dataStore.setCustomers(transformedData);
+      if (import.meta.env.DEV) console.log(`✅ Preloaded ${transformedData.length} customers (transformed)`);
 
       // Also populate customerCacheService for components that use it
-      if (data && data.length > 0) {
+      if (transformedData && transformedData.length > 0) {
         try {
           const { customerCacheService } = await import('../lib/customerCacheService');
-          customerCacheService.saveCustomers(data);
-          if (import.meta.env.DEV) console.log(`✅ Also cached ${data.length} customers in customerCacheService`);
+          customerCacheService.saveCustomers(transformedData);
+          if (import.meta.env.DEV) console.log(`✅ Also cached ${transformedData.length} customers in customerCacheService`);
         } catch (cacheError) {
           console.warn('⚠️ Could not populate customerCacheService:', cacheError);
         }
       }
     } catch (error: any) {
-      console.error('❌ Error preloading customers:', error);
+      console.error('❌ Error preloading customers from both tables:', error);
       dataStore.setError('customers', error.message);
       throw error;
     }
@@ -693,17 +718,10 @@ class DataPreloadService {
     }
 
     try {
-      // Load stock movements via inventory store
-      const { useInventoryStore } = await import('../features/lats/stores/useInventoryStore');
-      const inventoryStore = useInventoryStore.getState();
-
-      // Use the inventory store's loadStockMovements method
-      await inventoryStore.loadStockMovements();
-
-      // Get the loaded stock movements and store in dataStore
-      const stockMovements = inventoryStore.stockMovements || [];
-      dataStore.setStockMovements(stockMovements);
-      console.log(`✅ Preloaded ${stockMovements.length} stock movements`);
+      // Stock movements table was dropped during consolidation
+      // Return empty array for compatibility
+      dataStore.setStockMovements([]);
+      console.log('ℹ️ Stock movements table was consolidated - no data to preload');
     } catch (error: any) {
       console.error('❌ Error preloading stock movements:', error);
       dataStore.setError('stockMovements', error.message);
@@ -849,16 +867,28 @@ class DataPreloadService {
     }
 
     try {
+      // Employees table was dropped during consolidation - use users table instead
       const { data, error } = await supabase
-        .from('employees')
+        .from('users')
         .select('*')
-        .eq('is_active', true)
-        .order('full_name', { ascending: true });
+        .order('name', { ascending: true });
 
       if (error) throw error;
 
-      dataStore.setEmployees(data || []);
-      console.log(`✅ Preloaded ${data?.length || 0} employees`);
+      // Transform users data to employee format for compatibility
+      const employees = (data || []).map(user => ({
+        id: user.id,
+        full_name: user.name || user.email,
+        email: user.email,
+        phone: user.phone,
+        role: 'user',
+        is_active: true,
+        created_at: user.created_at,
+        updated_at: user.updated_at
+      }));
+
+      dataStore.setEmployees(employees);
+      console.log(`✅ Preloaded ${employees.length} employees (from users table)`);
     } catch (error: any) {
       console.error('❌ Error preloading employees:', error);
       dataStore.setError('employees', error.message);
@@ -903,21 +933,10 @@ class DataPreloadService {
     }
 
     try {
-      // Load attendance records for the last 30 days to avoid loading too much data
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      const { data, error } = await supabase
-        .from('attendance_records')
-        .select('*')
-        .gte('attendance_date', thirtyDaysAgo.toISOString().split('T')[0])
-        .order('attendance_date', { ascending: false })
-        .limit(1000); // Limit to prevent loading too much data
-
-      if (error) throw error;
-
-      dataStore.setAttendanceRecords(data || []);
-      console.log(`✅ Preloaded ${data?.length || 0} attendance records`);
+      // Attendance records table was dropped during consolidation
+      // Return empty array for compatibility
+      dataStore.setAttendanceRecords([]);
+      console.log(`ℹ️ Attendance records table was consolidated - no data to preload`);
     } catch (error: any) {
       console.error('❌ Error preloading attendance records:', error);
       dataStore.setError('attendanceRecords', error.message);

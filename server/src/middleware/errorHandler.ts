@@ -7,9 +7,9 @@ import { Request, Response, NextFunction } from 'express';
 
 export class ApiError extends Error {
   constructor(
-    public statusCode: number,
+    public statusCode: number, // eslint-disable-line no-unused-vars
     message: string,
-    public isOperational = true
+    public isOperational = true // eslint-disable-line no-unused-vars
   ) {
     super(message);
     Object.setPrototypeOf(this, ApiError.prototype);
@@ -20,7 +20,7 @@ export const errorHandler = (
   err: Error | ApiError,
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction // eslint-disable-line no-unused-vars
 ) => {
   // Log error
   console.error('❌ Error:', {

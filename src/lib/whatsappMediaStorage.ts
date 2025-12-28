@@ -111,9 +111,30 @@ export class WhatsAppMediaStorageService {
       const safeFileName = this.generateSafeFileName(file.name);
       console.log('📝 [FILENAME] Generated safe name:', safeFileName);
       
+      // In development mode, skip API upload and use base64 directly
+      if (this.isDevelopment()) {
+        console.log('\n🚀 [DEVELOPMENT] Skipping API upload, using base64 fallback...');
+        try {
+          const base64Url = await this.fileToBase64(file);
+          console.log('✅ [SUCCESS] Using base64 data URL for development');
+          console.log('   Data URL length:', base64Url.length);
+          console.log('───────────────────────────────────────────────\n');
+          return {
+            success: true,
+            url: base64Url
+          };
+        } catch (error: any) {
+          console.error('❌ [DEVELOPMENT FALLBACK FAILED] Base64 conversion failed:', error);
+          return {
+            success: false,
+            error: 'Development mode: Could not convert file to base64'
+          };
+        }
+      }
+
       // Try to upload to WasenderAPI via proxy endpoint
       console.log('\n🚀 [UPLOAD] Preparing to upload via proxy...');
-      
+
       const formData = new FormData();
       formData.append('file', file);
       console.log('📦 [FORMDATA] Created FormData with file');
@@ -125,7 +146,7 @@ export class WhatsAppMediaStorageService {
         const { getIntegration } = await import('../lib/integrationsApi');
         const integration = await getIntegration('WHATSAPP_WASENDER');
         apiKey = integration?.credentials?.api_key || integration?.credentials?.bearer_token || '';
-        
+
         if (apiKey) {
           console.log('✅ [AUTH] API key found:', apiKey.substring(0, 10) + '...');
         } else {
@@ -136,7 +157,11 @@ export class WhatsAppMediaStorageService {
       }
 
       // Use the WhatsApp upload proxy endpoint (proxies to WasenderAPI)
-      const uploadUrl = '/api/whatsapp/upload-media';
+      // In development, point to the backend server (port 8000)
+      // In production, use relative URL (same domain)
+      const uploadUrl = this.isDevelopment()
+        ? 'http://localhost:8000/api/whatsapp/upload-media'
+        : '/api/whatsapp/upload-media';
       console.log('\n📡 [REQUEST] Sending to server proxy:');
       console.log('   URL:', uploadUrl);
       console.log('   Method: POST');

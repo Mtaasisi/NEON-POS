@@ -172,8 +172,24 @@ export const CustomersProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           created_at: new Date().toISOString(),
           customer_id: newCustomerId
         };
-        const { data: noteResult, error: noteError } = await supabase.from('customer_notes').insert(noteData);
-        
+        // Get current notes array from customer
+        const { data: customerData } = await supabase
+          .from('lats_customers')
+          .select('notes_history')
+          .eq('id', newCustomerId)
+          .single();
+
+        const currentNotes = customerData?.notes_history || [];
+
+        // Add new note
+        const updatedNotes = [...currentNotes, noteData];
+
+        // Update customer record
+        const { error: noteError } = await supabase
+          .from('lats_customers')
+          .update({ notes_history: updatedNotes })
+          .eq('id', newCustomerId);
+
         if (noteError) {
           console.error('⚠️  Failed to add welcome note:', {
             error: noteError.message,

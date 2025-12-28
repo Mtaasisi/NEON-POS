@@ -1,0 +1,8 @@
+import{j as h}from"./index-DcOZFT5f.js";import{r as n}from"./ui-DzCRF9nk.js";const p=["via.placeholder.com","placehold.it","placehold.co","dummyimage.com","picsum.photos","lorempixel.com","loremflickr.com"];function a(t=400,e=400,r="Image"){const o=`
+    <svg width="${t}" height="${e}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#f3f4f6"/>
+      <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="16" fill="#6b7280" text-anchor="middle" dy=".3em">
+        ${r}
+      </text>
+    </svg>
+  `;return`data:image/svg+xml;base64,${btoa(o)}`}function E(t){if(!t)return!0;try{const e=new URL(t);return p.some(r=>e.hostname.includes(r))}catch{return!0}}function I(t){if(!t)return!1;try{const e=new URL(t),r=["http:","https:","data:"],o=[".jpg",".jpeg",".png",".gif",".webp",".svg"];return r.includes(e.protocol)?e.protocol==="data:"?t.includes("image/"):o.some(s=>e.pathname.toLowerCase().includes(s)):!1}catch{return!1}}function v(t,e="Image"){return!t||E(t)||!I(t)?a(400,400,e):t}function S(t,e="Image"){const r=t.target;r&&(r.src=a(400,400,e),r.alt=e)}const C=({src:t,alt:e,className:r="",width:o,height:i,fallbackText:s,onError:c,onLoad:m})=>{const[u,U]=n.useState(()=>v(t,s||e)),[w,l]=n.useState(!1),f=n.useCallback(d=>{l(!0),S(d,s||e),c?.(new Error("Image failed to load"))},[s,e,c]),g=n.useCallback(()=>{l(!1),m?.()},[m]);return h.jsxDEV("img",{src:u,alt:e,className:r,width:o,height:i,onError:f,onLoad:g,style:{objectFit:"cover",backgroundColor:"#f3f4f6"}},void 0,!1,{fileName:"/Users/mtaasisi/Desktop/BACKUP DUKANI APP/Dukani Pro Backup V01_CODE_BACKUP/BRANCH_ISOLATION_FIXED_FEATURE_BACKUP/source_code Original/src/components/SafeImage.tsx",lineNumber:40,columnNumber:5},void 0)};export{C as S};

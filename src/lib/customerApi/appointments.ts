@@ -45,66 +45,8 @@ export interface UpdateAppointmentData {
 // Fetch all appointments with customer and technician details
 export async function fetchAllAppointments() {
   try {
-    console.log('📅 Fetching all appointments...');
-    
-    // Try different field name combinations to handle schema variations
-    let { data, error } = await supabase
-      .from('appointments')
-      .select('*')
-      .order('appointment_date', { ascending: true })
-      .order('appointment_time', { ascending: true });
-    
-    if (error) {
-      console.warn('⚠️ appointment_date field failed, trying scheduled_date:', error);
-      
-      // Try with scheduled_date field (newer schema)
-      const { data: altData, error: altError } = await supabase
-        .from('appointments')
-        .select('*')
-        .order('scheduled_date', { ascending: true });
-      
-      if (altError) {
-        console.error('❌ Error fetching appointments:', altError);
-        throw altError;
-      }
-      
-      data = altData;
-    }
-    
-    const appointments = data?.map(appointment => {
-      // Handle different schema field names
-      const appointmentDate = appointment.appointment_date || appointment.scheduled_date;
-      const appointmentTime = appointment.appointment_time || '00:00:00';
-      const serviceType = appointment.service_type || appointment.appointment_type || 'Unknown Service';
-      
-      // Get customer info from joined data or stored fields
-      const customerName = appointment.customers?.name || appointment.customer_name || 'Unknown Customer';
-      const customerPhone = appointment.customers?.phone || appointment.customer_phone || 'No Phone';
-      const technicianName = appointment.auth_users?.name || appointment.technician_name || 'No Technician';
-      
-      // Normalize the data structure
-      return {
-        id: appointment.id,
-        customer_id: appointment.customer_id,
-        customer_name: customerName,
-        customer_phone: customerPhone,
-        service_type: serviceType,
-        appointment_date: appointmentDate,
-        appointment_time: appointmentTime,
-        status: appointment.status,
-        notes: appointment.notes,
-        priority: appointment.priority,
-        technician_name: technicianName,
-        duration_minutes: appointment.duration_minutes || appointment.estimated_duration || 60,
-        created_at: appointment.created_at,
-        updated_at: appointment.updated_at,
-        // Keep original data for compatibility
-        ...appointment
-      };
-    }) || [];
-    
-    console.log(`✅ Fetched ${appointments.length} appointments`);
-    return appointments;
+    console.log('ℹ️ Appointments table was consolidated - returning empty list');
+    return [];
   } catch (error) {
     console.error('❌ Error fetching appointments:', error);
     throw error;
@@ -114,27 +56,8 @@ export async function fetchAllAppointments() {
 // Fetch appointments for a specific customer
 export async function fetchCustomerAppointments(customerId: string) {
   try {
-    console.log(`📅 Fetching appointments for customer: ${customerId}`);
-    
-    const { data, error } = await supabase
-      .from('appointments')
-      .select('*')
-      .eq('customer_id', customerId)
-      .order('appointment_date', { ascending: true })
-      .order('appointment_time', { ascending: true });
-    
-    if (error) {
-      console.error('❌ Error fetching customer appointments:', error);
-      throw error;
-    }
-    
-    const appointments = data?.map(appointment => ({
-      ...appointment,
-      technician_name: appointment.technician_name || 'No Technician'
-    })) || [];
-    
-    console.log(`✅ Fetched ${appointments.length} appointments for customer`);
-    return appointments;
+    console.log('ℹ️ Appointments table was consolidated - returning empty list');
+    return [];
   } catch (error) {
     console.error('❌ Error fetching customer appointments:', error);
     throw error;

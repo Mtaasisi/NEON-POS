@@ -47,7 +47,7 @@ if (!DATABASE_URL && existsSync('database-config.json')) {
 
 if (!DATABASE_URL) {
   // PRODUCTION NEON DATABASE - Always use production Neon database
-  DATABASE_URL = 'postgresql://neondb_owner:npg_tHAqPdo2x0LR@ep-aged-pond-adays3pg-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+  DATABASE_URL = 'postgresql://neondb_owner:npg_dMyv1cG4KSOR@ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
 }
 
 const sql = neon(DATABASE_URL);
@@ -59,8 +59,13 @@ console.log('🚀 Starting Backend API Server...');
 console.log(`📡 Database: ${dbEnvironment} (${dbHost})`);
 
 // Health check endpoint
+// Health check endpoints (both with and without /api prefix for compatibility)
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', message: 'Backend API is running', timestamp: new Date().toISOString() });
+});
+
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Backend API is running' });
+  res.json({ status: 'ok', message: 'Backend API is running', timestamp: new Date().toISOString() });
 });
 
 // Mount Neon migration routes
@@ -69,20 +74,25 @@ app.use('/api/neon', neonMigrationRouter);
 // Anti-ban Settings Routes
 app.get('/api/antiban-settings', async (req, res) => {
   console.log('📥 [API] GET /api/antiban-settings');
-  
+
   try {
     const userId = req.query.user_id ? parseInt(req.query.user_id) : null;
     console.log(`🔍 [QUERY] Fetching settings for user_id: ${userId || 'default'}`);
-    
+
     const result = await sql`
-      SELECT * FROM whatsapp_antiban_settings 
-      WHERE user_id IS NOT DISTINCT FROM ${userId}
-      ORDER BY updated_at DESC 
+      SELECT setting_value_json as settings, updated_at
+      FROM settings
+      WHERE scope = 'user'
+        AND category = 'whatsapp'
+        AND setting_key = 'antiban_settings'
+        AND (user_id IS NOT DISTINCT FROM ${userId} OR user_id IS NULL)
+      ORDER BY updated_at DESC
       LIMIT 1
     `;
-    
-    const settings = result[0];
-    
+
+    const settingsRow = result[0];
+    const settings = settingsRow ? (typeof settingsRow.settings === 'string' ? JSON.parse(settingsRow.settings) : settingsRow.settings) : null;
+
     if (!settings) {
       console.log('⚠️ [WARNING] No settings found, returning defaults');
       return res.json({
@@ -102,30 +112,18 @@ app.get('/api/antiban-settings', async (req, res) => {
         varyMessageLength: true
       });
     }
-    
+
     console.log('✅ [SUCCESS] Settings retrieved');
-    
+
+    // Settings are already in the correct format from JSON
     res.json({
-      usePersonalization: settings.use_personalization,
-      randomDelay: settings.random_delay,
-      minDelay: settings.min_delay,
-      maxDelay: settings.max_delay,
-      usePresence: settings.use_presence,
-      batchSize: settings.batch_size,
-      batchDelay: settings.batch_delay,
-      maxPerHour: settings.max_per_hour,
-      dailyLimit: settings.daily_limit,
-      skipRecentlyContacted: settings.skip_recently_contacted,
-      respectQuietHours: settings.respect_quiet_hours,
-      useInvisibleChars: settings.use_invisible_chars,
-      useEmojiVariation: settings.use_emoji_variation,
-      varyMessageLength: settings.vary_length,
-      updatedAt: settings.updated_at
+      ...settings,
+      updatedAt: settingsRow.updated_at
     });
   } catch (error) {
     console.error('❌ Error getting anti-ban settings:', error);
     const errorMessage = error.message || 'Internal server error';
-    
+
     // If table doesn't exist, return defaults instead of error
     if (errorMessage.includes('does not exist') || errorMessage.includes('relation') || errorMessage.includes('table')) {
       console.log('⚠️ Table does not exist, returning defaults');
@@ -146,7 +144,7 @@ app.get('/api/antiban-settings', async (req, res) => {
         varyMessageLength: true
       });
     }
-    
+
     res.status(500).json({
       success: false,
       error: errorMessage
@@ -156,7 +154,7 @@ app.get('/api/antiban-settings', async (req, res) => {
 
 app.post('/api/antiban-settings', async (req, res) => {
   console.log('📤 [API] POST /api/antiban-settings');
-  
+
   try {
     const userId = req.body.user_id || null;
     const {
@@ -175,62 +173,42 @@ app.post('/api/antiban-settings', async (req, res) => {
       useEmojiVariation,
       varyMessageLength
     } = req.body;
-    
+
     console.log(`💾 [SAVE] Saving settings for user_id: ${userId || 'default'}`);
-    
+
+    // Prepare settings object for JSON storage
+    const settingsData = {
+      usePersonalization,
+      randomDelay,
+      minDelay,
+      maxDelay,
+      usePresence,
+      batchSize,
+      batchDelay,
+      maxPerHour,
+      dailyLimit,
+      skipRecentlyContacted,
+      respectQuietHours,
+      useInvisibleChars,
+      useEmojiVariation,
+      varyMessageLength
+    };
+
+    // Use INSERT ... ON CONFLICT for upsert behavior (PostgreSQL)
     await sql`
-      INSERT INTO whatsapp_antiban_settings (
+      INSERT INTO settings (
+        scope,
+        category,
+        setting_key,
+        setting_value_json,
         user_id,
-        use_personalization,
-        random_delay,
-        min_delay,
-        max_delay,
-        use_presence,
-        batch_size,
-        batch_delay,
-        max_per_hour,
-        daily_limit,
-        skip_recently_contacted,
-        respect_quiet_hours,
-        use_invisible_chars,
-        use_emoji_variation,
-        vary_length
-      ) VALUES (
-        ${userId},
-        ${usePersonalization},
-        ${randomDelay},
-        ${minDelay},
-        ${maxDelay},
-        ${usePresence},
-        ${batchSize},
-        ${batchDelay},
-        ${maxPerHour},
-        ${dailyLimit},
-        ${skipRecentlyContacted},
-        ${respectQuietHours},
-        ${useInvisibleChars},
-        ${useEmojiVariation},
-        ${varyMessageLength}
-      )
-      ON CONFLICT (user_id) 
-      DO UPDATE SET
-        use_personalization = EXCLUDED.use_personalization,
-        random_delay = EXCLUDED.random_delay,
-        min_delay = EXCLUDED.min_delay,
-        max_delay = EXCLUDED.max_delay,
-        use_presence = EXCLUDED.use_presence,
-        batch_size = EXCLUDED.batch_size,
-        batch_delay = EXCLUDED.batch_delay,
-        max_per_hour = EXCLUDED.max_per_hour,
-        daily_limit = EXCLUDED.daily_limit,
-        skip_recently_contacted = EXCLUDED.skip_recently_contacted,
-        respect_quiet_hours = EXCLUDED.respect_quiet_hours,
-        use_invisible_chars = EXCLUDED.use_invisible_chars,
-        use_emoji_variation = EXCLUDED.use_emoji_variation,
-        vary_length = EXCLUDED.vary_length,
-        updated_at = CURRENT_TIMESTAMP
+        updated_at
+      ) VALUES ('user', 'whatsapp', 'antiban_settings', ${JSON.stringify(settingsData)}, ${userId}, NOW())
+      ON CONFLICT (scope, category, setting_key, user_id) DO UPDATE SET
+        setting_value_json = ${JSON.stringify(settingsData)},
+        updated_at = NOW()
     `;
-    
+
     console.log('✅ [SUCCESS] Settings saved');
     res.json({
       success: true,
@@ -248,33 +226,54 @@ app.post('/api/antiban-settings', async (req, res) => {
 // WhatsApp Sessions Routes
 app.get('/api/whatsapp-sessions/get-active', async (req, res) => {
   console.log('📥 [API] GET /api/whatsapp-sessions/get-active');
-  
+
   try {
     const userId = req.query.user_id;
-    
+
     if (!userId) {
       return res.status(400).json({
         success: false,
         error: 'user_id is required'
       });
     }
-    
+
     console.log(`🔍 [QUERY] Fetching active session for user_id: ${userId}`);
-    
-    // Get user's active session preference
-    const prefs = await sql`
-      SELECT active_session_id, auto_select_session
-      FROM user_whatsapp_preferences
-      WHERE user_id = ${userId}
+
+    // Get user's active session preference from unified settings table
+    const prefsResult = await sql`
+      SELECT setting_value_text as active_session_id
+      FROM settings
+      WHERE scope = 'user'
+        AND category = 'whatsapp'
+        AND setting_key = 'active_session_id'
+        AND user_id = ${userId}
     `;
-    
-    const pref = prefs[0];
+
+    const activeSessionIdFromSettings = prefsResult[0]?.active_session_id;
+
+    // Get auto-select preference
+    const autoSelectResult = await sql`
+      SELECT setting_value_boolean as auto_select_session
+      FROM settings
+      WHERE scope = 'user'
+        AND category = 'whatsapp'
+        AND setting_key = 'auto_select_session'
+        AND user_id = ${userId}
+    `;
+
+    const autoSelectSession = autoSelectResult[0]?.auto_select_session ?? true; // Default to true
+
+    const prefs = {
+      active_session_id: activeSessionIdFromSettings,
+      auto_select_session: autoSelectSession
+    };
+
     let activeSessionId = null;
-    
-    if (pref && pref.active_session_id) {
-      activeSessionId = pref.active_session_id;
+
+    if (prefs.active_session_id) {
+      activeSessionId = prefs.active_session_id;
       console.log(`✅ Found user preference for session: ${activeSessionId}`);
-    } else if (!pref || pref.auto_select_session) {
+    } else if (autoSelectSession) {
       console.log('🔄 Auto-selecting first connected session');
       const autoResult = await sql`
         SELECT id FROM whatsapp_sessions
@@ -282,7 +281,7 @@ app.get('/api/whatsapp-sessions/get-active', async (req, res) => {
         ORDER BY last_connected_at DESC NULLS LAST, created_at DESC
         LIMIT 1
       `;
-      
+
       if (autoResult.length > 0) {
         activeSessionId = autoResult[0].id;
         console.log(`✅ Auto-selected session: ${activeSessionId}`);
@@ -364,7 +363,7 @@ app.get('/api/whatsapp-sessions/get-active', async (req, res) => {
 
 app.get('/api/whatsapp-sessions/check-integration', async (req, res) => {
   console.log('📥 [API] GET /api/whatsapp-sessions/check-integration');
-  
+
   try {
     const result = {
       success: true,
@@ -372,30 +371,27 @@ app.get('/api/whatsapp-sessions/check-integration', async (req, res) => {
       database_sessions: [],
       recommendation: ''
     };
-    
-    // Check integrations table
+
+    // Check unified settings table for WhatsApp configuration
     const integrationResult = await sql`
-      SELECT 
-        integration_name,
-        is_active,
-        api_key,
-        api_secret,
-        config,
-        last_sync
-      FROM integrations
-      WHERE integration_name = 'WHATSAPP_WASENDER' OR integration_type = 'whatsapp'
+      SELECT setting_value_boolean as is_active, setting_value_text as api_key, setting_value_json as config, updated_at as last_sync
+      FROM settings
+      WHERE scope = 'system'
+        AND category = 'integrations'
+        AND setting_key = 'whatsapp_wasender'
+      LIMIT 1
     `;
-    
+
     const integration = integrationResult[0];
-    
+
     if (integration) {
-      const config = typeof integration.config === 'string' 
-        ? JSON.parse(integration.config) 
+      const config = typeof integration.config === 'string'
+        ? JSON.parse(integration.config)
         : integration.config || {};
-      
+
       const apiKey = integration.api_key || config.api_key || config.bearer_token;
       const sessionId = config.session_id || config.whatsapp_session;
-      
+
       result.integration = {
         enabled: !!integration.is_active,
         has_api_key: !!apiKey,
@@ -469,58 +465,67 @@ app.get('/api/whatsapp-sessions/check-integration', async (req, res) => {
 
 app.post('/api/whatsapp-sessions/set-active', async (req, res) => {
   console.log('📥 [API] POST /api/whatsapp-sessions/set-active');
-  
+
   try {
     const { user_id, session_id } = req.body;
-    
+
     if (!user_id || !session_id) {
       return res.status(400).json({
         success: false,
         error: 'user_id and session_id are required'
       });
     }
-    
+
     console.log(`💾 Setting active session ${session_id} for user ${user_id}`);
-    
+
     // Verify session exists and is connected
     const sessionResult = await sql`
       SELECT id, name, status FROM whatsapp_sessions WHERE id = ${session_id}
     `;
-    
+
     const session = sessionResult[0];
-    
+
     if (!session) {
       return res.status(400).json({
         success: false,
         error: 'Session not found'
       });
     }
-    
+
     if (session.status !== 'connected') {
       return res.status(400).json({
         success: false,
         error: 'Session is not connected. Please connect the session first.'
       });
     }
-    
-    // Upsert user preferences
+
+    // Update active session in unified settings table
     await sql`
-      INSERT INTO user_whatsapp_preferences (user_id, active_session_id, auto_select_session, updated_at)
-      VALUES (${user_id}, ${session_id}, false, NOW())
-      ON CONFLICT (user_id) 
-      DO UPDATE SET 
-        active_session_id = ${session_id},
-        auto_select_session = false,
+      INSERT INTO settings (scope, category, setting_key, setting_value_text, user_id, updated_at)
+      VALUES ('user', 'whatsapp', 'active_session_id', ${session_id}, ${user_id}, NOW())
+      ON CONFLICT (scope, category, setting_key, user_id)
+      DO UPDATE SET
+        setting_value_text = ${session_id},
         updated_at = NOW()
     `;
-    
+
+    // Also set auto_select_session to false
+    await sql`
+      INSERT INTO settings (scope, category, setting_key, setting_value_boolean, user_id, updated_at)
+      VALUES ('user', 'whatsapp', 'auto_select_session', false, ${user_id}, NOW())
+      ON CONFLICT (scope, category, setting_key, user_id)
+      DO UPDATE SET
+        setting_value_boolean = false,
+        updated_at = NOW()
+    `;
+
     console.log(`✅ Active session set to: ${session.name}`);
     res.json({
       success: true,
       message: `Active session set to '${session.name}'`,
       active_session_id: session_id
     });
-    
+
   } catch (error) {
     console.error('❌ Error setting active session:', error);
     res.status(400).json({
@@ -532,27 +537,29 @@ app.post('/api/whatsapp-sessions/set-active', async (req, res) => {
 
 app.post('/api/whatsapp-sessions/sync-from-wasender', async (req, res) => {
   console.log('📥 [API] POST /api/whatsapp-sessions/sync-from-wasender');
-  
+
   try {
-    // Get Bearer Token from integrations
+    // Get Bearer Token from unified settings
     const integrationResult = await sql`
-      SELECT credentials, config FROM lats_pos_integrations_settings
-      WHERE integration_name = 'WHATSAPP_WASENDER' AND is_enabled = true
+      SELECT setting_value_json as config, setting_value_boolean as is_active
+      FROM settings
+      WHERE scope = 'system'
+        AND category = 'integrations'
+        AND setting_key = 'whatsapp_wasender'
     `;
-    
-    if (integrationResult.length === 0) {
+
+    if (integrationResult.length === 0 || !integrationResult[0].is_active) {
       return res.status(400).json({
         success: false,
         error: 'WhatsApp integration not configured. Please configure in Admin Settings.'
       });
     }
-    
-    const integration = integrationResult[0];
-    const credentials = typeof integration.credentials === 'string'
-      ? JSON.parse(integration.credentials)
-      : integration.credentials || {};
-    
-    const bearerToken = credentials.api_key || credentials.bearer_token;
+
+    const config = typeof integrationResult[0].config === 'string'
+      ? JSON.parse(integrationResult[0].config)
+      : integrationResult[0].config || {};
+
+    const bearerToken = config.bearer_token || config.api_key;
     
     if (!bearerToken) {
       return res.status(400).json({

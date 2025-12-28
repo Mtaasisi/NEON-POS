@@ -49,7 +49,7 @@ const LATS_PERMISSIONS: Permission[] = [
 
   // Products
   { resource: 'products', action: 'view', roles: ['admin', 'technician', 'store-keeper'] },
-  { resource: 'products', action: 'create', roles: ['admin'] },
+  { resource: 'products', action: 'create', roles: ['admin', 'customer-care'] },
   { resource: 'products', action: 'edit', roles: ['admin'] },
   { resource: 'products', action: 'delete', roles: ['admin'] },
 

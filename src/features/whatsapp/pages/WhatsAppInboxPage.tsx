@@ -28,9 +28,11 @@ import {
   Type, Keyboard, Sparkles, Minimize2, Smartphone, Volume2, VolumeX 
 } from 'lucide-react';
 import whatsappService from '../../../services/whatsappService';
+import { smsService } from '../../../services/smsService';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
+import * as Papa from 'papaparse';
 import { findCustomerByPhoneMatch, phonesMatch } from '../../../utils/phoneMatching';
 import whatsappAdvancedService from '../../../services/whatsappAdvancedService';
 import type { WhatsAppCampaign, BlacklistEntry } from '../../../types/whatsapp-advanced';
@@ -39,6 +41,7 @@ import BlacklistManagementModal from '../components/BlacklistManagementModal';
 import MediaLibraryModal from '../components/MediaLibraryModal';
 import WhatsAppSessionModal from '../components/WhatsAppSessionModal';
 import CampaignManagementModal from '../components/CampaignManagementModal';
+import CsvPreviewModal from '../components/CsvPreviewModal';
 import CampaignTemplatesModal from '../components/CampaignTemplatesModal';
 import ScheduledCampaignsModal from '../components/ScheduledCampaignsModal';
 import WhatsAppTopBar from '../components/WhatsAppTopBar';
@@ -132,7 +135,8 @@ export default function WhatsAppInboxPage() {
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkStep, setBulkStep] = useState(1); // 1: Recipients, 2: Message, 3: Review, 4: Sending
   const [bulkMessage, setBulkMessage] = useState('');
-  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
+  const [selectedRecipients, setSelectedRecipients] = useState<Array<{phone: string, name: string}>>([]);
+  const [recipientNames, setRecipientNames] = useState<Map<string, string>>(new Map());
   const [bulkSending, setBulkSending] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0, success: 0, failed: 0 });
   
@@ -187,6 +191,7 @@ export default function WhatsAppInboxPage() {
   const [activeQuickFilter, setActiveQuickFilter] = useState<string | null>(null);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvUploading, setCsvUploading] = useState(false);
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [showCsvTooltip, setShowCsvTooltip] = useState(false);
   const [showImportSection, setShowImportSection] = useState(false);
   const [showCsvPreviewModal, setShowCsvPreviewModal] = useState(false);
@@ -480,12 +485,12 @@ export default function WhatsAppInboxPage() {
 
   // Export pending recipients
   const exportPendingRecipients = () => {
-    const pending = selectedRecipients.filter(phone => !sentPhones.includes(phone));
-    const data = pending.map(phone => {
-      const conv = conversations.find(c => c.phone === phone);
+    const pending = selectedRecipients.filter(recipient => !sentPhones.includes(recipient.phone));
+    const data = pending.map(recipient => {
+      const displayName = recipientNames.get(recipient.phone) || recipient.name;
       return {
-        phone,
-        name: conv?.customer_name || 'Unknown'
+        phone: recipient.phone,
+        name: displayName
       };
     });
     exportToCSV(data, `pending-recipients-${new Date().toISOString().split('T')[0]}.csv`);
@@ -1157,11 +1162,83 @@ export default function WhatsAppInboxPage() {
         .from('customers')
         .select('id, name, phone, whatsapp')
         .order('name');
-      
+
       if (error) throw error;
       setCustomers(data || []);
     } catch (error) {
       console.error('Error loading customers:', error);
+    }
+  }
+
+  async function loadRecipientNames(recipients: Array<{phone: string, name: string}>) {
+    if (recipients.length === 0) return;
+
+    try {
+      // Create a map to store phone-to-name mappings
+      const namesMap = new Map<string, string>();
+
+      // First use names from recipients (from CSV or manual entry)
+      recipients.forEach(recipient => {
+        if (recipient.name && recipient.name !== 'Unknown') {
+          namesMap.set(recipient.phone, recipient.name);
+        } else {
+          namesMap.set(recipient.phone, 'Unknown');
+        }
+      });
+
+      // For recipients with "Unknown" names, try to look up from customers table
+      const unknownRecipients = recipients.filter(r => namesMap.get(r.phone) === 'Unknown');
+      if (unknownRecipients.length > 0) {
+        const unknownPhones = unknownRecipients.map(r => r.phone);
+
+        // First try existing customers data in memory
+        unknownPhones.forEach(phone => {
+          const normalizedPhone = phone.replace(/[^\d+]/g, '');
+          const customer = customers.find(c =>
+            (c.phone && c.phone.replace(/[^\d+]/g, '') === normalizedPhone) ||
+            (c.whatsapp && c.whatsapp.replace(/[^\d+]/g, '') === normalizedPhone)
+          );
+
+          if (customer) {
+            namesMap.set(phone, customer.name);
+          }
+        });
+
+        // If still unknown, try database lookup
+        const stillUnknownPhones = unknownPhones.filter(phone => namesMap.get(phone) === 'Unknown');
+        if (stillUnknownPhones.length > 0) {
+          const phoneConditions = stillUnknownPhones.map(phone => {
+            const normalized = phone.replace(/[^\d+]/g, '');
+            return `phone.eq.${normalized},whatsapp.eq.${normalized},phone.eq.+${normalized},whatsapp.eq.+${normalized}`;
+          }).join(',');
+
+          const { data: additionalCustomers, error } = await supabase
+            .from('customers')
+            .select('name, phone, whatsapp')
+            .or(phoneConditions);
+
+          if (!error && additionalCustomers) {
+            stillUnknownPhones.forEach(phone => {
+              const normalized = phone.replace(/[^\d+]/g, '');
+              const customer = additionalCustomers.find(c =>
+                (c.phone && c.phone.replace(/[^\d+]/g, '') === normalized) ||
+                (c.whatsapp && c.whatsapp.replace(/[^\d+]/g, '') === normalized)
+              );
+              if (customer) {
+                namesMap.set(phone, customer.name);
+              }
+            });
+          }
+        }
+      }
+
+      setRecipientNames(namesMap);
+    } catch (error) {
+      console.error('Error loading recipient names:', error);
+      // Set all to Unknown as fallback
+      const fallbackMap = new Map<string, string>();
+      recipients.forEach(recipient => fallbackMap.set(recipient.phone, recipient.name || 'Unknown'));
+      setRecipientNames(fallbackMap);
     }
   }
 
@@ -1518,24 +1595,9 @@ export default function WhatsAppInboxPage() {
           [conversation.phone]: ''
         }));
         
-        // Log to customer communications if customer is linked
+        // Customer communications table was consolidated into customers table as JSON
         if (conversation.customer_id) {
-          try {
-            await supabase
-              .from('customer_communications')
-              .insert({
-                customer_id: conversation.customer_id,
-                type: 'whatsapp',
-                message: messageText,
-                phone_number: conversation.phone,
-                status: 'sent',
-                sent_by: currentUser?.id,
-                sent_at: new Date().toISOString(),
-                created_at: new Date().toISOString(),
-              });
-          } catch (commEx) {
-            console.warn('⚠️ Could not log to customer_communications:', commEx);
-          }
+          console.log('ℹ️ Customer communications consolidated - WhatsApp logging skipped');
         }
         
         // Reload to show new message in history
@@ -1578,24 +1640,41 @@ export default function WhatsAppInboxPage() {
       if (result.success) {
         toast.success('✅ Message sent successfully!');
         
-        // Log to customer communications if customer is selected (same as CustomerDetailModal)
+        // Log to customer communications if customer is selected (consolidated into customers table)
         if (selectedCustomer) {
           try {
+            // Get current communications array
+            const { data: customerData } = await supabase
+              .from('lats_customers')
+              .select('communications')
+              .eq('id', selectedCustomer.id)
+              .single();
+
+            const currentCommunications = customerData?.communications || [];
+
+            // Add new communication
+            const newCommunication = {
+              id: crypto.randomUUID(),
+              type: 'whatsapp',
+              message: composeMessage,
+              phone_number: phoneNumber,
+              status: 'sent',
+              sent_by: currentUser?.id,
+              sent_at: new Date().toISOString(),
+              created_at: new Date().toISOString(),
+            };
+
+            const updatedCommunications = [...currentCommunications, newCommunication];
+
+            // Update customer record
             await supabase
-              .from('customer_communications')
-              .insert({
-                customer_id: selectedCustomer.id,
-                type: 'whatsapp',
-                message: composeMessage,
-                phone_number: phoneNumber,
-                status: 'sent',
-                sent_by: currentUser?.id,
-                sent_at: new Date().toISOString(),
-                created_at: new Date().toISOString(),
-              });
-            console.log('✅ WhatsApp message logged to customer_communications table');
+              .from('lats_customers')
+              .update({ communications: updatedCommunications })
+              .eq('id', selectedCustomer.id);
+
+            console.log('✅ WhatsApp message logged to customer communications');
           } catch (commEx) {
-            console.warn('⚠️ Could not log to customer_communications table:', commEx);
+            console.warn('⚠️ Could not log to customer communications:', commEx);
           }
         }
         
@@ -1617,7 +1696,90 @@ export default function WhatsAppInboxPage() {
       setComposing(false);
     }
   }
-  
+
+  // SMS Fallback: Send failed WhatsApp messages via SMS
+  async function sendFailedMessagesViaSMS(failedMessages: any[], originalMessage: string) {
+    console.log('📱 Starting SMS fallback for failed WhatsApp messages...');
+
+    let smsSuccess = 0;
+    let smsFailed = 0;
+    const smsErrors: string[] = [];
+
+    toast.loading(`📱 Sending ${failedMessages.length} message${failedMessages.length > 1 ? 's' : ''} via SMS...`, { id: 'sms-fallback' });
+
+    try {
+      for (const failed of failedMessages) {
+        try {
+          console.log(`📤 Sending SMS to ${failed.phone} (${failed.name})`);
+
+          // Personalize message if needed (similar to WhatsApp personalization)
+          let smsMessage = originalMessage;
+          if (usePersonalization) {
+            const conversation = conversations.find(c => c.phone === failed.phone);
+            if (conversation?.customer_name) {
+              smsMessage = smsMessage
+                .replace(/\{name\}/gi, conversation.customer_name)
+                .replace(/\{phone\}/gi, failed.phone)
+                .replace(/\{date\}/gi, new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }))
+                .replace(/\{time\}/gi, new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }))
+                .replace(/\{day\}/gi, new Date().toLocaleDateString('en-US', { weekday: 'long' }))
+                .replace(/\{month\}/gi, new Date().toLocaleDateString('en-US', { month: 'long' }))
+                .replace(/\{greeting\}/gi, new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening')
+                .replace(/\{company\}/gi, 'Dukani Pro');
+            }
+          }
+
+          const result = await smsService.sendSMS(failed.phone, smsMessage);
+
+          if (result.success) {
+            smsSuccess++;
+            console.log(`✅ SMS sent successfully to ${failed.phone}`);
+          } else {
+            smsFailed++;
+            smsErrors.push(`${failed.phone}: ${result.error}`);
+            console.log(`❌ SMS failed to ${failed.phone}: ${result.error}`);
+          }
+
+          // Small delay between SMS sends to avoid rate limits
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+        } catch (error) {
+          smsFailed++;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          smsErrors.push(`${failed.phone}: ${errorMsg}`);
+          console.error(`❌ SMS error for ${failed.phone}:`, error);
+        }
+      }
+
+      // Show final SMS results
+      if (smsSuccess > 0) {
+        toast.success(`📱 SMS Fallback Complete: ${smsSuccess} sent, ${smsFailed} failed`, { id: 'sms-fallback' });
+
+        if (smsFailed > 0) {
+          console.log(`\n📱 SMS FALLBACK RESULTS:`);
+          console.log(`✅ SMS Sent: ${smsSuccess}`);
+          console.log(`❌ SMS Failed: ${smsFailed}`);
+          console.log(`📋 Errors:`, smsErrors);
+
+          toast.error(`📱 ${smsFailed} SMS message${smsFailed > 1 ? 's' : ''} failed. Check console for details.`, { duration: 5000 });
+        } else {
+          console.log(`\n📱 SMS FALLBACK SUCCESS: All ${smsSuccess} messages sent via SMS!`);
+        }
+      } else {
+        toast.error(`📱 SMS Fallback Failed: All ${smsFailed} SMS messages failed`, { id: 'sms-fallback' });
+        console.log(`\n📱 SMS FALLBACK FAILED: All ${smsFailed} messages failed`);
+        console.log(`📋 Errors:`, smsErrors);
+      }
+
+      // Log SMS campaign results
+      addTimelineEvent('SMS Fallback', `${smsSuccess} SMS sent, ${smsFailed} failed`);
+
+    } catch (error) {
+      console.error('❌ SMS fallback process failed:', error);
+      toast.error('📱 SMS fallback process failed. Check console for details.', { id: 'sms-fallback' });
+    }
+  }
+
   async function sendBulkMessages(resuming: boolean = false) {
     if (!bulkMessage.trim() && bulkMessageType === 'text') {
       toast.error('Please enter a message');
@@ -1673,11 +1835,12 @@ export default function WhatsAppInboxPage() {
     let recipientsToSend = [...selectedRecipients];
     if (segmentFilter && !resuming) {
       console.log('🎯 Applying recipient segmentation...');
-      const filtered = await filterRecipientsBySegment(recipientsToSend, segmentFilter);
-      const stats = await getSegmentStats(recipientsToSend);
-      console.log(`   Filtered: ${filtered.length}/${recipientsToSend.length} recipients match criteria`);
+      const phoneNumbers = recipientsToSend.map(r => r.phone);
+      const filteredPhones = await filterRecipientsBySegment(phoneNumbers, segmentFilter);
+      const stats = await getSegmentStats(phoneNumbers);
+      console.log(`   Filtered: ${filteredPhones.length}/${recipientsToSend.length} recipients match criteria`);
       console.log(`   Stats:`, stats);
-      recipientsToSend = filtered;
+      recipientsToSend = recipientsToSend.filter(r => filteredPhones.includes(r.phone));
       
       if (recipientsToSend.length === 0) {
         toast.error('No recipients match the segmentation criteria');
@@ -1715,7 +1878,8 @@ export default function WhatsAppInboxPage() {
       const validatedPhones: string[] = [];
       const invalidPhones: Array<{ phone: string; reason: string }> = [];
       
-      for (const phone of recipientsToSend) {
+      for (const recipient of recipientsToSend) {
+        const phone = recipient.phone;
         // Validate phone format
         try {
           // Check if validatePhoneNumber method exists
@@ -1849,11 +2013,11 @@ export default function WhatsAppInboxPage() {
     setBulkSending(true);
     setIsPaused(false);
     setIsStopped(false);
-    setBulkProgress({ 
-      current: alreadySentCount, 
-      total: originalTotal, 
-      success: sentPhones.filter(p => selectedRecipients.includes(p)).length, 
-      failed: 0 
+    setBulkProgress({
+      current: alreadySentCount,
+      total: originalTotal,
+      success: sentPhones.filter(p => selectedRecipients.some(r => r.phone === p)).length,
+      failed: 0
     });
     
     // Track campaign start time (only if starting fresh)
@@ -1876,7 +2040,7 @@ export default function WhatsAppInboxPage() {
           bulkProgress: {
             current: alreadySentCount,
             total: originalTotal,
-            success: sentPhones.filter(p => selectedRecipients.includes(p)).length,
+            success: sentPhones.filter(p => selectedRecipients.some(r => r.phone === p)).length,
             failed: 0
           },
           failedMessages: [],
@@ -2085,7 +2249,8 @@ export default function WhatsAppInboxPage() {
           return; // Exit the function
         }
         
-        const phone = recipientsToSend[i];
+        const recipient = recipientsToSend[i];
+        const phone = recipient.phone;
         const conversation = conversations.find(c => c.phone === phone);
         
         // Check hourly limit
@@ -2445,23 +2610,41 @@ export default function WhatsAppInboxPage() {
               });
             }
             
-            // Log to customer communications if customer is linked
+            // Log to customer communications if customer is linked (consolidated into customers table)
             if (conversation?.customer_id) {
               try {
+                // Get current communications array
+                const { data: customerData } = await supabase
+                  .from('lats_customers')
+                  .select('communications')
+                  .eq('id', conversation.customer_id)
+                  .single();
+
+                const currentCommunications = customerData?.communications || [];
+
+                // Add new communication
+                const newCommunication = {
+                  id: crypto.randomUUID(),
+                  type: 'whatsapp',
+                  message: personalizedMessage,
+                  phone_number: phone,
+                  status: 'sent',
+                  sent_by: currentUser?.id,
+                  sent_at: new Date().toISOString(),
+                  created_at: new Date().toISOString(),
+                };
+
+                const updatedCommunications = [...currentCommunications, newCommunication];
+
+                // Update customer record
                 await supabase
-                  .from('customer_communications')
-                  .insert({
-                    customer_id: conversation.customer_id,
-                    type: 'whatsapp',
-                    message: personalizedMessage,
-                    phone_number: phone,
-                    status: 'sent',
-                    sent_by: currentUser?.id,
-                    sent_at: new Date().toISOString(),
-                    created_at: new Date().toISOString(),
-                  });
+                  .from('lats_customers')
+                  .update({ communications: updatedCommunications })
+                  .eq('id', conversation.customer_id);
+
+                console.log('✅ WhatsApp message logged to customer communications');
               } catch (commEx) {
-                console.warn('⚠️ Could not log to customer_communications:', commEx);
+                console.warn('⚠️ Could not log to customer communications:', commEx);
               }
             }
           } else {
@@ -2834,7 +3017,31 @@ export default function WhatsAppInboxPage() {
       // Clear paused campaign state on completion
       clearPausedCampaignState();
       console.log('🗑️ Cleared paused campaign state after completion');
-      
+
+      // SMS Fallback: Offer to send failed messages via SMS
+      if (failCount > 0 && failedMessages.length > 0) {
+        console.log(`\n📱 SMS FALLBACK: ${failCount} WhatsApp messages failed`);
+
+        // Wait a moment for user to see results, then prompt for SMS fallback
+        setTimeout(async () => {
+          const sendViaSMS = window.confirm(
+            `📱 SMS Fallback Available\n\n` +
+            `${failCount} WhatsApp message${failCount > 1 ? 's' : ''} failed to send.\n\n` +
+            `Would you like to send ${failCount > 1 ? 'these messages' : 'this message'} via SMS instead?\n\n` +
+            `• SMS delivery is more reliable for numbers not on WhatsApp\n` +
+            `• Additional charges may apply based on your SMS provider\n` +
+            `• SMS will be sent to the same recipients who failed via WhatsApp`
+          );
+
+          if (sendViaSMS) {
+            console.log('📤 User chose to send failed messages via SMS');
+            await sendFailedMessagesViaSMS(failedMessages, bulkMessage);
+          } else {
+            console.log('❌ User declined SMS fallback');
+          }
+        }, 2000); // Wait 2 seconds for user to see results
+      }
+
       // Reload messages to show new sent messages in history
       loadMessages();
       
@@ -2889,11 +3096,12 @@ export default function WhatsAppInboxPage() {
       console.log(`   • Has Media: ${!!bulkMedia}`);
       
       // Prepare recipients with names
-      const recipientsWithNames = selectedRecipients.map(phone => {
-        const conversation = conversations.find(c => c.phone === phone);
+      const recipientsWithNames = selectedRecipients.map(recipient => {
+        const conversation = conversations.find(c => c.phone === recipient.phone);
+        const displayName = recipientNames.get(recipient.phone) || recipient.name;
         return {
-          phone,
-          name: conversation?.customer_name || 'Customer'
+          phone: recipient.phone,
+          name: displayName || 'Customer'
         };
       });
 
@@ -3214,8 +3422,10 @@ export default function WhatsAppInboxPage() {
     
     toast.loading('Filtering recipients by segment criteria...', { id: 'segment-filter' });
     try {
-      const filtered = await filterRecipientsBySegment(selectedRecipients, filter);
-      setSelectedRecipients(filtered);
+      const phoneNumbers = selectedRecipients.map(r => r.phone);
+      const filteredPhones = await filterRecipientsBySegment(phoneNumbers, filter);
+      const filteredRecipients = selectedRecipients.filter(r => filteredPhones.includes(r.phone));
+      setSelectedRecipients(filteredRecipients);
       setSegmentFilter(filter);
       
       const removed = selectedRecipients.length - filtered.length;
@@ -3237,39 +3447,111 @@ export default function WhatsAppInboxPage() {
   };
   
   const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('handleCsvUpload called with event:', event);
     const file = event.target.files?.[0];
-    if (!file) return;
-    
+    console.log('CSV upload started:', { file: file?.name, size: file?.size });
+    if (!file) {
+      console.log('No file selected');
+      return;
+    }
+
     setCsvFile(file);
     setCsvUploading(true);
+
+    // Don't show modal immediately - wait for parsing to complete
     
     try {
-      const text = await file.text();
-      const lines = text.split('\n').filter(line => line.trim());
-      const recipients: Array<{ phone: string; name: string }> = [];
-      
-      // Parse CSV (assuming format: name,phone or phone,name)
-      lines.slice(1).forEach(line => { // Skip header
-        const [col1, col2] = line.split(',').map(s => s.trim());
-        if (col1 && col2) {
-          // Try to detect which column is phone
-          const isCol1Phone = /^\+?\d{10,15}$/.test(col1.replace(/[^\d+]/g, ''));
-          const phone = isCol1Phone ? col1 : col2;
-          const name = isCol1Phone ? col2 : col1;
-          
-          if (isValidPhone(phone)) {
-            recipients.push({ phone, name });
+      console.log('About to call Papa.parse with file:', file);
+      // Use PapaParse for robust CSV parsing (handles quoted fields, different line endings, etc.)
+      Papa.parse(file, {
+        skipEmptyLines: true,
+        transform: (value) => value.trim().replace(/^"|"$/g, ''),
+        complete: (results) => {
+          try {
+            console.log('PapaParse results:', results);
+            const rows: any[] = results.data as any[];
+            console.log('Raw rows:', rows.slice(0, 3));
+            const recipients: Array<{ phone: string; name: string }> = [];
+
+            // Determine if first row is header-like
+            let startIndex = 0;
+            if (rows.length > 0) {
+              const firstRow = Array.isArray(rows[0]) ? (rows[0] as string[]).join(' ').toLowerCase() : String(rows[0]).toLowerCase();
+              // Skip first row only if it clearly contains header keywords
+              const hasHeaderKeywords = /\b(name|phone|number|contact|mobile|cell)\b/.test(firstRow);
+
+              if (hasHeaderKeywords) {
+                startIndex = 1;
+              }
+            }
+
+            for (let i = startIndex; i < rows.length; i++) {
+              const row = rows[i];
+              // Normalize row to array of strings
+              const cols: string[] = Array.isArray(row) ? row.map(String) : [String(row)];
+              const col1 = (cols[0] || '').trim();
+              const col2 = (cols[1] || '').trim();
+
+              let phone = '';
+              let name = '';
+              const cleanedCol1 = col1.replace(/[^\d+]/g, '');
+              const cleanedCol2 = col2.replace(/[^\d+]/g, '');
+              const isCol1Phone = /^\+?\d{10,15}$/.test(cleanedCol1);
+              const isCol2Phone = /^\+?\d{10,15}$/.test(cleanedCol2);
+
+              if (isCol1Phone) {
+                phone = cleanedCol1;
+                name = col2 || 'Unknown';
+              } else if (isCol2Phone) {
+                phone = cleanedCol2;
+                name = col1 || 'Unknown';
+              } else {
+                // Try single-column fallback
+                const singleClean = col1.replace(/[^\d+]/g, '');
+                if (/^\+?\d{10,15}$/.test(singleClean)) {
+                  phone = singleClean;
+                  name = 'Unknown';
+                } else {
+                  continue; // skip rows without detectable phone
+                }
+              }
+
+              if (isValidPhone(phone)) {
+                recipients.push({ phone, name });
+              }
+            }
+
+            console.log('CSV parsing completed:', { recipientsCount: recipients.length, recipients: recipients.slice(0, 3) });
+            setCsvRecipients(recipients);
+            setCsvUploading(false); // Stop loading - user can now click preview
+            toast.success(`Parsed ${recipients.length} recipients from CSV — click Preview to review`);
+          } catch (err: any) {
+            console.error('CSV parse post-processing error', err);
+            toast.error('Failed to process CSV contents');
+            setCsvUploading(false); // Stop loading on error
+            setShowCsvPreviewModal(false); // Don't show modal on error
+          } finally {
+            // Reset file input to allow re-uploading same file
+            if (event.target) {
+              event.target.value = '';
+            }
+          }
+        },
+        error: (err) => {
+          console.error('PapaParse error', err);
+          toast.error('Failed to parse CSV file');
+          setCsvUploading(false);
+          // Reset file input
+          if (event.target) {
+            event.target.value = '';
           }
         }
       });
-      
-      setCsvRecipients(recipients);
-      setSelectedRecipients(recipients.map(r => r.phone));
-      toast.success(`Imported ${recipients.length} recipients from CSV`);
     } catch (error) {
       console.error('Error parsing CSV:', error);
       toast.error('Failed to parse CSV file');
     } finally {
+      // setCsvUploading cleared in Papa callbacks; ensure false if synchronous error occurred
       setCsvUploading(false);
     }
   };
@@ -3324,6 +3606,8 @@ export default function WhatsAppInboxPage() {
     setCsvFile(null);
     setCsvRecipients([]);
     setSelectedRecipients([]);
+    // Force re-render of file input by changing key
+    setFileInputKey(prev => prev + 1);
   };
   
   const loadRecipientList = async (listId: string) => {
@@ -5268,6 +5552,7 @@ export default function WhatsAppInboxPage() {
                   setShowCsvPreviewModal={setShowCsvPreviewModal}
                   setShowCsvTooltip={setShowCsvTooltip}
                   setShowSaveListModal={setShowSaveListModal}
+                  fileInputKey={fileInputKey}
                   setShowCustomerImport={setShowCustomerImport}
                   setShowImportSection={setShowImportSection}
                   loadRecipientList={loadRecipientList}
@@ -5282,6 +5567,7 @@ export default function WhatsAppInboxPage() {
                     setSegmentFilter(null);
                     toast.success('Segmentation filter cleared');
                   }}
+                  onNextStep={() => setBulkStep(2)}
                 />
               )}
 
@@ -6587,392 +6873,228 @@ export default function WhatsAppInboxPage() {
 
               {/* STEP 3: Review & Confirm */}
               {bulkStep === 3 && (
-                <div className="space-y-6">
-                  {/* Step Info Header - Matching Step 2 */}
-                  {(() => {
-                    const pendingRecipients = selectedRecipients.filter(phone => !sentPhones.includes(phone));
-                    return (
-                      <div className="p-5 bg-purple-50 border-2 border-purple-200 rounded-xl">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-bold text-purple-900 mb-2 text-lg flex items-center gap-2">
-                              <CheckCheck className="w-5 h-5" />
-                              Review & Confirm
-                            </h3>
-                            <p className="text-sm text-purple-700">
-                              Review your message and settings before sending. {sentPhones.length > 0 && `${sentPhones.length} already sent.`}
-                            </p>
-                          </div>
-                          <div className="text-right bg-white rounded-xl px-4 py-3 border-2 border-purple-300 shadow-sm">
-                            <p className="text-xs text-gray-600 font-medium">Sending to</p>
-                            <p className="text-3xl font-bold text-purple-900">{pendingRecipients.length}</p>
-                            <p className="text-xs text-gray-600 font-medium">recipients</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Recipients Section - Matching Step 2 Style */}
-                  <div className="p-5 bg-white border-2 border-gray-200 rounded-xl">
-                    <label className="block text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
-                      <Users className="w-5 h-5" />
-                      Recipients
-                    </label>
-                    {(() => {
-                      const pendingRecipients = selectedRecipients.filter(phone => !sentPhones.includes(phone));
-                      return (
-                        <div className="space-y-2">
-                          {pendingRecipients.length > 0 ? (
-                            <>
-                              {pendingRecipients.slice(0, 5).map(phone => {
-                                const conv = conversations.find(c => c.phone === phone);
-                                return (
-                                  <div key={phone} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border-2 border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-all">
-                                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-semibold">
-                                      {conv?.customer_name?.charAt(0) || '?'}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-semibold text-gray-900 truncate">{conv?.customer_name || 'Unknown'}</p>
-                                      <p className="text-xs text-gray-500 font-mono truncate">{phone}</p>
-                                    </div>
-                                    <CheckCheck className="w-5 h-5 text-green-600 flex-shrink-0" />
-                                  </div>
-                                );
-                              })}
-                              {pendingRecipients.length > 5 && (
-                                <div className="pt-2 border-t-2 border-gray-200">
-                                  <p className="text-sm text-gray-600 text-center font-medium">
-                                    +{pendingRecipients.length - 5} more recipient{pendingRecipients.length - 5 !== 1 ? 's' : ''}
-                                  </p>
-                                </div>
-                              )}
-                            </>
-                          ) : sentPhones.length > 0 ? (
-                            <div className="text-center py-6 bg-green-50 rounded-xl border-2 border-green-200">
-                              <CheckCheck className="w-8 h-8 text-green-600 mx-auto mb-2" />
-                              <p className="text-base font-semibold text-green-700">All messages sent!</p>
-                              <p className="text-sm text-gray-500 mt-1">No pending recipients</p>
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* WhatsApp Preview - Matching Step 2 Style */}
-                  <div className="p-5 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl">
-                    <label className="block text-base font-bold text-green-900 mb-3 flex items-center gap-2">
-                      <MessageCircle className="w-5 h-5" />
-                      WhatsApp Preview
-                    </label>
-                    <p className="text-sm text-green-700 mb-4">Exact preview as it will appear</p>
-                      
-                      <div className="relative rounded-xl overflow-hidden bg-[#e5ddd5] p-6 min-h-[240px] flex flex-col justify-end" style={{ 
-                        backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'100\' height=\'100\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0 0h100v100H0z\' fill=\'%23e5ddd5\'/%3E%3Cpath d=\'M25 25h50v50H25z\' fill=\'%23ffffff\' opacity=\'0.03\'/%3E%3C/svg%3E")'
-                      }}>
-                        <div className="flex justify-end mb-3">
-                          <div className="max-w-[85%]">
-                            <div className="bg-[#dcf8c6] rounded-2xl rounded-tr-none shadow-lg">
-                              {/* Media Content */}
-                              {bulkMedia && (['image', 'video', 'document', 'audio'].includes(bulkMessageType)) && (
-                                <div className="p-1.5">
-                                  {bulkMessageType === 'image' && bulkMediaPreview && (
-                                    <div className="relative">
-                                      <img src={bulkMediaPreview} alt="Preview" className="w-full rounded-xl max-h-64 object-cover" />
-                                      {viewOnce && (
-                                        <div className="absolute top-2 left-2 px-2 py-1 bg-black/70 rounded-full flex items-center gap-1 backdrop-blur-sm">
-                                          <Lock className="w-3 h-3 text-white" />
-                                          <span className="text-xs text-white font-medium">View once</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                  {bulkMessageType === 'video' && (
-                                    <div className="relative bg-black rounded-xl h-48 flex items-center justify-center">
-                                      <div className="w-20 h-20 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-                                        <Video className="w-10 h-10 text-white" />
-                                      </div>
-                                      {viewOnce && (
-                                        <div className="absolute top-2 left-2 px-2 py-1 bg-black/70 rounded-full flex items-center gap-1 backdrop-blur-sm">
-                                          <Lock className="w-3 h-3 text-white" />
-                                          <span className="text-xs text-white font-medium">View once</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                  {bulkMessageType === 'document' && (
-                                    <div className="bg-white rounded-xl p-4 flex items-center gap-3">
-                                      <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                                        <FileText className="w-6 h-6 text-blue-600" />
-                                      </div>
-                                      <div className="flex-1">
-                                        <p className="text-sm font-semibold text-gray-900">Document</p>
-                                        <p className="text-xs text-gray-500">PDF, DOC, or other file</p>
-                                      </div>
-                                    </div>
-                                  )}
-                                  {bulkMessageType === 'audio' && (
-                                    <div className="bg-white rounded-xl p-4 flex items-center gap-3">
-                                      <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
-                                        <Music className="w-6 h-6 text-white" />
-                                      </div>
-                                      <div className="flex-1 h-10 bg-gray-200 rounded-full flex items-center px-4">
-                                        <div className="w-full h-1.5 bg-gray-400 rounded-full"></div>
-                                      </div>
-                                      <span className="text-xs text-gray-600 font-medium">0:00</span>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {/* Text Content */}
-                              {bulkMessage && (['text', 'image', 'video', 'document'].includes(bulkMessageType)) && (
-                                <div className="px-4 py-3">
-                                  <div 
-                                    className="text-sm text-gray-900 leading-relaxed whitespace-pre-wrap break-words"
-                                    dangerouslySetInnerHTML={{ __html: renderWhatsAppFormatting(bulkMessage) }}
-                                  />
-                                </div>
-                              )}
-                              
-                              {/* Poll Content */}
-                              {bulkMessageType === 'poll' && pollQuestion && (
-                                <div className="p-4">
-                                  <div className="mb-3">
-                                    <p className="text-sm font-semibold text-gray-900">{pollQuestion}</p>
-                                  </div>
-                                  <div className="space-y-2">
-                                    {pollOptions.filter(o => o.trim()).map((option, idx) => (
-                                      <div key={idx} className="flex items-center gap-2 p-2.5 bg-white/60 rounded-lg border border-gray-300/50">
-                                        <div className={`w-4 h-4 rounded-full border-2 border-gray-400 ${allowMultiSelect ? '' : 'bg-white'}`}></div>
-                                        <span className="text-sm text-gray-800">{option}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <div className="mt-3 pt-3 border-t border-gray-300/50">
-                                    <p className="text-xs text-gray-600 flex items-center gap-1">
-                                      <BarChart3 className="w-3.5 h-3.5" />
-                                      {allowMultiSelect ? 'Select one or more options' : 'Select one option'}
-                                    </p>
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {/* Location Content */}
-                              {bulkMessageType === 'location' && locationLat && locationLng && (
-                                <div className="p-1.5">
-                                  <div className="bg-gray-200 rounded-xl h-40 flex items-center justify-center relative overflow-hidden">
-                                    <div className="absolute inset-0 opacity-30" style={{
-                                      backgroundImage: 'repeating-linear-gradient(0deg, #ccc 0px, #ccc 1px, transparent 1px, transparent 20px), repeating-linear-gradient(90deg, #ccc 0px, #ccc 1px, transparent 1px, transparent 20px)'
-                                    }}></div>
-                                    <MapPin className="w-14 h-14 text-red-500 drop-shadow-xl relative z-10" />
-                                  </div>
-                                  {(locationName || locationAddress) && (
-                                    <div className="bg-white p-3 mt-1.5 rounded-xl">
-                                      {locationName && (
-                                        <p className="text-sm font-semibold text-gray-900">{locationName}</p>
-                                      )}
-                                      {locationAddress && (
-                                        <p className="text-xs text-gray-600 mt-0.5">{locationAddress}</p>
-                                      )}
-                                      <p className="text-xs text-gray-500 mt-1">{locationLat}, {locationLng}</p>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {/* Timestamp and Status */}
-                              <div className="px-4 pb-2 flex items-center justify-end gap-1.5">
-                                <span className="text-[10px] text-gray-600">
-                                  {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                                <CheckCheck className="w-4 h-4 text-blue-500" />
-                              </div>
-                            </div>
-                            
-                            {/* Recipient Name */}
-                            <div className="text-right mt-2">
-                              <span className="text-sm text-gray-600 font-medium">
-                                To: {conversations.find(c => c.phone === selectedRecipients[0])?.customer_name || 'Customer'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                  </div>
-
-                  {/* Protection Settings - Matching Step 2 Style */}
-                  <div className="p-5 bg-purple-50 border-2 border-purple-200 rounded-xl">
-                    <label className="block text-base font-bold text-purple-900 mb-3 flex items-center gap-2">
-                      <Settings className="w-5 h-5" />
-                      Protection Settings
-                    </label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className={`p-3 rounded-xl border-2 ${usePersonalization ? 'bg-white border-purple-300' : 'bg-white/50 border-gray-200'}`}>
-                        <div className="flex items-center gap-2">
-                          {usePersonalization ? (
-                            <CheckCheck className="w-5 h-5 text-green-600" />
-                          ) : (
-                            <X className="w-5 h-5 text-gray-400" />
-                          )}
-                          <span className={`text-sm font-semibold ${usePersonalization ? 'text-gray-900' : 'text-gray-500'}`}>
-                            Personalization
-                          </span>
-                        </div>
-                      </div>
-                      <div className="p-3 rounded-xl border-2 bg-white border-purple-300">
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-5 h-5 text-purple-600" />
-                          <span className="text-sm font-semibold text-gray-900">
-                            Delays: {randomDelay ? `${minDelay}-${maxDelay}s` : `${minDelay}s`}
-                          </span>
-                        </div>
-                      </div>
-                      <div className={`p-3 rounded-xl border-2 ${usePresence ? 'bg-white border-purple-300' : 'bg-white/50 border-gray-200'}`}>
-                        <div className="flex items-center gap-2">
-                          {usePresence ? (
-                            <CheckCheck className="w-5 h-5 text-green-600" />
-                          ) : (
-                            <X className="w-5 h-5 text-gray-400" />
-                          )}
-                          <span className={`text-sm font-semibold ${usePresence ? 'text-gray-900' : 'text-gray-500'}`}>
-                            Typing Indicator
-                          </span>
-                        </div>
-                      </div>
-                      <div className="p-3 rounded-xl border-2 bg-white border-purple-300">
-                        <div className="flex items-center gap-2">
-                          <BarChart3 className="w-5 h-5 text-purple-600" />
-                          <span className="text-sm font-semibold text-gray-900">Limit: Unlimited</span>
-                        </div>
+                <div>
+                  {/* Review & Confirm Header */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <CheckCheck className="w-4 h-4" />
+                        Review & Confirm
+                      </label>
+                      <div className="text-sm font-semibold text-gray-900 bg-green-100 px-3 py-1 rounded-lg flex items-center gap-2">
+                        <Send className="w-4 h-4" />
+                        {selectedRecipients.length} recipients
                       </div>
                     </div>
                   </div>
 
-                  {/* Estimated Time & Sending Mode - Matching Step 2 Style */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Estimated Time */}
-                    <div className="p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl">
-                      <label className="block text-base font-bold text-blue-900 mb-3 flex items-center gap-2">
-                        <Clock className="w-5 h-5" />
-                        Estimated Time
+                  {/* Recipients Summary */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <Users className="w-4 h-4" />
+                        Recipients Summary
                       </label>
-                      <div className="flex items-center gap-4">
-                        <div className="text-4xl font-bold text-blue-900">
-                          {(() => {
-                            const avgDelay = randomDelay ? (minDelay + maxDelay) / 2 : minDelay;
-                            const typingTime = usePresence ? 1.5 : 0;
-                            const totalSeconds = selectedRecipients.length * (avgDelay + typingTime + 1);
-                            const minutes = Math.floor(totalSeconds / 60);
-                            const seconds = Math.floor(totalSeconds % 60);
-                            return `${minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`}`;
-                          })()}
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-semibold text-gray-900 bg-blue-100 px-3 py-1 rounded-lg">
+                          {selectedRecipients.length} recipients
                         </div>
+                        {selectedRecipients.length > 0 && (
+                          <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                            {selectedRecipients.filter(r => /^\+?\d{10,15}$/.test(r.phone.replace(/\s+/g, ''))).length} valid
+                          </div>
+                        )}
                       </div>
-                      <p className="text-sm text-blue-700 mt-2">
-                        for {selectedRecipients.length} message{selectedRecipients.length !== 1 ? 's' : ''}
-                      </p>
                     </div>
 
-                    {/* Sending Mode */}
-                    <div className="p-5 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl">
-                      <label className="block text-base font-bold text-green-900 mb-3 flex items-center gap-2">
-                        <Zap className="w-5 h-5" />
-                        Sending Mode
-                      </label>
-                      <div className="space-y-3">
-                        <div
-                          onClick={() => setSendingMode('browser')}
-                          className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                            sendingMode === 'browser'
-                              ? 'bg-green-600 text-white border-green-600 shadow-lg'
-                              : 'bg-white border-green-200 hover:border-green-400'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-3">
-                              <Activity className={`w-5 h-5 ${sendingMode === 'browser' ? 'text-white' : 'text-green-600'}`} />
-                              <div>
-                                <h4 className={`font-bold text-sm ${sendingMode === 'browser' ? 'text-white' : 'text-gray-900'}`}>
-                                  Browser Sending
-                                </h4>
-                                <p className={`text-xs ${sendingMode === 'browser' ? 'text-green-100' : 'text-gray-500'}`}>
-                                  Real-time feedback
-                                </p>
-                              </div>
-                            </div>
-                            {sendingMode === 'browser' && (
-                              <CheckCheck className="w-5 h-5 text-white" />
-                            )}
-                          </div>
-                          <p className={`text-xs ${sendingMode === 'browser' ? 'text-green-100' : 'text-gray-600'}`}>
-                            Best for &lt; 100 recipients
-                          </p>
-                        </div>
-                        
-                        <div
-                          onClick={() => setSendingMode('cloud')}
-                          className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                            sendingMode === 'cloud'
-                              ? 'bg-green-600 text-white border-green-600 shadow-lg'
-                              : 'bg-white border-green-200 hover:border-green-400'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-3">
-                              <Database className={`w-5 h-5 ${sendingMode === 'cloud' ? 'text-white' : 'text-green-600'}`} />
-                              <div>
-                                <h4 className={`font-bold text-sm ${sendingMode === 'cloud' ? 'text-white' : 'text-gray-900'}`}>
-                                  Cloud Processing
-                                </h4>
-                                <p className={`text-xs ${sendingMode === 'cloud' ? 'text-green-100' : 'text-gray-500'}`}>
-                                  Background processing
-                                </p>
-                              </div>
-                            </div>
-                            {sendingMode === 'cloud' && (
-                              <CheckCheck className="w-5 h-5 text-white" />
-                            )}
-                          </div>
-                          <p className={`text-xs ${sendingMode === 'cloud' ? 'text-green-100' : 'text-gray-600'}`}>
-                            Best for 100+ recipients
-                          </p>
-                        </div>
-                      </div>
-                      
-                      {/* Campaign Name for Cloud Mode */}
-                      {sendingMode === 'cloud' && (
-                        <div className="mt-4">
+                    {selectedRecipients.length > 10 && (
+                      <div className="mb-4">
+                        <div className="relative">
+                          <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                           <input
                             type="text"
-                            value={campaignName}
-                            onChange={(e) => setCampaignName(e.target.value)}
-                            placeholder={`Campaign ${new Date().toLocaleDateString()}`}
-                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all text-sm font-medium"
+                            placeholder="Search recipients..."
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                            onChange={(e) => {
+                              // Filter logic can be added here if needed
+                              console.log('Search:', e.target.value);
+                            }}
                           />
+                        </div>
+                      </div>
+                    )}
+                    <div className="bg-white rounded-xl border-2 border-gray-200 p-5">
+                      {selectedRecipients.length > 20 && (
+                        <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-xs text-blue-700 font-medium flex items-center gap-2">
+                            <Users className="w-4 h-4" />
+                            Showing {selectedRecipients.length} recipient cards • Scroll to see all
+                          </p>
+                        </div>
+                      )}
+                      <div className={`grid gap-3 ${
+                        selectedRecipients.length <= 4 ? 'grid-cols-1 sm:grid-cols-2' :
+                        selectedRecipients.length <= 12 ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' :
+                        selectedRecipients.length > 20 ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 max-h-96 overflow-y-auto' :
+                        'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+                      }`}>
+                        {selectedRecipients.map((recipient, index) => {
+                          const displayName = recipientNames.get(recipient.phone) || recipient.name;
+                          const isValidPhone = /^\+?\d{10,15}$/.test(recipient.phone.replace(/\s+/g, ''));
+                          return (
+                            <div key={recipient.phone} className="flex items-center gap-3 p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200 hover:from-blue-50 hover:to-blue-100 hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                              <div className="relative flex-shrink-0">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+                                  isValidPhone ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                                }`}>
+                                  {displayName.charAt(0).toUpperCase() || "?"}
+                                </div>
+                                {isValidPhone && (
+                                  <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-blue-900 transition-colors">
+                                  {displayName}
+                                </p>
+                                <p className="text-xs text-gray-500 truncate font-mono">{recipient.phone}</p>
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <span className="text-xs font-medium text-gray-400">#{index + 1}</span>
+                                {isValidPhone ? (
+                                  <CheckCheck className="w-3 h-3 text-green-600" />
+                                ) : (
+                                  <X className="w-3 h-3 text-red-600" />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {selectedRecipients.length === 0 && (
+                        <div className="text-center py-12 text-gray-500">
+                          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Users className="w-8 h-8 text-gray-400" />
+                          </div>
+                          <p className="text-sm font-medium mb-1">No Recipients Selected</p>
+                          <p className="text-xs text-gray-400">Go back to Step 1 to select recipients for your campaign</p>
                         </div>
                       )}
                     </div>
                   </div>
-                  
-                  {/* Final Confirmation Warning - Matching Step 2 Style */}
-                  <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl">
-                    <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
-                        <AlertCircle className="w-5 h-5 text-white" />
+
+                  {/* Message Preview */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <MessageCircle className="w-4 h-4" />
+                        Message Preview
+                      </label>
+                      <div className="text-sm text-gray-600">
+                        {bulkMessageType} message
                       </div>
-                      <div className="flex-1">
-                        <h4 className="text-base font-bold text-amber-900 mb-2">Final Confirmation</h4>
+                    </div>
+                    <div className="bg-white rounded-xl border-2 border-gray-200 p-5">
+                      <div className="bg-[#e5ddd5] rounded-xl p-4 max-w-sm mx-auto">
+                        <div className="flex justify-end mb-2">
+                          <div className="bg-[#dcf8c6] rounded-2xl rounded-tr-none px-4 py-3 max-w-[85%]">
+                            <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                              {bulkMessage || "Your message will appear here..."}
+                            </p>
+                            <div className="flex items-center justify-end mt-2 gap-1">
+                              <span className="text-xs text-gray-500">
+                                {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                              <CheckCheck className="w-3 h-3 text-blue-500" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {bulkMedia && (
+                        <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200 flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-blue-600" />
+                          <span className="text-sm text-blue-800 font-medium">
+                            Media attachment: {bulkMessageType}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Sending Method */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <Zap className="w-4 h-4" />
+                        Sending Method
+                      </label>
+                      <div className="text-sm text-gray-600">
+                        Choose how to send
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setSendingMode("browser")}
+                        className={`p-4 rounded-xl font-medium text-sm transition-all border-2 flex flex-col items-center gap-2 ${
+                          sendingMode === "browser"
+                            ? "bg-blue-600 text-white border-blue-600 shadow-lg"
+                            : "bg-white text-gray-700 border-gray-200 hover:bg-blue-50"
+                        }`}
+                      >
+                        <Activity className={`w-5 h-5 ${sendingMode === "browser" ? "text-white" : "text-blue-600"}`} />
+                        <span>Browser Sending</span>
+                        <span className={`text-xs ${sendingMode === "browser" ? "text-blue-100" : "text-gray-500"}`}>
+                          Real-time feedback
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => setSendingMode("cloud")}
+                        className={`p-4 rounded-xl font-medium text-sm transition-all border-2 flex flex-col items-center gap-2 ${
+                          sendingMode === "cloud"
+                            ? "bg-purple-600 text-white border-purple-600 shadow-lg"
+                            : "bg-white text-gray-700 border-gray-200 hover:bg-purple-50"
+                        }`}
+                      >
+                        <Database className={`w-5 h-5 ${sendingMode === "cloud" ? "text-white" : "text-purple-600"}`} />
+                        <span>Cloud Processing</span>
+                        <span className={`text-xs ${sendingMode === "cloud" ? "text-purple-100" : "text-gray-500"}`}>
+                          Background processing
+                        </span>
+                      </button>
+                    </div>
+
+                    {sendingMode === "cloud" && (
+                      <div className="mt-4">
+                        <input
+                          type="text"
+                          value={campaignName}
+                          onChange={(e) => setCampaignName(e.target.value)}
+                          placeholder="Campaign name (optional)"
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all text-sm font-medium"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Final Confirmation */}
+                  <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl p-5">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
+                        <AlertCircle className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-base font-bold text-amber-900 mb-2">Ready to Send</h4>
                         <p className="text-sm text-amber-800">
-                          You are about to send <strong className="font-bold">{selectedRecipients.length} message{selectedRecipients.length !== 1 ? 's' : ''}</strong> to your recipients. This action cannot be undone.
+                          You are about to send <strong className="font-bold">{selectedRecipients.length} message{selectedRecipients.length !== 1 ? "s" : ""}</strong> to your recipients.
                         </p>
                       </div>
                     </div>
                   </div>
                 </div>
               )}
-
               {/* STEP 4: Sending Progress */}
               {bulkStep === 4 && (
                 <div>
@@ -7557,6 +7679,9 @@ export default function WhatsAppInboxPage() {
                       }
                       // Clear draft when moving to step 3 (drafts only work in step 1 and 2)
                       clearDraft();
+                      // Load recipient names for the review step
+                      const pendingRecipients = selectedRecipients.filter(recipient => !sentPhones.includes(recipient.phone));
+                      loadRecipientNames(pendingRecipients);
                       setBulkStep(3);
                     }}
                     disabled={
@@ -7924,6 +8049,40 @@ export default function WhatsAppInboxPage() {
       <WhatsAppAutomationModal
         isOpen={showAutomationModal}
         onClose={() => setShowAutomationModal(false)}
+      />
+
+      <CsvPreviewModal
+        isOpen={showCsvPreviewModal}
+        recipients={csvRecipients}
+        existingPhones={selectedRecipients.map(r => r.phone)}
+        blacklistPhones={blacklist.map(b => b.phone)}
+        isUploading={csvUploading}
+        onClose={() => setShowCsvPreviewModal(false)}
+        onConfirm={(phones) => {
+          // Merge selected phones into selectedRecipients (avoid duplicates)
+          // Include names from csvRecipients if available
+          setSelectedRecipients(prev => {
+            const next = [...prev];
+            phones.forEach(phone => {
+              // Check if already exists
+              const exists = next.some(r => r.phone === phone);
+              if (!exists) {
+                // Try to find name from csvRecipients first
+                const csvRecipient = csvRecipients.find(r => r.phone === phone);
+                next.push({
+                  phone,
+                  name: csvRecipient?.name || 'Unknown'
+                });
+              }
+            });
+            return next;
+          });
+          // Clear CSV staging
+          setCsvRecipients([]);
+          setCsvFile(null);
+          setShowCsvPreviewModal(false);
+          toast.success(`${phones.length} recipients added`);
+        }}
       />
 
       {/* Date/Time Scheduling Modal */}

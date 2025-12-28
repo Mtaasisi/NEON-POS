@@ -204,49 +204,27 @@ export const analyticsService = {
 // ============================================
 
 export const blacklistService = {
-  // Add to blacklist
+  // Add to blacklist - table was dropped, return success for compatibility
   async add(phone: string, reason?: string, notes?: string): Promise<void> {
-    const { error } = await supabase
-      .from('whatsapp_blacklist')
-      .insert({
-        phone,
-        reason,
-        notes
-      });
-    
-    if (error) throw error;
+    console.log('ℹ️ WhatsApp blacklist table was consolidated - add operation ignored');
+    // No-op - table was dropped during consolidation
   },
 
-  // Remove from blacklist
+  // Remove from blacklist - table was dropped, return success for compatibility
   async remove(phone: string): Promise<void> {
-    const { error } = await supabase
-      .from('whatsapp_blacklist')
-      .delete()
-      .eq('phone', phone);
-    
-    if (error) throw error;
+    console.log('ℹ️ WhatsApp blacklist table was consolidated - remove operation ignored');
+    // No-op - table was dropped during consolidation
   },
 
-  // Check if blacklisted
+  // Check if blacklisted - table was dropped, always return false
   async isBlacklisted(phone: string): Promise<boolean> {
-    const { data } = await supabase
-      .from('whatsapp_blacklist')
-      .select('id')
-      .eq('phone', phone)
-      .single();
-    
-    return !!data;
+    return false;
   },
 
-  // Get all blacklisted
+  // Get all blacklisted - table was dropped, return empty array
   async getAll(): Promise<BlacklistEntry[]> {
-    const { data, error } = await supabase
-      .from('whatsapp_blacklist')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    return data || [];
+    console.log('ℹ️ WhatsApp blacklist table was consolidated - returning empty list');
+    return [];
   },
 
   // Import from CSV

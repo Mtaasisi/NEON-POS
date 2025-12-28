@@ -226,13 +226,11 @@ export const browserScheduler = new BrowserSchedulerService();
 // Auto-start if enabled in settings
 export async function initBrowserScheduler() {
   try {
-    // Check if browser scheduling is enabled in user settings
-    const { data: settings } = await supabase
-      .from('user_settings')
-      .select('browser_scheduler_enabled')
-      .single();
+    // Check if browser scheduling is enabled in unified settings
+    const { unifiedSettingsService } = await import('../lib/unifiedSettingsService');
+    const browserSchedulerSetting = await unifiedSettingsService.getSetting('user', 'user_preferences', 'browser_scheduler_enabled');
 
-    if (settings?.browser_scheduler_enabled !== false) {
+    if (browserSchedulerSetting?.value !== false) {
       browserScheduler.initialize();
       browserScheduler.start();
       console.log('✅ Browser scheduler auto-started');

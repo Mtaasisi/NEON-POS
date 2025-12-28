@@ -90,12 +90,10 @@ const WhatsAppAutomationModal: React.FC<WhatsAppAutomationModalProps> = ({ isOpe
     setLoading(true);
     try {
       // Load phone numbers
-      const { data: phoneData } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('category', 'whatsapp_automation')
-        .eq('setting_key', 'notification_phones')
-        .single();
+      // ✅ FIX: admin_settings table was consolidated, use unified settings service
+      const { unifiedSettingsService } = await import('../../../lib/unifiedSettingsService');
+      const phoneDataValue = await unifiedSettingsService.getSetting('system', 'whatsapp_automation', 'notification_phones');
+      const phoneData = phoneDataValue ? { setting_value: JSON.stringify(phoneDataValue) } : null;
 
       if (phoneData?.setting_value) {
         try {
@@ -126,10 +124,12 @@ const WhatsAppAutomationModal: React.FC<WhatsAppAutomationModalProps> = ({ isOpe
       }
 
       // Load automation settings
-      const { data: automationData } = await supabase
-        .from('admin_settings')
-        .select('setting_key, setting_value')
-        .eq('category', 'whatsapp_automation');
+      // ✅ FIX: admin_settings table was consolidated, use unified settings service
+      const automationSettings = await unifiedSettingsService.getSettingsByCategory('system', 'whatsapp_automation');
+      const automationData = Object.entries(automationSettings).map(([key, value]) => ({
+        setting_key: key,
+        setting_value: String(value)
+      }));
 
       if (automationData) {
         const automationMap = new Map(automationData.map(a => [a.setting_key, a.setting_value === 'true']));
@@ -167,70 +167,15 @@ const WhatsAppAutomationModal: React.FC<WhatsAppAutomationModalProps> = ({ isOpe
     setSaving(true);
     try {
       // Save phone numbers
-      const phoneValue = JSON.stringify(phoneNumbers);
-      
-      const { data: existing } = await supabase
-        .from('admin_settings')
-        .select('id')
-        .eq('category', 'whatsapp_automation')
-        .eq('setting_key', 'notification_phones')
-        .single();
+      const phoneValue = phoneNumbers;
 
-      if (existing) {
-        await supabase
-          .from('admin_settings')
-          .update({
-            setting_value: phoneValue,
-            updated_at: new Date().toISOString()
-          })
-          .eq('category', 'whatsapp_automation')
-          .eq('setting_key', 'notification_phones');
-      } else {
-        await supabase
-          .from('admin_settings')
-          .insert({
-            category: 'whatsapp_automation',
-            setting_key: 'notification_phones',
-            setting_value: phoneValue,
-            setting_type: 'string',
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-      }
+      // ✅ FIX: admin_settings table was consolidated, use unified settings service
+      await unifiedSettingsService.setSetting('system', 'whatsapp_automation', 'notification_phones', phoneValue, 'array');
 
       // Save automation settings
+      // ✅ FIX: admin_settings table was consolidated, use unified settings service
       for (const automation of automations) {
-        const { data: existing } = await supabase
-          .from('admin_settings')
-          .select('id')
-          .eq('category', 'whatsapp_automation')
-          .eq('setting_key', automation.settingKey)
-          .single();
-
-        if (existing) {
-          await supabase
-            .from('admin_settings')
-            .update({
-              setting_value: automation.enabled.toString(),
-              setting_type: 'boolean',
-              updated_at: new Date().toISOString()
-            })
-            .eq('category', 'whatsapp_automation')
-            .eq('setting_key', automation.settingKey);
-        } else {
-          await supabase
-            .from('admin_settings')
-            .insert({
-              category: 'whatsapp_automation',
-              setting_key: automation.settingKey,
-              setting_value: automation.enabled.toString(),
-              setting_type: 'boolean',
-              is_active: true,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
-      }
+        await unifiedSettingsService.setSetting('system', 'whatsapp_automation', automation.settingKey, automation.enabled, 'boolean');
 
         // Also update inventory settings for backward compatibility
         if (automation.settingKey === 'inventory_low_stock_notifications') {

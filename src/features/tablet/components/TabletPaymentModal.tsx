@@ -49,6 +49,10 @@ const TabletPaymentModal: React.FC<TabletPaymentModalProps> = ({
   const remainingAmount = Math.max(0, amount - totalPaid);
   const change = Math.max(0, totalPaid - amount);
 
+  // Check if the button should be disabled
+  const isButtonDisabled = !amountInput || parseFloat(amountInput.replace(/,/g, '')) <= 0;
+
+
   // Force discount type to TSh (fixed) for tablet flow
   useEffect(() => {
     onChangeDiscountType('fixed');
@@ -63,8 +67,23 @@ const TabletPaymentModal: React.FC<TabletPaymentModalProps> = ({
 
   // Keep amount input in sync if parent total changes (e.g., discount edits)
   useEffect(() => {
-    setAmountInput(formatNumber(amount));
+    const formattedAmount = formatNumber(amount);
+    console.log('🔄 [TabletPaymentModal] Amount changed, updating input:', {
+      amount,
+      formattedAmount,
+      currentInput: amountInput
+    });
+    setAmountInput(formattedAmount);
   }, [amount]);
+
+  // Initialize amount input on mount with remaining amount
+  useEffect(() => {
+    if (remainingAmount > 0 && (!amountInput || amountInput === '0')) {
+      const formattedRemaining = formatNumber(remainingAmount);
+      console.log('🎯 [TabletPaymentModal] Initializing amount input with remaining:', formattedRemaining);
+      setAmountInput(formattedRemaining);
+    }
+  }, [remainingAmount, amountInput]);
 
   // Filter to only show active payment methods
   const activePaymentAccounts = paymentAccounts.filter(account => account.is_payment_method && account.is_active);
@@ -90,11 +109,25 @@ const TabletPaymentModal: React.FC<TabletPaymentModalProps> = ({
 
 
   const addPayment = () => {
+
     const paymentAmount = parseNumber(amountInput);
-    if (paymentAmount <= 0) return;
+
+    if (paymentAmount <= 0) {
+      console.warn('⚠️ [TabletPaymentModal] Payment amount is zero or negative, skipping');
+      return;
+    }
 
     const selectedMethod = availablePaymentMethods.find(method => method.id === currentPaymentMethod);
-    if (!selectedMethod) return;
+    if (!selectedMethod) {
+      console.error('❌ [TabletPaymentModal] No payment method selected');
+      return;
+    }
+
+    console.log('✅ [TabletPaymentModal] Creating payment:', {
+      method: selectedMethod.name,
+      amount: paymentAmount,
+      reference: reference
+    });
 
     const newPayment: Payment = {
       paymentMethod: selectedMethod.name,
@@ -104,7 +137,12 @@ const TabletPaymentModal: React.FC<TabletPaymentModalProps> = ({
       timestamp: new Date().toISOString(),
     };
 
-    setPayments([...payments, newPayment]);
+    setPayments(prevPayments => {
+      const updatedPayments = [...prevPayments, newPayment];
+      console.log('💳 [TabletPaymentModal] Payment added, total payments:', updatedPayments.length);
+      return updatedPayments;
+    });
+
     setAmountInput('0');
     setReference('');
   };
@@ -129,7 +167,7 @@ const TabletPaymentModal: React.FC<TabletPaymentModalProps> = ({
 
   if (showSuccess) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
         <div className="bg-white rounded-2xl p-8 max-w-sm mx-4 text-center">
           <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle size={32} className="text-white" />
@@ -145,7 +183,7 @@ const TabletPaymentModal: React.FC<TabletPaymentModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -276,23 +314,38 @@ const TabletPaymentModal: React.FC<TabletPaymentModalProps> = ({
               {/* Amount Input */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Amount
+                  Amount to Pay
+                  {isButtonDisabled && (
+                    <span className="text-xs text-gray-500 ml-2">(required)</span>
+                  )}
                 </label>
                 <input
                   type="text"
                   value={amountInput}
                   onChange={(e) => {
-                    const raw = e.target.value.replace(/,/g, '');
+                    const raw = e.target.value.replace(/[^0-9.]/g, ''); // Only allow numbers and decimal
                     const num = parseFloat(raw) || 0;
-                    setAmountInput(num.toLocaleString());
+                    const formatted = num > 0 ? num.toLocaleString() : '';
+                    setAmountInput(formatted);
                   }}
                   onFocus={(e) => {
+                    console.log('🎯 [TabletPaymentModal] Amount input focused');
                     e.target.select();
-                    setAmountInput('');
+                    // Don't clear the input on focus, just select it
                   }}
-                  className="w-full px-3 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
-                  placeholder="0"
+                  onBlur={() => {
+                    // Format the number when user leaves the field
+                    const num = parseNumber(amountInput);
+                    if (num > 0) {
+                      setAmountInput(formatNumber(num));
+                    } else {
+                      setAmountInput('');
+                    }
+                  }}
+                  className="w-full px-3 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg font-mono"
+                  placeholder="Enter amount"
                   inputMode="decimal"
+                  autoFocus
                 />
               </div>
 
@@ -322,12 +375,32 @@ const TabletPaymentModal: React.FC<TabletPaymentModalProps> = ({
 
               {/* Add Payment Button */}
               <button
-                onClick={addPayment}
-                disabled={!amountInput || parseFloat(amountInput.replace(/,/g, '')) <= 0}
-                className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  addPayment();
+                }}
+                disabled={isButtonDisabled}
+                className={`w-full font-semibold py-3 rounded-lg transition-all flex items-center justify-center space-x-2 ${
+                  isButtonDisabled
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white cursor-pointer hover:shadow-lg'
+                }`}
+                style={{
+                  WebkitTapHighlightColor: 'transparent',
+                  touchAction: 'manipulation'
+                }}
               >
                 <Plus size={20} />
                 <span>Add Payment</span>
+                {isButtonDisabled && amountInput === '' && (
+                  <span className="text-xs opacity-75 ml-2">(Enter amount)</span>
+                )}
+                {!isButtonDisabled && (
+                  <span className="text-xs opacity-75 ml-2">
+                    ({format.currency(parseNumber(amountInput))})
+                  </span>
+                )}
               </button>
             </div>
           </div>

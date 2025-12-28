@@ -1,9 +1,11 @@
 /**
  * Integrations API
  * Manage all third-party integrations and API credentials
+ * Updated to use unified settings service instead of old table
  */
 
 import { supabase } from './supabaseClient';
+import { unifiedSettingsService } from './unifiedSettingsService';
 
 export interface Integration {
   id?: string;
@@ -58,60 +60,241 @@ export interface IntegrationTemplate {
  * Get all integrations
  */
 export async function getAllIntegrations(): Promise<Integration[]> {
-  const { data, error } = await supabase
-    .from('lats_pos_integrations_settings')
-    .select('*')
-    .order('integration_type', { ascending: true })
-    .order('integration_name', { ascending: true });
+  try {
+    const integrations: Integration[] = [];
 
-  if (error) throw error;
-  return data || [];
+    // Try to get known integrations by name
+    const knownIntegrations = [
+      'SMS_GATEWAY',
+      'WHATSAPP_WASENDER',
+      'GEMINI_AI'
+      // Add more as needed
+    ];
+
+    for (const integrationName of knownIntegrations) {
+      const integration = await getIntegration(integrationName);
+      if (integration) {
+        integrations.push(integration);
+      }
+    }
+
+    return integrations.sort((a, b) => {
+      if (a.integration_type !== b.integration_type) {
+        return a.integration_type.localeCompare(b.integration_type);
+      }
+      return a.integration_name.localeCompare(b.integration_name);
+    });
+  } catch (error) {
+    console.error('Error getting all integrations:', error);
+    return [];
+  }
 }
 
 /**
  * Get integrations by type
  */
 export async function getIntegrationsByType(type: string): Promise<Integration[]> {
-  const { data, error } = await supabase
-    .from('lats_pos_integrations_settings')
-    .select('*')
-    .eq('integration_type', type)
-    .order('integration_name', { ascending: true });
+  try {
+    const allIntegrations = await getAllIntegrations();
+    return allIntegrations.filter(integration => integration.integration_type === type);
+  } catch (error) {
+    console.error('Error getting integrations by type:', error);
+    return [];
+  }
+}
 
-  if (error) throw error;
-  return data || [];
+/**
+ * Helper function to convert settings to Integration format
+ */
+function convertSettingsToIntegration(settings: Record<string, any>, category: string): Integration | null {
+  const integrationName = getIntegrationNameFromCategory(category);
+
+  if (Object.keys(settings).length === 0) return null;
+
+  return {
+    id: `${category}-${integrationName}`,
+    integration_name: integrationName,
+    integration_type: getIntegrationTypeFromCategory(category),
+    is_enabled: true,
+    is_active: true,
+    is_test_mode: false,
+    credentials: extractCredentialsFromSettings(settings, integrationName),
+    config: settings,
+    environment: 'production',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+}
+
+/**
+ * Helper function to get integration name from category
+ */
+function getIntegrationNameFromCategory(category: string): string {
+  const nameMap: Record<string, string> = {
+    'sms': 'sms',
+    'analytics': 'analytics',
+    'delivery': 'shipping',
+    'integrations': 'custom'
+  };
+  return nameMap[category] || category;
+}
+
+/**
+ * Helper function to get integration type from category
+ */
+function getIntegrationTypeFromCategory(category: string): Integration['integration_type'] {
+  const typeMap: Record<string, Integration['integration_type']> = {
+    'sms': 'sms',
+    'analytics': 'analytics',
+    'delivery': 'shipping',
+    'integrations': 'custom'
+  };
+  return typeMap[category] || 'custom';
 }
 
 /**
  * Get specific integration by name
  */
 export async function getIntegration(integrationName: string): Promise<Integration | null> {
-  const { data, error } = await supabase
-    .from('lats_pos_integrations_settings')
-    .select('*')
-    .eq('integration_name', integrationName)
-    .single();
+  try {
+    // Map integration names to unified settings categories
+    const categoryMap: Record<string, string> = {
+      'sms': 'sms',
+      'SMS_GATEWAY': 'sms',  // SMS service uses this name
+      'GEMINI_AI': 'integrations',
+      'gemini': 'integrations',
+      'whatsapp': 'integrations',
+      'WHATSAPP_WASENDER': 'integrations',  // WhatsApp WasenderAPI
+      'email': 'integrations',
+      'payment': 'integrations',
+      'analytics': 'analytics',
+      'shipping': 'delivery'
+    };
 
-  if (error) {
-    if (error.code === 'PGRST116') return null; // Not found
-    throw error;
+    const category = categoryMap[integrationName] || 'integrations';
+
+    // Try to get settings from unified table
+    console.log(`🔍 getIntegration(${integrationName}) - category: ${category}`);
+    const settings = await unifiedSettingsService.getSettingsByCategory('system', category);
+    console.log(`📦 Found ${Object.keys(settings || {}).length} settings in category '${category}' for ${integrationName}`);
+
+      // Convert settings to Integration format
+      if (settings && Object.keys(settings).length > 0) {
+        console.log(`✅ Building integration ${integrationName} from settings`);
+        const credentials = extractCredentialsFromSettings(settings, integrationName);
+
+        // Build config from settings, excluding credentials
+        const config: Record<string, any> = {};
+        const prefix = `${integrationName.toLowerCase()}_`;
+        Object.entries(settings).forEach(([key, setting]) => {
+          // Extract config fields with prefix
+          if (key.startsWith(`${prefix}config_`)) {
+            const configKey = key.replace(`${prefix}config_`, '');
+            config[configKey] = setting.value;
+          }
+        });
+
+        // For SMS, ensure API URL is set
+        if (integrationName === 'sms' || integrationName === 'SMS_GATEWAY') {
+          config.api_url = config.api_url || config.sms_api_url || 'https://mshastra.com/sendurl.aspx';
+        }
+
+        return {
+          id: `${category}-${integrationName}`,
+          integration_name: integrationName,
+          integration_type: getIntegrationTypeFromName(integrationName),
+          is_enabled: settings[`${prefix}is_enabled`]?.value === 'true' || settings[`${prefix}is_enabled`]?.value === true ||
+                     settings.is_enabled?.value === 'true' || settings.is_enabled?.value === true || false,
+          is_active: settings[`${prefix}is_enabled`]?.value === 'true' || settings[`${prefix}is_enabled`]?.value === true ||
+                    settings.is_enabled?.value === 'true' || settings.is_enabled?.value === true || false,
+          is_test_mode: false,
+          credentials: credentials,
+          config: config,
+          environment: settings[`${prefix}environment`]?.value || settings.environment?.value || 'production',
+          provider_name: settings[`${prefix}provider_name`]?.value || settings.provider_name?.value,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      }
+
+    // Return a default integration object even if no settings are found
+    // This prevents services from crashing when integrations aren't configured
+    const defaultConfig: Record<string, any> = {};
+    if (integrationName === 'sms' || integrationName === 'SMS_GATEWAY') {
+      defaultConfig.api_url = 'https://mshastra.com/sendurl.aspx';
+    }
+
+    return {
+      id: `${category}-${integrationName}`,
+      integration_name: integrationName,
+      integration_type: getIntegrationTypeFromName(integrationName),
+      is_enabled: false, // Disabled by default when not configured
+      is_active: false,
+      is_test_mode: false,
+      credentials: {},
+      config: defaultConfig,
+      environment: 'production',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Error getting integration:', error);
+    return null;
   }
-  return data;
+}
+
+/**
+ * Helper function to get integration type from name
+ */
+function getIntegrationTypeFromName(name: string): Integration['integration_type'] {
+  const typeMap: Record<string, Integration['integration_type']> = {
+    'sms': 'sms',
+    'SMS_GATEWAY': 'sms',
+    'GEMINI_AI': 'ai',
+    'gemini': 'ai',
+    'whatsapp': 'whatsapp',
+    'email': 'email',
+    'payment': 'payment',
+    'analytics': 'analytics',
+    'shipping': 'shipping'
+  };
+  return typeMap[name] || 'custom';
+}
+
+/**
+ * Helper function to extract credentials from unified settings
+ */
+function extractCredentialsFromSettings(settings: Record<string, any>, integrationName: string): Record<string, any> {
+  const credentials: Record<string, any> = {};
+  const prefix = `${integrationName.toLowerCase()}_`;
+
+  // Map specific integration credentials using prefixed keys (new format) with fallback to old format
+  if (integrationName === 'sms' || integrationName === 'SMS_GATEWAY') {
+    credentials.api_key = settings[`${prefix}api_key`]?.value || settings.api_key?.value || settings.sms_provider_api_key?.value;
+    credentials.api_password = settings[`${prefix}api_password`]?.value || settings.api_password?.value || settings.sms_provider_password?.value; // SMS service expects api_password
+    credentials.sender_id = settings[`${prefix}sender_id`]?.value || settings.sender_id?.value;
+  } else if (integrationName === 'GEMINI_AI' || integrationName === 'gemini') {
+    credentials.api_key = settings[`${prefix}api_key`]?.value || settings.api_key?.value || settings.gemini_api_key?.value;
+  } else if (integrationName === 'WHATSAPP_WASENDER') {
+    credentials.api_key = settings[`${prefix}api_key`]?.value || settings.api_key?.value || settings.whatsapp_api_key?.value;
+    credentials.session_id = settings[`${prefix}session_id`]?.value || settings.session_id?.value || settings.whatsapp_session_id?.value;
+    credentials.bearer_token = settings[`${prefix}api_key`]?.value || settings.api_key?.value || settings.whatsapp_api_key?.value; // Also set bearer_token for compatibility
+  }
+
+  return credentials;
 }
 
 /**
  * Get only enabled integrations
  */
 export async function getEnabledIntegrations(): Promise<Integration[]> {
-  const { data, error } = await supabase
-    .from('lats_pos_integrations_settings')
-    .select('*')
-    .eq('is_enabled', true)
-    .eq('is_active', true)
-    .order('integration_type', { ascending: true });
-
-  if (error) throw error;
-  return data || [];
+  try {
+    const allIntegrations = await getAllIntegrations();
+    return allIntegrations.filter(integration => integration.is_enabled && integration.is_active);
+  } catch (error) {
+    console.error('Error getting enabled integrations:', error);
+    return [];
+  }
 }
 
 /**
@@ -127,19 +310,85 @@ export async function getCredentials(integrationName: string): Promise<Record<st
  * Create new integration
  */
 export async function createIntegration(integration: Partial<Integration>): Promise<Integration> {
-  const { data: userData } = await supabase.auth.getUser();
-  
-  const { data, error } = await supabase
-    .from('lats_pos_integrations_settings')
-    .insert({
-      ...integration,
-      user_id: userData?.user?.id,
-    })
-    .select()
-    .single();
+  try {
+    // Map integration name to category (same as updateIntegration)
+    const categoryMap: Record<string, string> = {
+      'sms': 'sms',
+      'SMS_GATEWAY': 'sms',
+      'GEMINI_AI': 'integrations',
+      'gemini': 'integrations',
+      'whatsapp': 'integrations',
+      'WHATSAPP_WASENDER': 'integrations',
+      'email': 'integrations',
+      'payment': 'integrations',
+      'analytics': 'analytics',
+      'shipping': 'delivery'
+    };
 
-  if (error) throw error;
-  return data;
+    const category = categoryMap[integration.integration_name || ''] || 'integrations';
+
+    // Create prefixed keys to avoid conflicts between integrations in same category
+    const prefix = `${integration.integration_name?.toLowerCase()}_`;
+
+    // Save credentials to unified settings
+    if (integration.credentials) {
+      const promises = Object.entries(integration.credentials).map(async ([key, value]) => {
+        return unifiedSettingsService.setSetting('system', category, `${prefix}${key}`, value, 'string');
+      });
+      await Promise.all(promises);
+    }
+
+    // Save config to unified settings
+    if (integration.config) {
+      const configPromises = Object.entries(integration.config).map(async ([key, value]) => {
+        return unifiedSettingsService.setSetting('system', category, `${prefix}config_${key}`, value, 'string');
+      });
+      await Promise.all(configPromises);
+    }
+
+    // Save other integration properties
+    const otherSettings: Record<string, any> = {};
+    if (integration.is_enabled !== undefined) otherSettings[`${prefix}is_enabled`] = integration.is_enabled;
+    if (integration.environment) otherSettings[`${prefix}environment`] = integration.environment;
+    if (integration.provider_name) otherSettings[`${prefix}provider_name`] = integration.provider_name;
+
+    if (Object.keys(otherSettings).length > 0) {
+      const otherPromises = Object.entries(otherSettings).map(async ([key, value]) => {
+        return unifiedSettingsService.setSetting('system', category, key, value, 'string');
+      });
+      await Promise.all(otherPromises);
+    }
+
+    // Return the integration object
+    return {
+      id: `${category}-${integration.integration_name}`,
+      user_id: undefined,
+      business_id: undefined,
+      integration_name: integration.integration_name || '',
+      integration_type: integration.integration_type || 'custom',
+      provider_name: integration.provider_name,
+      is_enabled: integration.is_enabled || false,
+      is_active: integration.is_active || false,
+      is_test_mode: integration.is_test_mode || false,
+      credentials: integration.credentials || {},
+      config: integration.config || {},
+      description: integration.description,
+      webhook_url: integration.webhook_url,
+      callback_url: integration.callback_url,
+      environment: integration.environment || 'production',
+      last_used_at: integration.last_used_at,
+      total_requests: integration.total_requests || 0,
+      successful_requests: integration.successful_requests || 0,
+      failed_requests: integration.failed_requests || 0,
+      metadata: integration.metadata || {},
+      notes: integration.notes,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Error creating integration:', error);
+    throw error;
+  }
 }
 
 /**
@@ -149,18 +398,71 @@ export async function updateIntegration(
   integrationName: string,
   updates: Partial<Integration>
 ): Promise<Integration> {
-  const { data, error } = await supabase
-    .from('lats_pos_integrations_settings')
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('integration_name', integrationName)
-    .select()
-    .single();
+  try {
 
-  if (error) throw error;
-  return data;
+    // Map integration name to category
+    const categoryMap: Record<string, string> = {
+      'sms': 'sms',
+      'SMS_GATEWAY': 'sms',
+      'GEMINI_AI': 'integrations',
+      'gemini': 'integrations',
+      'whatsapp': 'integrations',
+      'WHATSAPP_WASENDER': 'integrations',
+      'email': 'integrations',
+      'payment': 'integrations',
+      'analytics': 'analytics',
+      'shipping': 'delivery'
+    };
+
+    const category = categoryMap[integrationName] || 'integrations';
+
+    // Create prefixed keys to avoid conflicts between integrations in same category
+    const prefix = `${integrationName.toLowerCase()}_`;
+
+    // Update credentials in unified settings
+    if (updates.credentials) {
+      const promises = Object.entries(updates.credentials).map(async ([key, value]) => {
+        return unifiedSettingsService.setSetting('system', category, `${prefix}${key}`, value, 'string');
+      });
+      await Promise.all(promises);
+    }
+
+    // Update config in unified settings
+    if (updates.config) {
+      const configPromises = Object.entries(updates.config).map(async ([key, value]) => {
+        return unifiedSettingsService.setSetting('system', category, `${prefix}config_${key}`, value, 'string');
+      });
+      await Promise.all(configPromises);
+    }
+
+    // Update other integration properties
+    const otherSettings: Record<string, any> = {};
+    if (updates.is_enabled !== undefined) otherSettings[`${prefix}is_enabled`] = updates.is_enabled;
+    if (updates.environment) otherSettings[`${prefix}environment`] = updates.environment;
+    if (updates.provider_name) otherSettings[`${prefix}provider_name`] = updates.provider_name;
+
+    if (Object.keys(otherSettings).length > 0) {
+      const otherPromises = Object.entries(otherSettings).map(async ([key, value]) => {
+        return unifiedSettingsService.setSetting('system', category, key, value, 'string');
+      });
+      await Promise.all(otherPromises);
+    }
+
+    // Return updated integration object
+    const existing = await getIntegration(integrationName);
+    if (!existing) {
+      throw new Error(`Integration ${integrationName} not found`);
+    }
+
+    return {
+      ...existing,
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Error updating integration:', error);
+    throw error;
+  }
 }
 
 /**
@@ -168,24 +470,15 @@ export async function updateIntegration(
  */
 export async function upsertIntegration(integration: Integration): Promise<Integration> {
   const { data: userData } = await supabase.auth.getUser();
-  
   const userId = integration.user_id || userData?.user?.id;
-  
+
   // Check if integration exists
   const existing = await getIntegration(integration.integration_name);
-  
+
   if (existing) {
-    // Update existing integration
-    return await updateIntegration(integration.integration_name, {
-      ...integration,
-      user_id: userId,
-    });
+    return await updateIntegration(integration.integration_name, integration);
   } else {
-    // Create new integration
-    return await createIntegration({
-      ...integration,
-      user_id: userId,
-    });
+    return await createIntegration(integration);
   }
 }
 
@@ -193,28 +486,62 @@ export async function upsertIntegration(integration: Integration): Promise<Integ
  * Delete integration
  */
 export async function deleteIntegration(integrationName: string): Promise<void> {
-  const { error } = await supabase
-    .from('lats_pos_integrations_settings')
-    .delete()
-    .eq('integration_name', integrationName);
+  try {
+    // Map integration name to category
+    const categoryMap: Record<string, string> = {
+      'sms': 'sms',
+      'SMS_GATEWAY': 'sms',
+      'GEMINI_AI': 'integrations',
+      'gemini': 'integrations',
+      'whatsapp': 'integrations',
+      'email': 'integrations',
+      'payment': 'integrations',
+      'analytics': 'analytics',
+      'shipping': 'delivery'
+    };
 
-  if (error) throw error;
+    const category = categoryMap[integrationName] || 'integrations';
+
+    // Get all settings in the category and delete them
+    const settings = await unifiedSettingsService.getSettingsByCategory('system', category);
+    const promises = Object.keys(settings).map(key =>
+      unifiedSettingsService.deleteSetting('system', category, key)
+    );
+
+    await Promise.all(promises);
+  } catch (error) {
+    console.error('Error deleting integration:', error);
+    throw error;
+  }
 }
 
 /**
  * Enable/Disable integration
  */
 export async function toggleIntegration(integrationName: string, enabled: boolean): Promise<void> {
-  const { error } = await supabase
-    .from('lats_pos_integrations_settings')
-    .update({
-      is_enabled: enabled,
-      is_active: enabled,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('integration_name', integrationName);
+  try {
+    // Map integration name to category
+    const categoryMap: Record<string, string> = {
+      'sms': 'sms',
+      'SMS_GATEWAY': 'sms',
+      'GEMINI_AI': 'integrations',
+      'gemini': 'integrations',
+      'whatsapp': 'integrations',
+      'email': 'integrations',
+      'payment': 'integrations',
+      'analytics': 'analytics',
+      'shipping': 'delivery'
+    };
 
-  if (error) throw error;
+    const category = categoryMap[integrationName] || 'integrations';
+
+    // Update enabled status in unified settings
+    await unifiedSettingsService.setSetting('system', category, 'is_enabled', enabled, 'boolean');
+    await unifiedSettingsService.setSetting('system', category, 'is_active', enabled, 'boolean');
+  } catch (error) {
+    console.error('Error toggling integration:', error);
+    throw error;
+  }
 }
 
 /**
@@ -224,25 +551,9 @@ export async function updateIntegrationUsage(
   integrationName: string,
   success: boolean
 ): Promise<void> {
-  const integration = await getIntegration(integrationName);
-  if (!integration) return;
-
-  const { error } = await supabase
-    .from('lats_pos_integrations_settings')
-    .update({
-      last_used_at: new Date().toISOString(),
-      total_requests: (integration.total_requests || 0) + 1,
-      successful_requests: success 
-        ? (integration.successful_requests || 0) + 1 
-        : integration.successful_requests,
-      failed_requests: !success 
-        ? (integration.failed_requests || 0) + 1 
-        : integration.failed_requests,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('integration_name', integrationName);
-
-  if (error) throw error;
+  // Usage tracking is not implemented in unified settings yet
+  // This is a no-op for now to maintain API compatibility
+  console.debug(`Integration usage update: ${integrationName}, success: ${success}`);
 }
 
 /**
@@ -529,4 +840,36 @@ export function getIntegrationTemplates(): IntegrationTemplate[] {
     },
   ];
 }
+
+/**
+ * Debug function to check integration status - can be called from browser console
+ */
+(window as any).checkIntegrations = async () => {
+  console.log('🔍 Checking integration status...');
+
+  try {
+    const sms = await getIntegration('SMS_GATEWAY');
+    const whatsapp = await getIntegration('WHATSAPP_WASENDER');
+    const all = await getAllIntegrations();
+
+    console.log('📱 SMS Integration:', sms ? {
+      enabled: sms.is_enabled,
+      credentials: sms.credentials,
+      config: sms.config
+    } : 'NOT FOUND');
+
+    console.log('💬 WhatsApp Integration:', whatsapp ? {
+      enabled: whatsapp.is_enabled,
+      credentials: whatsapp.credentials,
+      config: whatsapp.config
+    } : 'NOT FOUND');
+
+    console.log('📋 All Integrations:', all.map(i => i.integration_name));
+
+    return { sms, whatsapp, all };
+  } catch (error) {
+    console.error('❌ Error checking integrations:', error);
+    return { error };
+  }
+};
 

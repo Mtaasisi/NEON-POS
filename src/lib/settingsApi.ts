@@ -25,18 +25,16 @@ export interface SettingsBackup {
  */
 export const getSetting = async (key: string): Promise<string | null> => {
   try {
-    const { data, error } = await supabase
-      .from('settings')
-      .select('value')
-      .eq('key', key)
-      .single();
+    // Use unified settings service instead of direct table query
+    const { unifiedSettingsService } = await import('./unifiedSettingsService');
+    const settings = await unifiedSettingsService.getSettingsByCategory('system', 'general');
+    const setting = settings[key];
 
-    if (error) {
-      console.error('Error fetching setting:', error);
-      return null;
+    if (setting && typeof setting === 'object' && 'value' in setting) {
+      return String(setting.value);
     }
 
-    return data?.value || null;
+    return null;
   } catch (error) {
     console.error('Error fetching setting:', error);
     return null;
@@ -79,18 +77,14 @@ export const getSettings = async (): Promise<SettingsData> => {
  */
 export const updateSetting = async (key: string, value: any): Promise<boolean> => {
   try {
-    const stringValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
-    
-    const { error } = await supabase
-      .from('settings')
-      .upsert({ key, value: stringValue }, { onConflict: 'key' });
+    // Use unified settings service instead of direct table query
+    const { unifiedSettingsService } = await import('./unifiedSettingsService');
 
-    if (error) {
-      console.error('Error updating setting:', error);
-      return false;
-    }
+    const settingType = typeof value === 'boolean' ? 'boolean' :
+                       typeof value === 'number' ? 'number' :
+                       typeof value === 'object' ? 'json' : 'string';
 
-    return true;
+    return unifiedSettingsService.setSetting('system', 'general', key, value, settingType);
   } catch (error) {
     console.error('Error updating setting:', error);
     return false;
@@ -128,17 +122,10 @@ export const updateSettings = async (settings: SettingsData): Promise<boolean> =
  */
 export const deleteSetting = async (key: string): Promise<boolean> => {
   try {
-    const { error } = await supabase
-      .from('settings')
-      .delete()
-      .eq('key', key);
+    // Use unified settings service instead of direct table query
+    const { unifiedSettingsService } = await import('./unifiedSettingsService');
 
-    if (error) {
-      console.error('Error deleting setting:', error);
-      return false;
-    }
-
-    return true;
+    return unifiedSettingsService.deleteSetting('system', 'general', key);
   } catch (error) {
     console.error('Error deleting setting:', error);
     return false;

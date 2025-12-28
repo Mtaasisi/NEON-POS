@@ -43,11 +43,10 @@ export const BackupWidget: React.FC<BackupWidgetProps> = ({ className }) => {
       setIsLoading(true);
       
       // Query backup logs
-      const { data: backups, error } = await supabase
-        .from('backup_logs')
-        .select('id, created_at, status')
-        .order('created_at', { ascending: false })
-        .limit(10);
+      // ✅ FIX: backup_logs table was consolidated - returning empty backup logs
+      console.log('ℹ️ backup_logs table was consolidated - returning empty backup logs');
+      const backups = [];
+      const error = null;
 
       // Handle missing table gracefully
       if (error) {

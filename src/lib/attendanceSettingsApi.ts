@@ -80,27 +80,35 @@ export const defaultAttendanceSettings: AttendanceSettings = {
 // Get attendance settings from database
 export const getAttendanceSettings = async (): Promise<AttendanceSettings> => {
   try {
-    const { data, error } = await supabase
-      .from('settings')
-      .select('value')
-      .eq('key', 'attendance')
-      .maybeSingle();
+    // Import unified settings service dynamically
+    const { unifiedSettingsService } = await import('./unifiedSettingsService');
 
-    if (error) {
-      // Only log error if it's not a "no rows found" error
-      if (error.code !== 'PGRST116') {
-        console.error('Error fetching attendance settings:', error);
-      }
-      return defaultAttendanceSettings;
-    }
+    // Get attendance settings from unified table
+    const settings = await unifiedSettingsService.getSettingsByCategory('system', 'attendance');
 
-    if (data) {
-      try {
-        return JSON.parse(data.value);
-      } catch (parseError) {
-        console.error('Error parsing attendance settings:', parseError);
-        return defaultAttendanceSettings;
-      }
+    if (settings && Object.keys(settings).length > 0) {
+      // Convert unified settings format to attendance settings object
+      const attendanceSettings: any = { ...defaultAttendanceSettings };
+
+      // Map individual settings to the attendance object
+      Object.entries(settings).forEach(([key, setting]) => {
+        if (setting && typeof setting === 'object' && 'value' in setting) {
+          if (key === 'enabled') attendanceSettings.enabled = Boolean(setting.value);
+          else if (key === 'allowEmployeeChoice') attendanceSettings.allowEmployeeChoice = Boolean(setting.value);
+          else if (key === 'requireLocation') attendanceSettings.requireLocation = Boolean(setting.value);
+          else if (key === 'requireWifi') attendanceSettings.requireWifi = Boolean(setting.value);
+          else if (key === 'requirePhoto') attendanceSettings.requirePhoto = Boolean(setting.value);
+          else if (key === 'allowMobileData') attendanceSettings.allowMobileData = Boolean(setting.value);
+          else if (key === 'gpsAccuracy') attendanceSettings.gpsAccuracy = Number(setting.value) || 50;
+          else if (key === 'checkInRadius') attendanceSettings.checkInRadius = Number(setting.value) || 100;
+          else if (key === 'gracePeriod') attendanceSettings.gracePeriod = Number(setting.value) || 15;
+          else if (key === 'defaultSecurityMode') attendanceSettings.defaultSecurityMode = setting.value;
+          else if (key === 'checkInTime') attendanceSettings.checkInTime = setting.value;
+          else if (key === 'checkOutTime') attendanceSettings.checkOutTime = setting.value;
+        }
+      });
+
+      return attendanceSettings;
     }
 
     return defaultAttendanceSettings;

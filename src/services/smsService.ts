@@ -76,10 +76,10 @@ class SMSService {
       );
       
       const integration = await Promise.race([integrationPromise, timeoutPromise]);
-      
+
       if (!integration || !integration.is_enabled) {
         console.debug('ℹ️ SMS integration not configured. SMS features will be disabled until configured in Admin Settings → Integrations');
-        this.initialized = true;
+        // Don't set initialized=true so we can try again later
         return;
       }
 
@@ -114,9 +114,7 @@ class SMSService {
         console.warn('❌ SMS service configuration error:', errorMsg);
       }
       
-      // Mark as initialized anyway to prevent blocking
-      // The service will retry when actually needed
-      this.initialized = true;
+      // Don't set initialized=true on error so we can try again later
     }
   }
 
@@ -125,6 +123,12 @@ class SMSService {
    */
   private async ensureInitialized(): Promise<void> {
     if (!this.initialized && this.initializationPromise) {
+      await this.initializationPromise;
+    } else if (this.initialized && (!this.apiKey || !this.apiUrl)) {
+      // If initialized but no credentials, try to re-initialize
+      console.log('🔄 SMS service was initialized but has no credentials, re-initializing...');
+      this.initialized = false;
+      this.initializationPromise = this.initializeService();
       await this.initializationPromise;
     }
   }
@@ -1073,7 +1077,7 @@ Asante kwa kumtumaini Inauzwa! 🚀`;
    */
   async checkServerAvailability(): Promise<boolean> {
     try {
-      const healthCheckUrl = 'http://localhost:8000/health';
+      const healthCheckUrl = 'http://localhost:8000/api/health';
       const healthController = new AbortController();
       const healthTimeout = setTimeout(() => healthController.abort(), 2000);
       

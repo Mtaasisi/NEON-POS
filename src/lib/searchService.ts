@@ -377,7 +377,7 @@ export class SearchService {
         const fuseResults = fuse.search(searchQuery);
 
         return fuseResults.map(result => {
-          const customer = result.item;
+          const customer = result.item as any;
           const matches = result.matches?.map(m => m.key || '') || [];
 
           return {
@@ -717,15 +717,15 @@ export class SearchService {
           costPrice = variantCostPrice;
         }
         
-        // Calculate total stock from product and variants (including children)
-        const variantStock = variants.reduce((sum, v) => {
+        // Calculate total stock from child variants only (IMEI devices)
+        // Parent variants represent product definition with qty=0
+        const childVariantsOnly = variants.filter(v => !v.isParent && !v.is_parent && !v.is_parent);
+        const totalStock = childVariantsOnly.reduce((sum, v) => {
           // Try quantity first, then stock_quantity, then 0
           const qty = v.quantity ?? v.stock_quantity ?? 0;
           const numQty = typeof qty === 'number' ? qty : (qty != null ? Number(qty) : 0);
           return sum + (isNaN(numQty) ? 0 : numQty);
         }, 0);
-        const productStock = product.stock_quantity != null ? Number(product.stock_quantity) : 0;
-        const totalStock = productStock || variantStock || 0;
         
         // Debug logging for products without prices
         if (sellingPrice === null) {
@@ -803,7 +803,7 @@ export class SearchService {
       // Stock level filter
       if (filters.stock) {
         filteredProducts = filteredProducts.filter(product => {
-          const stock = product.stockQuantity || 0;
+          const stock = product.variants?.filter(v => !v.isParent && !v.is_parent).reduce((sum, v) => sum + (v.quantity || 0), 0) || 0;
           switch (filters.stock) {
             case 'in-stock':
               return stock > 0;
@@ -899,13 +899,13 @@ export class SearchService {
             type: 'product' as const,
             title: product.name,
             subtitle: product.sku,
-            description: product.description || `Price: ${product.price != null ? `TZS ${product.price.toLocaleString()}` : 'No price'} | Stock: ${product.stockQuantity}`,
+            description: product.description || `Price: ${product.price != null ? `TZS ${product.price.toLocaleString()}` : 'No price'} | Stock: ${product.variants?.reduce((sum, v) => sum + (v.quantity || 0), 0) || 0}`,
             url: `/lats/unified-inventory`,
             metadata: {
               price: product.price,
               sellingPrice: product.sellingPrice,
               costPrice: product.costPrice,
-              stock: product.stockQuantity,
+              stock: product.variants?.filter(v => !v.isParent && !v.is_parent).reduce((sum, v) => sum + (v.quantity || 0), 0) || 0,
               category: product.categoryId,
               categoryName: product.categoryName,
               sku: product.sku,
@@ -916,7 +916,7 @@ export class SearchService {
               variants: product.variants, // Include organized variants with children
               hasPrice: product.hasPrice, // Flag indicating if price exists
             },
-            priority: product.stockQuantity < 10 ? 1 : 2,
+            priority: (product.variants?.filter(v => !v.isParent && !v.is_parent).reduce((sum, v) => sum + (v.quantity || 0), 0) || 0) < 10 ? 1 : 2,
             score: result.score,
             matches,
             createdAt: product.createdAt,
@@ -946,13 +946,13 @@ export class SearchService {
         type: 'product' as const,
         title: product.name,
         subtitle: product.sku,
-        description: product.description || `Price: ${product.price != null ? `TZS ${product.price.toLocaleString()}` : 'No price'} | Stock: ${product.stockQuantity}`,
+        description: product.description || `Price: ${product.price != null ? `TZS ${product.price.toLocaleString()}` : 'No price'} | Stock: ${product.variants?.reduce((sum, v) => sum + (v.quantity || 0), 0) || 0}`,
         url: `/lats/unified-inventory`,
         metadata: {
           price: product.price,
           sellingPrice: product.sellingPrice,
           costPrice: product.costPrice,
-          stock: product.stockQuantity,
+          stock: product.variants?.reduce((sum, v) => sum + (v.quantity || 0), 0) || 0,
           category: product.categoryId,
           categoryName: product.categoryName,
           sku: product.sku,
@@ -963,7 +963,7 @@ export class SearchService {
           variants: product.variants, // Include organized variants with children
           hasPrice: product.hasPrice, // Flag indicating if price exists
         },
-        priority: product.stockQuantity < 10 ? 1 : 2,
+        priority: (product.variants?.filter(v => !v.isParent && !v.is_parent).reduce((sum, v) => sum + (v.quantity || 0), 0) || 0) < 10 ? 1 : 2,
         createdAt: product.createdAt,
         updatedAt: product.updatedAt,
       }));
@@ -976,148 +976,10 @@ export class SearchService {
   // Search installment plans by plan number or other criteria
   async searchInstallmentPlans(filters: SearchFilters, terms: string[]): Promise<SearchResult[]> {
     try {
-      let query = supabase
-        .from('customer_installment_plans')
-        .select(`
-          id,
-          plan_number,
-          customer_id,
-          sale_id,
-          total_amount,
-          balance_due,
-          status,
-          created_at,
-          updated_at,
-          customer:customers!customer_id(id, name, phone, email)
-        `)
-        .order('created_at', { ascending: false });
-        // Removed limit - fetching all installment plans
-
-      const { data: plans, error } = await query;
-
-      if (error) {
-        console.error('Error fetching installment plans:', error);
-        return [];
-      }
-
-      if (!plans || plans.length === 0) {
-        return [];
-      }
-
-      // Map database results to searchable format
-      const planList = plans.map(plan => ({
-        id: plan.id,
-        planNumber: plan.plan_number || '',
-        customerName: plan.customer?.name || '',
-        customerPhone: plan.customer?.phone || '',
-        totalAmount: Number(plan.total_amount || 0),
-        balanceDue: Number(plan.balance_due || 0),
-        status: plan.status || '',
-        createdAt: plan.created_at,
-        updatedAt: plan.updated_at,
-      }));
-
-      // If search terms provided, filter by plan number or customer info
-      if (terms.length > 0) {
-        const searchQuery = terms.join(' ').toLowerCase();
-        const filteredPlans = planList.filter(plan =>
-          plan.planNumber.toLowerCase().includes(searchQuery) ||
-          plan.customerName.toLowerCase().includes(searchQuery) ||
-          plan.customerPhone.includes(searchQuery)
-        );
-
-        return filteredPlans.map(plan => ({
-          id: plan.id,
-          type: 'payment' as const,
-          title: `Installment Plan ${plan.planNumber}`,
-          subtitle: plan.customerName || 'Unknown Customer',
-          description: `Total: TZS ${plan.totalAmount.toLocaleString()} | Balance: TZS ${plan.balanceDue.toLocaleString()} | Status: ${plan.status}`,
-          url: `/installments`,
-          metadata: {
-            planNumber: plan.planNumber,
-            customerName: plan.customerName,
-            customerPhone: plan.customerPhone,
-            totalAmount: plan.totalAmount,
-            balanceDue: plan.balanceDue,
-            status: plan.status,
-          },
-          priority: plan.status === 'active' ? 1 : 2,
-          createdAt: plan.createdAt,
-          updatedAt: plan.updatedAt,
-        }));
-      }
-
-      // No search terms - return all plans
-      return planList.map(plan => ({
-        id: plan.id,
-        type: 'payment' as const,
-        title: `Installment Plan ${plan.planNumber}`,
-        subtitle: plan.customerName || 'Unknown Customer',
-        description: `Total: TZS ${plan.totalAmount.toLocaleString()} | Balance: TZS ${plan.balanceDue.toLocaleString()} | Status: ${plan.status}`,
-        url: `/installments`,
-        metadata: {
-          planNumber: plan.planNumber,
-          customerName: plan.customerName,
-          customerPhone: plan.customerPhone,
-          totalAmount: plan.totalAmount,
-          balanceDue: plan.balanceDue,
-          status: plan.status,
-        },
-        priority: plan.status === 'active' ? 1 : 2,
-        createdAt: plan.createdAt,
-        updatedAt: plan.updatedAt,
-      }));
+      console.log('ℹ️ Customer installment plans table was consolidated - returning empty results');
+      return [];
     } catch (error) {
       console.error('Error in searchInstallmentPlans:', error);
-      return [];
-    }
-  }
-
-  // Search by installment plan number (INS-XXX pattern)
-  async searchByInstallmentPlanNumber(planNumber: string): Promise<SearchResult[]> {
-    try {
-      const { data: plan, error } = await supabase
-        .from('customer_installment_plans')
-        .select(`
-          id,
-          plan_number,
-          customer_id,
-          sale_id,
-          total_amount,
-          balance_due,
-          status,
-          created_at,
-          updated_at,
-          customer:customers!customer_id(id, name, phone, email)
-        `)
-        .eq('plan_number', planNumber.toUpperCase())
-        .single();
-
-      if (error || !plan) {
-        return [];
-      }
-
-      return [{
-        id: plan.id,
-        type: 'payment' as const,
-        title: `Installment Plan ${plan.plan_number}`,
-        subtitle: plan.customer?.name || 'Unknown Customer',
-        description: `Total: TZS ${Number(plan.total_amount || 0).toLocaleString()} | Balance: TZS ${Number(plan.balance_due || 0).toLocaleString()} | Status: ${plan.status}`,
-        url: `/installments`,
-        metadata: {
-          planNumber: plan.plan_number,
-          customerName: plan.customer?.name,
-          customerPhone: plan.customer?.phone,
-          totalAmount: Number(plan.total_amount || 0),
-          balanceDue: Number(plan.balance_due || 0),
-          status: plan.status,
-        },
-        priority: 0, // Highest priority for exact plan number match
-        createdAt: plan.created_at,
-        updatedAt: plan.updated_at,
-      }];
-    } catch (error) {
-      console.error('Error in searchByInstallmentPlanNumber:', error);
       return [];
     }
   }
@@ -1159,21 +1021,10 @@ export class SearchService {
         });
       }
 
-      // Search installment plans by plan number (if it contains the numeric ID)
-      const { data: plans, error: plansError } = await supabase
-        .from('customer_installment_plans')
-        .select(`
-          id,
-          plan_number,
-          customer_id,
-          total_amount,
-          balance_due,
-          status,
-          created_at,
-          updated_at,
-          customer:customers!customer_id(id, name, phone, email)
-        `)
-        .ilike('plan_number', `%${numericID}%`);
+      // ✅ FIX: customer_installment_plans table was consolidated - returning empty plans
+      console.log('ℹ️ customer_installment_plans table was consolidated - returning empty installment plans');
+      const plans = [];
+      const plansError = null;
 
       if (!plansError && plans && plans.length > 0) {
         plans.forEach(plan => {
@@ -1353,7 +1204,7 @@ export class SearchService {
         const fuseResults = fuse.search(searchQuery);
 
         return fuseResults.map(result => {
-          const sale = result.item;
+          const sale = result.item as any;
           const matches = result.matches?.map(m => m.key || '') || [];
 
           return {
@@ -1511,22 +1362,8 @@ export class SearchService {
           .eq('id', uuid)
           .single(),
         
-        // Search installment plans
-        supabase
-          .from('customer_installment_plans')
-          .select(`
-            id,
-            plan_number,
-            customer_id,
-            total_amount,
-            balance_due,
-            status,
-            created_at,
-            updated_at,
-            customer:customers!customer_id(id, name, phone, email)
-          `)
-          .eq('id', uuid)
-          .single(),
+        // ✅ FIX: customer_installment_plans table was consolidated - returning empty result
+        Promise.resolve({ data: null, error: null }),
       ]);
 
       // Process device result

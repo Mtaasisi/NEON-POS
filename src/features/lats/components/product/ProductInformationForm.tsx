@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Package, FileText, Check, Eye, EyeOff } from 'lucide-react';
+import { Package, FileText, Check, Eye, EyeOff, ChevronDown, ChevronUp, Settings } from 'lucide-react';
 import CategoryInput from '../../../shared/components/ui/CategoryInput';
 import { 
   formatSpecificationValue, 
@@ -16,6 +16,7 @@ interface ProductInformationFormProps {
     condition: string;
     specification?: string;
     isCustomerPortalVisible?: boolean;
+    customerPortalSpecification?: string;
   };
   setFormData: React.Dispatch<React.SetStateAction<any>>;
   categories: any[];
@@ -40,7 +41,33 @@ const ProductInformationForm: React.FC<ProductInformationFormProps> = ({
   useVariants = false,
   onGenerateSKU
 }) => {
-  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [isAdvancedFeaturesExpanded, setIsAdvancedFeaturesExpanded] = useState(false);
+  const [conditionFocusIndex, setConditionFocusIndex] = useState(-1);
+
+  // Condition options for keyboard navigation
+  const conditionOptions = [
+    { value: 'new', label: 'New' },
+    { value: 'used', label: 'Used' },
+    { value: 'refurbished', label: 'Refurbished' }
+  ];
+
+  // Handle keyboard navigation for condition selection
+  const handleConditionKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const nextIndex = conditionFocusIndex < conditionOptions.length - 1 ? conditionFocusIndex + 1 : 0;
+      setConditionFocusIndex(nextIndex);
+      setFormData(prev => ({ ...prev, condition: conditionOptions[nextIndex].value }));
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prevIndex = conditionFocusIndex > 0 ? conditionFocusIndex - 1 : conditionOptions.length - 1;
+      setConditionFocusIndex(prevIndex);
+      setFormData(prev => ({ ...prev, condition: conditionOptions[prevIndex].value }));
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      // Focus is already handled by button clicks
+    }
+  };
   
   return (
     <div className="mb-6">
@@ -166,27 +193,36 @@ const ProductInformationForm: React.FC<ProductInformationFormProps> = ({
 
               {/* Condition */}
               <div className="md:col-span-2">
-                <label 
+                <label
                   htmlFor="condition"
                   className={`block mb-2 text-xs font-medium ${currentErrors.condition ? 'text-red-600' : 'text-gray-700'}`}
                 >
-                  Condition *
+                  Condition * <span className="text-gray-400 text-xs">(Use arrow keys to navigate)</span>
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {[
-                    { value: 'new', label: 'New', color: 'bg-green-500 hover:bg-green-600 border-green-500' },
-                    { value: 'used', label: 'Used', color: 'bg-blue-500 hover:bg-blue-600 border-blue-500' },
-                    { value: 'refurbished', label: 'Refurbished', color: 'bg-purple-500 hover:bg-purple-600 border-purple-500' }
-                  ].map((option) => (
+                <div
+                  className="grid grid-cols-1 sm:grid-cols-3 gap-3"
+                  onKeyDown={handleConditionKeyDown}
+                  tabIndex={0}
+                  role="radiogroup"
+                  aria-label="Product condition selection"
+                >
+                  {conditionOptions.map((option, index) => (
                     <button
                       key={option.value}
                       type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, condition: option.value }))}
-                      className={`py-3 px-6 rounded-xl border-2 transition-all duration-200 font-semibold text-base ${
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, condition: option.value }));
+                        setConditionFocusIndex(index);
+                      }}
+                      className={`py-3 px-6 rounded-xl border-2 transition-all duration-200 font-semibold text-base focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                         formData.condition === option.value
-                          ? `${option.color} text-white shadow-lg`
+                          ? `${option.value === 'new' ? 'bg-green-500 hover:bg-green-600 border-green-500' :
+                              option.value === 'used' ? 'bg-blue-500 hover:bg-blue-600 border-blue-500' :
+                              'bg-purple-500 hover:bg-purple-600 border-purple-500'} text-white shadow-lg`
                           : 'bg-white hover:bg-gray-50 border-gray-300 text-gray-700 hover:border-gray-400'
-                      } ${currentErrors.condition ? 'border-red-500' : ''}`}
+                      } ${conditionFocusIndex === index ? 'ring-2 ring-blue-300' : ''} ${currentErrors.condition ? 'border-red-500' : ''}`}
+                      role="radio"
+                      aria-checked={formData.condition === option.value}
                     >
                       {option.label}
                     </button>
@@ -196,98 +232,6 @@ const ProductInformationForm: React.FC<ProductInformationFormProps> = ({
                   <p className="mt-1 text-sm text-red-600">{currentErrors.condition}</p>
                 )}
               </div>
-            </div>
-
-            {/* Customer Portal Visibility Toggle */}
-            <div className="border-t border-gray-200 pt-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    formData.isCustomerPortalVisible !== false ? 'bg-green-500' : 'bg-gray-400'
-                  }`}>
-                    {formData.isCustomerPortalVisible !== false ? (
-                      <Eye className="w-5 h-5 text-white" />
-                    ) : (
-                      <EyeOff className="w-5 h-5 text-white" />
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-900">
-                      Customer Portal Visibility
-                    </h4>
-                    <p className="text-xs text-gray-600">
-                      {formData.isCustomerPortalVisible !== false
-                        ? 'Product is visible to customers in the portal'
-                        : 'Product is hidden from customers in the portal'
-                      }
-                    </p>
-                  </div>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.isCustomerPortalVisible !== false}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      isCustomerPortalVisible: e.target.checked
-                    }))}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                </label>
-              </div>
-            </div>
-
-            {/* Description */}
-            <div>
-              <label 
-                htmlFor="description"
-                className={`block mb-2 text-xs font-medium ${currentErrors.description ? 'text-red-600' : 'text-gray-700'}`}
-              >
-                Description (optional)
-              </label>
-              <div className="relative">
-                {isDescriptionExpanded ? (
-                  <textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-all duration-200 resize-none ${
-                      currentErrors.description 
-                        ? 'border-red-500 focus:border-red-600 focus:ring-2 focus:ring-red-200' 
-                        : 'border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                    }`}
-                    placeholder="Brief description..."
-                    maxLength={500}
-                    rows={4}
-                    onBlur={() => setIsDescriptionExpanded(false)}
-                    autoFocus
-                  />
-                ) : (
-                  <input
-                    id="description"
-                    type="text"
-                    value={formData.description}
-                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-all duration-200 ${
-                      currentErrors.description 
-                        ? 'border-red-500 focus:border-red-600 focus:ring-2 focus:ring-red-200' 
-                        : 'border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                    }`}
-                    placeholder="Brief description..."
-                    maxLength={200}
-                    onFocus={() => setIsDescriptionExpanded(true)}
-                  />
-                )}
-              </div>
-              {currentErrors.description && (
-                <p className="mt-1 text-sm text-red-600">{currentErrors.description}</p>
-              )}
-              {isDescriptionExpanded && (
-                <p className="mt-1 text-sm text-gray-500">
-                  {formData.description.length}/500 characters
-                </p>
-              )}
             </div>
 
             {/* Specification - Only show when not using variants AND when onSpecificationsClick is provided */}
@@ -373,6 +317,7 @@ const ProductInformationForm: React.FC<ProductInformationFormProps> = ({
                 )}
               </div>
             )}
+
           </form>
         </div>
       </div>

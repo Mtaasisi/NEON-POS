@@ -313,10 +313,9 @@ export const useRealtimeDashboard = () => {
 
       // Load employee attendance
       const todayStr = today.toISOString().split('T')[0];
-      const { data: attendanceData } = await supabase
-        .from('attendance_records')
-        .select('status')
-        .eq('attendance_date', todayStr);
+      // attendance_records table was consolidated - no attendance data available
+      console.log('ℹ️ attendance_records table was consolidated - no attendance data available');
+      const attendanceData = [];
 
       const presentCount = attendanceData?.filter(record => record.status === 'present').length || 0;
 

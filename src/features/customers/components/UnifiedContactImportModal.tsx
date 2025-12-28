@@ -1,15 +1,15 @@
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../../../lib/supabaseClient';
 import { useAuth } from '../../../context/AuthContext';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassButton from '../../shared/components/ui/GlassButton';
-import Modal from '../../shared/components/ui/Modal';
-import { 
-  Upload, 
-  FileText, 
-  Smartphone, 
-  Users, 
-  CheckCircle, 
+import {
+  Upload,
+  FileText,
+  Smartphone,
+  Users,
+  CheckCircle,
   AlertTriangle,
   Download,
   RefreshCw,
@@ -23,7 +23,8 @@ import {
   Search,
   Eye,
   Trash2,
-  Edit
+  Edit,
+  X
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -231,14 +232,61 @@ const UnifiedContactImportModal: React.FC<UnifiedContactImportModalProps> = ({
     return <Users className="w-4 h-4 text-gray-500" />;
   };
 
-  return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={onClose} 
-      title="Unified Contact Import" 
-      maxWidth="1200px"
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div
+      className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]"
+      style={{
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        overflow: 'hidden',
+        overscrollBehavior: 'none'
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="contact-import-title"
+      onClick={onClose}
     >
-      <div className="space-y-6">
+      <div
+        className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] flex flex-col overflow-hidden relative"
+        style={{ pointerEvents: 'auto' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close Button */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Icon Header - Fixed */}
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+            {/* Icon */}
+            <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center shadow-lg">
+              <Upload className="w-8 h-8 text-white" />
+            </div>
+
+            {/* Text */}
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2" id="contact-import-title">
+                Unified Contact Import
+              </h3>
+              <p className="text-sm text-gray-600">
+                Import contacts from SMS backup or CSV files with advanced duplicate handling
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-6 space-y-6">
         {/* Import Options */}
         <GlassCard className="p-6">
           <div className="flex items-center gap-4 mb-4">
@@ -477,8 +525,11 @@ const UnifiedContactImportModal: React.FC<UnifiedContactImportModalProps> = ({
             </GlassButton>
           )}
         </div>
+          </div>
+        </div>
       </div>
-    </Modal>
+    </div>,
+    document.body
   );
 };
 

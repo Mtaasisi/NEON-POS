@@ -1,0 +1,12 @@
+RewriteEngine On
+
+# Don't rewrite if the file exists (like upload-image.php)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Don't rewrite specific endpoints that have their own handlers
+RewriteCond %{REQUEST_URI} !^/api/upload-image
+RewriteCond %{REQUEST_URI} !^/api/whatsapp/upload-media
+
+# Rewrite everything else to green-api-proxy.php
+RewriteRule ^(.*)$ green-api-proxy.php [QSA,L]

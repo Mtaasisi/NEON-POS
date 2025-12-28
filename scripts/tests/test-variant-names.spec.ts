@@ -214,7 +214,7 @@ test.describe('Variant Name Display Test', () => {
     console.log('✅ TEST PASSED: Variant names persist after refresh!');
   });
 
-  test.afterAll(async ({ page }) => {
+  test.afterAll(async () => {
     // Optional: Clean up test product
     console.log('🧹 Test complete. You can manually delete the test product if needed.');
   });

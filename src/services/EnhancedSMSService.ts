@@ -60,14 +60,15 @@ class EnhancedSMSService {
    */
   private async initializeService() {
     try {
-      const { data, error } = await supabase
-        .from('settings')
-        .select('value')
-        .eq('key', 'sms_config')
-        .single();
+      // Use unified settings service
+      const { unifiedSettingsService } = await import('../lib/unifiedSettingsService');
+      const smsSettings = await unifiedSettingsService.getSettingsByCategory('system', 'sms');
 
-      if (data && !error) {
-        this.config = JSON.parse(data.value);
+      if (smsSettings && smsSettings.config) {
+        const setting = smsSettings.config;
+        if (setting && typeof setting === 'object' && 'value' in setting) {
+          this.config = setting.value;
+        }
       } else {
         // Use environment variables as fallback
         this.config = {

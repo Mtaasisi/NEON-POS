@@ -160,16 +160,51 @@ export interface UserSettings {
  * Load user settings with improved error handling
  */
 export const loadUserSettings = async (userId: string): Promise<UserSettings | null> => {
+  try {
+    // Import unified settings service dynamically
+    const { unifiedSettingsService } = await import('./unifiedSettingsService');
+
+    // Load user preferences from unified settings
+    const userPrefs = await unifiedSettingsService.getSettingsByCategory('user', 'user_preferences', userId);
+
+    // Load dashboard settings from unified settings (stored in preferences)
+    const dashboardSettings = await unifiedSettingsService.getSettingsByCategory('user', 'user_preferences', userId);
+
+    // Return user settings in the expected format
+    return {
+      id: `user-${userId}`,
+      user_id: userId,
+      theme: userPrefs.theme?.value || 'light',
+      language: userPrefs.language?.value || 'en',
+      currency: userPrefs.currency?.value || 'TZS',
+      timezone: userPrefs.timezone?.value || 'Africa/Dar_es_Salaam',
+      date_format: userPrefs.date_format?.value || 'DD/MM/YYYY',
+      time_format: userPrefs.time_format?.value || '24',
+      sound_enabled: userPrefs.sound_enabled?.value !== false,
+      notifications_enabled: userPrefs.notifications_enabled?.value !== false,
+      auto_save: userPrefs.auto_save?.value !== false,
+      compact_view: userPrefs.compact_view?.value || false,
+      show_tooltips: userPrefs.show_tooltips?.value !== false,
+      keyboard_shortcuts: userPrefs.keyboard_shortcuts?.value !== false,
+      // Load dashboard settings
+      dashboard: dashboardSettings.preferences?.value?.dashboard || getDefaultUserSettings(userId)?.dashboard,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    } as UserSettings;
+  } catch (error) {
+    console.error('❌ Error loading user settings:', error);
+    return getDefaultUserSettings(userId);
+  }
+}
+
+export const loadUserSettings_old = async (userId: string): Promise<UserSettings | null> => {
   let retries = 0;
   const maxRetries = 3;
   
   while (retries < maxRetries) {
     try {
-      // First, check if the table exists
-      const { data: tableCheck, error: tableError } = await supabase
-        .from('user_settings')
-        .select('id')
-        .limit(1);
+      // Skip old user_settings table check - using unified settings now
+      return getDefaultUserSettings(userId);
 
       if (tableError) {
         // Table doesn't exist or RLS is blocking access
@@ -203,12 +238,8 @@ export const loadUserSettings = async (userId: string): Promise<UserSettings | n
         }
       }
 
-      // Now try to load the settings
-      const { data, error } = await supabase
-        .from('user_settings')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
+      // Skip old user_settings query - using unified settings now
+      return getDefaultUserSettings(userId);
 
       if (error) {
         // If it's a 406 error, retry after a short delay
@@ -254,74 +285,50 @@ export const loadUserSettings = async (userId: string): Promise<UserSettings | n
  * Save user settings with improved error handling
  */
 export const saveUserSettings = async (
-  userId: string, 
+  userId: string,
   settings: UserSettings,
   section?: string
 ): Promise<boolean> => {
-  let retries = 0;
-  const maxRetries = 3;
-  
-  while (retries < maxRetries) {
-    try {
-      const { error } = await supabase
-        .from('user_settings')
-        .upsert({
-          user_id: userId,
-          settings: settings,
-          updated_at: new Date().toISOString()
-        });
+  try {
+    // Import unified settings service dynamically
+    const { unifiedSettingsService } = await import('./unifiedSettingsService');
 
-      if (error) {
-        // If it's a 406 error, retry after a short delay
-        if (error.code === '406' || error.message?.includes('406')) {
-          console.log(`⚠️ 406 error on save attempt ${retries + 1}, retrying...`);
-          retries++;
-          if (retries < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 1000 * retries));
-            continue;
-          }
-        }
-        
-        // If table doesn't exist, try to create it
-        if (error.code === '42P01') {
-          console.log('📋 User settings table not found, please run the database setup script');
-          console.log('📋 You can run: create-user-settings-simple.sql in your Supabase SQL editor');
-          return false;
-        }
-        
-        // If trigger already exists, this is expected and can be ignored
-        if (error.code === '42710') {
-          console.log('⚠️ Trigger conflict detected, this is expected and can be ignored');
-          // Continue with the operation as the table exists
-          continue;
-        }
-        
-        throw error;
-      }
+    // Save individual user preference settings
+    const preferenceUpdates = [
+      unifiedSettingsService.setSetting('user', 'user_preferences', 'theme', settings.theme, 'string', userId),
+      unifiedSettingsService.setSetting('user', 'user_preferences', 'language', settings.language, 'string', userId),
+      unifiedSettingsService.setSetting('user', 'user_preferences', 'currency', settings.currency, 'string', userId),
+      unifiedSettingsService.setSetting('user', 'user_preferences', 'timezone', settings.timezone, 'string', userId),
+      unifiedSettingsService.setSetting('user', 'user_preferences', 'date_format', settings.date_format, 'string', userId),
+      unifiedSettingsService.setSetting('user', 'user_preferences', 'time_format', settings.time_format, 'string', userId),
+      unifiedSettingsService.setSetting('user', 'user_preferences', 'sound_enabled', settings.sound_enabled, 'boolean', userId),
+      unifiedSettingsService.setSetting('user', 'user_preferences', 'notifications_enabled', settings.notifications_enabled, 'boolean', userId),
+      unifiedSettingsService.setSetting('user', 'user_preferences', 'auto_save', settings.auto_save, 'boolean', userId),
+      unifiedSettingsService.setSetting('user', 'user_preferences', 'compact_view', settings.compact_view, 'boolean', userId),
+      unifiedSettingsService.setSetting('user', 'user_preferences', 'show_tooltips', settings.show_tooltips, 'boolean', userId),
+      unifiedSettingsService.setSetting('user', 'user_preferences', 'keyboard_shortcuts', settings.keyboard_shortcuts, 'boolean', userId)
+    ];
 
-      if (section) {
-        toast.success(`${section} settings saved successfully`);
-      }
-      return true;
-      
-    } catch (retryError: any) {
-      if (retries >= maxRetries - 1) {
-        console.error('Error saving user settings:', retryError);
-        
-        // Don't show error toast for 406 errors as they're expected in some cases
-        if (!retryError.message?.includes('406')) {
-          toast.error('Failed to save settings');
-        } else {
-          console.log('Settings saved locally (sync will retry)');
-        }
-        return false;
-      }
-      retries++;
-      await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+    // Save dashboard settings if provided (stored in preferences)
+    let dashboardUpdate = Promise.resolve(true);
+    if (settings.dashboard) {
+      // Load current preferences and merge dashboard settings
+      const currentPrefs = await unifiedSettingsService.getSettingsByCategory('user', 'user_preferences', userId);
+      const updatedPrefs = {
+        ...currentPrefs,
+        dashboard: settings.dashboard
+      };
+      dashboardUpdate = unifiedSettingsService.setSetting('user', 'user_preferences', 'preferences', updatedPrefs, 'json', userId);
     }
-  }
-  
-  return false;
+
+    const allUpdates = [...preferenceUpdates, dashboardUpdate];
+    const results = await Promise.all(allUpdates);
+    return results.every(result => result);
+
+    } catch (error) {
+      console.error('Error saving user settings:', error);
+      return false;
+    }
 };
 
 /**
@@ -449,4 +456,109 @@ export const createDefaultUserSettings = async (userId: string): Promise<boolean
     console.error('Error creating default user settings:', error);
     return false;
   }
+};
+
+/**
+ * Get default user settings object
+ */
+export const getDefaultUserSettings = (userId: string): UserSettings => {
+  return {
+    id: `user-${userId}`,
+    user_id: userId,
+    theme: 'light',
+    language: 'en',
+    currency: 'TZS',
+    timezone: 'Africa/Dar_es_Salaam',
+    date_format: 'DD/MM/YYYY',
+    time_format: '24',
+    sound_enabled: true,
+    notifications_enabled: true,
+    auto_save: true,
+    compact_view: false,
+    show_tooltips: true,
+    keyboard_shortcuts: true,
+    dashboard: {
+      quickActions: {
+        // Core Business Features - Only 6 enabled by default
+        devices: true,
+        addDevice: true,
+        customers: true,
+        inventory: true,
+        appointments: true,
+        purchaseOrders: true,
+        payments: false,
+        adGenerator: false,
+        pos: false,
+        reports: false,
+        employees: false,
+        whatsapp: false,
+        settings: false,
+        search: false,
+        loyalty: false,
+        backup: false,
+
+        // SMS & Communication Features
+        sms: false,
+        bulkSms: false,
+        smsLogs: false,
+        smsSettings: false,
+
+        // Import/Export & Data Management
+        excelImport: false,
+        excelTemplates: false,
+        productExport: false,
+        customerImport: false,
+
+        // Advanced System Features
+        userManagement: false,
+        databaseSetup: false,
+        integrationSettings: false,
+        integrationsTest: false,
+        aiTraining: false,
+        bluetoothPrinter: false,
+
+        // Business Management
+        categoryManagement: false,
+        supplierManagement: false,
+        storeLocations: false,
+
+        // Advanced Analytics & Reports
+        reminders: false,
+        mobile: false,
+        myAttendance: false
+      },
+      widgets: {
+        revenueTrendChart: true,
+        deviceStatusChart: true,
+        appointmentsTrendChart: true,
+        stockLevelChart: true,
+        performanceMetricsChart: true,
+        customerActivityChart: true,
+        salesFunnelChart: true,
+        purchaseOrderChart: true,
+        appointmentWidget: true,
+        employeeWidget: true,
+        notificationWidget: true,
+        financialWidget: true,
+        analyticsWidget: true,
+        serviceWidget: true,
+        reminderWidget: true,
+        customerInsightsWidget: true,
+        systemHealthWidget: true,
+        inventoryWidget: true,
+        activityFeedWidget: true,
+        purchaseOrderWidget: true,
+        chatWidget: true,
+        salesWidget: true,
+        topProductsWidget: true,
+        expensesWidget: true,
+        staffPerformanceWidget: true,
+        paymentMethodsChart: true,
+        salesByCategoryChart: true,
+        profitMarginChart: true
+      }
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
 };

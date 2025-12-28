@@ -45,15 +45,12 @@ export const InstallmentsWidget: React.FC<InstallmentsWidgetProps> = ({ classNam
       const currentBranchId = getCurrentBranchId();
 
       // Query installment plans
-      let query = supabase
-        .from('customer_installment_plans')
-        .select('id, total_amount, total_paid, status, next_payment_date, created_at');
+      // customer_installment_plans table was consolidated - returning empty data
+      console.log('ℹ️ customer_installment_plans table was consolidated - returning empty data');
 
-      if (currentBranchId) {
-        query = query.eq('branch_id', currentBranchId);
-      }
-
-      const { data: installments, error } = await query;
+      // Return empty data since table was consolidated
+      const installments = [];
+      const error = null;
 
       // Handle missing table gracefully
       if (error) {

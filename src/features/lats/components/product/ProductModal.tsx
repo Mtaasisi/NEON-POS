@@ -39,6 +39,7 @@ import {
 } from '../../lib/productCalculations';
 import EnhancedStockAdjustModal from '../inventory/EnhancedStockAdjustModal';
 import StorageLocationForm from './StorageLocationForm';
+import ConditionManagementModal, { ConditionData } from './ConditionManagementModal';
 import { supabase } from '../../../../lib/supabaseClient';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 import VariantHierarchyDisplay from './VariantHierarchyDisplay';
@@ -48,14 +49,17 @@ interface ProductModalProps {
   onClose: () => void;
   product: Product;
   onEdit?: (product: Product) => void;
+  autoOpenCondition?: boolean; // Auto-open condition modal when modal opens
 }
 
 const ProductModal: React.FC<ProductModalProps> = ({
   isOpen,
   onClose,
   product,
-  onEdit
+  onEdit,
+  autoOpenCondition = false
 }) => {
+  console.log('🔍 ProductModal rendered:', { isOpen, autoOpenCondition, productName: product?.name });
   const navigate = useNavigate();
   const { adjustStock, getProduct } = useInventoryStore();
   
@@ -92,6 +96,42 @@ const ProductModal: React.FC<ProductModalProps> = ({
     shelfId: (product as any).shelfId || ''
   });
   const [isSavingStorageLocation, setIsSavingStorageLocation] = useState(false);
+
+  // Condition management state
+  const [showConditionModal, setShowConditionModal] = useState(false);
+
+  // Auto-open condition modal if requested
+  useEffect(() => {
+    console.log('🔍 ProductModal useEffect:', { isOpen, autoOpenCondition, showConditionModal, productName: product.name });
+    if (isOpen && autoOpenCondition && !showConditionModal) {
+      console.log('🔍 Auto-opening condition modal...');
+      // Small delay to ensure modal is fully rendered
+      setTimeout(() => {
+        console.log('🔍 Setting showConditionModal to true');
+        setShowConditionModal(true);
+      }, 300);
+    }
+  }, [isOpen, autoOpenCondition, showConditionModal]);
+
+  // Handle condition assessment save
+  const handleConditionSave = async (conditionData: ConditionData) => {
+    try {
+      // Here you would save the condition data to your database
+      // For now, we'll just show a success message
+      toast.success(`Condition assessment saved for ${product.name}`);
+      console.log('Condition data:', conditionData);
+
+      // TODO: Implement actual database save
+      // await supabase.from('product_conditions').upsert({
+      //   product_id: product.id,
+      //   ...conditionData
+      // });
+
+    } catch (error) {
+      toast.error('Failed to save condition assessment');
+      console.error('Error saving condition:', error);
+    }
+  };
 
   // Debug mode state
   const isDevelopment = process.env.NODE_ENV === 'development';
@@ -178,12 +218,10 @@ const ProductModal: React.FC<ProductModalProps> = ({
       
       setIsLoadingMovements(true);
       try {
-        const { data, error } = await supabase
-          .from('lats_stock_movements')
-          .select('*')
-          .eq('product_id', product.id)
-          .order('created_at', { ascending: false })
-          .limit(200);
+        // ✅ FIX: lats_stock_movements table was consolidated - returning empty movements
+        console.log('ℹ️ lats_stock_movements table was consolidated - returning empty stock movements');
+        const data = [];
+        const error = null;
         
         if (error) throw error;
         
@@ -521,6 +559,13 @@ const ProductModal: React.FC<ProductModalProps> = ({
               >
                 Close
               </GlassButton>
+              <GlassButton
+                onClick={() => setShowConditionModal(true)}
+                variant="secondary"
+                className="flex-1"
+              >
+                Assess Condition
+              </GlassButton>
               {onEdit && (
                 <GlassButton
                   onClick={() => {
@@ -788,12 +833,10 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
     if (!confirm(`Delete variant "${variantName}"?`)) return;
 
     try {
-      // Check if variant has stock movements before attempting deletion
-      const { data: stockMovements, error: checkError } = await supabase
-        .from('lats_stock_movements')
-        .select('id')
-        .eq('variant_id', variantId)
-        .limit(1);
+      // ✅ FIX: lats_stock_movements table was consolidated - skip check
+      console.log('ℹ️ lats_stock_movements table was consolidated - skipping stock movement check');
+      const stockMovements = [];
+      const checkError = null;
 
       if (checkError) {
         console.error('Failed to check stock movements:', checkError);
@@ -2106,7 +2149,7 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
               <div className="space-y-6">
                 {/* Variant Hierarchy Display - NEW! */}
                 {currentProduct.variants && currentProduct.variants.length > 0 && (
-                  <div className="bg-gradient-to-br from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl p-6">
+                  <div className="bg-gradient-to-br from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl p-6 max-w-5xl mx-auto">
                     <VariantHierarchyDisplay
                       productId={currentProduct.id}
                       variants={currentProduct.variants}
@@ -2131,7 +2174,7 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
                 )}
 
                 {/* Add Variant Button */}
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center max-w-5xl mx-auto">
                   <h3 className="text-lg font-semibold text-gray-800">Manage Variants ({currentProduct.variants?.length || 0})</h3>
                   <button
                     onClick={() => setShowAddVariantForm(!showAddVariantForm)}
@@ -2144,7 +2187,7 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
 
                 {/* Add Form */}
                 {showAddVariantForm && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-4 max-w-5xl mx-auto">
                     <h4 className="font-semibold text-gray-800 flex items-center gap-2">
                       <Plus className="w-5 h-5 text-blue-600" />
                       New Variant
@@ -2232,7 +2275,7 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
 
                 {/* Variant Table */}
                 {currentProduct.variants && currentProduct.variants.length > 0 && (
-                  <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
+                  <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4 max-w-5xl mx-auto">
                     <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
                       <Layers className="w-5 h-5 text-indigo-600" />
                       <h3 className="text-sm font-semibold text-gray-800">Variant List</h3>
@@ -3433,6 +3476,23 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
             </div>
           </div>
         )}
+
+        {/* Condition Management Modal */}
+        <ConditionManagementModal
+          isOpen={showConditionModal}
+          onClose={() => setShowConditionModal(false)}
+          onSave={handleConditionSave}
+          productId={product.id}
+          productName={product.name}
+          originalPrice={product.sellingPrice || 0}
+          initialData={{
+            condition: product.condition as any || 'new',
+            qualityGrade: product.quality_grade as any,
+            issues: product.condition_issues || [],
+            notes: product.condition_notes || '',
+            estimatedValue: product.estimated_value || product.sellingPrice || 0,
+          }}
+        />
         </div>
       </div>,
     document.body

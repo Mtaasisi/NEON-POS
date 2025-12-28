@@ -36,6 +36,7 @@ const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
   const [activeTab, setActiveTab] = useState<'gateway' | 'categories' | 'preferences' | 'notifications' | 'currency' | 'refunds' | 'reports'>(tabFromUrl || 'categories');
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ExpenseCategory | null>(null);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   
@@ -134,20 +135,43 @@ const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
     setSearchParams({ tab });
   };
 
-  const loadSettings = () => {
-    const savedGateway = localStorage.getItem('paymentGatewaySettings');
-    const savedPreferences = localStorage.getItem('paymentPreferences');
-    const savedNotifications = localStorage.getItem('paymentNotifications');
-    const savedCurrency = localStorage.getItem('paymentCurrency');
-    const savedRefunds = localStorage.getItem('paymentRefunds');
-    const savedReports = localStorage.getItem('paymentReports');
-    
-    if (savedGateway) setGatewaySettings(JSON.parse(savedGateway));
-    if (savedPreferences) setPreferences(JSON.parse(savedPreferences));
-    if (savedNotifications) setNotificationSettings(JSON.parse(savedNotifications));
-    if (savedCurrency) setCurrencySettings(JSON.parse(savedCurrency));
-    if (savedRefunds) setRefundSettings(JSON.parse(savedRefunds));
-    if (savedReports) setReportSettings(JSON.parse(savedReports));
+  const loadSettings = async () => {
+    try {
+      // ✅ FIX: Load payment settings from database instead of localStorage
+      const { unifiedSettingsService } = await import('../../../lib/unifiedSettingsService');
+      const { getCurrentBranchId } = await import('../../../lib/branchAwareApi');
+      const currentBranchId = getCurrentBranchId();
+
+      const gatewaySettingsValue = await unifiedSettingsService.getSetting('branch', 'payment_gateway', 'settings', undefined, currentBranchId);
+      const preferencesValue = await unifiedSettingsService.getSetting('branch', 'payment_preferences', 'settings', undefined, currentBranchId);
+      const notificationsValue = await unifiedSettingsService.getSetting('branch', 'payment_notifications', 'settings', undefined, currentBranchId);
+      const currencyValue = await unifiedSettingsService.getSetting('branch', 'payment_currency', 'settings', undefined, currentBranchId);
+      const refundsValue = await unifiedSettingsService.getSetting('branch', 'payment_refunds', 'settings', undefined, currentBranchId);
+      const reportsValue = await unifiedSettingsService.getSetting('branch', 'payment_reports', 'settings', undefined, currentBranchId);
+
+      if (gatewaySettingsValue) setGatewaySettings(gatewaySettingsValue);
+      if (preferencesValue) setPreferences(preferencesValue);
+      if (notificationsValue) setNotificationSettings(notificationsValue);
+      if (currencyValue) setCurrencySettings(currencyValue);
+      if (refundsValue) setRefundSettings(refundsValue);
+      if (reportsValue) setReportSettings(reportsValue);
+    } catch (error) {
+      console.error('Error loading payment settings from database:', error);
+      // Fallback to localStorage if database fails
+      const savedGateway = localStorage.getItem('paymentGatewaySettings');
+      const savedPreferences = localStorage.getItem('paymentPreferences');
+      const savedNotifications = localStorage.getItem('paymentNotifications');
+      const savedCurrency = localStorage.getItem('paymentCurrency');
+      const savedRefunds = localStorage.getItem('paymentRefunds');
+      const savedReports = localStorage.getItem('paymentReports');
+
+      if (savedGateway) setGatewaySettings(JSON.parse(savedGateway));
+      if (savedPreferences) setPreferences(JSON.parse(savedPreferences));
+      if (savedNotifications) setNotificationSettings(JSON.parse(savedNotifications));
+      if (savedCurrency) setCurrencySettings(JSON.parse(savedCurrency));
+      if (savedRefunds) setRefundSettings(JSON.parse(savedRefunds));
+      if (savedReports) setReportSettings(JSON.parse(savedReports));
+    }
   };
 
   const fetchExpenseCategories = async () => {
@@ -274,13 +298,85 @@ const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
 
   useEffect(() => {
     const handleSave = async () => {
-    localStorage.setItem('paymentGatewaySettings', JSON.stringify(gatewaySettings));
-    localStorage.setItem('paymentPreferences', JSON.stringify(preferences));
-    localStorage.setItem('paymentNotifications', JSON.stringify(notificationSettings));
-    localStorage.setItem('paymentCurrency', JSON.stringify(currencySettings));
-    localStorage.setItem('paymentRefunds', JSON.stringify(refundSettings));
-    localStorage.setItem('paymentReports', JSON.stringify(reportSettings));
-      toast.success('All payment settings saved');
+      try {
+        setIsSaving(true);
+
+        // Import unified settings service dynamically
+        const { unifiedSettingsService } = await import('../../../lib/unifiedSettingsService');
+        const { getCurrentBranchId } = await import('../../../lib/branchAwareApi');
+        const currentBranchId = getCurrentBranchId();
+
+        // Save gateway settings
+        await Promise.all([
+          unifiedSettingsService.setSetting('branch', 'payment_gateway', 'beem_enabled', gatewaySettings.beemEnabled, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_gateway', 'beem_api_key', gatewaySettings.beemApiKey, 'string', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_gateway', 'beem_secret_key', gatewaySettings.beemSecretKey, 'string', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_gateway', 'beem_environment', gatewaySettings.beemEnvironment, 'string', undefined, currentBranchId),
+        ]);
+
+        // Save payment preferences
+        await Promise.all([
+          unifiedSettingsService.setSetting('branch', 'payment_preferences', 'cash_enabled', preferences.cashEnabled, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_preferences', 'card_enabled', preferences.cardEnabled, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_preferences', 'mobile_money_enabled', preferences.mobileMoneyEnabled, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_preferences', 'auto_confirm_payments', preferences.autoConfirmPayments, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_preferences', 'require_receipt', preferences.requireReceipt, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_preferences', 'allow_partial_payments', preferences.allowPartialPayments, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_preferences', 'tax_rate', preferences.taxRate, 'number', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_preferences', 'default_currency', preferences.defaultCurrency, 'string', undefined, currentBranchId),
+        ]);
+
+        // Save notification settings
+        await Promise.all([
+          unifiedSettingsService.setSetting('branch', 'payment_notifications', 'send_receipt_email', notificationSettings.sendReceiptEmail, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_notifications', 'send_receipt_sms', notificationSettings.sendReceiptSMS, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_notifications', 'send_receipt_whatsapp', notificationSettings.sendReceiptWhatsApp, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_notifications', 'auto_send_on_success', notificationSettings.autoSendOnSuccess, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_notifications', 'notify_on_failure', notificationSettings.notifyOnFailure, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_notifications', 'notify_admin_on_payment', notificationSettings.notifyAdminOnPayment, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_notifications', 'receipt_template', notificationSettings.receiptTemplate, 'string', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_notifications', 'include_qr_code', notificationSettings.includeQRCode, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_notifications', 'include_logo', notificationSettings.includeLogo, 'boolean', undefined, currentBranchId),
+        ]);
+
+        // Save currency settings
+        await Promise.all([
+          unifiedSettingsService.setSetting('branch', 'payment_currency', 'base_currency', currencySettings.baseCurrency, 'string', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_currency', 'enabled_currencies', currencySettings.enabledCurrencies, 'json', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_currency', 'exchange_rate_source', currencySettings.exchangeRateSource, 'string', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_currency', 'auto_update_rates', currencySettings.autoUpdateRates, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_currency', 'update_frequency', currencySettings.updateFrequency, 'string', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_currency', 'usd_to_tzs', currencySettings.usdToTzs, 'number', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_currency', 'eur_to_tzs', currencySettings.eurToTzs, 'number', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_currency', 'show_currency_symbol', currencySettings.showCurrencySymbol, 'boolean', undefined, currentBranchId),
+        ]);
+
+        // Save refund settings
+        await Promise.all([
+          unifiedSettingsService.setSetting('branch', 'payment_refunds', 'enable_refunds', refundSettings.enableRefunds, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_refunds', 'require_approval', refundSettings.requireApproval, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_refunds', 'allow_partial_refund', refundSettings.allowPartialRefund, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_refunds', 'refund_time_limit', refundSettings.refundTimeLimit, 'number', undefined, currentBranchId),
+        ]);
+
+        // Save report settings
+        await Promise.all([
+          unifiedSettingsService.setSetting('branch', 'payment_reports', 'enable_detailed_reports', reportSettings.enableDetailedReports, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_reports', 'auto_generate_reports', reportSettings.autoGenerateReports, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_reports', 'report_frequency', reportSettings.reportFrequency, 'string', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_reports', 'include_charts', reportSettings.includeCharts, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_reports', 'send_email_reports', reportSettings.sendEmailReports, 'boolean', undefined, currentBranchId),
+          unifiedSettingsService.setSetting('branch', 'payment_reports', 'email_recipients', reportSettings.emailRecipients, 'json', undefined, currentBranchId),
+        ]);
+
+        toast.success('All payment settings saved to database!');
+
+      } catch (error) {
+        console.error('Error saving payment settings:', error);
+        toast.error('Failed to save payment settings to database');
+      } finally {
+        setIsSaving(false);
+      }
     };
     
     registerSaveHandler('payment-settings', handleSave);

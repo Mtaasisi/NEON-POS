@@ -312,8 +312,8 @@ router.post('/retry/:campaignId', async (req, res) => {
  */
 router.get('/campaigns/:userId', async (req, res) => {
   try {
-    const { userId } = req.params;
-    const { status } = req.query;
+    const { userId } = req.params; // eslint-disable-line no-unused-vars
+    const { status } = req.query; // eslint-disable-line no-unused-vars
     
     // This would use supabase directly or through the service
     // Simplified example:

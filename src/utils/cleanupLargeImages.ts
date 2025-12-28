@@ -32,7 +32,7 @@ export class LargeImageCleanup {
     console.log('🔍 Scanning products for large images...');
 
     const { data: products, error } = await supabase
-      .from('products')
+      .from('lats_products')
       .select('id, name, image_url, thumbnail_url');
 
     if (error) {
@@ -116,7 +116,7 @@ export class LargeImageCleanup {
     for (const id of productIds) {
       try {
         const { error } = await supabase
-          .from('products')
+          .from('lats_products')
           .update({
             image_url: placeholderUrl,
             thumbnail_url: placeholderUrl
@@ -150,7 +150,7 @@ export class LargeImageCleanup {
       try {
         // Fetch product
         const { data: product, error: fetchError } = await supabase
-          .from('products')
+          .from('lats_products')
           .select('image_url, thumbnail_url')
           .eq('id', id)
           .single();
@@ -171,7 +171,7 @@ export class LargeImageCleanup {
 
         // Update product
         const { error: updateError } = await supabase
-          .from('products')
+          .from('lats_products')
           .update({
             image_url: newImageUrl,
             thumbnail_url: newThumbnailUrl

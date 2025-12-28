@@ -802,7 +802,7 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
         }
       } else if (type === 'sms') {
         // Explicit SMS send
-        const { default: smsService } = await import('../../../services/smsService');
+        const { smsService } = await import('../../../services/smsService');
         const result = await smsService.sendSMS(customerData.phone, smsMessage);
         if (result.success) {
           toast.success('SMS sent successfully');

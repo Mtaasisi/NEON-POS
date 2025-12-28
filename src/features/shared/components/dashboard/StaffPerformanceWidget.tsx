@@ -80,20 +80,8 @@ export const StaffPerformanceWidget: React.FC<StaffPerformanceWidgetProps> = ({ 
             });
           }
           
-          // Also try employees table for those not found in users
-          // ✅ Note: employees table uses 'full_name' column
-          const { data: employees, error: employeesError } = await supabase
-            .from('employees')
-            .select('id, email, full_name')
-            .in('id', userIds);
-          
-          if (!employeesError && employees) {
-            employees.forEach((emp: any) => {
-              if (!usersMap.has(emp.id)) {
-                usersMap.set(emp.id, emp); // Use employee data directly
-              }
-            });
-          }
+          // ✅ FIX: employees table was consolidated - no need to query employees table
+          // All employee data is now in users table
         }
         
         // Query by emails if we have email addresses
@@ -110,20 +98,8 @@ export const StaffPerformanceWidget: React.FC<StaffPerformanceWidgetProps> = ({ 
             });
           }
           
-          // Also try employees table by email
-          // ✅ Note: employees table uses 'full_name' column
-          const { data: employees, error: employeesError } = await supabase
-            .from('employees')
-            .select('id, email, full_name')
-            .in('email', emails);
-          
-          if (!employeesError && employees) {
-            employees.forEach((emp: any) => {
-              if (!usersMap.has(emp.email)) {
-                usersMap.set(emp.email, emp); // Use employee data directly
-              }
-            });
-          }
+          // ✅ FIX: employees table was consolidated - no need to query employees table
+          // All employee data is now in users table
         }
       }
       

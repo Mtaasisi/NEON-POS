@@ -55,12 +55,22 @@ export async function getUserBranchAssignments(userId: string): Promise<UserBran
       .order('is_primary', { ascending: false });
 
     if (error) {
+      // Handle missing table gracefully
+      if (error.message?.includes('relation "user_branch_assignments" does not exist')) {
+        console.info('Branch assignments table does not exist - returning empty array');
+        return [];
+      }
       console.error('Error fetching user branch assignments:', error);
       throw error;
     }
 
     return data || [];
-  } catch (error) {
+  } catch (error: any) {
+    // Handle missing table gracefully
+    if (error.message?.includes('relation "user_branch_assignments" does not exist')) {
+      console.info('Branch assignments table does not exist - returning empty array');
+      return [];
+    }
     console.error('Error in getUserBranchAssignments:', error);
     return [];
   }
@@ -123,19 +133,30 @@ export async function assignUserToBranch(
       .single();
 
     if (error) {
+      // Handle missing table gracefully
+      if (error.message?.includes('relation "user_branch_assignments" does not exist')) {
+        console.warn('Branch assignments table does not exist - cannot assign user to branch');
+        return null;
+      }
       console.error('Error assigning user to branch:', error);
       throw error;
     }
 
     return data;
   } catch (error: any) {
+    // Handle missing table gracefully
+    if (error.message?.includes('relation "user_branch_assignments" does not exist')) {
+      console.warn('Branch assignments table does not exist - cannot assign user to branch');
+      return null;
+    }
+
     console.error('Error in assignUserToBranch:', error);
-    
+
     // Check for duplicate assignment error
     if (error.message?.includes('duplicate key value') || error.code === '23505') {
       throw new Error('User is already assigned to this branch');
     }
-    
+
     throw error;
   }
 }
@@ -199,10 +220,19 @@ export async function bulkAssignUserToBranches(
 ): Promise<boolean> {
   try {
     // First, remove all existing assignments
-    await supabase
+    const { error: deleteError } = await supabase
       .from('user_branch_assignments')
       .delete()
       .eq('user_id', userId);
+
+    if (deleteError) {
+      // Handle missing table gracefully
+      if (deleteError.message?.includes('relation "user_branch_assignments" does not exist')) {
+        console.warn('Branch assignments table does not exist - cannot bulk assign user to branches');
+        return false;
+      }
+      throw deleteError;
+    }
 
     // Then insert new assignments
     if (branchAssignments.length > 0) {
@@ -222,6 +252,11 @@ export async function bulkAssignUserToBranches(
         .insert(assignments);
 
       if (error) {
+        // Handle missing table gracefully
+        if (error.message?.includes('relation "user_branch_assignments" does not exist')) {
+          console.warn('Branch assignments table does not exist - cannot bulk assign user to branches');
+          return false;
+        }
         console.error('Error bulk assigning user to branches:', error);
         throw error;
       }
@@ -292,6 +327,11 @@ export async function userHasAccessToAllBranches(userId: string): Promise<boolea
       .eq('user_id', userId);
 
     if (assignError) {
+      // Handle missing table gracefully - assume all access if table doesn't exist
+      if (assignError.message?.includes('relation "user_branch_assignments" does not exist')) {
+        console.info('Branch assignments table does not exist - assuming all branch access');
+        return true;
+      }
       return false;
     }
 
@@ -323,12 +363,22 @@ export async function getBranchUsers(branchId: string): Promise<any[]> {
       .eq('branch_id', branchId);
 
     if (error) {
+      // Handle missing table gracefully
+      if (error.message?.includes('relation "user_branch_assignments" does not exist')) {
+        console.info('Branch assignments table does not exist - returning empty array');
+        return [];
+      }
       console.error('Error fetching branch users:', error);
       throw error;
     }
 
     return data || [];
-  } catch (error) {
+  } catch (error: any) {
+    // Handle missing table gracefully
+    if (error.message?.includes('relation "user_branch_assignments" does not exist')) {
+      console.info('Branch assignments table does not exist - returning empty array');
+      return [];
+    }
     console.error('Error in getBranchUsers:', error);
     return [];
   }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { PageErrorBoundary } from '../../../features/shared/components/PageErrorBoundary';
@@ -33,6 +34,7 @@ import { format } from '../lib/format';
 import { latsEventBus } from '../lib/data/eventBus';
 import { LiveInventoryService, LiveInventoryMetrics } from '../lib/liveInventoryService';
 import { Category, Supplier, StockMovement, Product } from '../types/inventory';
+import { calculateAggregateStockMetrics } from '../lib/stockUtils';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
 import { DashboardSkeleton } from '../../../components/ui/SkeletonLoaders';
 
@@ -40,7 +42,16 @@ import { DashboardSkeleton } from '../../../components/ui/SkeletonLoaders';
 type TabType = 'inventory';
 
 const UnifiedInventoryPage: React.FC = () => {
+  const { currentUser, hasPermission } = useAuth();
   const navigate = useNavigate();
+
+  // Permission check - redirect if no inventory access
+  useEffect(() => {
+    if (!hasPermission('view_inventory')) {
+      toast.error('You do not have permission to access inventory management');
+      navigate('/dashboard');
+    }
+  }, [hasPermission, navigate]);
   
   // Product modals
   const productModals = useProductModals();
@@ -141,6 +152,18 @@ const UnifiedInventoryPage: React.FC = () => {
   const [selectedProductForHistory, setSelectedProductForHistory] = useState<string | null>(null);
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [showOrderManagementModal, setShowOrderManagementModal] = useState(false);
+
+  // Permission checks
+  const userPermissions = currentUser?.permissions || [];
+  const hasAllPermissions = userPermissions.includes('all');
+  const canViewInventory = hasAllPermissions || userPermissions.includes('view_inventory');
+  const canAddProducts = hasAllPermissions || userPermissions.includes('add_products');
+  const canEditProducts = hasAllPermissions || userPermissions.includes('edit_products');
+  const canDeleteProducts = hasAllPermissions || userPermissions.includes('delete_products');
+  const canAdjustStock = hasAllPermissions || userPermissions.includes('adjust_stock');
+  const canViewStockHistory = hasAllPermissions || userPermissions.includes('view_stock_history');
+  const canManagePurchaseOrders = hasAllPermissions || userPermissions.includes('view_purchase_orders');
+  const canManageSuppliers = hasAllPermissions || userPermissions.includes('view_purchase_orders');
 
 
 
@@ -307,12 +330,24 @@ const UnifiedInventoryPage: React.FC = () => {
   // Load live metrics when products change or on initial load with debouncing
   useEffect(() => {
     if (products.length > 0 && !isLoadingLiveMetrics) {
-      // Add debouncing to prevent excessive API calls
-      const timeoutId = setTimeout(() => {
-        loadLiveMetrics();
-      }, 1000); // 1 second debounce
-      
-      return () => clearTimeout(timeoutId);
+      // Clear live metrics cache first to ensure fresh data
+      const clearCache = async () => {
+        try {
+          const { LiveInventoryService } = await import('../lib/liveInventoryService');
+          LiveInventoryService.clearCache();
+        } catch (e) {
+          console.warn('Failed to clear live metrics cache:', e);
+        }
+      };
+
+      clearCache().then(() => {
+        // Add debouncing to prevent excessive API calls
+        const timeoutId = setTimeout(() => {
+          loadLiveMetrics();
+        }, 1000); // 1 second debounce
+
+        return () => clearTimeout(timeoutId);
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products.length]);
@@ -440,27 +475,19 @@ const UnifiedInventoryPage: React.FC = () => {
 
   // Calculate metrics (use live data when available, fallback to cached data)
   const metrics = useMemo(() => {
-    // Calculate from cached products first (always available)
-    const totalItems = products.length;
-    const lowStockItems = products.filter(product => {
-      const totalStock = product.variants?.reduce((sum, variant) => sum + (variant.quantity || 0), 0) || 0;
-      return totalStock > 0 && totalStock <= 10;
-    }).length;
-    const outOfStockItems = products.filter(product => {
-      const totalStock = product.variants?.reduce((sum, variant) => sum + (variant.quantity || 0), 0) || 0;
-      return totalStock <= 0;
-    }).length;
-    const reorderAlerts = products.filter(product => {
-      const mainVariant = product.variants?.[0];
-      const totalStock = product.variants?.reduce((sum, variant) => sum + (variant.quantity || 0), 0) || 0;
-      return mainVariant?.minQuantity && totalStock <= mainVariant.minQuantity;
-    }).length;
-    
+    // Use new consistent stock calculation
+    const stockMetrics = calculateAggregateStockMetrics(products, 10);
+
+    const totalItems = stockMetrics.totalProducts;
+    const lowStockItems = stockMetrics.lowStockProducts;
+    const outOfStockItems = stockMetrics.outOfStockProducts;
+    const reorderAlerts = stockMetrics.reorderAlerts;
+
     // Calculate spare parts reorder alerts (quantity <= min_quantity)
     const sparePartsReorderAlerts = (spareParts || []).filter(sp => {
       let totalQuantity = 0;
       let minQuantity = 0;
-      
+
       // If spare part has variants, check each variant
       if (sp.variants && sp.variants.length > 0) {
         // Check if any variant needs reordering
@@ -476,96 +503,20 @@ const UnifiedInventoryPage: React.FC = () => {
         return minQuantity > 0 && totalQuantity <= minQuantity;
       }
     }).length;
+
+    // Use stock metrics for consistent value calculations
+    const totalValue = stockMetrics.totalValue;
+    const retailValue = stockMetrics.retailValue;
     
-    const totalValue = products.reduce((sum, product) => {
-      // Calculate value using ALL variants (consistent with LiveInventoryService)
-      let productValue = 0;
-      
-      if (product.variants && product.variants.length > 0) {
-        // Product has variants - calculate from variants
-        productValue = product.variants.reduce((variantSum, variant) => {
-          // Try multiple field name variations
-          const costPrice = variant.costPrice || 
-                           (variant as any).cost_price || 
-                           (variant as any).unit_cost ||
-                           0;
-          const quantity = variant.quantity || 
-                          (variant as any).stock_quantity ||
-                          (variant as any).stockQuantity ||
-                          0;
-          const variantValue = costPrice * quantity;
-          
-          // Debug first few products in development
-          if (import.meta.env.MODE === 'development' && products.indexOf(product) < 3 && variantValue > 0) {
-            console.log(`💰 [UnifiedInventoryPage] ${product.name} - Variant: ${quantity} × ${costPrice} = ${variantValue}`);
-          }
-          
-          return variantSum + variantValue;
-        }, 0);
-      } else {
-        // Product has no variants - use product-level stock and cost
-        const productStock = product.stockQuantity || 
-                            (product as any).stock_quantity || 
-                            (product as any).total_quantity ||
-                            0;
-        const productCost = product.costPrice || 
-                           (product as any).cost_price || 
-                           (product as any).unit_cost ||
-                           0;
-        productValue = productStock * productCost;
-        
-        // Debug first few products in development
-        if (import.meta.env.MODE === 'development' && products.indexOf(product) < 3 && productValue > 0) {
-          console.log(`💰 [UnifiedInventoryPage] ${product.name} - Product-level: ${productStock} × ${productCost} = ${productValue}`);
-        }
-      }
-      
-      return sum + productValue;
-    }, 0);
-    
-    const retailValue = products.reduce((sum, product) => {
-      // Calculate retail value using ALL variants
-      let productRetailValue = 0;
-      
-      if (product.variants && product.variants.length > 0) {
-        // Product has variants - calculate from variants
-        productRetailValue = product.variants.reduce((variantSum, variant) => {
-          // Try multiple field name variations
-          const sellingPrice = variant.sellingPrice || 
-                              variant.price || 
-                              (variant as any).selling_price || 
-                              (variant as any).unit_price ||
-                              0;
-          const quantity = variant.quantity || 
-                          (variant as any).stock_quantity ||
-                          (variant as any).stockQuantity ||
-                          0;
-        return variantSum + (sellingPrice * quantity);
-        }, 0);
-      } else {
-        // Product has no variants - use product-level stock and selling price
-        const productStock = product.stockQuantity || 
-                            (product as any).stock_quantity || 
-                            (product as any).total_quantity ||
-                            0;
-        const productSellingPrice = product.sellingPrice || 
-                                   product.price || 
-                                   (product as any).selling_price || 
-                                   (product as any).unit_price ||
-                                   0;
-        productRetailValue = productStock * productSellingPrice;
-      }
-      
-      return sum + productRetailValue;
-    }, 0);
-    
-    // Calculate spare parts in stock (quantity > 0, not out of stock)
-    // Match the same logic as products: totalItems - lowStockItems - outOfStockItems
-    // Handle both spare parts with variants and without variants
+    // Calculate spare parts metrics
     const sparePartsTotal = (spareParts || []).length;
-    const sparePartsLowStock = (spareParts || []).filter(sp => {
+    let sparePartsInStock = 0;
+    let sparePartsLowStock = 0;
+    let sparePartsOutOfStock = 0;
+
+    (spareParts || []).forEach(sp => {
       let totalQuantity = 0;
-      
+
       // If spare part has variants, sum up variant quantities
       if (sp.variants && sp.variants.length > 0) {
         totalQuantity = sp.variants.reduce((sum, variant) => {
@@ -575,30 +526,16 @@ const UnifiedInventoryPage: React.FC = () => {
         // Use spare part level quantity
         totalQuantity = sp.quantity || 0;
       }
-      
-      // Low stock: quantity > 0 and <= 10
-      return totalQuantity > 0 && totalQuantity <= 10;
-    }).length;
-    
-    const sparePartsOutOfStock = (spareParts || []).filter(sp => {
-      let totalQuantity = 0;
-      
-      // If spare part has variants, sum up variant quantities
-      if (sp.variants && sp.variants.length > 0) {
-        totalQuantity = sp.variants.reduce((sum, variant) => {
-          return sum + (variant.quantity || 0);
-        }, 0);
+
+      // Classify spare part stock status
+      if (totalQuantity <= 0) {
+        sparePartsOutOfStock++;
+      } else if (totalQuantity > 0 && totalQuantity <= 10) {
+        sparePartsLowStock++;
       } else {
-        // Use spare part level quantity
-        totalQuantity = sp.quantity || 0;
+        sparePartsInStock++;
       }
-      
-      // Out of stock: quantity <= 0
-      return totalQuantity <= 0;
-    }).length;
-    
-    // In stock = total - low stock - out of stock (same logic as products)
-    const sparePartsInStock = sparePartsTotal - sparePartsLowStock - sparePartsOutOfStock;
+    });
     
     // Total spare parts count
     const sparePartsTotalCount = (spareParts || []).length;
@@ -631,7 +568,7 @@ const UnifiedInventoryPage: React.FC = () => {
         })
       });
     }
-    
+
     // Use live metrics if available AND has valid values, otherwise use calculated
     if (liveMetrics && liveMetrics.totalValue > 0) {
       return {
@@ -641,6 +578,8 @@ const UnifiedInventoryPage: React.FC = () => {
         reorderAlerts: liveMetrics.reorderAlerts,
         totalValue: liveMetrics.totalValue,
         retailValue: liveMetrics.retailValue || retailValue, // Use calculated if live is 0
+        totalStockQuantity: liveMetrics.totalStockQuantity,
+        productsWithStock: liveMetrics.productsWithStock,
         activeProducts: liveMetrics.activeProducts,
         featuredProducts: products.filter(p => p.isFeatured).length,
         sparePartsInStock, // Add spare parts in stock count
@@ -649,14 +588,14 @@ const UnifiedInventoryPage: React.FC = () => {
         lastUpdated: liveMetrics.lastUpdated
       };
     }
-    
+
     // Use calculated metrics (fallback or when liveMetrics is 0)
     // Calculate active products count
     const activeProducts = products.filter(product => product.isActive !== false).length;
-    
+
     // Debug total in development
     if (import.meta.env.MODE === 'development') {
-      console.log(`💰 [UnifiedInventoryPage] Using calculated metrics - Total Value: ${totalValue}, Retail Value: ${retailValue} from ${products.length} products`);
+      console.log(`💰 [UnifiedInventoryPage] Using calculated metrics - Total Value: ${totalValue}, Retail Value: ${retailValue}, Stock Quantity: ${stockMetrics.totalStockQuantity} from ${products.length} products`);
     }
 
     return {
@@ -719,18 +658,64 @@ const UnifiedInventoryPage: React.FC = () => {
     // Apply status filter based on active tab
     if (activeTab === 'inventory') {
       if (selectedStatus === 'in-stock') {
+        // Show products with ANY stock (> 0), including low stock
         filtered = filtered.filter(product => {
-          const stock = product.variants?.reduce((sum, variant) => sum + (variant.quantity || 0), 0) || 0;
-          return stock > 10;
+          // Filter out IMEI child variants first
+          const regularVariants = product.variants?.filter(variant => {
+            const isImeiChild = variant.parent_variant_id ||
+                               variant.parentVariantId ||
+                               variant.variant_type === 'imei_child' ||
+                               variant.variantType === 'imei_child' ||
+                               (variant.name && variant.name.toLowerCase().includes('imei:'));
+            return !isImeiChild;
+          }) || [];
+
+          const stock = regularVariants.reduce((sum, variant) => {
+            const quantity = variant.quantity || 0;
+            const reserved = variant.reserved_quantity || variant.reservedQuantity || 0;
+            return sum + Math.max(0, quantity - reserved);
+          }, 0);
+
+          return stock > 0; // Any stock, not just sufficient stock
         });
       } else if (selectedStatus === 'low-stock') {
         filtered = filtered.filter(product => {
-          const stock = product.variants?.reduce((sum, variant) => sum + (variant.quantity || 0), 0) || 0;
+          // Filter out IMEI child variants first
+          const regularVariants = product.variants?.filter(variant => {
+            const isImeiChild = variant.parent_variant_id ||
+                               variant.parentVariantId ||
+                               variant.variant_type === 'imei_child' ||
+                               variant.variantType === 'imei_child' ||
+                               (variant.name && variant.name.toLowerCase().includes('imei:'));
+            return !isImeiChild;
+          }) || [];
+
+          const stock = regularVariants.reduce((sum, variant) => {
+            const quantity = variant.quantity || 0;
+            const reserved = variant.reserved_quantity || variant.reservedQuantity || 0;
+            return sum + Math.max(0, quantity - reserved);
+          }, 0);
+
           return stock > 0 && stock <= 10;
         });
       } else if (selectedStatus === 'out-of-stock') {
         filtered = filtered.filter(product => {
-          const stock = product.variants?.reduce((sum, variant) => sum + (variant.quantity || 0), 0) || 0;
+          // Filter out IMEI child variants first
+          const regularVariants = product.variants?.filter(variant => {
+            const isImeiChild = variant.parent_variant_id ||
+                               variant.parentVariantId ||
+                               variant.variant_type === 'imei_child' ||
+                               variant.variantType === 'imei_child' ||
+                               (variant.name && variant.name.toLowerCase().includes('imei:'));
+            return !isImeiChild;
+          }) || [];
+
+          const stock = regularVariants.reduce((sum, variant) => {
+            const quantity = variant.quantity || 0;
+            const reserved = variant.reserved_quantity || variant.reservedQuantity || 0;
+            return sum + Math.max(0, quantity - reserved);
+          }, 0);
+
           return stock <= 0;
         });
       }
@@ -1117,7 +1102,6 @@ const UnifiedInventoryPage: React.FC = () => {
                     <p className="text-xs font-medium text-gray-600 mb-1">Total Products</p>
                     <p className="text-2xl font-bold text-gray-900">
                       {metrics.totalItems}
-                      {metrics.sparePartsTotal !== undefined && ` / ${metrics.sparePartsTotal}`}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">{metrics.activeProducts} active</p>
                   </div>
@@ -1147,8 +1131,7 @@ const UnifiedInventoryPage: React.FC = () => {
                   <div>
                     <p className="text-xs font-medium text-gray-600 mb-1">In Stock</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {metrics.totalItems - metrics.lowStockItems - metrics.outOfStockItems}
-                      {metrics.sparePartsInStock !== undefined && ` / ${metrics.sparePartsInStock}`}
+                      {metrics.productsWithStock || 0}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">{metrics.lowStockItems} low, {metrics.outOfStockItems} out</p>
                   </div>
@@ -1178,7 +1161,6 @@ const UnifiedInventoryPage: React.FC = () => {
                     <p className="text-xs font-medium text-gray-600 mb-1">Reorder Alerts</p>
                     <p className="text-2xl font-bold text-gray-900">
                       {metrics.reorderAlerts}
-                      {metrics.sparePartsReorderAlerts !== undefined && ` / ${metrics.sparePartsReorderAlerts}`}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">Need attention</p>
                   </div>
@@ -1294,54 +1276,64 @@ const UnifiedInventoryPage: React.FC = () => {
               </button>
               
               {/* Add Product Button */}
-              <button
-                onClick={() => setShowAddProductModal(true)}
-                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700"
-                title="Add a new product (⌘N)"
-              >
-                <Plus size={18} />
-                <span>Add Product</span>
-              </button>
+              {canAddProducts && (
+                <button
+                  onClick={() => setShowAddProductModal(true)}
+                  className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700"
+                  title="Add a new product (⌘N)"
+                >
+                  <Plus size={18} />
+                  <span>Add Product</span>
+                </button>
+              )}
 
               {/* Manage Orders Button */}
-              <button
-                onClick={() => setShowOrderManagementModal(true)}
-                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg hover:from-purple-600 hover:to-purple-700"
-                title="Manage Orders"
-              >
-                <ShoppingCart size={18} />
-                <span>Orders</span>
-              </button>
+              {canManagePurchaseOrders && (
+                <button
+                  onClick={() => setShowOrderManagementModal(true)}
+                  className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg hover:from-purple-600 hover:to-purple-700"
+                  title="Manage Orders"
+                >
+                  <ShoppingCart size={18} />
+                  <span>Orders</span>
+                </button>
+              )}
 
               {/* Spare Parts Button */}
-              <button
-                onClick={() => navigate('/lats/spare-parts')}
-                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg hover:from-orange-600 hover:to-orange-700"
-                title="Manage spare parts inventory"
-              >
-                <Wrench size={18} />
-                <span>Spare Parts</span>
-              </button>
+              {(hasAllPermissions || userPermissions.includes('spare_parts')) && (
+                <button
+                  onClick={() => navigate('/lats/spare-parts')}
+                  className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg hover:from-orange-600 hover:to-orange-700"
+                  title="Manage spare parts inventory"
+                >
+                  <Wrench size={18} />
+                  <span>Spare Parts</span>
+                </button>
+              )}
 
               {/* POS Button */}
-              <button
-                onClick={() => navigate('/pos')}
-                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg hover:from-emerald-600 hover:to-emerald-700"
-                title="Point of Sale"
-              >
-                <ShoppingCart size={18} />
-                <span>POS</span>
-              </button>
+              {(hasAllPermissions || userPermissions.includes('access_pos')) && (
+                <button
+                  onClick={() => navigate('/pos')}
+                  className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg hover:from-emerald-600 hover:to-emerald-700"
+                  title="Point of Sale"
+                >
+                  <ShoppingCart size={18} />
+                  <span>POS</span>
+                </button>
+              )}
 
               {/* Import/Export Excel Button */}
-              <button
-                onClick={handleImport}
-                className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700"
-                title="Import / Export"
-              >
-                <Upload size={18} />
-                <span>Import</span>
-              </button>
+              {(hasAllPermissions || canAddProducts) && (
+                <button
+                  onClick={handleImport}
+                  className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700"
+                  title="Import / Export"
+                >
+                  <Upload size={18} />
+                  <span>Import</span>
+                </button>
+              )}
 
               {/* Refresh Data Button */}
               <button
@@ -1355,7 +1347,11 @@ const UnifiedInventoryPage: React.FC = () => {
                     } catch (e) {
                       console.warn('Cache clear warning:', e);
                     }
-                    
+
+                    // Clear live inventory metrics cache
+                    const { LiveInventoryService } = await import('../lib/liveInventoryService');
+                    LiveInventoryService.clearCache();
+
                     await Promise.all([
                       loadLiveMetrics(),
                       forceRefreshProducts()

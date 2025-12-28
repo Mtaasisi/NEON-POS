@@ -24,10 +24,30 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({ isActive })
 
   useEffect(() => {
     const handleSave = async () => {
-    localStorage.setItem('notificationSettings', JSON.stringify(settings));
-    toast.success('Notification settings saved');
-  };
-    
+      try {
+        // Import unified settings service dynamically
+        const { unifiedSettingsService } = await import('../../../lib/unifiedSettingsService');
+
+        // Save notification settings to database
+        await Promise.all([
+          unifiedSettingsService.setSetting('system', 'notifications', 'email_notifications', settings.emailNotifications, 'boolean'),
+          unifiedSettingsService.setSetting('system', 'notifications', 'sms_notifications', settings.smsNotifications, 'boolean'),
+          unifiedSettingsService.setSetting('system', 'notifications', 'push_notifications', settings.pushNotifications, 'boolean'),
+          unifiedSettingsService.setSetting('system', 'notifications', 'whatsapp_notifications', settings.whatsappNotifications, 'boolean'),
+          unifiedSettingsService.setSetting('system', 'notifications', 'low_stock_alerts', settings.lowStockAlerts, 'boolean'),
+          unifiedSettingsService.setSetting('system', 'notifications', 'sales_reports', settings.salesReports, 'boolean'),
+          unifiedSettingsService.setSetting('system', 'notifications', 'system_updates', settings.systemUpdates, 'boolean'),
+          unifiedSettingsService.setSetting('system', 'notifications', 'marketing_emails', settings.marketingEmails, 'boolean'),
+        ]);
+
+        toast.success('Notification settings saved to database!');
+      } catch (error) {
+        console.error('Error saving notification settings:', error);
+        toast.error('Failed to save notification settings');
+        throw error;
+      }
+    };
+
     registerSaveHandler('notification-settings', handleSave);
     return () => unregisterSaveHandler('notification-settings');
   }, [settings, registerSaveHandler, unregisterSaveHandler]);

@@ -10,7 +10,7 @@ export interface ScheduledCampaign {
   timezone: string;
   message: string;
   messageType: string;
-  selectedRecipients: string[];
+  selectedRecipients: Array<{phone: string, name: string}>;
   settings: Record<string, any>;
   status: 'pending' | 'running' | 'completed' | 'cancelled';
   createdAt: string;

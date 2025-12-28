@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
 import { businessInfoService } from '../../../lib/businessInfoService';
 import { useSettingsSave } from '../../../context/SettingsSaveContext';
+import { MultiPhoneInput } from '../../../components/ui/MultiPhoneInput';
 
 interface UserProfileSettingsProps {
   isActive: boolean;
@@ -170,17 +171,13 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ isActive }) =
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <Phone className="w-4 h-4 text-gray-500" />
-              Business Phone
-            </label>
-            <input
-              type="tel"
+          <div className="md:col-span-2">
+            <MultiPhoneInput
               value={formData.businessPhone}
-              onChange={(e) => setFormData({ ...formData, businessPhone: e.target.value })}
+              onChange={(value) => setFormData({ ...formData, businessPhone: value })}
               placeholder="+255 XXX XXX XXX"
-              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+              label="Business Phone"
+              maxPhones={3}
             />
           </div>
 

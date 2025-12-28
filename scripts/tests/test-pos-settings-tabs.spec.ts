@@ -14,7 +14,7 @@
  * 7. Take screenshots for documentation
  */
 
-import { test, expect, Page } from '@playwright/test';
+import { test, Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -268,45 +268,51 @@ test.describe('POS Settings - Tab Switching Test', () => {
 async function testTabContent(page: Page, tabName: string) {
   try {
     switch (tabName) {
-      case 'General':
+      case 'General': {
         // Check for theme selector
         const themeSelect = await page.locator('select[name*="theme"]').count();
         console.log(`    - Found ${themeSelect} theme selector(s)`);
-        
+
         // Check for language selector
         const langSelect = await page.locator('select[name*="language"]').count();
         console.log(`    - Found ${langSelect} language selector(s)`);
         break;
+      }
 
-      case 'Receipt':
+      case 'Receipt': {
         // Check for toggles
         const toggles = await page.locator('input[type="checkbox"]').count();
         console.log(`    - Found ${toggles} toggle(s)`);
         break;
+      }
 
-      case 'Features':
+      case 'Features': {
         // Check for feature toggles
         const featureToggles = await page.locator('input[type="checkbox"]').count();
         console.log(`    - Found ${featureToggles} feature toggle(s)`);
         break;
+      }
 
-      case 'Pricing':
+      case 'Pricing': {
         // Check for pricing inputs
         const inputs = await page.locator('input[type="number"]').count();
         console.log(`    - Found ${inputs} number input(s)`);
         break;
+      }
 
-      case 'Notifications':
+      case 'Notifications': {
         // Check for notification settings
         const notifToggles = await page.locator('input[type="checkbox"]').count();
         console.log(`    - Found ${notifToggles} notification setting(s)`);
         break;
+      }
 
-      case 'Permissions':
+      case 'Permissions': {
         // Check for permission settings
         const permCheckboxes = await page.locator('input[type="checkbox"]').count();
         console.log(`    - Found ${permCheckboxes} permission checkbox(es)`);
         break;
+      }
     }
   } catch (error) {
     console.log(`    - Error checking content: ${error.message}`);

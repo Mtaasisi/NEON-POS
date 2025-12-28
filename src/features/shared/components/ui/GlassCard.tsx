@@ -10,7 +10,7 @@ const GlassCard: React.FC<GlassCardProps> = ({ children, className = '', onClick
   return (
     <div 
       className={`
-        backdrop-blur-xl rounded-xl 
+        backdrop-blur-xl rounded-2xl 
         border shadow-lg 
         p-6 sm:p-8 transition-all duration-300 
         hover:shadow-xl

@@ -460,23 +460,32 @@ let cacheRefreshPromise: Promise<any> | null = null;
 export class POSSettingsAPI {
   // Get current user - works with your Supabase auth
   private static async getCurrentUser() {
-    // Check cache first
-    if (currentUserCache && (Date.now() - currentUserCache.timestamp) < USER_CACHE_DURATION) {
-      return currentUserCache.user;
-    }
-    
-    // If there's already a refresh in progress, wait for it
-    if (cacheRefreshPromise) {
-      return await cacheRefreshPromise;
-    }
-    
-    // Start a new refresh
-    cacheRefreshPromise = this.performAuthRefresh();
     try {
-      const user = await cacheRefreshPromise;
-      return user;
-    } finally {
-      cacheRefreshPromise = null;
+      // Check cache first
+      if (currentUserCache && (Date.now() - currentUserCache.timestamp) < USER_CACHE_DURATION) {
+        return currentUserCache.user;
+      }
+
+      // If there's already a refresh in progress, wait for it
+      if (cacheRefreshPromise) {
+        return await cacheRefreshPromise;
+      }
+
+      // Start a new refresh
+      cacheRefreshPromise = this.performAuthRefresh();
+      try {
+        const user = await cacheRefreshPromise;
+        return user;
+      } finally {
+        cacheRefreshPromise = null;
+      }
+    } catch (error) {
+      // Handle "No active session" gracefully - return null instead of throwing
+      if (error.message === 'No active session' || error.message === 'User not authenticated') {
+        console.log('ℹ️ No active user session - using defaults');
+        return null;
+      }
+      throw error;
     }
   }
 
@@ -888,110 +897,85 @@ export class POSSettingsAPI {
     tableKey: SettingsTableKey
   ): Promise<T | null> {
     try {
+      // Import unified settings service dynamically
+      const { unifiedSettingsService } = await import('./unifiedSettingsService');
+
+      // Map tableKey to unified settings category
+      const categoryMap: Record<SettingsTableKey, string> = {
+        general: 'ui', // General settings are now in 'ui' category
+        pricing: 'dynamic_pricing',
+        receipt: 'receipt',
+        scanner: 'barcode_scanner',
+        delivery: 'delivery',
+        search: 'search_filter',
+        permissions: 'permissions',
+        loyalty: 'loyalty',
+        analytics: 'analytics',
+        notifications: 'notifications',
+        advanced: 'advanced'
+      };
+
+      const category = categoryMap[tableKey];
+
+      // Get current branch ID for branch-specific settings
+      const { getCurrentBranchId } = await import('./branchAwareApi');
+      const currentBranchId = getCurrentBranchId();
+
+      // Load settings from unified table for current branch
+      let settingsData = await unifiedSettingsService.getSettingsByCategory('branch', category, currentBranchId);
+
+      // If no branch-specific settings found, try user scope (for backward compatibility)
+      if (!settingsData || Object.keys(settingsData).length === 0) {
+        console.log(`⚠️ No branch-specific ${category} settings found, checking user scope...`);
+        settingsData = await unifiedSettingsService.getSettingsByCategory('user', category);
+      }
+
+      if (settingsData && Object.keys(settingsData).length > 0) {
+        // Convert unified settings format back to the expected format
+        const convertedSettings = await this.convertUnifiedSettingsToLegacyFormat(settingsData, tableKey);
+        return convertedSettings as T;
+      }
+
+      // No settings found, return defaults
       const user = await this.getCurrentUser();
-      const tableName = SETTINGS_TABLES[tableKey];
-
-      // First, try to get existing records for this user
-      const { data: existingData, error: existingError } = await supabase
-        .from(tableName)
-        .select('*')
-        .eq('user_id', user.id);
-
-      if (existingError) {
-        // Handle 400 Bad Request errors (table doesn't exist or RLS issues)
-        if (existingError.code === '400' || existingError.message?.includes('400') || existingError.message?.includes('Bad Request')) {
-          // Silently return defaults - no console spam
-          return this.getDefaultSettings(tableKey, user.id) as T;
-        }
-
-        // Handle 406 Not Acceptable errors (RLS policy issues)
-        if (existingError.code === '406' || existingError.message?.includes('Not Acceptable')) {
-          // Silently return defaults - no console spam
-          return this.getDefaultSettings(tableKey, user.id) as T;
-        }
-        
-        // Handle 42P01 (table doesn't exist)
-        if (existingError.code === '42P01' || existingError.message?.includes('does not exist')) {
-          // Silently return defaults - no console spam
-          return this.getDefaultSettings(tableKey, user.id) as T;
-        }
-        
-        // Handle PGRST301 (JWT expired or invalid)
-        if (existingError.code === 'PGRST301' || existingError.message?.includes('JWT')) {
-          // Silently return defaults - no console spam
-          return this.getDefaultSettings(tableKey, user.id) as T;
-        }
-        
-        // For any other database error, silently return defaults
-        return this.getDefaultSettings(tableKey, user.id) as T;
-      }
-
-      // Check if we have existing records for this user
-      if (existingData && existingData.length > 0) {
-        if (existingData.length === 1) {
-          return existingData[0] as T;
-        } else {
-          // Return the first record and let the migration clean up duplicates
-          return existingData[0] as T;
-        }
-      }
-
-      // If no user-specific settings found, try to get global settings (user_id = NULL)
-      const { data: globalData, error: globalError } = await supabase
-        .from(tableName)
-        .select('*')
-        .is('user_id', null)
-        .limit(1)
-        .single();
-
-      if (!globalError && globalData) {
-        // Found global settings, use them but associate with current user
-        console.log('ℹ️ Using global settings (user_id = NULL) for user:', user.id);
-        return globalData as T;
-      }
-
-      // No existing records found, create a default one
-      // Verify user exists in users table before using user_id
-      const { data: userExists } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', user.id)
-        .single();
-      
-      const defaultRecord = this.getDefaultSettings(
-        tableKey, 
-        userExists ? user.id : null // Use NULL if user doesn't exist
-      );
-      
-      const { data: insertData, error: insertError } = await supabase
-        .from(tableName)
-        .insert(defaultRecord)
-        .select()
-        .single();
-      
-      if (insertError) {
-        // Check if it's a foreign key constraint error (user doesn't exist)
-        if (insertError.code === '23503' || insertError.message?.includes('foreign key constraint')) {
-          console.log('ℹ️ User not found in users table, using global settings');
-          // Return defaults without user_id
-          return this.getDefaultSettings(tableKey, null) as T;
-        }
-        
-        // Silently return default settings even if insert fails for other reasons
-        return defaultRecord as T;
-      } else {
-        return insertData as T;
-      }
+      return this.getDefaultSettings(tableKey, user?.id || '') as T;
     } catch (error) {
-      // Silently handle all exceptions - return default settings instead of null
-      try {
-        const user = await this.getCurrentUser();
-        return this.getDefaultSettings(tableKey, user.id) as T;
-      } catch (userError) {
-        // If we can't even get the user, return null
-        return null;
-      }
+      console.warn('⚠️ No general settings found in database, using defaults');
+      return this.getDefaultSettings(tableKey, '') as T;
     }
+  }
+
+  // Convert unified settings format back to legacy format
+  static async convertUnifiedSettingsToLegacyFormat(
+    unifiedSettings: Record<string, any>,
+    tableKey: SettingsTableKey
+  ): Promise<any> {
+    const user = await this.getCurrentUser();
+
+    // Build the legacy format based on the tableKey
+    const legacyFormat: any = {
+      id: 'legacy-' + tableKey + '-' + (user ? user.id : 'global'),
+      user_id: user ? user.id : null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    // Map unified settings keys to legacy format keys
+    Object.entries(unifiedSettings).forEach(([key, setting]) => {
+      if (setting && typeof setting === 'object' && 'value' in setting) {
+        legacyFormat[key] = setting.value;
+      }
+    });
+
+    return legacyFormat;
+  }
+
+  // Get setting type based on value
+  static getSettingType(value: any): string {
+    if (typeof value === 'boolean') return 'boolean';
+    if (typeof value === 'number') return 'number';
+    if (typeof value === 'string') return 'string';
+    return 'json';
   }
 
   // Generic function to save settings
@@ -1000,83 +984,54 @@ export class POSSettingsAPI {
     settings: Omit<T, 'id' | 'user_id' | 'created_at' | 'updated_at'>
   ): Promise<T | null> {
     try {
+      // Import unified settings service dynamically
+      const { unifiedSettingsService } = await import('./unifiedSettingsService');
+
+      // Map tableKey to unified settings category
+      const categoryMap: Record<SettingsTableKey, string> = {
+        general: 'ui', // General settings are now in 'ui' category
+        pricing: 'dynamic_pricing',
+        receipt: 'receipt',
+        scanner: 'barcode_scanner',
+        delivery: 'delivery',
+        search: 'search_filter',
+        permissions: 'permissions',
+        loyalty: 'loyalty',
+        analytics: 'analytics',
+        notifications: 'notifications',
+        advanced: 'advanced'
+      };
+
+      const category = categoryMap[tableKey];
+
+      // Get current branch ID for branch-specific settings
+      const { getCurrentBranchId } = await import('./branchAwareApi');
+      const currentBranchId = getCurrentBranchId();
+
+      // Convert settings to unified format and save each setting
+      const promises = Object.entries(settings).map(async ([key, value]) => {
+        return unifiedSettingsService.setSetting('branch', category, key, value, this.getSettingType(value), undefined, currentBranchId);
+      });
+
+      await Promise.all(promises);
+
+      // Clear business info cache if general settings were updated
+      if (tableKey === 'general') {
+        businessInfoService.clearCache();
+        console.log('🔄 Business info cache cleared - components will refresh');
+      }
+
+      // Return the settings in legacy format for compatibility
       const user = await this.getCurrentUser();
-      const tableName = SETTINGS_TABLES[tableKey];
-
-      // Check if settings already exist
-      const { data: existing, error: checkError } = await supabase
-        .from(tableName)
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (checkError && checkError.code !== 'PGRST116') {
-        // Handle 400 Bad Request errors - silently return defaults
-        if (checkError.code === '400' || checkError.message?.includes('400') || checkError.message?.includes('Bad Request')) {
-          return this.getDefaultSettings(tableKey, user.id) as T;
-        }
-      }
-
-      if (existing) {
-        // Update existing settings
-        const { id, ...updateData } = settings;
-
-        const { data, error } = await supabase
-          .from(tableName)
-          .update({
-            ...updateData,
-            user_id: user.id
-          })
-          .eq('user_id', user.id)
-          .select()
-          .single();
-
-        if (error) {
-          // Check for foreign key constraint errors
-          if (error.code === '23503' || error.message?.includes('foreign key constraint')) {
-            console.log('ℹ️ User not found in users table - cannot update settings');
-          }
-          console.error(`Database update error for ${tableKey}:`, error.message);
-          return null;
-        }
-        
-        // Clear business info cache if general settings were updated
-        if (tableKey === 'general') {
-          businessInfoService.clearCache();
-          console.log('🔄 Business info cache cleared - components will refresh');
-        }
-        
-        return data as T;
-      } else {
-        // Insert new settings
-        const { data, error } = await supabase
-          .from(tableName)
-          .insert({
-            ...settings,
-            user_id: user.id
-          })
-          .select()
-          .single();
-
-        if (error) {
-          // Check for foreign key constraint errors
-          if (error.code === '23503' || error.message?.includes('foreign key constraint')) {
-            console.log('ℹ️ User not found in users table - cannot save settings');
-          }
-          // Silently return null on error
-          return null;
-        }
-
-        // Clear business info cache if general settings were created
-        if (tableKey === 'general') {
-          businessInfoService.clearCache();
-          console.log('🔄 Business info cache cleared - components will refresh');
-        }
-
-        return data as T;
-      }
+      return {
+        ...settings,
+        id: 'legacy-' + tableKey + '-' + (user?.id || 'global'),
+        user_id: user?.id || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as T;
     } catch (error) {
-      // Silently handle all errors
+      console.error('Error saving settings:', error);
       return null;
     }
   }
@@ -1087,27 +1042,54 @@ export class POSSettingsAPI {
     updates: Partial<Omit<T, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
   ): Promise<T | null> {
     try {
-      const user = await this.getCurrentUser();
-      const tableName = SETTINGS_TABLES[tableKey];
-      
-      const { data, error } = await supabase
-        .from(tableName)
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id)
-        .select()
-        .single();
+      // Import unified settings service dynamically
+      const { unifiedSettingsService } = await import('./unifiedSettingsService');
 
-      if (error) {
-        // Silently return null on error
-        return null;
+      // Map tableKey to unified settings category
+      const categoryMap: Record<SettingsTableKey, string> = {
+        general: 'ui', // General settings are now in 'ui' category
+        pricing: 'dynamic_pricing',
+        receipt: 'receipt',
+        scanner: 'barcode_scanner',
+        delivery: 'delivery',
+        search: 'search_filter',
+        permissions: 'permissions',
+        loyalty: 'loyalty',
+        analytics: 'analytics',
+        notifications: 'notifications',
+        advanced: 'advanced'
+      };
+
+      const category = categoryMap[tableKey];
+
+      // Get current branch ID for branch-specific settings
+      const { getCurrentBranchId } = await import('./branchAwareApi');
+      const currentBranchId = getCurrentBranchId();
+
+      // Update each setting individually
+      const promises = Object.entries(updates).map(async ([key, value]) => {
+        return unifiedSettingsService.setSetting('branch', category, key, value, this.getSettingType(value), undefined, currentBranchId);
+      });
+
+      await Promise.all(promises);
+
+      // Clear business info cache if general settings were updated
+      if (tableKey === 'general') {
+        businessInfoService.clearCache();
+        console.log('🔄 Business info cache cleared - components will refresh');
       }
 
-      return data as T;
+      // Return the updated settings in legacy format for compatibility
+      const user = await this.getCurrentUser();
+      return {
+        ...updates,
+        id: 'legacy-' + tableKey + '-' + (user?.id || 'global'),
+        user_id: user?.id || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as T;
     } catch (error) {
-      // Silently handle all errors
+      console.error('Error updating settings:', error);
       return null;
     }
   }
@@ -1115,22 +1097,36 @@ export class POSSettingsAPI {
   // Generic function to delete settings
   static async deleteSettings(tableKey: SettingsTableKey): Promise<boolean> {
     try {
-      const user = await this.getCurrentUser();
-      const tableName = SETTINGS_TABLES[tableKey];
-      
-      const { error } = await supabase
-        .from(tableName)
-        .delete()
-        .eq('user_id', user.id);
+      // Import unified settings service dynamically
+      const { unifiedSettingsService } = await import('./unifiedSettingsService');
 
-      if (error) {
-        // Silently return false on error
-        return false;
-      }
+      // Map tableKey to unified settings category
+      const categoryMap: Record<SettingsTableKey, string> = {
+        general: 'ui', // General settings are now in 'ui' category
+        pricing: 'dynamic_pricing',
+        receipt: 'receipt',
+        scanner: 'barcode_scanner',
+        delivery: 'delivery',
+        search: 'search_filter',
+        permissions: 'permissions',
+        loyalty: 'loyalty',
+        analytics: 'analytics',
+        notifications: 'notifications',
+        advanced: 'advanced'
+      };
 
+      const category = categoryMap[tableKey];
+
+      // Get all settings in the category and delete them
+      const settings = await unifiedSettingsService.getSettingsByCategory('user', category);
+      const promises = Object.keys(settings).map(key =>
+        unifiedSettingsService.deleteSetting('user', category, key)
+      );
+
+      await Promise.all(promises);
       return true;
     } catch (error) {
-      // Silently handle all errors
+      console.error('Error deleting settings:', error);
       return false;
     }
   }
@@ -1167,22 +1163,43 @@ export class POSSettingsAPI {
   // Reset settings to defaults
   static async resetSettings(tableKey: SettingsTableKey): Promise<boolean> {
     try {
-      const user = await this.getCurrentUser();
-      const tableName = SETTINGS_TABLES[tableKey];
-      
-      const { error } = await supabase
-        .from(tableName)
-        .delete()
-        .eq('user_id', user.id);
+      // Import unified settings service dynamically
+      const { unifiedSettingsService } = await import('./unifiedSettingsService');
 
-      if (error) {
-        // Silently return false on error
-        return false;
+      // Get current branch ID for branch-specific settings
+      const { getCurrentBranchId } = await import('./branchAwareApi');
+      const currentBranchId = getCurrentBranchId();
+
+      // Map tableKey to unified settings category
+      const categoryMap: Record<SettingsTableKey, string> = {
+        general: 'ui',
+        pricing: 'dynamic_pricing',
+        receipt: 'receipt',
+        scanner: 'barcode_scanner',
+        delivery: 'delivery',
+        search: 'search_filter',
+        permissions: 'permissions',
+        loyalty: 'loyalty',
+        analytics: 'analytics',
+        notifications: 'notifications',
+        advanced: 'advanced'
+      };
+
+      const category = categoryMap[tableKey];
+
+      // Get all settings for this category and branch, then delete them
+      const settingsToDelete = await unifiedSettingsService.getSettingsByCategory('branch', category, currentBranchId);
+      if (Object.keys(settingsToDelete).length > 0) {
+        const deletePromises = Object.keys(settingsToDelete).map(key =>
+          unifiedSettingsService.deleteSetting('branch', category, key, undefined, currentBranchId)
+        );
+        await Promise.all(deletePromises);
       }
 
+      console.log(`✅ Reset ${tableKey} settings to defaults for branch ${currentBranchId}`);
       return true;
     } catch (error) {
-      // Silently handle all errors
+      console.error(`Error in resetSettings for ${tableKey}:`, error);
       return false;
     }
   }

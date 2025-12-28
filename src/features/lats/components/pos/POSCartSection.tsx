@@ -3,6 +3,7 @@ import { ShoppingCart, User, XCircle, Phone, Crown, Search, Plus, Percent, Dolla
 import GlassCard from '../../../../features/shared/components/ui/GlassCard';
 import VariantCartItem from './VariantCartItem';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
+import { useAuth } from '../../../../context/AuthContext';
 
 interface Customer {
   id: string;
@@ -81,9 +82,20 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
   onEditCustomer,
   isTaxEnabled = true
 }) => {
+  const { currentUser } = useAuth();
+
   // Calculate total item count
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const { playClickSound, playPaymentSound, playDeleteSound } = usePOSClickSounds();
+
+  // Permission checks
+  const userPermissions = currentUser?.permissions || [];
+  const hasAllPermissions = userPermissions.includes('all');
+  const canApplyDiscounts = hasAllPermissions || userPermissions.includes('apply_discounts');
+  const canProcessRefunds = hasAllPermissions || userPermissions.includes('process_refunds');
+  const canManageInstallments = hasAllPermissions || userPermissions.includes('financial_reports');
+  const canPreviewInvoices = hasAllPermissions || userPermissions.includes('view_reports');
+  const canManageTradeIns = hasAllPermissions || userPermissions.includes('view_devices');
   
   // Track which item is expanded (only one at a time)
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
@@ -148,9 +160,9 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
   };
 
   return (
-    <div className="lg:w-[450px] flex-shrink-0 pos-cart-section">
-      <GlassCard className="p-6 h-full flex flex-col">
-        <div className="flex items-center gap-3 mb-6 flex-shrink-0">
+    <div className="h-full flex flex-col overflow-hidden min-h-0">
+      <GlassCard className="p-0 h-full flex flex-col overflow-hidden min-h-0 rounded-none">
+        <div className="flex items-center gap-3 mb-6 flex-shrink-0 p-6">
           <div className="p-2 bg-green-50 rounded-lg">
             <ShoppingCart className="w-6 h-6 text-green-600" />
           </div>
@@ -297,7 +309,7 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
         <div className="my-4 border-t border-gray-200"></div>
 
         {/* Cart Items - Scrollable */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2" style={{ minHeight: 0 }}>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 min-h-0">
           {cartItems.length === 0 ? (
             <div className="text-center py-12">
               <ShoppingCart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -329,8 +341,8 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
 
         {/* Cart Summary - Compact Redesign with Larger Touch Targets */}
         {cartItems.length > 0 && (
-          <div className="flex-shrink-0 border-t border-gray-200 pt-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+          <div className="flex-shrink-0 border-t border-gray-200 pt-4 px-3">
+            <div className="bg-white border border-gray-200 rounded-xl p-3 mb-4">
               {/* Summary Row - Larger Text */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3 text-base">
@@ -351,7 +363,7 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                           playClickSound();
                           setIsDiscountExpanded(true);
                         }}
-                        className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all duration-300 hover:shadow-md ${
+                        className={`w-full flex items-center justify-between p-2 rounded-xl border-2 transition-all duration-300 hover:shadow-md ${
                           discountAmount > 0
                             ? 'bg-green-50 border-green-200 hover:bg-green-100'
                             : 'bg-orange-50 border-orange-200 hover:bg-orange-100'
@@ -397,24 +409,25 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                     </div>
                 ) : (
                     /* Expanded State - Full Discount Section */
-                    <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-200 overflow-hidden">
-                      {/* Header with collapse button */}
-                      <div className="flex items-center justify-between p-4 border-b border-orange-200">
-                        <div className="flex items-center gap-2">
-                          <Percent className="w-5 h-5 text-orange-600" />
-                          <span className="font-semibold text-gray-900">Discount Options</span>
+                    canApplyDiscounts && (
+                      <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-200 overflow-hidden">
+                        {/* Header with collapse button */}
+                        <div className="flex items-center justify-between p-4 border-b border-orange-200">
+                          <div className="flex items-center gap-2">
+                            <Percent className="w-5 h-5 text-orange-600" />
+                            <span className="font-semibold text-gray-900">Discount Options</span>
+                          </div>
+                    <button
+                      onClick={() => {
+                        playClickSound();
+                              setIsDiscountExpanded(false);
+                            }}
+                            className="p-2 hover:bg-orange-100 rounded-lg transition-colors"
+                            title="Collapse"
+                          >
+                            <ChevronUp className="w-5 h-5 text-gray-600" />
+                          </button>
                         </div>
-                  <button
-                    onClick={() => {
-                      playClickSound();
-                            setIsDiscountExpanded(false);
-                          }}
-                          className="p-2 hover:bg-orange-100 rounded-lg transition-colors"
-                          title="Collapse"
-                        >
-                          <ChevronUp className="w-5 h-5 text-gray-600" />
-                        </button>
-                      </div>
 
                       {/* Content */}
                       <div className="p-4">
@@ -543,8 +556,9 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                         )}
                       </div>
                     </div>
-                )}
+                )
                 </div>
+              )}
 
               {/* Tax - Larger Text */}
               {isTaxEnabled && (
@@ -555,7 +569,7 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
               )}
               
               {/* Total - Prominent & Larger */}
-              <div className="flex justify-between items-center bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+              <div className="flex justify-between items-center bg-green-50 border border-green-200 rounded-lg px-3 py-3">
                 <span className="text-lg font-bold text-gray-900">Total:</span>
                 <span className="text-2xl font-bold text-green-600">TZS {finalAmount.toLocaleString()}</span>
               </div>
@@ -569,17 +583,17 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
               </div>
             )}
 
-            {/* Action Buttons - Grid Layout with Larger Touch Targets */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Action Buttons - Grid Layout with Minimal Gaps */}
+            <div className="grid grid-cols-2 gap-2">
                 {/* Installment Plan Button */}
-                {onShowInstallmentModal && (
+                {onShowInstallmentModal && canManageInstallments && (
                   <button
                     onClick={() => {
                       playClickSound();
                       onShowInstallmentModal();
                     }}
                     disabled={cartItems.length === 0 || !selectedCustomer}
-                    className="bg-purple-500 hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-4 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-base"
+                    className="bg-purple-500 hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-3 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-base"
                     title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Create installment plan"}
                   >
                     <CreditCard className="w-5 h-5" />
@@ -588,14 +602,14 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                 )}
 
                 {/* Trade-In Button */}
-                {onShowTradeInModal && (
+                {onShowTradeInModal && canManageTradeIns && (
                   <button
                     onClick={() => {
                       playClickSound();
                       onShowTradeInModal();
                     }}
                     disabled={cartItems.length === 0 || !selectedCustomer}
-                    className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-4 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-base"
+                    className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed text-white font-bold py-4 px-3 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-base"
                     title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Add trade-in device"}
                   >
                     <Repeat className="w-5 h-5" />
@@ -605,14 +619,14 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
               </div>
 
             {/* Preview Invoice Button - Show before payment */}
-            {onPreviewInvoice && cartItems.length > 0 && (
+            {onPreviewInvoice && cartItems.length > 0 && canPreviewInvoices && (
               <button
                 onClick={() => {
                   playClickSound();
                   onPreviewInvoice();
                 }}
                 disabled={!selectedCustomer}
-                className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg mt-3 flex items-center justify-center gap-2"
+                className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg mt-2 flex items-center justify-center gap-2"
                 title={!selectedCustomer ? "Please select a customer first to preview invoice" : "Preview invoice with current prices"}
               >
                 <FileText className="w-5 h-5" />
@@ -627,7 +641,7 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                 onProcessPayment();
               }}
               disabled={cartItems.length === 0 || !selectedCustomer}
-              className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl mt-3 text-lg"
+              className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-3 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl mt-2 text-lg"
               title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Process payment"}
             >
               Process Payment

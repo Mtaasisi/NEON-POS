@@ -162,26 +162,50 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     root.style.setProperty('--show-barcodes', settings.show_barcodes ? 'block' : 'none');
   };
 
+  // Helper function to handle both legacy and unified settings format
+  const getBooleanValue = (value: any): boolean => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'object' && value !== null && 'value' in value) {
+      return Boolean(value.value);
+    }
+    return Boolean(value);
+  };
+
+  // Helper function to handle both legacy and unified number format
+  const getNumberValue = (value: any, defaultValue: number): number => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'object' && value !== null && 'value' in value) {
+      return Number(value.value) || defaultValue;
+    }
+    return Number(value) || defaultValue;
+  };
+
   // Apply behavior settings
   const applyBehaviorSettings = (settings: GeneralSettings) => {
     const root = document.documentElement;
-    
+
+    const autoCompleteSearch = getBooleanValue(settings.auto_complete_search);
+    const confirmDelete = getBooleanValue(settings.confirm_delete);
+    const showConfirmations = getBooleanValue(settings.show_confirmations);
+    const enableSoundEffects = getBooleanValue(settings.enable_sound_effects);
+    const enableAnimations = getBooleanValue(settings.enable_animations);
+
     // Store behavior settings in localStorage for components to access
-    localStorage.setItem('autoCompleteSearch', settings.auto_complete_search.toString());
-    localStorage.setItem('confirmDelete', settings.confirm_delete.toString());
-    localStorage.setItem('showConfirmations', settings.show_confirmations.toString());
-    localStorage.setItem('enableSoundEffects', settings.enable_sound_effects.toString());
-    localStorage.setItem('enableAnimations', settings.enable_animations.toString());
-    
+    localStorage.setItem('autoCompleteSearch', autoCompleteSearch.toString());
+    localStorage.setItem('confirmDelete', confirmDelete.toString());
+    localStorage.setItem('showConfirmations', showConfirmations.toString());
+    localStorage.setItem('enableSoundEffects', enableSoundEffects.toString());
+    localStorage.setItem('enableAnimations', enableAnimations.toString());
+
     // Apply data attributes to root element for CSS targeting
-    root.setAttribute('data-enable-animations', settings.enable_animations.toString());
-    root.setAttribute('data-enable-sounds', settings.enable_sound_effects.toString());
-    root.setAttribute('data-auto-complete', settings.auto_complete_search.toString());
-    root.setAttribute('data-confirm-delete', settings.confirm_delete.toString());
-    root.setAttribute('data-show-confirmations', settings.show_confirmations.toString());
+    root.setAttribute('data-enable-animations', enableAnimations.toString());
+    root.setAttribute('data-enable-sounds', enableSoundEffects.toString());
+    root.setAttribute('data-auto-complete', autoCompleteSearch.toString());
+    root.setAttribute('data-confirm-delete', confirmDelete.toString());
+    root.setAttribute('data-show-confirmations', showConfirmations.toString());
     
     // Add/remove body class for animations
-    if (settings.enable_animations) {
+    if (enableAnimations) {
       document.body.classList.remove('animations-disabled');
     } else {
       document.body.classList.add('animations-disabled');
@@ -190,10 +214,15 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
 
   // Apply performance settings
   const applyPerformanceSettings = (settings: GeneralSettings) => {
-    localStorage.setItem('enableCaching', settings.enable_caching.toString());
-    localStorage.setItem('cacheDuration', settings.cache_duration.toString());
-    localStorage.setItem('enableLazyLoading', settings.enable_lazy_loading.toString());
-    localStorage.setItem('maxSearchResults', settings.max_search_results.toString());
+    const enableCaching = getBooleanValue(settings.enable_caching);
+    const cacheDuration = getNumberValue(settings.cache_duration, 3600000);
+    const enableLazyLoading = getBooleanValue(settings.enable_lazy_loading);
+    const maxSearchResults = getNumberValue(settings.max_search_results, 50);
+
+    localStorage.setItem('enableCaching', enableCaching.toString());
+    localStorage.setItem('cacheDuration', cacheDuration.toString());
+    localStorage.setItem('enableLazyLoading', enableLazyLoading.toString());
+    localStorage.setItem('maxSearchResults', maxSearchResults.toString());
   };
 
   // Apply all settings to the UI

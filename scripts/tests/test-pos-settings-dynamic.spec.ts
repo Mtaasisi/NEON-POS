@@ -11,7 +11,7 @@
  * 4. Saves and verifies
  */
 
-import { test, expect, Page } from '@playwright/test';
+import { test, Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 

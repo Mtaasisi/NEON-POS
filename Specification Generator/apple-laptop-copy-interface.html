@@ -1,0 +1,1790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Laptop Sales Copy Generator - Dukani Pro</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f7;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #1d1d1f;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #424245;
+        }
+        select, input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d2d2d7;
+            border-radius: 8px;
+            font-size: 16px;
+            background: #fff;
+        }
+        select:focus, input:focus {
+            outline: none;
+            border-color: #0071e3;
+            box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
+        }
+        button {
+            background: #0071e3;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #0051a8;
+        }
+        button:disabled {
+            background: #d2d2d7;
+            cursor: not-allowed;
+        }
+        .output {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f5f5f7;
+            border-radius: 8px;
+            border-left: 4px solid #0071e3;
+            white-space: pre-wrap;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .copy-btn {
+            background: #34c759;
+            margin-top: 10px;
+        }
+        .copy-btn:hover {
+            background: #28a745;
+        }
+        .model-info {
+            background: #e8f4fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #0071e3;
+        }
+        .model-specs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            font-size: 14px;
+        }
+        .spec-item {
+            background: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #e8f4fd;
+        }
+        .hidden {
+            display: none;
+        }
+        .option-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .option-btn {
+            padding: 10px 12px;
+            border: 2px solid #d2d2d7;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            color: #424245;
+            text-align: center;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .option-btn:hover {
+            border-color: #0071e3;
+            background: #f5f9ff;
+        }
+        .option-btn.active {
+            background: #0071e3;
+            border-color: #0071e3;
+            color: white;
+        }
+        .option-btn.disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        .processor-btn {
+            background: #fff8e1;
+            border-color: #f9a825;
+        }
+        .processor-btn.active {
+            background: #f9a825;
+            color: white;
+        }
+        .color-btn {
+            background: #f3e5f5;
+            border-color: #9c27b0;
+        }
+        .color-btn.active {
+            background: #9c27b0;
+            color: white;
+        }
+        .selected-specs {
+            margin-top: 15px;
+            padding: 12px;
+            background: #e8f4fd;
+            border-radius: 8px;
+            border: 1px solid #0071e3;
+            font-size: 14px;
+        }
+        .placeholder-text {
+            color: #86868b;
+            font-style: italic;
+            font-size: 14px;
+            text-align: center;
+            width: 100%;
+            display: block;
+            padding: 20px;
+        }
+
+        /* Condition and Extras Buttons */
+        .condition-btn, .extras-btn {
+            padding: 10px 15px;
+            margin: 5px;
+            border: 2px solid #0071e3;
+            background: white;
+            color: #0071e3;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .condition-btn:hover, .extras-btn:hover {
+            background: #0071e3;
+            color: white;
+        }
+
+        .condition-btn.active, .extras-btn.active {
+            background: #0071e3;
+            color: white;
+        }
+
+        /* Conditional Details Fields */
+        .condition-details, .extras-details {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+        .condition-details input, .extras-details input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .condition-details input:focus, .extras-details input:focus {
+            outline: none;
+            border-color: #0071e3;
+            box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.2);
+        }
+
+        /* Searchable Model Dropdown */
+        #modelSearch {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        #modelSearch:focus {
+            outline: none;
+            border-color: #0071e3;
+            box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
+        }
+
+        .model-dropdown {
+            position: relative;
+            margin-top: 5px;
+        }
+
+        .dropdown-header {
+            padding: 12px;
+            background: #f8f9fa;
+            color: #6c757d;
+            font-style: italic;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+        .model-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .model-list.show {
+            display: block;
+        }
+
+        .model-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #f8f9fa;
+            transition: background-color 0.2s ease;
+        }
+
+        .model-item:hover {
+            background: #f8f9fa;
+        }
+
+        .model-item.selected {
+            background: #0071e3;
+            color: white;
+        }
+
+        .model-item:last-child {
+            border-bottom: none;
+        }
+
+        .model-highlight {
+            font-weight: bold;
+            color: #0071e3;
+        }
+
+        /* Database Management Styles */
+        .database-section {
+            margin-bottom: 30px;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .db-toggle-btn {
+            width: 100%;
+            background: #f8f9fa;
+            border: none;
+            padding: 16px 20px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.3s ease;
+        }
+
+        .db-toggle-btn:hover {
+            background: #e9ecef;
+        }
+
+        .database-content {
+            padding: 20px;
+            background: white;
+        }
+
+        .db-actions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .db-btn {
+            background: #0071e3;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s ease;
+        }
+
+        .db-btn:hover {
+            background: #0056cc;
+        }
+
+        .model-list-view {
+            margin-top: 20px;
+        }
+
+        .model-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 16px;
+        }
+
+        .model-card {
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 16px;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .model-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .model-card-title {
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+
+        .model-card-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .model-card-btn {
+            background: #86868b;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.3s ease;
+        }
+
+        .model-card-btn:hover {
+            background: #6e6e73;
+        }
+
+        .model-card-btn.edit {
+            background: #0071e3;
+        }
+
+        .model-card-btn.edit:hover {
+            background: #0056cc;
+        }
+
+        .model-card-btn.delete {
+            background: #d63031;
+        }
+
+        .model-card-btn.delete:hover {
+            background: #b71515;
+        }
+
+        .model-card-info {
+            font-size: 14px;
+            color: #6e6e73;
+            margin-bottom: 8px;
+        }
+
+        .model-form {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+        .form-section {
+            margin-bottom: 24px;
+            padding: 16px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+        }
+
+        .form-section h5 {
+            margin: 0 0 16px 0;
+            color: #1d1d1f;
+            font-size: 16px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .save-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .save-btn:hover {
+            background: #218838;
+        }
+
+        .cancel-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .cancel-btn:hover {
+            background: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍎 Apple Laptop Sales Copy Generator</h1>
+        <p style="text-align: center; color: #6e6e73; margin-bottom: 30px;">
+            Generate professional sales descriptions for your Dukani Pro inventory<br>
+            <small style="color: #86868b;">Offline-ready with accurate Apple configurations database</small>
+        </p>
+
+        <!-- Database Management Section -->
+        <div class="database-section">
+            <button type="button" class="db-toggle-btn" onclick="toggleDatabaseSection()">
+                📊 Database Management <span id="dbToggleIcon">▼</span>
+            </button>
+            <div id="databaseContent" class="database-content hidden">
+                <h3>📋 Current Models in Database (<span id="modelCount">0</span>)</h3>
+                <div class="db-actions">
+                    <button type="button" class="db-btn" onclick="viewAllModels()">👁️ View All Models</button>
+                    <button type="button" class="db-btn" onclick="addNewModel()">➕ Add New Model</button>
+                    <button type="button" class="db-btn" onclick="downloadDatabase()">💾 Download Database</button>
+                </div>
+
+                <!-- Model List View -->
+                <div id="modelListView" class="model-list-view hidden">
+                    <div id="modelGrid" class="model-grid"></div>
+                </div>
+
+                <!-- Add/Edit Model Form -->
+                <div id="modelForm" class="model-form hidden">
+                    <h4 id="formTitle">Add New Apple Laptop Model</h4>
+                    <form id="manualDataForm">
+                        <div class="form-row">
+            <div class="form-group">
+                                <label for="modelId">Model ID (e.g., A2681):</label>
+                                <input type="text" id="modelId" required placeholder="A2681">
+                            </div>
+                            <div class="form-group">
+                                <label for="family">Family:</label>
+                                <select id="family" required>
+                                    <option value="MacBook Air">MacBook Air</option>
+                                    <option value="MacBook Pro">MacBook Pro</option>
+                                    <option value="MacBook">MacBook</option>
+                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="generation">Generation:</label>
+                                <input type="text" id="generation" required placeholder="13-inch, M2, 2022">
+                            </div>
+                            <div class="form-group">
+                                <label for="year">Year:</label>
+                                <input type="text" id="year" required placeholder="2022">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="modelNumber">Model Number:</label>
+                                <input type="text" id="modelNumber" required placeholder="A2681">
+                            </div>
+                            <div class="form-group">
+                                <label for="originalPrice">Original Price (USD):</label>
+                                <input type="number" id="originalPrice" placeholder="1299">
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h5>🎨 Display Specifications</h5>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="displaySize">Display Size:</label>
+                                    <input type="text" id="displaySize" placeholder="13.6-inch">
+                                </div>
+                                <div class="form-group">
+                                    <label for="displayType">Display Type:</label>
+                                    <input type="text" id="displayType" placeholder="Liquid Retina display">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="displayResolution">Resolution:</label>
+                                <input type="text" id="displayResolution" placeholder="2560 x 1664">
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h5>🧠 Processor & Memory</h5>
+                            <div class="form-group">
+                                <label for="processors">Processors (comma-separated):</label>
+                                <input type="text" id="processors" placeholder="Apple M2 chip">
+                            </div>
+                            <div class="form-group">
+                                <label for="memoryOptions">Memory Options (comma-separated):</label>
+                                <input type="text" id="memoryOptions" placeholder="8GB, 16GB, 24GB">
+                            </div>
+                            <div class="form-group">
+                                <label for="storageOptions">Storage Options (comma-separated):</label>
+                                <input type="text" id="storageOptions" placeholder="256GB, 512GB, 1TB, 2TB">
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h5>🔋 Battery & Performance</h5>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="battery">Battery Life:</label>
+                                    <input type="text" id="battery" placeholder="Up to 18 hours">
+                                </div>
+                                <div class="form-group">
+                                    <label for="graphics">Graphics:</label>
+                                    <input type="text" id="graphics" placeholder="Apple M2 GPU (10-core)">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h5>🔌 Ports & Connectivity</h5>
+                            <div class="form-group">
+                                <label for="ports">Ports (comma-separated):</label>
+                                <input type="text" id="ports" placeholder="Two Thunderbolt / USB 4 ports, 3.5mm headphone jack">
+                            </div>
+                            <div class="form-group">
+                                <label for="connectivity">Connectivity:</label>
+                                <input type="text" id="connectivity" placeholder="Wi-Fi 6E, Bluetooth 5.3">
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h5>📷 Camera & Audio</h5>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="camera">Camera:</label>
+                                    <input type="text" id="camera" placeholder="1080p FaceTime HD">
+                                </div>
+                                <div class="form-group">
+                                    <label for="audio">Audio:</label>
+                                    <input type="text" id="audio" placeholder="Four-speaker system">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h5>⌨️ Keyboard & Colors</h5>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="keyboard">Keyboard:</label>
+                                    <input type="text" id="keyboard" placeholder="Magic Keyboard with Touch ID">
+                                </div>
+                                <div class="form-group">
+                                    <label for="weight">Weight:</label>
+                                    <input type="text" id="weight" placeholder="2.7 pounds">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="colors">Colors (comma-separated):</label>
+                                <input type="text" id="colors" placeholder="Space Gray, Silver, Gold">
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="save-btn">💾 Save to Database</button>
+                            <button type="button" onclick="cancelEdit()" class="cancel-btn">❌ Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <form id="copyForm">
+            <div class="form-group">
+                <label for="modelSearch">Search Apple Model:</label>
+                <input type="text" id="modelSearch" placeholder="Type model number, year, or name (e.g., A2681, 2023, MacBook Air)" autocomplete="off">
+                <div id="modelDropdown" class="model-dropdown">
+                    <div class="dropdown-header">Select a model or start typing to search...</div>
+                    <div id="modelList" class="model-list"></div>
+                </div>
+                <input type="hidden" id="modelSelect" required>
+                <small style="color: #86868b; display: block; margin-top: 5px;">
+                    💡 For all 62 models, use: <code>node apple-laptop-copy-generator.mjs list</code>
+                </small>
+            </div>
+
+            <div id="modelInfo" class="model-info hidden">
+                <h3>Model Information:</h3>
+                <div id="modelSpecs" class="model-specs"></div>
+            </div>
+
+            <div class="form-group">
+                <label>RAM Options:</label>
+                <div id="ramButtons" class="option-buttons">
+                    <span class="placeholder-text">Select a model first</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Storage Options:</label>
+                <div id="storageButtons" class="option-buttons">
+                    <span class="placeholder-text">Select a model first</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Processor Options:</label>
+                <div id="processorButtons" class="option-buttons">
+                    <span class="placeholder-text">Select a model first</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Color Options:</label>
+                <div id="colorButtons" class="option-buttons">
+                    <span class="placeholder-text">Select a model first</span>
+                </div>
+            </div>
+
+            <div id="selectedSpecs" class="selected-specs" style="display: none;">
+                <strong>Selected: </strong><span id="selectedRam">No RAM selected</span> | <span id="selectedStorage">No storage selected</span> | <span id="selectedProcessor">No processor selected</span> | <span id="selectedColor">No color selected</span>
+            </div>
+
+            <div class="form-group">
+                <label>Condition:</label>
+                <div id="conditionButtons" class="option-buttons">
+                    <button type="button" class="condition-btn active" data-condition="Brand New – Sealed">Brand New</button>
+                    <button type="button" class="condition-btn" data-condition="Open Box – Like New">Open Box</button>
+                    <button type="button" class="condition-btn" data-condition="Used">Used</button>
+                </div>
+                <div id="conditionDetails" class="condition-details" style="display: none;">
+                    <input type="text" id="conditionDetailsInput" placeholder="e.g., Clean as new, minor scratches" value="Clean as new">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Extras/Accessories:</label>
+                <div id="extrasButtons" class="option-buttons">
+                    <button type="button" class="extras-btn active" data-extras="Original Charger">Original Charger</button>
+                    <button type="button" class="extras-btn" data-extras="Original Box">Original Box</button>
+                    <button type="button" class="extras-btn" data-extras="Full Accessories">Full Accessories</button>
+                    <button type="button" class="extras-btn" data-extras="Other">Other</button>
+                </div>
+                <div id="extrasDetails" class="extras-details" style="display: none;">
+                    <input type="text" id="extrasDetailsInput" placeholder="Specify other extras/accessories">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="price">Price:</label>
+                <input type="text" id="price" placeholder="e.g., 1,300,000 TSH" required>
+            </div>
+
+            <button type="submit">Generate Sales Copy</button>
+        </form>
+
+        <div id="output" class="output hidden">
+            <h3>Generated Sales Copy:</h3>
+            <div id="copyContent"></div>
+            <button class="copy-btn" onclick="copyToClipboard()">Copy to Clipboard</button>
+        </div>
+    </div>
+
+    <script>
+        // Load the database (embedded for offline use)
+        let database = null;
+
+        // Function to load database
+        async function loadDatabase() {
+            try {
+                const response = await fetch('./apple-laptops-database.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                database = await response.json();
+                console.log('Database loaded successfully - 62 models available');
+                initializeModelSearch();
+                return true;
+            } catch (error) {
+                console.error('Failed to load database:', error);
+                alert('Failed to load laptop database. Please ensure apple-laptops-database.json is in the same folder. Alternatively, use the command line tool: node apple-laptop-copy-generator.mjs');
+                    return false;
+                }
+            }
+
+        // Database Management Functions
+        function toggleDatabaseSection() {
+            const content = document.getElementById('databaseContent');
+            const icon = document.getElementById('dbToggleIcon');
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                icon.textContent = '▲';
+            } else {
+                content.classList.add('hidden');
+                icon.textContent = '▼';
+            }
+        }
+
+        function viewAllModels() {
+            if (!database) {
+                alert('Database not loaded yet. Please wait and try again.');
+                return;
+            }
+
+            const modelGrid = document.getElementById('modelGrid');
+            const modelCount = document.getElementById('modelCount');
+            modelCount.textContent = Object.keys(database.models).length;
+
+            modelGrid.innerHTML = '';
+
+            Object.keys(database.models).sort().forEach(modelId => {
+                const model = database.models[modelId];
+                const card = document.createElement('div');
+                card.className = 'model-card';
+                card.innerHTML = `
+                    <div class="model-card-header">
+                        <div class="model-card-title">${modelId}</div>
+                        <div class="model-card-actions">
+                            <button class="model-card-btn edit" onclick="editModel('${modelId}')">✏️ Edit</button>
+                            <button class="model-card-btn delete" onclick="deleteModel('${modelId}')">🗑️ Delete</button>
+                        </div>
+                    </div>
+                    <div class="model-card-info">
+                        <strong>${model.family}</strong> - ${model.generation} (${model.year})<br>
+                        <small>💰 $${model.original_price_usd || 'N/A'} | 📏 ${model.display?.size || 'N/A'}</small>
+                    </div>
+                `;
+                modelGrid.appendChild(card);
+            });
+
+            document.getElementById('modelListView').classList.remove('hidden');
+            document.getElementById('modelForm').classList.add('hidden');
+        }
+
+        function addNewModel() {
+            document.getElementById('formTitle').textContent = 'Add New Apple Laptop Model';
+            document.getElementById('manualDataForm').reset();
+            document.getElementById('modelId').readOnly = false;
+            document.getElementById('modelListView').classList.add('hidden');
+            document.getElementById('modelForm').classList.remove('hidden');
+        }
+
+        function editModel(modelId) {
+            if (!database || !database.models[modelId]) {
+                alert('Model not found in database.');
+                return;
+            }
+
+            const model = database.models[modelId];
+            document.getElementById('formTitle').textContent = `Edit Model: ${modelId}`;
+            document.getElementById('modelId').value = modelId;
+            document.getElementById('modelId').readOnly = true;
+            document.getElementById('family').value = model.family || '';
+            document.getElementById('generation').value = model.generation || '';
+            document.getElementById('year').value = model.year || '';
+            document.getElementById('modelNumber').value = model.model_number || '';
+            document.getElementById('originalPrice').value = model.original_price_usd || '';
+
+            // Display specs
+            document.getElementById('displaySize').value = model.display?.size || '';
+            document.getElementById('displayType').value = model.display?.type || '';
+            document.getElementById('displayResolution').value = model.display?.resolution || '';
+
+            // Processor & Memory
+            document.getElementById('processors').value = Array.isArray(model.processors) ? model.processors.join(', ') : model.processors || '';
+            document.getElementById('memoryOptions').value = Array.isArray(model.memory) ? model.memory.join(', ') : model.memory || '';
+            document.getElementById('storageOptions').value = Array.isArray(model.storage) ? model.storage.join(', ') : model.storage || '';
+
+            // Battery & Performance
+            document.getElementById('battery').value = model.battery || '';
+            document.getElementById('graphics').value = model.graphics || '';
+
+            // Ports & Connectivity
+            document.getElementById('ports').value = Array.isArray(model.ports) ? model.ports.join(', ') : model.ports || '';
+            document.getElementById('connectivity').value = Array.isArray(model.connectivity) ? model.connectivity.join(', ') : model.connectivity || '';
+
+            // Camera & Audio
+            document.getElementById('camera').value = model.camera || '';
+            document.getElementById('audio').value = model.audio || '';
+
+            // Keyboard & Colors
+            document.getElementById('keyboard').value = model.keyboard || '';
+            document.getElementById('weight').value = model.weight || '';
+            document.getElementById('colors').value = Array.isArray(model.colors) ? model.colors.join(', ') : model.colors || '';
+
+            document.getElementById('modelListView').classList.add('hidden');
+            document.getElementById('modelForm').classList.remove('hidden');
+        }
+
+        function deleteModel(modelId) {
+            if (!database || !database.models[modelId]) {
+                alert('Model not found in database.');
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to delete model ${modelId}? This action cannot be undone.`)) {
+                return;
+            }
+
+            delete database.models[modelId];
+            saveDatabaseToFile();
+            viewAllModels();
+            alert(`Model ${modelId} has been deleted.`);
+        }
+
+        function cancelEdit() {
+            document.getElementById('manualDataForm').reset();
+            document.getElementById('modelForm').classList.add('hidden');
+            document.getElementById('modelListView').classList.remove('hidden');
+        }
+
+        function downloadDatabase() {
+            if (!database) {
+                alert('Database not loaded yet.');
+                return;
+            }
+
+            const dataStr = JSON.stringify(database, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+
+            const exportFileDefaultName = 'apple-laptops-database.json';
+
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+
+        // Initialize database on page load
+        window.addEventListener('load', async () => {
+            await loadDatabase();
+            // Initialize with no buttons shown
+            updateRamButtons([]);
+            updateStorageButtons([]);
+
+            // Test dropdown visibility after a short delay
+            setTimeout(() => {
+                console.log('Testing dropdown visibility...');
+                const modelList = document.getElementById('modelList');
+                if (modelList && allModels.length > 0) {
+                    renderModelList(allModels.slice(0, 5)); // Show first 5 models
+                    showModelDropdown();
+                    console.log('Dropdown should be visible now');
+                }
+            }, 2000);
+        });
+
+        // Model search and selection functionality
+        }
+
+        // Searchable model dropdown functionality
+        let allModels = [];
+        let selectedModel = '';
+
+        function initializeModelSearch() {
+            console.log('initializeModelSearch called, database exists:', !!database);
+            if (database) {
+                allModels = Object.keys(database.models).map(modelId => {
+                    const model = database.models[modelId];
+            return {
+                        id: modelId,
+                        displayName: `${modelId} - ${model.family} ${model.generation} (${model.year})`,
+                        searchText: `${modelId} ${model.family} ${model.generation} ${model.year}`.toLowerCase(),
+                        model: model
+                    };
+                }).sort((a, b) => a.id.localeCompare(b.id));
+
+                console.log('allModels populated with', allModels.length, 'models');
+                renderModelList(allModels);
+            } else {
+                console.log('Database not available for model search initialization');
+            }
+        }
+
+        function renderModelList(models) {
+            const modelList = document.getElementById('modelList');
+            modelList.innerHTML = '';
+
+            if (models.length === 0) {
+                modelList.innerHTML = '<div class="model-item">No models found</div>';
+                return;
+            }
+
+            models.forEach(modelItem => {
+                const modelElement = document.createElement('div');
+                modelElement.className = 'model-item';
+                if (selectedModel === modelItem.id) {
+                    modelElement.classList.add('selected');
+                }
+                modelElement.textContent = modelItem.displayName;
+                modelElement.dataset.modelId = modelItem.id;
+                modelList.appendChild(modelElement);
+            });
+        }
+
+        function selectModel(modelId) {
+            selectedModel = modelId;
+            const modelSearch = document.getElementById('modelSearch');
+            const modelSelect = document.getElementById('modelSelect');
+            const modelInfo = document.getElementById('modelInfo');
+            const modelSpecs = document.getElementById('modelSpecs');
+
+            if (modelId && database) {
+                const model = database.models[modelId];
+                modelSearch.value = `${modelId} - ${model.family} ${model.generation} (${model.year})`;
+                modelSelect.value = modelId;
+
+                if (model) {
+                    modelSpecs.innerHTML = `
+                        <div class="spec-item"><strong>Family:</strong> ${model.family}</div>
+                        <div class="spec-item"><strong>Generation:</strong> ${model.generation}</div>
+                        <div class="spec-item"><strong>Year:</strong> ${model.year}</div>
+                        <div class="spec-item"><strong>Display:</strong> ${model.display.size} ${model.display.type}</div>
+                        <div class="spec-item"><strong>Processor:</strong> ${model.processors[0]}</div>
+                        <div class="spec-item"><strong>Battery:</strong> ${model.battery}</div>
+                        <div class="spec-item"><strong>Weight:</strong> ${model.weight}</div>
+                    `;
+                    modelInfo.classList.remove('hidden');
+
+                    // Update RAM, Storage, Processor and Color buttons based on model specs
+                    updateRamButtons(model.memory);
+                    updateStorageButtons(model.storage);
+                    updateProcessorButtons(model.processors);
+                    updateColorButtons(model.colors);
+                }
+            } else {
+                modelSearch.value = '';
+                modelSelect.value = '';
+                modelInfo.classList.add('hidden');
+                // Reset buttons when no model selected
+                updateRamButtons([]);
+                updateStorageButtons([]);
+                updateProcessorButtons([]);
+                updateColorButtons([]);
+            }
+
+            hideModelDropdown();
+        }
+
+        function showModelDropdown() {
+            const modelList = document.getElementById('modelList');
+            console.log('showModelDropdown called, modelList element:', modelList);
+            modelList.classList.add('show');
+            console.log('Added show class, classList:', modelList.className);
+        }
+
+        function hideModelDropdown() {
+            const modelList = document.getElementById('modelList');
+            console.log('hideModelDropdown called');
+            modelList.classList.remove('show');
+        }
+
+        function filterModels(searchTerm) {
+            console.log('filterModels called with term:', searchTerm);
+            console.log('allModels available:', allModels.length);
+            if (!searchTerm.trim()) {
+                console.log('Showing all models');
+                renderModelList(allModels);
+            } else {
+                const filtered = allModels.filter(model =>
+                    model.searchText.includes(searchTerm.toLowerCase())
+                );
+                console.log('Filtered results:', filtered.length);
+                renderModelList(filtered);
+            }
+            showModelDropdown();
+        }
+
+        // Model search input event listeners
+        document.getElementById('modelSearch').addEventListener('input', function(e) {
+            console.log('Input event triggered, search term:', e.target.value);
+            console.log('allModels length:', allModels.length);
+            filterModels(e.target.value);
+        });
+
+        document.getElementById('modelSearch').addEventListener('focus', function() {
+            console.log('Focus event triggered, allModels length:', allModels.length);
+            if (allModels.length > 0) {
+                renderModelList(allModels);
+                showModelDropdown();
+            } else {
+                console.log('No models loaded yet');
+            }
+        });
+
+        // Model list click handler
+        document.getElementById('modelList').addEventListener('click', function(e) {
+            if (e.target.classList.contains('model-item')) {
+                const modelId = e.target.dataset.modelId;
+                selectModel(modelId);
+            }
+        });
+
+        // Hide dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            const modelDropdown = document.getElementById('modelDropdown');
+            const modelSearch = document.getElementById('modelSearch');
+            if (!modelDropdown.contains(e.target) && e.target !== modelSearch) {
+                hideModelDropdown();
+            }
+        });
+
+        // Initialize model search when database is loaded
+        if (database) {
+            initializeModelSearch();
+        }
+
+        // RAM and Storage button handlers (using event delegation for dynamic buttons)
+        let selectedRam = '';
+        let selectedStorage = '';
+        let selectedProcessor = '';
+        let selectedColor = '';
+        let selectedCondition = 'Brand New – Sealed';
+        let selectedExtras = ['Original Charger'];
+
+        document.getElementById('ramButtons').addEventListener('click', function(e) {
+            if (e.target.classList.contains('option-btn')) {
+                // Remove active class from all RAM buttons
+                document.querySelectorAll('#ramButtons .option-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                // Add active class to clicked button
+                e.target.classList.add('active');
+                selectedRam = e.target.dataset.ram;
+                updateSelectedSpecs();
+            }
+        });
+
+        document.getElementById('storageButtons').addEventListener('click', function(e) {
+            if (e.target.classList.contains('option-btn')) {
+                // Remove active class from all storage buttons
+                document.querySelectorAll('#storageButtons .option-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                // Add active class to clicked button
+                e.target.classList.add('active');
+                selectedStorage = e.target.dataset.storage;
+                updateSelectedSpecs();
+            }
+        });
+
+        document.getElementById('processorButtons').addEventListener('click', function(e) {
+            if (e.target.classList.contains('option-btn')) {
+                // Remove active class from all processor buttons
+                document.querySelectorAll('#processorButtons .option-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                // Add active class to clicked button
+                e.target.classList.add('active');
+                selectedProcessor = e.target.dataset.processor;
+                updateSelectedSpecs();
+            }
+        });
+
+        document.getElementById('colorButtons').addEventListener('click', function(e) {
+            if (e.target.classList.contains('option-btn')) {
+                // Remove active class from all color buttons
+                document.querySelectorAll('#colorButtons .option-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                // Add active class to clicked button
+                e.target.classList.add('active');
+                selectedColor = e.target.dataset.color;
+                updateSelectedSpecs();
+            }
+        });
+
+        // Condition buttons event handler
+        document.getElementById('conditionButtons').addEventListener('click', function(e) {
+            if (e.target.classList.contains('condition-btn')) {
+                // Remove active class from all condition buttons
+                document.querySelectorAll('#conditionButtons .condition-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                // Add active class to clicked button
+                e.target.classList.add('active');
+                selectedCondition = e.target.dataset.condition;
+
+                // Show/hide condition details based on selection
+                const conditionDetails = document.getElementById('conditionDetails');
+                if (selectedCondition === 'Used') {
+                    conditionDetails.style.display = 'block';
+                } else {
+                    conditionDetails.style.display = 'none';
+                }
+            }
+        });
+
+        // Extras buttons event handler
+        document.getElementById('extrasButtons').addEventListener('click', function(e) {
+            if (e.target.classList.contains('extras-btn')) {
+                const extrasValue = e.target.dataset.extras;
+
+                if (extrasValue === 'Other') {
+                    // Toggle the "Other" option
+                    if (e.target.classList.contains('active')) {
+                        e.target.classList.remove('active');
+                        selectedExtras = selectedExtras.filter(item => item !== 'Other');
+                        document.getElementById('extrasDetails').style.display = 'none';
+                    } else {
+                        e.target.classList.add('active');
+                        selectedExtras.push('Other');
+                        document.getElementById('extrasDetails').style.display = 'block';
+                    }
+                } else {
+                    // Handle regular extras options (multi-select)
+                    if (e.target.classList.contains('active')) {
+                        e.target.classList.remove('active');
+                        selectedExtras = selectedExtras.filter(item => item !== extrasValue);
+                    } else {
+                        e.target.classList.add('active');
+                        selectedExtras.push(extrasValue);
+                    }
+
+                    // Remove "Other" if it was selected and we're adding regular options
+                    if (selectedExtras.includes('Other') && extrasValue !== 'Other') {
+                        const otherBtn = document.querySelector('#extrasButtons .extras-btn[data-extras="Other"]');
+                        if (otherBtn) {
+                            otherBtn.classList.remove('active');
+                            selectedExtras = selectedExtras.filter(item => item !== 'Other');
+                            document.getElementById('extrasDetails').style.display = 'none';
+                        }
+                    }
+                }
+            }
+        });
+
+        function updateRamButtons(validRamOptions) {
+            const ramButtonsContainer = document.getElementById('ramButtons');
+            const allRamButtons = ['8GB', '16GB', '24GB', '32GB', '64GB', '96GB'];
+
+            // Clear existing buttons
+            ramButtonsContainer.innerHTML = '';
+
+            // Create buttons only for valid options
+            allRamButtons.forEach(ramValue => {
+                if (validRamOptions && validRamOptions.includes(ramValue)) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'option-btn';
+                    button.dataset.ram = ramValue;
+                    button.textContent = ramValue;
+                    if (selectedRam === ramValue) {
+                        button.classList.add('active');
+                    }
+                    ramButtonsContainer.appendChild(button);
+                }
+            });
+
+            // Clear selection if current selection is not valid
+            if (selectedRam && (!validRamOptions || !validRamOptions.includes(selectedRam))) {
+                selectedRam = '';
+            }
+            updateSelectedSpecs();
+        }
+
+        function updateStorageButtons(validStorageOptions) {
+            const storageButtonsContainer = document.getElementById('storageButtons');
+            const allStorageButtons = ['128GB', '256GB', '512GB', '1TB', '2TB', '4TB', '8TB'];
+
+            // Clear existing buttons
+            storageButtonsContainer.innerHTML = '';
+
+            // Create buttons only for valid options
+            allStorageButtons.forEach(storageValue => {
+                if (validStorageOptions && validStorageOptions.includes(storageValue)) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'option-btn';
+                    button.dataset.storage = storageValue;
+                    button.textContent = storageValue;
+                    if (selectedStorage === storageValue) {
+                        button.classList.add('active');
+                    }
+                    storageButtonsContainer.appendChild(button);
+                }
+            });
+
+            // Clear selection if current selection is not valid
+            if (selectedStorage && (!validStorageOptions || !validStorageOptions.includes(selectedStorage))) {
+                selectedStorage = '';
+            }
+            updateSelectedSpecs();
+        }
+
+        function updateProcessorButtons(validProcessorOptions) {
+            const processorButtonsContainer = document.getElementById('processorButtons');
+
+            // Clear existing buttons
+            processorButtonsContainer.innerHTML = '';
+
+            // Create buttons only for valid options
+            if (validProcessorOptions && validProcessorOptions.length > 0) {
+                validProcessorOptions.forEach((processorValue, index) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'option-btn processor-btn';
+                    button.dataset.processor = processorValue;
+                    // Show simplified processor name for button
+                    const displayName = getProcessorDisplayName(processorValue);
+                    button.textContent = displayName;
+                    if (selectedProcessor === processorValue) {
+                        button.classList.add('active');
+                    }
+                    processorButtonsContainer.appendChild(button);
+                });
+            } else {
+                processorButtonsContainer.innerHTML = '<span class="placeholder-text">No processor options available</span>';
+            }
+
+            // Clear selection if current selection is not valid
+            if (selectedProcessor && (!validProcessorOptions || !validProcessorOptions.includes(selectedProcessor))) {
+                selectedProcessor = '';
+            }
+            updateSelectedSpecs();
+        }
+
+        function updateColorButtons(validColorOptions) {
+            const colorButtonsContainer = document.getElementById('colorButtons');
+
+            // Clear existing buttons
+            colorButtonsContainer.innerHTML = '';
+
+            // Create buttons only for valid options
+            if (validColorOptions && validColorOptions.length > 0) {
+                validColorOptions.forEach(colorValue => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'option-btn color-btn';
+                    button.dataset.color = colorValue;
+                    button.textContent = colorValue;
+                    if (selectedColor === colorValue) {
+                        button.classList.add('active');
+                    }
+                    colorButtonsContainer.appendChild(button);
+                });
+            } else {
+                colorButtonsContainer.innerHTML = '<span class="placeholder-text">No color options available</span>';
+            }
+
+            // Clear selection if current selection is not valid
+            if (selectedColor && (!validColorOptions || !validColorOptions.includes(selectedColor))) {
+                selectedColor = '';
+            }
+            updateSelectedSpecs();
+        }
+
+        function updateSelectedSpecs() {
+            const selectedSpecsDiv = document.getElementById('selectedSpecs');
+            const selectedRamSpan = document.getElementById('selectedRam');
+            const selectedStorageSpan = document.getElementById('selectedStorage');
+            const selectedProcessorSpan = document.getElementById('selectedProcessor');
+            const selectedColorSpan = document.getElementById('selectedColor');
+
+            selectedRamSpan.textContent = selectedRam || 'No RAM selected';
+            selectedStorageSpan.textContent = selectedStorage || 'No storage selected';
+            selectedProcessorSpan.textContent = selectedProcessor ? getProcessorDisplayName(selectedProcessor) : 'No processor selected';
+            selectedColorSpan.textContent = selectedColor || 'No color selected';
+
+            if (selectedRam || selectedStorage || selectedProcessor || selectedColor) {
+                selectedSpecsDiv.style.display = 'block';
+            } else {
+                selectedSpecsDiv.style.display = 'none';
+            }
+        }
+
+        // Handle form submission
+        document.getElementById('copyForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            if (!database) {
+                alert('Database not loaded yet. Please wait and try again.');
+                return;
+            }
+
+            const modelNumber = selectedModel;
+            if (!modelNumber) {
+                alert('Please select a model first.');
+                return;
+            }
+
+            if (!selectedRam) {
+                alert('Please select a RAM option.');
+                return;
+            }
+
+            if (!selectedStorage) {
+                alert('Please select a storage option.');
+                return;
+            }
+
+            // Build condition string
+            let condition = selectedCondition;
+            if (selectedCondition === 'Used') {
+                const conditionDetails = document.getElementById('conditionDetailsInput').value.trim();
+                condition = conditionDetails ? `Used – ${conditionDetails}` : 'Used';
+            }
+
+            // Build extras array
+            let extrasArray = [...selectedExtras];
+            if (selectedExtras.includes('Other')) {
+                const customExtras = document.getElementById('extrasDetailsInput').value.trim();
+                if (customExtras) {
+                    // Remove 'Other' and add custom extras
+                    extrasArray = extrasArray.filter(item => item !== 'Other');
+                    extrasArray.push(customExtras);
+                } else {
+                    // Remove 'Other' if no custom input provided
+                    extrasArray = extrasArray.filter(item => item !== 'Other');
+                }
+            }
+
+            const price = document.getElementById('price').value.trim();
+
+            if (!condition || !price) {
+                alert('Please fill in condition and price.');
+                return;
+            }
+
+            try {
+                const copy = generateSalesCopy(modelNumber, {
+                    ram: selectedRam,
+                    storage: selectedStorage,
+                    processor: selectedProcessor,
+                    color: selectedColor,
+                    condition: condition,
+                    extras: extrasArray,
+                    price: price
+                });
+
+                document.getElementById('copyContent').textContent = copy;
+                document.getElementById('output').classList.remove('hidden');
+                document.getElementById('output').scrollIntoView({ behavior: 'smooth' });
+            } catch (error) {
+                alert('Error generating copy: ' + error.message);
+            }
+        });
+
+        // Handle manual data form submission
+        document.getElementById('manualDataForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const modelId = document.getElementById('modelId').value.trim();
+            if (!modelId) {
+                alert('Model ID is required.');
+                return;
+            }
+
+            // Check if model already exists (when adding new)
+            if (!document.getElementById('modelId').readOnly && database.models[modelId]) {
+                alert(`Model ${modelId} already exists. Use Edit instead.`);
+                return;
+            }
+
+            // Build model object from form data
+            const modelData = {
+                family: document.getElementById('family').value,
+                generation: document.getElementById('generation').value,
+                year: document.getElementById('year').value,
+                model_number: document.getElementById('modelNumber').value,
+                original_price_usd: parseInt(document.getElementById('originalPrice').value) || null,
+                display: {
+                    size: document.getElementById('displaySize').value,
+                    type: document.getElementById('displayType').value,
+                    resolution: document.getElementById('displayResolution').value
+                },
+                processors: document.getElementById('processors').value.split(',').map(s => s.trim()).filter(s => s),
+                memory: document.getElementById('memoryOptions').value.split(',').map(s => s.trim()).filter(s => s),
+                storage: document.getElementById('storageOptions').value.split(',').map(s => s.trim()).filter(s => s),
+                battery: document.getElementById('battery').value,
+                graphics: document.getElementById('graphics').value,
+                ports: document.getElementById('ports').value.split(',').map(s => s.trim()).filter(s => s),
+                connectivity: document.getElementById('connectivity').value.split(',').map(s => s.trim()).filter(s => s),
+                camera: document.getElementById('camera').value,
+                audio: document.getElementById('audio').value,
+                keyboard: document.getElementById('keyboard').value,
+                weight: document.getElementById('weight').value,
+                colors: document.getElementById('colors').value.split(',').map(s => s.trim()).filter(s => s)
+            };
+
+            // Clean up empty arrays/objects
+            Object.keys(modelData).forEach(key => {
+                if (Array.isArray(modelData[key]) && modelData[key].length === 0) {
+                    delete modelData[key];
+                } else if (typeof modelData[key] === 'object' && modelData[key] !== null) {
+                    const obj = modelData[key];
+                    if (Object.values(obj).every(v => !v || (Array.isArray(v) && v.length === 0))) {
+                        delete modelData[key];
+                    }
+                } else if (!modelData[key] || modelData[key] === '') {
+                    delete modelData[key];
+                }
+            });
+
+            // Save to database
+            if (!database.models) database.models = {};
+            database.models[modelId] = modelData;
+
+            saveDatabaseToFile();
+            cancelEdit();
+            viewAllModels();
+
+            const action = document.getElementById('modelId').readOnly ? 'updated' : 'added';
+            alert(`Model ${modelId} has been ${action} successfully!`);
+        });
+
+        // Function to save database to file (in browser, we'll download it)
+        function saveDatabaseToFile() {
+            // Since we can't directly write to files in the browser, we'll store in localStorage
+            // and provide a download option
+            localStorage.setItem('apple-laptops-database', JSON.stringify(database));
+            console.log('Database saved to localStorage. Use "Download Database" to get the file.');
+        }
+
+        function generateSalesCopy(modelNumber, userSpecs = {}) {
+            const model = database.models[modelNumber];
+            if (!model) {
+                throw new Error(`Model ${modelNumber} not found in database`);
+            }
+
+            // Extract user-provided specs
+            const userRAM = userSpecs.ram;
+            const userStorage = userSpecs.storage;
+            const userProcessor = userSpecs.processor;
+            const userColor = userSpecs.color;
+            const userCondition = userSpecs.condition || 'Used – Clean as New';
+            const userExtras = userSpecs.extras || [];
+            const userPrice = userSpecs.price;
+
+            // Get model display name
+            const modelDisplayName = getModelDisplayName(model, modelNumber);
+
+            // Build the copy in the requested format
+            const selectedProcessorName = userProcessor ? getProcessorDisplayName(userProcessor) : getProcessorDisplayName(model.processors[0]);
+            let copy = `🔥 ${model.family.toUpperCase()} ${model.display.size.split('"')[0]}" (${selectedProcessorName}) 💻
+
+📌 Quick Overview
+
+• Model: ${model.family} ${modelNumber}
+• Year: ${model.year}
+• Condition: ${userCondition}
+• Operating System: macOS (Latest supported)`;
+
+            if (userColor) {
+                copy += `\n• Color: ${userColor}`;
+            }
+
+            copy += `
+
+⸻
+
+⚙️ Performance (Fast & Smooth)
+
+• Processor: ${selectedProcessorName}`;
+
+            if (userRAM) {
+                copy += `\n• Memory: ${userRAM} RAM (Smooth multitasking)`;
+            }
+
+            if (userStorage) {
+                copy += `\n• Storage: ${userStorage} SSD (Very fast boot & apps)`;
+            }
+
+            // Display section
+            copy += `
+
+⸻
+
+🖥 Display & Graphics
+
+• ${model.display.size} ${model.display.type} (Sharp & clear)`;
+
+            // Add display features if available
+            if (model.display.features && model.display.features.length > 0) {
+                model.display.features.forEach(feature => {
+                    copy += `\n• ${feature}`;
+                });
+            }
+
+            copy += `\n• ${getGraphicsDisplayName(model.graphics)}`;
+
+            // Battery section
+            copy += `
+
+⸻
+
+🔋 Battery & Daily Use
+
+• Battery condition: Good
+• ${getBatteryDescription(model.battery)}`;
+
+            // Ports & Connectivity
+            copy += `
+
+⸻
+
+🔌 Ports & Connectivity
+
+${formatPorts(model.ports)}
+• Wi-Fi & Bluetooth`;
+
+            // Keyboard, Camera & Sound
+            copy += `
+
+⸻
+
+⌨️ Keyboard, Camera & Sound
+
+• ${model.keyboard.includes('Magic') ? 'Magic Keyboard' : model.keyboard} (Comfortable typing)`;
+
+            // Add Touch Bar for MacBook Pro models
+            if (model.family === 'MacBook Pro' && model.display.size.includes('13')) {
+                copy += `\n• Touch Bar (Smart controls above keyboard)`;
+            }
+
+            if (model.keyboard.includes('Touch ID')) {
+                copy += `\n• Touch ID (Fingerprint unlock)`;
+            }
+
+            copy += `\n• ${model.camera.replace('FaceTime HD', 'FaceTime HD Camera')}`;
+            copy += `\n• ${getAudioDescription(model.audio)}`;
+
+            // Included accessories
+            if (userExtras && userExtras.length > 0) {
+                copy += `
+
+⸻
+
+📦 Included
+
+${userExtras.map(extra => `• ${extra} ${extra.toLowerCase().includes('charger') ? '🔌' : ''}`).join('\n')}`;
+            }
+
+            // Best for section
+            copy += `
+
+⸻
+
+✅ BEST FOR (Beginner Friendly)
+
+${getBestForSection(model).map(item => `✔ ${item}`).join('\n')}`;
+
+            // Price
+            if (userPrice) {
+                copy += `
+
+⸻
+
+💰 PRICE: ${userPrice}`;
+            }
+
+            // Contact info
+            copy += `
+
+📞 0712378850 OR 0769601663 Call / WhatsApp to order
+📍 Available in Dar es Salaam (Mwenge) & Arusha (Triple A)`;
+
+            return copy;
+        }
+
+        function getModelDisplayName(model, modelNumber) {
+            // Extract screen size and key features
+            const screenSize = model.display.size.split('"')[0];
+            const processor = getProcessorDisplayName(model.processors[0]);
+            return `${model.family} ${screenSize}" (${processor})`;
+        }
+
+        function getProcessorDisplayName(processor) {
+            if (processor.includes('Apple M1')) {
+                return 'Apple M1 Chip';
+            } else if (processor.includes('Apple M2')) {
+                return 'Apple M2 Chip';
+            } else if (processor.includes('Intel Core i5')) {
+                return 'Intel Core i5';
+            } else if (processor.includes('Intel Core i7')) {
+                return 'Intel Core i7';
+            } else if (processor.includes('Intel Core i9')) {
+                return 'Intel Core i9';
+            }
+            return processor.split('(')[0].trim();
+        }
+
+        function getGraphicsDisplayName(graphics) {
+            if (graphics.includes('Apple M1') || graphics.includes('Apple M2')) {
+                return 'Integrated Apple GPU';
+            } else if (graphics.includes('Intel Iris')) {
+                return 'Intel Iris Plus Graphics';
+            } else if (graphics.includes('Intel UHD')) {
+                return 'Intel UHD Graphics';
+            } else if (graphics.includes('AMD Radeon')) {
+                return 'AMD Radeon Graphics';
+            }
+            return graphics;
+        }
+
+        function getBatteryDescription(battery) {
+            // Convert battery life to user-friendly description
+            if (battery.includes('18 hours') || battery.includes('20 hours') || battery.includes('21 hours') || battery.includes('22 hours')) {
+                return 'Excellent battery life for all-day work';
+            } else if (battery.includes('12 hours') || battery.includes('11 hours')) {
+                return 'Good battery life for daily tasks';
+            } else {
+                return 'Reliable battery life for daily work';
+            }
+        }
+
+        function formatPorts(ports) {
+            const portMap = {
+                'Two Thunderbolt / USB 4 ports': '2 × Thunderbolt 4 (USB-C)',
+                'Two Thunderbolt 3 (USB-C) ports': '2 × Thunderbolt 3 (USB-C)',
+                'Four Thunderbolt 3 ports': '4 × Thunderbolt 3 (USB-C)',
+                'Three Thunderbolt 4 ports': '3 × Thunderbolt 4 (USB-C)',
+                'One USB-C port': '1 × USB-C',
+            };
+
+            let formattedPorts = [];
+            ports.forEach(port => {
+                if (portMap[port]) {
+                    formattedPorts.push(`• ${portMap[port]}`);
+                } else if (port.includes('MagSafe')) {
+                    formattedPorts.push(`• MagSafe Charging Port`);
+                } else if (port.includes('HDMI')) {
+                    formattedPorts.push(`• HDMI Port`);
+                } else if (port.includes('SDXC')) {
+                    formattedPorts.push(`• SD Card Slot`);
+                } else if (port.includes('3.5mm')) {
+                    formattedPorts.push(`• 3.5mm Headphone Jack`);
+                } else {
+                    formattedPorts.push(`• ${port}`);
+                }
+            });
+
+            return formattedPorts.join('\n');
+        }
+
+        function getAudioDescription(audio) {
+            if (audio.includes('Six-speaker')) {
+                return 'Six-speaker system with Dolby Atmos';
+            } else if (audio.includes('Four-speaker')) {
+                return 'Four-speaker system with Dolby Atmos';
+            } else if (audio.includes('Stereo speakers')) {
+                return 'Stereo Speakers';
+            }
+            return audio;
+        }
+
+        function getBestForSection(model) {
+            const bestFor = [];
+
+            if (model.family === 'MacBook Air') {
+                bestFor.push('Students and educators');
+                bestFor.push('Remote workers and freelancers');
+                if (model.display.size.includes('15')) {
+                    bestFor.push('Content creators (video editing, design)');
+                } else {
+                    bestFor.push('Content creators (blogging, photo editing basics)');
+                }
+                bestFor.push('Anyone needing a reliable, fast laptop for daily use');
+            } else if (model.family === 'MacBook Pro') {
+                if (model.display.size.includes('14') || model.display.size.includes('16')) {
+                    bestFor.push('Professional content creators');
+                    bestFor.push('Video editors and 3D artists');
+                    bestFor.push('Software developers');
+                    bestFor.push('Creative professionals');
+                } else {
+                    bestFor.push('Students and educators');
+                    bestFor.push('Business professionals');
+                    bestFor.push('Content creators');
+                    bestFor.push('Power users');
+                }
+            } else if (model.family === 'MacBook') {
+                bestFor.push('Students and basic users');
+                bestFor.push('Web browsing and light productivity');
+                bestFor.push('Users transitioning from Windows to macOS');
+                bestFor.push('Ultra-portable computing needs');
+            }
+
+            bestFor.push('Users transitioning from Windows to macOS');
+            return bestFor;
+        }
+
+        function copyToClipboard() {
+            const content = document.getElementById('copyContent').textContent;
+            navigator.clipboard.writeText(content).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.style.background = '#28a745';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+    </script>
+</body>
+</html>

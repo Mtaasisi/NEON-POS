@@ -10,7 +10,7 @@ interface CampaignSaveData {
   name: string;
   message: string;
   messageType: string;
-  selectedRecipients: string[];
+  selectedRecipients: Array<{phone: string, name: string}>;
   sentPhones: string[];
   bulkProgress: {
     current: number;
@@ -33,14 +33,14 @@ const SAVE_INTERVAL = 20000; // Save every 20 seconds or every 10 messages
  */
 export async function createCampaignInDB(data: CampaignSaveData): Promise<string | null> {
   try {
-    const recipientsData = data.selectedRecipients.map(phone => {
-      const conv = data.conversations.find(c => c.phone === phone);
+    const recipientsData = data.selectedRecipients.map(recipient => {
+      const conv = data.conversations.find(c => c.phone === recipient.phone);
       return {
-        phone,
-        name: conv?.customer_name || 'Unknown',
-        sent: data.sentPhones.includes(phone),
-        success: data.sentPhones.includes(phone),
-        error: data.failedMessages.find(f => f.phone === phone)?.error || null
+        phone: recipient.phone,
+        name: recipient.name || conv?.customer_name || 'Unknown',
+        sent: data.sentPhones.includes(recipient.phone),
+        success: data.sentPhones.includes(recipient.phone),
+        error: data.failedMessages.find(f => f.phone === recipient.phone)?.error || null
       };
     });
 
@@ -89,14 +89,14 @@ export async function updateCampaignProgress(
   }
 
   try {
-    const recipientsData = data.selectedRecipients.map(phone => {
-      const conv = data.conversations.find(c => c.phone === phone);
+    const recipientsData = data.selectedRecipients.map(recipient => {
+      const conv = data.conversations.find(c => c.phone === recipient.phone);
       return {
-        phone,
-        name: conv?.customer_name || 'Unknown',
-        sent: data.sentPhones.includes(phone),
-        success: data.sentPhones.includes(phone),
-        error: data.failedMessages.find(f => f.phone === phone)?.error || null
+        phone: recipient.phone,
+        name: recipient.name || conv?.customer_name || 'Unknown',
+        sent: data.sentPhones.includes(recipient.phone),
+        success: data.sentPhones.includes(recipient.phone),
+        error: data.failedMessages.find(f => f.phone === recipient.phone)?.error || null
       };
     });
 

@@ -6,7 +6,7 @@
 import express from 'express';
 import multer from 'multer';
 import { sql } from '../db/connection.js';
-import { authenticateToken, optionalAuth, AuthRequest } from '../middleware/auth.js';
+import { optionalAuth, AuthRequest } from '../middleware/auth.js';
 import { ApiError } from '../middleware/errorHandler.js';
 
 const router = express.Router();
@@ -688,7 +688,7 @@ async function restoreFromJson(jsonContent: string, selectedTables?: string[], r
             const conflictClause = columns.includes('id')
               ? `ON CONFLICT (id) DO UPDATE SET ${columns
                   .filter(c => c !== 'id')
-                  .map((c, i) => `${c} = EXCLUDED.${c}`)
+                  .map((c) => `${c} = EXCLUDED.${c}`)
                   .join(', ')}`
               : '';
 

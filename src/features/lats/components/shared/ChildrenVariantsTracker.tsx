@@ -428,7 +428,7 @@ const ChildrenVariantsTracker: React.FC<ChildrenVariantsTrackerProps> = ({
   }, []);
 
   return (
-    <div className="mt-4 border-2 border-gray-200 rounded-xl bg-white overflow-hidden">
+    <div className="mt-2 border-2 border-gray-200 rounded-xl bg-white overflow-hidden">
       {/* Header Toggle */}
       <div 
         className="p-4 border-b border-gray-200"
@@ -522,7 +522,7 @@ const ChildrenVariantsTracker: React.FC<ChildrenVariantsTrackerProps> = ({
       
       {/* Children Input Section */}
       {useChildrenVariants && (
-        <div className="px-4 pb-4 space-y-3">
+        <div className="px-4 pt-3 pb-3 space-y-2">
           {/* Scanner Status Section - Only show when scanning */}
           {isScanning && (
             <div className="mb-3 p-3 bg-gray-50 border border-gray-300 rounded-lg">
@@ -562,30 +562,41 @@ const ChildrenVariantsTracker: React.FC<ChildrenVariantsTrackerProps> = ({
             </div>
           )}
 
-          <div 
+          <div
             ref={scrollContainerRef}
-            className="space-y-2 max-h-64 overflow-y-auto pr-2 relative"
+            className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-2 relative"
             style={{ scrollbarWidth: 'thin' }}
           >
             {fieldsToShow.map((child, childIndex) => {
               const isFilled = child && child.trim() !== '';
               
               return (
-                <div 
-                  key={childIndex} 
-                  className="group relative flex items-center gap-2 p-2 rounded-lg border border-gray-300 bg-white hover:border-gray-400 transition-colors"
+                <div
+                  key={childIndex}
+                  className="mb-1"
                 >
-                  <div className={`w-8 h-8 flex items-center justify-center rounded text-xs font-semibold flex-shrink-0 ${
-                    isFilled
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'bg-gray-100 text-gray-500'
-                  }`}>
-                    {childIndex + 1}
-                  </div>
-                  <div className="flex-1 relative">
-                    <QrCode className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${
-                      isFilled ? 'text-gray-400' : 'text-gray-300'
+                  {/* Input field with clear button inside */}
+                  <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-3 focus-within:border-orange-500 transition-colors relative">
+                    {/* Clear button - top right */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleClear(childIndex);
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full text-lg font-semibold transition-colors bg-red-500 text-white hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 z-20"
+                      title="Clear this field"
+                      aria-label="Clear field"
+                    >
+                      ×
+                    </button>
+
+                    {/* QrCode icon */}
+                    <QrCode className={`absolute left-3 top-1/2 -translate-y-1/2 w-6 h-6 z-10 font-bold ${
+                      isFilled ? 'text-gray-600' : 'text-gray-400'
                     }`} />
+
+                    {/* Input field */}
                     <input
                       ref={(el) => {
                         inputRefs.current[childIndex] = el;
@@ -593,30 +604,21 @@ const ChildrenVariantsTracker: React.FC<ChildrenVariantsTrackerProps> = ({
                       type="text"
                       value={child}
                       onChange={(e) => handleChildChange(childIndex, e.target.value)}
-                      placeholder={`Enter ${itemLabel} #${childIndex + 1}`}
-                      className={`w-full pl-10 pr-10 py-2.5 border-0 rounded-lg focus:outline-none focus:ring-2 text-sm font-medium font-mono bg-transparent ${
+                      placeholder={`${itemLabel} #${childIndex + 1}`}
+                      className={`w-full pl-8 pr-8 py-2 text-center text-lg font-bold text-gray-900 bg-transparent border-none outline-none transition-all duration-200 ${
                         isFilled
-                          ? 'text-gray-900 focus:ring-blue-500'
-                          : 'text-gray-600 focus:ring-gray-400'
+                          ? 'text-gray-900'
+                          : 'text-gray-600'
                       }`}
                     />
+
+                    {/* Check icon */}
                     {isFilled && (
-                      <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
                         <Check className="w-4 h-4 text-green-500" />
                       </div>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleClear(childIndex);
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    title="Clear this field"
-                  >
-                    Clear
-                  </button>
                 </div>
               );
             })}

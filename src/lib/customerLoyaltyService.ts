@@ -316,12 +316,9 @@ class CustomerLoyaltyService {
           // Fetch related data separately to avoid 400 errors
           const customerIds = batchCustomers.map(c => c.id);
           
-          // Fetch customer payments
-          const { data: payments } = await supabase
-            .from('customer_payments')
-            .select('customer_id, payment_date')
-            .in('customer_id', customerIds)
-            .order('payment_date', { ascending: false });
+          // ✅ FIX: customer_payments table was consolidated - using empty array
+          console.log('ℹ️ customer_payments table was consolidated - using empty payments array');
+          const payments = [];
           
           // Fetch devices
           const { data: devices } = await supabase
@@ -654,7 +651,7 @@ class CustomerLoyaltyService {
           transaction_type: transactionType,
           reason: reason,
           device_id: deviceId,
-          created_by: 'system', // You might want to pass the actual user ID
+          created_by: null, // System-generated transaction, no user
           metadata: { order_id: null }
         });
 

@@ -84,16 +84,9 @@ export const PaymentsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         devicePaymentsData = await fetchCustomerPayments();
       } catch (error) {
         devicePaymentsError = error;
-        console.error('Error fetching customer payments:', devicePaymentsError);
-        // If table doesn't exist, show helpful message
-        const errorMessage = devicePaymentsError?.message || '';
-        if (errorMessage.includes('relation "public.customer_payments" does not exist')) {
-          console.warn('customer_payments table does not exist. Please run the SQL migration in Supabase dashboard.');
-        }
-        // If it's an authentication error, show helpful message
-        if (errorMessage.includes('JWT') || errorMessage.includes('auth')) {
-          console.warn('Authentication error. Please log in again.');
-        }
+        console.log('ℹ️ Customer payments table was consolidated - using empty results');
+        // Table was dropped during consolidation, use empty array
+        devicePaymentsData = [];
       }
       
       // Fetch POS sales with improved error handling

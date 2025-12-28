@@ -8,7 +8,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import * as fs from 'fs';
-import * as path from 'path';
+// import * as path from 'path'; // Not used
 import * as readline from 'readline';
 
 // Initialize Supabase client from environment
@@ -226,8 +226,8 @@ function transformCustomer(row: CSVRow): CustomerInsert | null {
   
   // Calculate total spent from Tigopesa if available
   const totalReceived = parseCurrency(row.Tigopesa_Total_Received_TSh);
-  const totalSent = parseCurrency(row.Tigopesa_Total_Sent_TSh);
-  const netAmount = totalReceived - totalSent;
+  // const totalSent = parseCurrency(row.Tigopesa_Total_Sent_TSh); // Not used
+  // const netAmount = totalReceived - totalSent; // Not used
   
   // Use received amount as total spent (money received by business)
   const totalSpent = totalReceived > 0 ? totalReceived / 1000 : 0; // Convert TSh to thousands
@@ -318,7 +318,7 @@ async function insertCustomers(customers: CustomerInsert[]) {
     process.stdout.write(`\r🔄 Processing batch ${batchNum}/${totalBatches}...`);
     
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('customers')
         .insert(batch)
         .select('id');

@@ -42,15 +42,36 @@ router.get('/get-active', async (req, res) => {
     
     console.log(`🔍 [QUERY] Fetching active session for user_id: ${userId}`);
     
-    // Get user's active session preference
+    // Get user's active session preference from unified settings table
     const prefsResult = await pool.query(
-      `SELECT active_session_id, auto_select_session
-       FROM user_whatsapp_preferences
-       WHERE user_id = $1`,
+      `SELECT setting_value_text as active_session_id
+       FROM settings
+       WHERE scope = 'user'
+         AND category = 'whatsapp'
+         AND setting_key = 'active_session_id'
+         AND user_id = $1`,
       [userId]
     );
-    
-    const prefs = prefsResult.rows[0];
+
+    const activeSessionIdFromSettings = prefsResult.rows[0]?.active_session_id;
+
+    // Get auto-select preference
+    const autoSelectResult = await pool.query(
+      `SELECT setting_value_boolean as auto_select_session
+       FROM settings
+       WHERE scope = 'user'
+         AND category = 'whatsapp'
+         AND setting_key = 'auto_select_session'
+         AND user_id = $1`,
+      [userId]
+    );
+
+    const autoSelectSession = autoSelectResult.rows[0]?.auto_select_session ?? true; // Default to true
+
+    const prefs = {
+      active_session_id: activeSessionIdFromSettings,
+      auto_select_session: autoSelectSession
+    };
     let activeSessionId = null;
     
     if (prefs && prefs.active_session_id) {
@@ -151,29 +172,30 @@ router.get('/check-integration', async (req, res) => {
       recommendation: ''
     };
     
-    // Check integrations table for WhatsApp configuration
+    // Check unified settings table for WhatsApp configuration
     const integrationResult = await pool.query(
-      `SELECT 
-        integration_name,
-        is_active,
-        api_key,
-        api_secret,
-        config,
-        last_sync
-       FROM integrations
-       WHERE integration_name = 'WHATSAPP_WASENDER' OR integration_type = 'whatsapp'`
+      `SELECT
+        setting_value_boolean as is_active,
+        setting_value_text as api_key,
+        setting_value_json as config,
+        updated_at as last_sync
+       FROM settings
+       WHERE scope = 'system'
+         AND category = 'integrations'
+         AND setting_key = 'whatsapp_wasender'
+       LIMIT 1`
     );
-    
+
     const integration = integrationResult.rows[0];
     
     if (integration) {
-      const config = typeof integration.config === 'string' 
-        ? JSON.parse(integration.config) 
+      const config = typeof integration.config === 'string'
+        ? JSON.parse(integration.config)
         : integration.config || {};
-      
+
       const apiKey = integration.api_key || config.api_key || config.bearer_token;
       const sessionId = config.session_id || config.whatsapp_session;
-      
+
       result.integration = {
         enabled: !!integration.is_active,
         has_api_key: !!apiKey,
@@ -282,16 +304,26 @@ router.post('/set-active', async (req, res) => {
       });
     }
     
-    // Upsert user preferences
+    // Update active session in unified settings table
     await pool.query(
-      `INSERT INTO user_whatsapp_preferences (user_id, active_session_id, auto_select_session, updated_at)
-       VALUES ($1, $2, false, NOW())
-       ON CONFLICT (user_id) 
-       DO UPDATE SET 
-         active_session_id = $2,
-         auto_select_session = false,
+      `INSERT INTO settings (scope, category, setting_key, setting_value_text, user_id, updated_at)
+       VALUES ('user', 'whatsapp', 'active_session_id', $1, $2, NOW())
+       ON CONFLICT (scope, category, setting_key, user_id)
+       DO UPDATE SET
+         setting_value_text = $1,
          updated_at = NOW()`,
-      [user_id, session_id]
+      [session_id, user_id]
+    );
+
+    // Also set auto_select_session to false
+    await pool.query(
+      `INSERT INTO settings (scope, category, setting_key, setting_value_boolean, user_id, updated_at)
+       VALUES ('user', 'whatsapp', 'auto_select_session', false, $1, NOW())
+       ON CONFLICT (scope, category, setting_key, user_id)
+       DO UPDATE SET
+         setting_value_boolean = false,
+         updated_at = NOW()`,
+      [user_id]
     );
     
     console.log(`✅ Active session set to: ${session.name}`);
@@ -371,24 +403,27 @@ router.post('/sync-from-wasender', async (req, res) => {
   console.log('📥 [API] POST /api/whatsapp-sessions/sync-from-wasender');
   
   try {
-    // Get Bearer Token from integrations
+    // Get Bearer Token from unified settings
     const integrationResult = await pool.query(
-      `SELECT credentials FROM lats_pos_integrations_settings
-       WHERE integration_name = 'WHATSAPP_WASENDER' AND is_enabled = true`
+      `SELECT setting_value_json as config, setting_value_boolean as is_active
+       FROM settings
+       WHERE scope = 'system'
+         AND category = 'integrations'
+         AND setting_key = 'whatsapp_wasender'`
     );
-    
-    if (integrationResult.rows.length === 0) {
+
+    if (integrationResult.rows.length === 0 || !integrationResult.rows[0].is_active) {
       return res.status(400).json({
         success: false,
         error: 'WhatsApp integration not configured. Please configure in Admin Settings.'
       });
     }
-    
-    const credentials = typeof integrationResult.rows[0].credentials === 'string'
-      ? JSON.parse(integrationResult.rows[0].credentials)
-      : integrationResult.rows[0].credentials;
-    
-    const bearerToken = credentials.bearer_token || credentials.api_key;
+
+    const config = typeof integrationResult.rows[0].config === 'string'
+      ? JSON.parse(integrationResult.rows[0].config)
+      : integrationResult.rows[0].config || {};
+
+    const bearerToken = config.bearer_token || config.api_key;
     
     if (!bearerToken) {
       return res.status(400).json({

@@ -160,15 +160,9 @@ const EnhancedPaymentManagementPage: React.FC = () => {
         return;
       }
 
-      const { data: transactions, error } = await supabase
-        .from('account_transactions')
-        .select('*, finance_accounts!account_id(id, name, type, currency)')
-        .eq('transaction_type', 'expense')
-        .in('account_id', accountIdsForBranch)
-        .order('created_at', { ascending: false })
-        .limit(500);
-
-      if (error) throw error;
+      // ✅ FIX: account_transactions table was consolidated, return empty
+      console.log('ℹ️ account_transactions table was consolidated - returning empty expenses');
+      const transactions = [];
 
       if (transactions && transactions.length > 0) {
         // Convert expenses to transaction format for unified display

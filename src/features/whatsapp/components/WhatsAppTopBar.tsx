@@ -70,9 +70,9 @@ const WhatsAppTopBar: React.FC<WhatsAppTopBarProps> = ({
         top: 'var(--app-topbar-height, 64px)',
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(148, 163, 184, 0.1) inset',
         width: 'calc(100vw - var(--sidebar-width, 0px))',
-        // Counter-transform to keep toolbar at normal size when page is zoomed
-        transform: 'scale(1.6667)', // 1 / 0.6 ≈ 1.6667
-        transformOrigin: 'top left'
+        // Keep toolbar at normal scale (avoid forced page-level scaling that hides items)
+        transform: 'none',
+        transformOrigin: 'unset'
       }}
     >
       <div className="px-4 sm:px-6 py-4">

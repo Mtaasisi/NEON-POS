@@ -163,7 +163,11 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
   const [currentTime, setCurrentTime] = useState(new Date());
   const [reminderCount, setReminderCount] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  
+
+  // Permission variables for component-level use
+  const userPermissions = currentUser?.permissions || [];
+  const hasAll = userPermissions.includes('all');
+
   const { handleBackClick, previousPage } = useNavigationHistory();
   
   // Update time every minute
@@ -416,40 +420,38 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
 
   const getQuickActions = () => {
     const actions = [];
-    const userPermissions = currentUser.permissions || [];
-    const hasAll = userPermissions.includes('all');
-    
-    // Check permissions for each action
-    if (hasAll || userPermissions.includes('create_customers') || currentUser.role === 'admin') {
+
+    // Check permissions for each action - using permission-based system only
+    if (hasAll || userPermissions.includes('add_customers')) {
       actions.push(
         { label: 'Add Customer', icon: <Users size={16} />, action: () => navigate('/customers') }
       );
     }
-    
-    if (hasAll || userPermissions.includes('add_device') || currentUser.role === 'admin' || currentUser.role === 'customer-care') {
+
+    if (hasAll || userPermissions.includes('add_devices')) {
       actions.push(
         { label: 'Add Device', icon: <Smartphone size={16} />, action: () => navigate('/devices/new') }
       );
     }
-    
-    if (hasAll || userPermissions.includes('add_products') || currentUser.role === 'admin') {
+
+    if (hasAll || userPermissions.includes('add_products')) {
       actions.push(
         { label: 'Add Product', icon: <Plus size={16} />, action: () => setShowAddProductModal(true) }
       );
     }
-    
-    if (hasAll || userPermissions.includes('view_inventory') || currentUser.role === 'admin') {
+
+    if (hasAll || userPermissions.includes('view_inventory')) {
       actions.push(
         { label: 'Unified Inventory', icon: <Package size={16} />, action: () => navigate('/lats/unified-inventory') }
       );
     }
-    
-    if (hasAll || currentUser.role === 'admin') {
+
+    if (hasAll || userPermissions.includes('sms_features')) {
       actions.push(
         { label: 'SMS Centre', icon: <MessageSquare size={16} />, action: () => navigate('/sms') }
       );
     }
-    
+
     return actions;
   };
 
@@ -457,9 +459,8 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
 
   // Get dynamic quick access buttons based on current route
   const getContextualQuickActions = useMemo(() => {
+    if (!currentUser || !location) return [];
     const path = location.pathname;
-    const userPermissions = currentUser?.permissions || [];
-    const hasAll = userPermissions.includes('all');
     const role = currentUser?.role;
 
     interface QuickActionButton {
@@ -475,7 +476,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
 
     // Inventory-related pages
     if (path.includes('/lats/unified-inventory') || path.includes('/lats/inventory')) {
-      if (hasAll || role === 'admin' || userPermissions.includes('manage_inventory')) {
+      if (hasAll || userPermissions.includes('adjust_stock')) {
         actions.push(
           {
             label: 'Stock Transfer',
@@ -483,7 +484,12 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
             path: '/lats/stock-transfer',
             color: 'from-sky-500 to-blue-600',
             hoverColor: 'hover:from-blue-600 hover:to-indigo-700',
-          },
+          }
+        );
+      }
+
+      if (hasAll || userPermissions.includes('view_purchase_orders')) {
+        actions.push(
           {
             label: 'Purchase Orders',
             icon: <Truck size={18} />,
@@ -498,6 +504,11 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
             color: 'from-amber-500 to-orange-600',
             hoverColor: 'hover:from-orange-600 hover:to-orange-700',
           },
+        );
+      }
+
+      // Additional navigation items
+      actions.push(
           {
             label: 'Storage Rooms',
             icon: <Warehouse size={18} />,
@@ -514,7 +525,6 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
           }
         );
       }
-    }
 
     // POS-related pages
     if (path.includes('/pos')) {
@@ -859,6 +869,8 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
   }, [location.pathname, currentUser]);
 
   const createMenuOptions = useMemo(() => {
+    if (!currentUser) return [];
+
     const options: Array<{
       key: string;
       label: string;
@@ -1308,10 +1320,10 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               <div className={`h-8 w-px mx-0.5 lg:mx-1 flex-shrink-0 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
 
             {/* Dynamic Quick Access Buttons - Context-aware */}
-            {getContextualQuickActions.length > 0 && (
+            {(getContextualQuickActions || []).length > 0 && (
               <>
                   <div className="flex items-center gap-1.5 lg:gap-2 flex-shrink-0">
-                  {getContextualQuickActions.slice(0, 4).map((action, index) => (
+                  {(getContextualQuickActions || []).slice(0, 4).map((action, index) => (
                     <button
                       key={`${action.path}-${index}`}
                       onClick={() => navigate(action.path)}
@@ -1373,12 +1385,12 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               {showCreateDropdown && (
                 <div className={`absolute right-0 top-full mt-2 w-80 ${isDark ? 'bg-slate-900/95 border-slate-700/60' : 'bg-white/95 border-gray-200/60'} backdrop-blur-xl rounded-xl shadow-xl border z-50`}>
                   <div className="p-4 space-y-3">
-                    {createMenuOptions.length === 0 ? (
+                    {(createMenuOptions || []).length === 0 ? (
                       <div className={`w-full px-4 py-6 rounded-xl border text-center ${isDark ? 'bg-slate-800/70 border-slate-700 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
                         <p className="text-sm font-medium">No quick create actions available</p>
                       </div>
                     ) : (
-                      createMenuOptions.map((option) => {
+                      (createMenuOptions || []).map((option) => {
                         const Icon = option.icon;
                         return (
                     <button
@@ -1429,106 +1441,114 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
           {currentUser?.role !== 'technician' && (
             <div className="hidden lg:flex items-center gap-1.5 flex-shrink-0">
               {/* POS System - Priority for Customer Care */}
-              <div className="relative group">
-                <button 
-                  onClick={() => navigate('/pos')}
-                  className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
-                    location.pathname.includes('/pos') 
-                      ? 'bg-emerald-500 text-white border-emerald-400 scale-105' 
-                      : isDark
-                        ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600 hover:scale-105'
-                        : 'bg-white/80 hover:bg-white border-gray-200 hover:scale-105'
-                  }`}
-                  title="POS System"
-                >
-                  <ShoppingCart size={16} className={location.pathname.includes('/pos') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
-                </button>
-                <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
-                  POS System
-                  <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${isDark ? 'border-t-slate-800/95' : 'border-t-white/95'}`}></div>
+              {(hasAll || userPermissions.includes('access_pos')) && (
+                <div className="relative group">
+                  <button
+                    onClick={() => navigate('/pos')}
+                    className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
+                      location.pathname.includes('/pos')
+                        ? 'bg-emerald-500 text-white border-emerald-400 scale-105'
+                        : isDark
+                          ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600 hover:scale-105'
+                          : 'bg-white/80 hover:bg-white border-gray-200 hover:scale-105'
+                    }`}
+                    title="POS System"
+                  >
+                    <ShoppingCart size={16} className={location.pathname.includes('/pos') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
+                  </button>
+                  <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
+                    POS System
+                    <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${isDark ? 'border-t-slate-800/95' : 'border-t-white/95'}`}></div>
+                  </div>
                 </div>
-              </div>
+              )}
               
               {/* Customer Management */}
-              <div className="relative group">
-                <button 
-                  onClick={() => navigate('/customers')}
-                  className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
-                    location.pathname.includes('/customers') 
-                      ? 'bg-purple-500 text-white border-purple-400 scale-105' 
-                      : isDark
-                        ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600 hover:scale-105'
-                        : 'bg-white/80 hover:bg-white border-gray-200 hover:scale-105'
-                  }`}
-                  title="Customers"
-                >
-                  <Users size={16} className={location.pathname.includes('/customers') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
-                </button>
-                <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
-                  Customers
-                  <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${isDark ? 'border-t-slate-800/95' : 'border-t-white/95'}`}></div>
+              {(hasAll || userPermissions.includes('view_customers')) && (
+                <div className="relative group">
+                  <button
+                    onClick={() => navigate('/customers')}
+                    className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
+                      location.pathname.includes('/customers')
+                        ? 'bg-purple-500 text-white border-purple-400 scale-105'
+                        : isDark
+                          ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600 hover:scale-105'
+                          : 'bg-white/80 hover:bg-white border-gray-200 hover:scale-105'
+                    }`}
+                    title="Customers"
+                  >
+                    <Users size={16} className={location.pathname.includes('/customers') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
+                  </button>
+                  <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
+                    Customers
+                    <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${isDark ? 'border-t-slate-800/95' : 'border-t-white/95'}`}></div>
+                  </div>
                 </div>
-              </div>
+              )}
               
               {/* Device Management */}
-              <div className="relative group">
-                <button 
-                  onClick={() => navigate('/devices')}
-                  className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
-                    location.pathname.includes('/devices') 
-                      ? 'bg-blue-500 text-white border-blue-400 scale-105' 
-                      : isDark
-                        ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600 hover:scale-105'
-                        : 'bg-white/80 hover:bg-white border-gray-200 hover:scale-105'
-                  }`}
-                  title="Devices"
-                >
-                  <Smartphone size={16} className={location.pathname.includes('/devices') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
-                </button>
-                <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
-                  Devices
-                  <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${isDark ? 'border-t-slate-800/95' : 'border-t-white/95'}`}></div>
+              {(hasAll || userPermissions.includes('view_devices')) && (
+                <div className="relative group">
+                  <button
+                    onClick={() => navigate('/devices')}
+                    className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
+                      location.pathname.includes('/devices')
+                        ? 'bg-blue-500 text-white border-blue-400 scale-105'
+                        : isDark
+                          ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600 hover:scale-105'
+                          : 'bg-white/80 hover:bg-white border-gray-200 hover:scale-105'
+                    }`}
+                    title="Devices"
+                  >
+                    <Smartphone size={16} className={location.pathname.includes('/devices') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
+                  </button>
+                  <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
+                    Devices
+                    <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${isDark ? 'border-t-slate-800/95' : 'border-t-white/95'}`}></div>
+                  </div>
                 </div>
-              </div>
+              )}
               
               {/* Reminders */}
-              <div className="relative group">
-                <button 
-                  onClick={() => navigate('/reminders')}
-                  className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm relative ${
-                    location.pathname.includes('/reminders') 
-                      ? 'bg-yellow-500 text-white border-yellow-400 scale-105' 
-                      : isDark
-                        ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600 hover:scale-105'
-                        : 'bg-white/80 hover:bg-white border-gray-200 hover:scale-105'
-                  }`}
-                  title="Reminders"
-                >
-                  <Clock size={16} className={location.pathname.includes('/reminders') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
-                  {reminderCount > 0 && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                      <span className="text-[10px] text-white font-bold">
-                        {reminderCount > 9 ? '9+' : reminderCount}
-                      </span>
-                    </div>
-                  )}
-                </button>
-                <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
-                  Reminders {reminderCount > 0 ? `(${reminderCount} overdue)` : ''}
-                  <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${isDark ? 'border-t-slate-800/95' : 'border-t-white/95'}`}></div>
+              {(hasAll || userPermissions.includes('view_dashboard')) && (
+                <div className="relative group">
+                  <button
+                    onClick={() => navigate('/reminders')}
+                    className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm relative ${
+                      location.pathname.includes('/reminders')
+                        ? 'bg-yellow-500 text-white border-yellow-400 scale-105'
+                        : isDark
+                          ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600 hover:scale-105'
+                          : 'bg-white/80 hover:bg-white border-gray-200 hover:scale-105'
+                    }`}
+                    title="Reminders"
+                  >
+                    <Clock size={16} className={location.pathname.includes('/reminders') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
+                    {reminderCount > 0 && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                        <span className="text-[10px] text-white font-bold">
+                          {reminderCount > 9 ? '9+' : reminderCount}
+                        </span>
+                      </div>
+                    )}
+                  </button>
+                  <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
+                    Reminders {reminderCount > 0 ? `(${reminderCount} overdue)` : ''}
+                    <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${isDark ? 'border-t-slate-800/95' : 'border-t-white/95'}`}></div>
+                  </div>
                 </div>
-              </div>
+              )}
               
-              {/* Admin-only quick access */}
-              {currentUser?.role === 'admin' && (
+              {/* Inventory - Permission-based access */}
+              {(hasAll || userPermissions.includes('view_inventory')) && (
                 <>
                   {/* Inventory */}
                   <div className="relative group">
-                    <button 
+                    <button
                       onClick={() => navigate('/lats/unified-inventory')}
                       className={`p-2.5 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
-                        location.pathname.includes('/lats/unified-inventory') 
-                          ? 'bg-orange-500 text-white border-orange-400 scale-105' 
+                        location.pathname.includes('/lats/unified-inventory')
+                          ? 'bg-orange-500 text-white border-orange-400 scale-105'
                           : isDark
                             ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600 hover:scale-105'
                             : 'bg-white/80 hover:bg-white border-gray-200 hover:scale-105'
@@ -1614,7 +1634,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                 title="Notifications"
               >
                 <Bell size={16} className={isDark ? 'text-gray-200' : 'text-gray-700'} />
-                {unreadNotifications.length > 0 && (
+                {(unreadNotifications || []).length > 0 && (
                   <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full notification-badge border-2 border-white shadow-sm flex items-center justify-center">
                     <span className="text-xs text-white font-bold">
                       {unreadNotifications.length > 9 ? '9+' : unreadNotifications.length}
@@ -1629,14 +1649,14 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                   <div className="p-4">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Notifications</h3>
-                      {unreadNotifications.length > 0 && (
+                      {(unreadNotifications || []).length > 0 && (
                         <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
                           {unreadNotifications.length} unread
                         </span>
                       )}
                     </div>
                     <div className="space-y-2">
-                      {notifications.length > 0 ? (
+                      {(notifications || []).length > 0 ? (
                         notifications.slice(0, 8).map((notification) => (
                           <div
                             key={notification.id}
@@ -1701,7 +1721,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                         </div>
                       )}
                     </div>
-                    {notifications.length > 8 && (
+                    {(notifications || []).length > 8 && (
                       <div className={`mt-3 pt-3 ${isDark ? 'border-slate-700' : 'border-gray-200'} border-t`}>
                         <button
                           onClick={() => {
@@ -1810,13 +1830,13 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                               <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                               <p className="text-sm text-gray-600">Loading users...</p>
                             </div>
-                          ) : availableTestUsers.length === 0 ? (
+                          ) : (availableTestUsers || []).length === 0 ? (
                             <div className="text-center py-4 text-gray-500">
                               <User size={24} className="mx-auto mb-2 opacity-50" />
                               <p className="text-sm">No users available for testing</p>
                             </div>
                           ) : (
-                            availableTestUsers.map((user) => (
+                            (availableTestUsers || []).map((user) => (
                               <button
                                 key={user.id}
                                 onClick={() => handleUserSelect(user.id)}

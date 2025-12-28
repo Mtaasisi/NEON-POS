@@ -29,6 +29,7 @@ const CategoryInput: React.FC<CategoryInputProps> = ({
   const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -84,12 +85,33 @@ const CategoryInput: React.FC<CategoryInputProps> = ({
     setShowDropdown(filtered.length > 0);
   };
 
+  // Handle keyboard navigation
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showDropdown || filteredCategories.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => prev < filteredCategories.length - 1 ? prev + 1 : prev);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
+    } else if (e.key === 'Enter' && selectedIndex >= 0) {
+      e.preventDefault();
+      handleCategorySelect(filteredCategories[selectedIndex]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowDropdown(false);
+      setSelectedIndex(-1);
+    }
+  };
+
   // Handle category selection
   const handleCategorySelect = (category: Category) => {
     console.log('🎯 CategoryInput: Selecting category:', category.name, category.id);
     onChange(category.id);
     setSearchQuery(category.name);
     setShowDropdown(false);
+    setSelectedIndex(-1);
     inputRef.current?.blur();
   };
 
@@ -144,6 +166,13 @@ const CategoryInput: React.FC<CategoryInputProps> = ({
       setSearchQuery('');
     }
   }, [value, categories]);
+
+  // Reset selected index when dropdown state changes
+  useEffect(() => {
+    if (!showDropdown) {
+      setSelectedIndex(-1);
+    }
+  }, [showDropdown]);
 
   // Render category item with children
   const renderCategoryItem = (category: Category, level: number = 0) => {
@@ -233,9 +262,10 @@ const CategoryInput: React.FC<CategoryInputProps> = ({
           value={searchQuery}
           onChange={(e) => handleInputChange(e.target.value)}
           onFocus={handleFocus}
+          onKeyDown={handleKeyDown}
           className={`w-full py-3 pl-12 pr-12 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors ${
-            error 
-              ? 'border-red-500 focus:border-red-600' 
+            error
+              ? 'border-red-500 focus:border-red-600'
               : 'border-gray-300 focus:border-blue-500'
           } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
           placeholder={placeholder}
@@ -268,7 +298,7 @@ const CategoryInput: React.FC<CategoryInputProps> = ({
           {searchQuery.trim() ? (
             // Search results - flat list
             filteredCategories.length > 0 ? (
-              filteredCategories.map((category) => (
+              filteredCategories.map((category, index) => (
                 <button
                   key={category.id}
                   type="button"
@@ -281,8 +311,12 @@ const CategoryInput: React.FC<CategoryInputProps> = ({
                     e.preventDefault();
                     handleCategorySelect(category);
                   }}
-                  className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 focus:outline-none focus:bg-blue-50 ${
-                    value === category.id ? 'bg-blue-50 border-blue-200' : ''
+                  className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 focus:outline-none ${
+                    selectedIndex === index
+                      ? 'bg-blue-100 border-blue-300'
+                      : value === category.id
+                        ? 'bg-blue-50 border-blue-200'
+                        : ''
                   }`}
                 >
                   <div className="flex items-center gap-3">

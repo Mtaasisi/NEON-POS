@@ -211,13 +211,19 @@ class GlobalErrorHandler {
       }).join(' ');
       
       // Suppress SMS proxy connection errors - expected when proxy server is not running
-      const isSMSProxyError = allArgsString.includes('sms-proxy') && 
+      const isSMSProxyError = allArgsString.includes('sms-proxy') &&
                              (allArgsString.includes('ERR_CONNECTION_REFUSED') ||
                               allArgsString.includes('ECONNREFUSED') ||
                               allArgsString.includes('Failed to fetch'));
-      
-      if (isSMSProxyError) {
-        // Don't log to console - this is expected when SMS proxy server is not running
+
+      // Suppress WebSocket connection errors - expected during network issues or Neon maintenance
+      const isWebSocketError = allArgsString.includes('WebSocket') ||
+                              allArgsString.includes('wss://') ||
+                              allArgsString.includes('ws://') ||
+                              (allArgsString.includes('connect') && allArgsString.includes('failed'));
+
+      if (isSMSProxyError || isWebSocketError) {
+        // Don't log to console - these are expected network connectivity issues
         return;
       }
 

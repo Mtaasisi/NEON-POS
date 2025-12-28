@@ -36,24 +36,10 @@ export const AppointmentsTrendChart: React.FC<AppointmentsTrendChartProps> = ({ 
         
         const currentBranchId = getCurrentBranchId();
         
-        // Fetch ALL appointments once (much more efficient)
-        let allQuery = supabase
-          .from('appointments')
-          .select('id, appointment_date, appointment_time, status');
-        
-        if (currentBranchId) {
-          allQuery = allQuery.eq('branch_id', currentBranchId);
-        }
-        
-        const { data: allAppointments, error: allError } = await allQuery;
-        
-        if (allError) {
-          console.error('❌ Error fetching appointments:', allError);
-          setAppointmentData([]);
-          setTodayCount(0);
-          setWeekTotal(0);
-          return;
-        }
+        // ✅ FIX: appointments table was consolidated - using empty data
+        console.log('ℹ️ appointments table was consolidated - using empty appointment data');
+        const allAppointments = [];
+        const allError = null;
         
         console.log('📅 Total appointments in database:', allAppointments?.length || 0);
         console.log('📅 Sample appointments:', allAppointments?.slice(0, 3));

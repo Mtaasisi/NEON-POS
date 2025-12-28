@@ -2,17 +2,18 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
-import { 
-  Users, 
-  Settings, 
-  MapPin, 
-  Wifi, 
-  Clock, 
-  Shield, 
+import {
+  Users,
+  Settings,
+  MapPin,
+  Clock,
+  Shield,
   BarChart3,
   Database,
   Server,
-  Globe
+  Globe,
+  Wrench,
+  ArrowLeft
 } from 'lucide-react';
 
 const AdminDashboard: React.FC = () => {
@@ -71,11 +72,52 @@ const AdminDashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
-          <p className="text-gray-600">Manage your system settings and configurations</p>
-        </div>
+        {/* Header + Quick Actions wrapped in one Card */}
+        <GlassCard className="p-8 mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-6">
+              <div className="w-16 h-16 bg-orange-600 rounded-full flex items-center justify-center shadow-lg">
+                <Wrench className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Spare Parts Inventory</h1>
+                <p className="text-sm text-gray-600">Manage inventory, track usage, and monitor stock levels</p>
+              </div>
+            </div>
+            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors !w-12 !h-12 !p-0 !rounded-full !bg-blue-600 hover:!bg-blue-700 !shadow-lg flex items-center justify-center">
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </button>
+          </div>
+
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <GlassButton
+                onClick={() => navigate('/admin/settings?section=attendance')}
+                className="bg-blue-600 text-white hover:bg-blue-700"
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Configure Attendance
+              </GlassButton>
+              
+              <GlassButton
+                onClick={() => navigate('/admin/offices')}
+                className="bg-green-600 text-white hover:bg-green-700"
+              >
+                <MapPin className="w-4 h-4 mr-2" />
+                Manage Offices
+              </GlassButton>
+              
+              <GlassButton
+                onClick={() => navigate('/admin/reports')}
+                className="bg-purple-600 text-white hover:bg-purple-700"
+              >
+                <BarChart3 className="w-4 h-4 mr-2" />
+                View Reports
+              </GlassButton>
+            </div>
+          </div>
+        </GlassCard>
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -138,10 +180,7 @@ const AdminDashboard: React.FC = () => {
                 </div>
                 <p className="text-sm opacity-80 mb-4">{feature.description}</p>
                 <GlassButton
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(feature.path);
-                  }}
+                  onClick={() => navigate(feature.path)}
                   className="w-full bg-white/50 hover:bg-white/70 text-gray-800"
                 >
                   Manage

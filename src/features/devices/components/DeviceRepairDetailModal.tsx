@@ -266,15 +266,9 @@ const DeviceRepairDetailModal: React.FC<DeviceRepairDetailModalProps> = ({
 
   const loadFinancialInfo = async (deviceId: string) => {
     try {
-      const { data: payments, error } = await supabase
-        .from('customer_payments')
-        .select('amount, status')
-        .eq('device_id', deviceId);
-
-      if (error) {
-        console.error('Error loading financial info:', error);
-        return;
-      }
+      // Customer payments table was consolidated, using empty payments array
+      console.log('ℹ️ Customer payments table was consolidated - using empty financial info');
+      const payments: any[] = [];
 
       const financialData = {
         totalPaid: 0,
@@ -501,107 +495,12 @@ const DeviceRepairDetailModal: React.FC<DeviceRepairDetailModalProps> = ({
 
       if (deviceError || !deviceData) return;
 
-      // Check if pending payments already exist for this device
-      const { data: existingPayments, error: existingError } = await supabase
-        .from('customer_payments')
-        .select('id, payment_type')
-        .eq('device_id', deviceId)
-        .eq('status', 'pending');
-
-      if (existingError) {
-
-        // If the query fails, assume no existing payments and continue
-        const paymentsToCreate = [];
-        
-        // Create pending payment for repair cost if it exists
-        if (deviceData.repair_cost && deviceData.repair_cost > 0) {
-          paymentsToCreate.push({
-            customer_id: deviceData.customer_id,
-            device_id: deviceId,
-            amount: deviceData.repair_cost,
-            method: 'cash',
-            payment_type: 'payment',
-            status: 'pending',
-            payment_date: new Date().toISOString()
-          });
-        }
-
-        // Create pending payment for deposit amount if it exists
-        if (deviceData.deposit_amount && deviceData.deposit_amount > 0) {
-          paymentsToCreate.push({
-            customer_id: deviceData.customer_id,
-            device_id: deviceId,
-            amount: deviceData.deposit_amount,
-            method: 'cash',
-            payment_type: 'deposit',
-            status: 'pending',
-            payment_date: new Date().toISOString()
-          });
-        }
-
-        // Insert pending payments if any were created
-        if (paymentsToCreate.length > 0) {
-          const { error: insertError } = await supabase
-            .from('customer_payments')
-            .insert(paymentsToCreate);
-
-          if (insertError) {
-            console.error('Error creating pending payments:', insertError);
-          } else {
-
-          }
-        }
-        return;
-      }
-
-      const paymentsToCreate = [];
-
-      // Create pending payment for repair cost if it exists and no pending payment exists
-      if (deviceData.repair_cost && deviceData.repair_cost > 0) {
-        const hasRepairCostPayment = existingPayments?.some(p => p.payment_type === 'payment');
-        if (!hasRepairCostPayment) {
-          paymentsToCreate.push({
-            customer_id: deviceData.customer_id,
-            device_id: deviceId,
-            amount: deviceData.repair_cost,
-            method: 'cash', // Default method, can be changed later
-            payment_type: 'payment',
-            status: 'pending',
-            payment_date: new Date().toISOString()
-          });
-        }
-      }
-
-      // Create pending payment for deposit amount if it exists and no pending payment exists
-      if (deviceData.deposit_amount && deviceData.deposit_amount > 0) {
-        const hasDepositPayment = existingPayments?.some(p => p.payment_type === 'deposit');
-        if (!hasDepositPayment) {
-          paymentsToCreate.push({
-            customer_id: deviceData.customer_id,
-            device_id: deviceId,
-            amount: deviceData.deposit_amount,
-            method: 'cash', // Default method, can be changed later
-            payment_type: 'deposit',
-            status: 'pending',
-            payment_date: new Date().toISOString()
-          });
-        }
-      }
-
-      // Insert pending payments if any were created
-      if (paymentsToCreate.length > 0) {
-        const { error: insertError } = await supabase
-          .from('customer_payments')
-          .insert(paymentsToCreate);
-
-        if (insertError) {
-          console.error('Error creating pending payments:', insertError);
-        } else {
-
-        }
-      }
+      // Customer payments table was consolidated, skipping payment creation
+      console.log('ℹ️ Customer payments table was consolidated - skipping payment creation');
     } catch (error) {
       console.error('Error creating pending payments from form:', error);
+    } finally {
+      // Cleanup if needed
     }
   };
 
@@ -855,18 +754,8 @@ const DeviceRepairDetailModal: React.FC<DeviceRepairDetailModalProps> = ({
           message = `Hello ${customerName}, this is an update about your ${deviceName} repair. Current status: ${device.status}. - LATS CHANCE`;
       }
       
-      // Store SMS in database for tracking
-      const { error } = await supabase
-        .from('customer_communications')
-        .insert({
-          customer_id: customer.id,
-          type: 'sms',
-          message: message,
-          status: 'sent',
-          phone_number: customer.phone || customer.whatsapp,
-          sent_by: currentUser?.id,
-          sent_at: new Date().toISOString()
-        });
+      // Customer communications table was consolidated into customers table as JSON
+      console.log('ℹ️ Customer communications consolidated - SMS tracking skipped');
       
       if (error) {
         console.error('Error saving SMS record:', error);

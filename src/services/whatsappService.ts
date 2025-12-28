@@ -65,10 +65,18 @@ class WhatsAppService {
       );
       
       const integration = await Promise.race([integrationPromise, timeoutPromise]);
-      
+
+      console.log('🔧 WhatsApp initialization result:', {
+        integrationFound: !!integration,
+        isEnabled: integration?.is_enabled,
+        hasApiKey: !!integration?.credentials?.api_key,
+        hasSessionId: !!integration?.credentials?.session_id,
+        credentials: integration?.credentials
+      });
+
       if (!integration || !integration.is_enabled) {
         console.debug('ℹ️ WhatsApp integration not configured. WhatsApp features will be disabled until configured in Admin Settings → Integrations');
-        this.initialized = true;
+        // Don't set initialized=true so we can try again later
         return;
       }
 
@@ -93,19 +101,25 @@ class WhatsAppService {
       this.initialized = true;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      
+
       if (errorMsg.includes('timeout')) {
         console.debug('ℹ️ WhatsApp service initialization timed out (normal during cold starts) - will retry on first use');
       } else {
         console.warn('❌ WhatsApp service configuration error:', errorMsg);
       }
-      
-      this.initialized = true;
+
+      // Don't set initialized=true on error so we can try again later
     }
   }
 
   private async ensureInitialized(): Promise<void> {
     if (!this.initialized && this.initializationPromise) {
+      await this.initializationPromise;
+    } else if (this.initialized && (!this.apiKey || !this.sessionId)) {
+      // If initialized but no credentials, try to re-initialize
+      console.log('🔄 WhatsApp service was initialized but has no credentials, re-initializing...');
+      this.initialized = false;
+      this.initializationPromise = this.initializeService();
       await this.initializationPromise;
     }
   }
@@ -120,7 +134,15 @@ class WhatsAppService {
   ): Promise<{ success: boolean; error?: string; log_id?: string; message_id?: string }> {
     try {
       await this.ensureInitialized();
-      
+
+      console.log('🔧 WhatsApp sendMessage check:', {
+        isInitialized: this.initialized,
+        hasApiKey: !!this.apiKey,
+        hasSessionId: !!this.sessionId,
+        apiKeyPreview: this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'NONE',
+        sessionId: this.sessionId || 'NONE'
+      });
+
       if (!this.apiKey || !this.sessionId) {
         if (!WhatsAppService.hasWarnedAboutConfig && (import.meta.env.DEV || import.meta.env.MODE === 'development')) {
           console.warn('⚠️ WhatsApp provider not configured. Configure WhatsApp WasenderAPI in Admin Settings → Integrations.');
@@ -412,16 +434,64 @@ class WhatsAppService {
           to: formattedPhone
         };
         
+        // Validate and ensure media URL has complete protocol
+        let mediaUrl = options.media_url;
+        console.log(`🔍 Raw ${mediaType} URL received:`, mediaUrl);
+        console.log(`🔍 Media URL type:`, typeof mediaUrl);
+        console.log(`🔍 Media URL length:`, mediaUrl ? mediaUrl.length : 'null');
+
+        if (!mediaUrl) {
+          return { success: false, error: `Media URL is required for ${mediaType} messages` };
+        }
+
+        // Ensure URL has protocol (but don't modify data: URLs)
+        if (!mediaUrl.startsWith('http://') && !mediaUrl.startsWith('https://') && !mediaUrl.startsWith('data:')) {
+          console.warn(`⚠️ Media URL missing protocol, adding https://: ${mediaUrl}`);
+          mediaUrl = `https://${mediaUrl}`;
+          console.log(`🔧 After protocol fix:`, mediaUrl);
+        }
+
+        // Additional validation - ensure URL is properly formatted
+        if (mediaUrl.startsWith('data:')) {
+          // Data URLs are valid but can't be parsed by URL constructor
+          console.log(`✅ Data URL validation passed:`, {
+            isDataUrl: true,
+            type: mediaUrl.split(';')[0].split(':')[1],
+            fullUrl: mediaUrl.substring(0, 100) + '...'
+          });
+        } else {
+          try {
+            const url = new URL(mediaUrl);
+            console.log(`✅ URL validation passed:`, {
+              protocol: url.protocol,
+              hostname: url.hostname,
+              pathname: url.pathname,
+              fullUrl: mediaUrl
+            });
+          } catch (urlError) {
+            console.error(`❌ URL validation failed:`, urlError);
+            return { success: false, error: `Invalid URL format: ${mediaUrl}` };
+          }
+        }
+
+        console.log(`📄 Final ${mediaType} URL for WhatsApp API:`, mediaUrl);
+
+        // Final safety check - ensure URL has protocol before sending to API
+        if (!mediaUrl.startsWith('http://') && !mediaUrl.startsWith('https://')) {
+          console.error(`❌ [WHATSAPP_SERVICE] CRITICAL: URL still missing protocol before API call: ${mediaUrl}`);
+          return { success: false, error: `Invalid media URL format - missing protocol: ${mediaUrl}` };
+        }
+
         // Set media URL based on type (WasenderAPI format)
         switch (mediaType) {
           case 'image':
-            payload.imageUrl = options.media_url;
+            payload.imageUrl = mediaUrl;
             break;
           case 'video':
-            payload.videoUrl = options.media_url;
+            payload.videoUrl = mediaUrl;
             break;
           case 'document':
-            payload.documentUrl = options.media_url;
+            payload.documentUrl = mediaUrl;
             // Add fileName if provided or extract from URL
             if (options.fileName) {
               payload.fileName = options.fileName;

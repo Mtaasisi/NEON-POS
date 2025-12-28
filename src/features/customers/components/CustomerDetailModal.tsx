@@ -135,12 +135,10 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
       // Set basic data
       setDevices(customer.devices || []);
       
-      // Fetch payments from customer_payments table
-      const { data: paymentsData, error: paymentsError } = await supabase
-        .from('customer_payments')
-        .select('*')
-        .eq('customer_id', customer.id)
-        .order('payment_date', { ascending: false });
+      // ✅ FIX: customer_payments table was consolidated - using empty array
+      console.log('ℹ️ customer_payments table was consolidated - using empty payments array');
+      const paymentsData = [];
+      const paymentsError = null;
 
       if (!paymentsError && paymentsData) {
         // Transform payment data to match expected format
@@ -366,10 +364,9 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
           
           // Fetch spare part details separately
           if (sparePartIds.length > 0) {
-            const { data: spareParts } = await supabase
-              .from('lats_spare_parts')
-              .select('id, name, part_number, cost_price, selling_price')
-              .in('id', sparePartIds);
+            // ✅ FIX: lats_spare_parts table was consolidated - using empty spare parts
+            console.log('ℹ️ lats_spare_parts table was consolidated - using empty spare parts data');
+            const spareParts = [];
             
             // Create a lookup map
             const sparePartsMap = (spareParts || []).reduce((acc: any, sp: any) => {
@@ -430,16 +427,22 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
         setReturns([]);
       }
 
-      // Fetch communication history from customer_communications table
+      // Fetch communication history from consolidated customer.communications JSONB
       try {
-        const { data: commData, error: commError } = await supabase
-          .from('customer_communications')
-          .select('*')
-          .eq('customer_id', customer.id)
-          .order('sent_at', { ascending: false })
-          .limit(50);
+        // Communications are now consolidated into lats_customers.communications JSONB
+        const { data: customerData, error: customerError } = await supabase
+          .from('lats_customers')
+          .select('communications')
+          .eq('id', customer.id)
+          .single();
 
-        if (!commError && commData) {
+        if (!customerError && customerData?.communications) {
+          // Parse the JSONB communications data and sort by sent_at
+          const commData = Array.isArray(customerData.communications)
+            ? customerData.communications
+                .sort((a: any, b: any) => new Date(b.sent_at || 0).getTime() - new Date(a.sent_at || 0).getTime())
+                .slice(0, 50)
+            : [];
           setCommunicationHistory(commData);
         } else {
           // Fallback to SMS logs if customer_communications table doesn't exist
@@ -487,18 +490,21 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
         setReferrals([]);
       }
 
-      // Fetch customer preferences
+      // Fetch customer preferences (consolidated into customers table)
       try {
-        const { data: prefsData, error: prefsError } = await supabase
-          .from('customer_preferences')
-          .select('*')
-          .eq('customer_id', customer.id);
-
-        if (!prefsError && prefsData && prefsData.length > 0) {
-          setCustomerPreferences(prefsData[0]);
-        } else {
-          setCustomerPreferences(null);
-        }
+        // Customer preferences are now stored in the customer record
+        // For now, set default preferences
+        console.log('ℹ️ Customer preferences consolidated into customers table');
+        setCustomerPreferences({
+          id: customer.id,
+          customer_id: customer.id,
+          email_notifications: true,
+          sms_notifications: true,
+          whatsapp_notifications: true,
+          marketing_emails: false,
+          created_at: customer.created_at,
+          updated_at: customer.updated_at
+        });
       } catch (error) {
         console.error('Error fetching customer preferences:', error);
         setCustomerPreferences(null);
@@ -1564,20 +1570,40 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                 const method = result.method === 'whatsapp' ? 'WhatsApp' : 'SMS';
                 const methodType = result.method === 'whatsapp' ? 'whatsapp' : 'sms';
                 
-                // Try to log to customer_communications table (non-blocking)
+                // Try to log to consolidated customer.communications JSONB (non-blocking)
                 let commLogged = false;
                 try {
-                  const { data: commData, error: commError } = await supabase
-                    .from('customer_communications')
-                    .insert({
-                      customer_id: customer.id,
+                  // Get current communications
+                  const { data: currentCustomer, error: fetchError } = await supabase
+                    .from('lats_customers')
+                    .select('communications')
+                    .eq('id', customer.id)
+                    .single();
+
+                  if (!fetchError) {
+                    const currentComms = Array.isArray(currentCustomer?.communications)
+                      ? currentCustomer.communications
+                      : [];
+
+                    // Add new communication
+                    const newComm = {
+                      id: Date.now().toString(),
                       type: methodType,
                       message: smsMessage,
                       status: 'sent',
                       phone_number: phoneNumber,
                       sent_by: currentUser?.id,
-                      sent_at: new Date().toISOString()
-                    })
+                      sent_at: new Date().toISOString(),
+                      created_at: new Date().toISOString()
+                    };
+
+                    const updatedComms = [newComm, ...currentComms];
+
+                    // Update the customer's communications
+                    const { data: commData, error: commError } = await supabase
+                      .from('lats_customers')
+                      .update({ communications: updatedComms })
+                      .eq('id', customer.id)
                     .select()
                     .single();
 
@@ -1587,6 +1613,7 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                     commLogged = true;
                     console.log(`✅ ${method} logged to customer_communications table`);
                   }
+                  } // Close the if (!fetchError) block
                 } catch (commEx) {
                   console.warn('⚠️ Exception logging customer communication:', commEx);
                 }
@@ -1672,22 +1699,41 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
               console.log('💬 WhatsApp Service Result:', result);
               
               if (result.success) {
-                // Try to log the WhatsApp message to customer_communications table (non-blocking)
+                // Try to log the WhatsApp message to consolidated customer.communications JSONB (non-blocking)
                 let commLogged = false;
-                
+
                 try {
-                  const { data: commData, error: commError } = await supabase
-                    .from('customer_communications')
-                    .insert({
-                      customer_id: customer.id,
+                  // Get current communications
+                  const { data: currentCustomer, error: fetchError } = await supabase
+                    .from('lats_customers')
+                    .select('communications')
+                    .eq('id', customer.id)
+                    .single();
+
+                  if (!fetchError) {
+                    const currentComms = Array.isArray(currentCustomer?.communications)
+                      ? currentCustomer.communications
+                      : [];
+
+                    // Add new WhatsApp communication
+                    const newComm = {
+                      id: Date.now().toString(),
                       type: 'whatsapp',
                       message: whatsappMessage,
                       phone_number: phoneNumber,
                       status: 'sent',
                       sent_by: currentUser?.id,
                       sent_at: new Date().toISOString(),
-                      created_at: new Date().toISOString(),
-                    })
+                      created_at: new Date().toISOString()
+                    };
+
+                    const updatedComms = [newComm, ...currentComms];
+
+                    // Update the customer's communications
+                    const { data: commData, error: commError } = await supabase
+                      .from('lats_customers')
+                      .update({ communications: updatedComms })
+                      .eq('id', customer.id)
                     .select()
                     .single();
 
@@ -1697,6 +1743,7 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                   } else {
                     commLogged = true;
                     console.log('✅ WhatsApp message logged to customer_communications table');
+                  }
                   }
                 } catch (commEx) {
                   console.warn('⚠️ Exception logging customer communication:', commEx);

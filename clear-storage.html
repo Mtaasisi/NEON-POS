@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear localStorage</title>
+</head>
+<body>
+    <h1>Clear localStorage</h1>
+    <p>This will clear all storage-related localStorage entries to fix quota issues.</p>
+    <button onclick="clearStorage()">Clear Storage</button>
+    <div id="result"></div>
+
+    <script>
+        function clearStorage() {
+            try {
+                const keys = Object.keys(localStorage);
+                const storageKeys = keys.filter(key => key.startsWith('storage:'));
+
+                console.log(`Found ${storageKeys.length} storage entries to clean up`);
+
+                storageKeys.forEach(key => {
+                    localStorage.removeItem(key);
+                    console.log(`Removed: ${key}`);
+                });
+
+                document.getElementById('result').innerHTML = `<p style="color: green;">✅ Cleared ${storageKeys.length} localStorage entries!</p>`;
+                console.log('✅ localStorage cleanup complete!');
+            } catch (error) {
+                document.getElementById('result').innerHTML = `<p style="color: red;">❌ Error: ${error.message}</p>`;
+                console.error('Error clearing storage:', error);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -119,19 +119,19 @@ const APIWebhooksSettings: React.FC = () => {
       else setWebhooks(webhooksData || []);
 
       // Load rate limit settings
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('key', 'api_rate_limits')
-        .single();
+      try {
+        const { unifiedSettingsService } = await import('../../../lib/unifiedSettingsService');
+        const rateLimitSettings = await unifiedSettingsService.getSettingsByCategory('system', 'api');
 
-      if (!settingsError && settingsData) {
-        try {
-          const parsed = JSON.parse(settingsData.value);
-          setRateLimitSettings(parsed);
-        } catch (e) {
-          console.error('Error parsing rate limit settings:', e);
+        if (rateLimitSettings && rateLimitSettings.rate_limits) {
+          const setting = rateLimitSettings.rate_limits;
+          if (setting && typeof setting === 'object' && 'value' in setting) {
+            const parsed = setting.value;
+            setRateLimitSettings(parsed);
+          }
         }
+      } catch (e) {
+        console.error('Error parsing rate limit settings:', e);
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -305,14 +305,11 @@ const APIWebhooksSettings: React.FC = () => {
 
   const saveRateLimitSettings = async () => {
     try {
-      const { error } = await supabase
-        .from('settings')
-        .upsert({
-          key: 'api_rate_limits',
-          value: JSON.stringify(rateLimitSettings)
-        }, { onConflict: 'key' });
+      // Use unified settings service
+      const { unifiedSettingsService } = await import('../../../lib/unifiedSettingsService');
 
-      if (error) throw error;
+      await unifiedSettingsService.setSetting('system', 'api', 'rate_limits', rateLimitSettings, 'json');
+
       toast.success('Rate limit settings saved successfully');
     } catch (error: any) {
       toast.error(error.message || 'Failed to save rate limit settings');

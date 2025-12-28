@@ -355,10 +355,21 @@ class SalesAnalyticsService {
 
   async getSalesStats(): Promise<SalesStats | null> {
     try {
-      const { data: sales, error } = await supabase
+      // Get current branch for filtering
+      const currentBranchId = getCurrentBranchId();
+      console.log('🏪 Analytics stats filtering by branch:', currentBranchId);
+
+      let query = supabase
         .from('lats_sales')
         .select('total_amount, created_at')
         .eq('status', 'completed');
+
+      // Apply branch filtering if branch ID exists
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+
+      const { data: sales, error } = await query;
 
       if (error) {
         console.error('Error fetching sales stats:', error);

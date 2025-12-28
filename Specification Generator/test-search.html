@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Search Test</title>
+    <style>
+        .model-list { display: none; background: white; border: 1px solid #ccc; max-height: 200px; overflow-y: auto; }
+        .model-list.show { display: block; }
+        .model-item { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; }
+        .model-item:hover { background: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <h2>Search Test</h2>
+    <input type="text" id="modelSearch" placeholder="Type to search...">
+    <div id="modelList" class="model-list"></div>
+    
+    <script>
+        let allModels = [];
+        
+        // Simulate database loading
+        fetch('./apple-laptops-database.json')
+            .then(response => response.json())
+            .then(data => {
+                allModels = Object.keys(data.models).map(modelId => {
+                    const model = data.models[modelId];
+                    return {
+                        id: modelId,
+                        displayName: `${modelId} - ${model.family} ${model.generation} (${model.year})`,
+                        searchText: `${modelId} ${model.family} ${model.generation} ${model.year}`.toLowerCase(),
+                    };
+                }).sort((a, b) => a.id.localeCompare(b.id));
+                
+                console.log('Models loaded:', allModels.length);
+                renderModelList(allModels);
+            })
+            .catch(error => {
+                console.error('Error loading database:', error);
+            });
+        
+        function renderModelList(models) {
+            const modelList = document.getElementById('modelList');
+            modelList.innerHTML = '';
+            
+            if (models.length === 0) {
+                modelList.innerHTML = '<div class="model-item">No models found</div>';
+                return;
+            }
+            
+            models.forEach(modelItem => {
+                const modelElement = document.createElement('div');
+                modelElement.className = 'model-item';
+                modelElement.textContent = modelItem.displayName;
+                modelElement.onclick = () => {
+                    document.getElementById('modelSearch').value = modelItem.displayName;
+                    hideModelDropdown();
+                };
+                modelList.appendChild(modelElement);
+            });
+        }
+        
+        function showModelDropdown() {
+            document.getElementById('modelList').classList.add('show');
+        }
+        
+        function hideModelDropdown() {
+            document.getElementById('modelList').classList.remove('show');
+        }
+        
+        function filterModels(searchTerm) {
+            if (!searchTerm.trim()) {
+                renderModelList(allModels);
+            } else {
+                const filtered = allModels.filter(model =>
+                    model.searchText.includes(searchTerm.toLowerCase())
+                );
+                renderModelList(filtered);
+            }
+            showModelDropdown();
+        }
+        
+        document.getElementById('modelSearch').addEventListener('input', function(e) {
+            filterModels(e.target.value);
+        });
+        
+        document.getElementById('modelSearch').addEventListener('focus', function() {
+            if (allModels.length > 0) {
+                renderModelList(allModels);
+                showModelDropdown();
+            }
+        });
+        
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#modelSearch') && !e.target.closest('#modelList')) {
+                hideModelDropdown();
+            }
+        });
+    </script>
+</body>
+</html>

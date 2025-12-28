@@ -121,21 +121,42 @@ const LoyaltyProgramSettings: React.FC = () => {
   const loadSettings = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('key', 'loyalty_program')
-        .single();
+      // Import unified settings service dynamically
+      const { unifiedSettingsService } = await import('../../../lib/unifiedSettingsService');
 
-      if (error) {
-        console.error('Error loading loyalty settings:', error);
-      } else if (data) {
-        try {
-          const parsed = JSON.parse(data.value);
-          setSettings(parsed);
-        } catch (e) {
-          console.error('Error parsing loyalty settings:', e);
-        }
+      // Get loyalty settings from unified table
+      const loyaltySettings = await unifiedSettingsService.getSettingsByCategory('system', 'loyalty');
+
+      if (loyaltySettings && Object.keys(loyaltySettings).length > 0) {
+        // Convert unified settings format to loyalty settings object
+        const settingsObj: any = { ...defaultSettings };
+
+        // Map individual settings to the loyalty object
+        Object.entries(loyaltySettings).forEach(([key, setting]) => {
+          if (setting && typeof setting === 'object' && 'value' in setting) {
+            const value = setting.value;
+
+            // Type conversion based on the value type
+            if (typeof value === 'boolean') {
+              settingsObj[key] = value;
+            } else if (typeof value === 'number') {
+              settingsObj[key] = value;
+            } else if (typeof value === 'string') {
+              // For string values, check if they should be boolean or number
+              if (value === 'true') {
+                settingsObj[key] = true;
+              } else if (value === 'false') {
+                settingsObj[key] = false;
+              } else if (!isNaN(Number(value))) {
+                settingsObj[key] = Number(value);
+              } else {
+                settingsObj[key] = value;
+              }
+            }
+          }
+        });
+
+        setSettings(settingsObj);
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -148,14 +169,22 @@ const LoyaltyProgramSettings: React.FC = () => {
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('settings')
-        .upsert({
-          key: 'loyalty_program',
-          value: JSON.stringify(settings)
-        }, { onConflict: 'key' });
+      // Import unified settings service dynamically
+      const { unifiedSettingsService } = await import('../../../lib/unifiedSettingsService');
 
-      if (error) throw error;
+      // Save each setting individually using unified settings service
+      const updatePromises = Object.entries(settings).map(async ([key, value]) => {
+        if (key === 'id') return; // Skip id field
+        const settingType = typeof value === 'boolean' ? 'boolean' :
+                           typeof value === 'number' ? 'number' : 'string';
+        return unifiedSettingsService.setSetting('system', 'loyalty', key, value, settingType);
+      });
+
+      const results = await Promise.all(updatePromises);
+      const success = results.every(result => result);
+
+      if (!success) throw new Error('Failed to save some settings');
+
       toast.success('Loyalty program settings saved successfully');
     } catch (error: any) {
       console.error('Error saving settings:', error);

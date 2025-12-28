@@ -86,12 +86,19 @@ export const generateProductReport = (
   productData: ProductData,
   variants: ProductVariant[]
 ): string => {
-  const totalValue = variants.length > 0 
-    ? variants.reduce((sum, v) => sum + (v.stockQuantity * v.price), 0)
+  // Filter out IMEI child variants from calculations
+  const regularVariants = variants.filter(v =>
+    v.variant_type !== 'imei_child' &&
+    !v.parent_variant_id &&
+    v.variantType !== 'imei_child'
+  );
+
+  const totalValue = regularVariants.length > 0
+    ? regularVariants.reduce((sum, v) => sum + (v.stockQuantity * v.price), 0)
     : productData.stockQuantity * productData.price;
 
-  const totalCost = variants.length > 0
-    ? variants.reduce((sum, v) => sum + (v.stockQuantity * v.costPrice), 0)
+  const totalCost = regularVariants.length > 0
+    ? regularVariants.reduce((sum, v) => sum + (v.stockQuantity * v.costPrice), 0)
     : productData.stockQuantity * productData.costPrice;
 
   const profit = totalValue - totalCost;

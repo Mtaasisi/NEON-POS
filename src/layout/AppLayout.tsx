@@ -5,6 +5,7 @@ import { useDevices } from '../context/DevicesContext';
 import { useCustomers } from '../context/CustomersContext';
 import { useBusinessInfo } from '../hooks/useBusinessInfo';
 import { useTheme } from '../context/ThemeContext';
+import { useFeature } from '../context/ConfigContext';
 
 import AddCustomerModal from '../features/customers/components/forms/AddCustomerModal';
 import TopBar from '../features/shared/components/TopBar';
@@ -222,6 +223,14 @@ const AppLayout: React.FC = () => {
   };
 
   const getNavItems = () => {
+    // Module toggle checks - in production, hide disabled modules completely
+    const isProduction = import.meta.env.MODE === 'production';
+    const salesPosEnabled = useFeature('sales_pos') || !isProduction;
+    const inventoryEnabled = useFeature('inventory') || !isProduction;
+    const customersEnabled = useFeature('customers') || !isProduction;
+    const communicationEnabled = useFeature('communication') || !isProduction;
+    const analyticsEnabled = useFeature('analytics') || !isProduction;
+
     // For technicians, only show repair-related navigation
     if (currentUser?.role === 'technician') {
       return [
@@ -239,13 +248,14 @@ const AppLayout: React.FC = () => {
           roles: ['technician'],
           count: activityCounts.activeDevices + activityCounts.overdueDevices
         },
-        {
+        // Only show spare parts if inventory management is enabled
+        ...(inventoryManagementEnabled || !isProduction ? [{
           path: '/lats/spare-parts',
           label: 'Spare Parts',
           icon: <Package size={20} strokeWidth={1.5} />,
           roles: ['technician'],
           count: Math.floor(Math.random() * 2)
-        },
+        }] : []),
       ];
     }
 
@@ -265,7 +275,12 @@ const AppLayout: React.FC = () => {
         label: 'POS System',
         icon: <ShoppingCart size={20} strokeWidth={1.5} />,
         roles: ['admin', 'customer-care'],
-        count: 0
+        count: 0,
+        onClick: () => {
+          // Force desktop mode by clearing tablet mode and navigating
+          localStorage.removeItem('forceTabletMode');
+          navigate('/pos');
+        }
       },
       {
         path: '/tablet-pos',
@@ -318,35 +333,37 @@ const AppLayout: React.FC = () => {
         count: 0
       },
 
-      // Inventory Management
-      {
-        path: '/lats/unified-inventory',
-        label: 'Inventory',
-        icon: <Package size={20} strokeWidth={1.5} />,
-        roles: ['admin'],
-        count: 0
-      },
-      {
-        path: '/lats/spare-parts',
-        label: 'Spare Parts',
-        icon: <Wrench size={20} strokeWidth={1.5} />,
-        roles: ['admin', 'technician'],
-        count: 0
-      },
-      {
-        path: '/lats/storage-rooms',
-        label: 'Storage Rooms',
-        icon: <Warehouse size={20} strokeWidth={1.5} />,
-        roles: ['admin'],
-        count: 0
-      },
-      {
-        path: '/lats/stock-transfers',
-        label: 'Stock Transfers',
-        icon: <ArrowRightLeft size={20} strokeWidth={1.5} />,
-        roles: ['admin'],
-        count: 0
-      },
+      // Inventory Management - conditionally shown based on Inventory module
+      ...(inventoryEnabled ? [
+        {
+          path: '/lats/unified-inventory',
+          label: 'Inventory',
+          icon: <Package size={20} strokeWidth={1.5} />,
+          roles: ['admin'],
+          count: 0
+        },
+        {
+          path: '/lats/spare-parts',
+          label: 'Spare Parts',
+          icon: <Wrench size={20} strokeWidth={1.5} />,
+          roles: ['admin', 'technician'],
+          count: 0
+        },
+        {
+          path: '/lats/storage-rooms',
+          label: 'Storage Rooms',
+          icon: <Warehouse size={20} strokeWidth={1.5} />,
+          roles: ['admin'],
+          count: 0
+        },
+        {
+          path: '/lats/stock-transfers',
+          label: 'Stock Transfers',
+          icon: <ArrowRightLeft size={20} strokeWidth={1.5} />,
+          roles: ['admin'],
+          count: 0
+        }
+      ] : []),
 
       // Orders & Purchasing
       {
@@ -371,14 +388,15 @@ const AppLayout: React.FC = () => {
         count: 0
       },
 
-      // Finance & Reports
-      {
+      // Finance & Reports - conditionally shown based on modules
+      // Sales Reports (Analytics Module)
+      ...(analyticsEnabled ? [{
         path: '/lats/sales-reports',
         label: 'Sales Reports',
         icon: <BarChart2 size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0
-      },
+      }] : []),
       {
         path: '/admin/reports',
         label: 'Employee Reports',
@@ -393,13 +411,14 @@ const AppLayout: React.FC = () => {
         roles: ['admin'],
         count: 0
       },
-      {
+      // Loyalty Program - conditionally shown (Sales & POS Module)
+      ...(salesPosEnabled ? [{
         path: '/lats/loyalty',
         label: 'Loyalty Program',
         icon: <Star size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0
-      },
+      }] : []),
 
       // People Management
       {
@@ -417,31 +436,33 @@ const AppLayout: React.FC = () => {
         count: 0
       },
 
-      // Communication
-      {
-        path: '/sms',
-        label: 'SMS',
-        icon: <MessageSquare size={20} strokeWidth={1.5} />,
-        roles: ['admin', 'customer-care'],
-        count: 0
-      },
-      {
-        path: '/whatsapp/inbox',
-        label: 'WhatsApp Inbox',
-        icon: <MessageCircle size={20} strokeWidth={1.5} />,
-        roles: ['admin', 'customer-care'],
-        count: whatsappUnreadCount
-      },
+      // Communication - conditionally shown based on Communication module
+      ...(communicationEnabled ? [
+        {
+          path: '/sms',
+          label: 'SMS',
+          icon: <MessageSquare size={20} strokeWidth={1.5} />,
+          roles: ['admin', 'customer-care'],
+          count: 0
+        },
+        {
+          path: '/whatsapp/inbox',
+          label: 'WhatsApp Inbox',
+          icon: <MessageCircle size={20} strokeWidth={1.5} />,
+          roles: ['admin', 'customer-care'],
+          count: whatsappUnreadCount
+        }
+      ] : []),
 
-      // Customer Portal
-      {
+      // Customer Portal - conditionally shown based on Customers module
+      ...(customersEnabled ? [{
         path: '/customer-portal/products',
         label: 'Customer Portal',
         icon: <Globe size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0,
         badge: '🌐'
-      },
+      }] : []),
 
       // Admin & Monitoring
       {

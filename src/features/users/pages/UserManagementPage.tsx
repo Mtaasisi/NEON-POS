@@ -102,8 +102,13 @@ const UserManagementPage: React.FC = () => {
               assignedBranches: branchIds,
               accessAllBranches: branchIds.length === 0 // If no branches assigned, assume all access
             };
-          } catch (error) {
-            console.error(`Error loading branches for user ${user.id}:`, error);
+          } catch (error: any) {
+            // Handle missing table gracefully - this is expected if branch management isn't set up
+            if (error.message?.includes('relation "user_branch_assignments" does not exist')) {
+              console.info(`Branch assignments table not found - skipping for user ${user.id}`);
+            } else {
+              console.warn(`Failed to load branch assignments for user ${user.id}:`, error);
+            }
             return {
               ...transformUserForUI(user),
               assignedBranches: [],

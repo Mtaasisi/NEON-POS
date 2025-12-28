@@ -25,7 +25,8 @@ import MobilePaymentModal from '../components/MobilePaymentModal';
 import MobileVariantSelectionModal from '../components/MobileVariantSelectionModal';
 import MobileCustomerSelectionModal from '../components/MobileCustomerSelectionModal';
 import MobileAddCustomerModal from '../components/MobileAddCustomerModal';
-import ShareReceiptModal from '../../../components/ui/ShareReceiptModal';
+import PDFReceiptGenerator from '../../../components/ui/PDFReceiptGenerator';
+import { usePOSReceipt } from '../../../hooks/usePOSReceipt';
 import SuccessModal from '../../../components/ui/SuccessModal';
 import { useSuccessModal } from '../../../hooks/useSuccessModal';
 import { SuccessIcons } from '../../../components/ui/SuccessModalIcons';
@@ -863,9 +864,31 @@ const MobilePOS: React.FC = () => {
       )}
 
       {showShareReceipt && currentReceipt && (
-        <ShareReceiptModal
-          receipt={currentReceipt}
+        <PDFReceiptGenerator
+          isOpen={showShareReceipt}
           onClose={() => setShowShareReceipt(false)}
+          receiptData={{
+            id: currentReceipt.id,
+            receiptNumber: currentReceipt.receiptNumber || 'N/A',
+            date: currentReceipt.date || new Date().toLocaleDateString(),
+            time: currentReceipt.time || new Date().toLocaleTimeString(),
+            items: currentReceipt.items || [],
+            customer: currentReceipt.customer,
+            seller: currentReceipt.cashier ? { name: currentReceipt.cashier } : undefined,
+            totals: {
+              subtotal: currentReceipt.subtotal || 0,
+              discount: currentReceipt.discount || 0,
+              tax: currentReceipt.tax || 0,
+              grandTotal: currentReceipt.total || 0
+            },
+            payment: {
+              method: currentReceipt.paymentMethod?.name || 'Cash',
+              amount: currentReceipt.total || 0,
+              change: currentReceipt.change || 0
+            }
+          }}
+          customerPhone={currentReceipt.customer?.phone}
+          settings={receiptSettingsRef?.current}
         />
       )}
 

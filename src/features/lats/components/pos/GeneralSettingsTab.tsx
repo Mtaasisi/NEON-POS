@@ -8,6 +8,7 @@ import { useGeneralSettings } from '../../../../hooks/usePOSSettings';
 import toast from 'react-hot-toast';
 import HelpTooltip from './HelpTooltip';
 import { useTranslation } from '../../lib/i18n/useTranslation';
+import { businessInfoService } from '../../../../lib/businessInfoService';
 
 export interface GeneralSettingsTabRef {
   saveSettings: () => Promise<boolean>;
@@ -27,32 +28,99 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
   } = useGeneralSettings();
   const { t } = useTranslation(); // Use the translation hook
   
-  const [logoPreview, setLogoPreview] = useState<string | null>(settings.business_logo || null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(settings?.business_logo || null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync logoPreview with settings.business_logo when settings change
+  // Business information state (loaded from businessInfoService)
+  const [businessInfo, setBusinessInfo] = useState({
+    name: '',
+    address: '',
+    phone: '',
+    email: '',
+    website: '',
+    logo: null as string | null
+  });
+  const [loadingBusinessInfo, setLoadingBusinessInfo] = useState(true);
+
+  // Load business information on mount
   React.useEffect(() => {
-    if (settings.business_logo !== logoPreview) {
-      setLogoPreview(settings.business_logo || null);
+    const loadBusinessInfo = async () => {
+      try {
+        setLoadingBusinessInfo(true);
+        const info = await businessInfoService.getBusinessInfo();
+        setBusinessInfo({
+          name: info.name || '',
+          address: info.address || '',
+          phone: info.phone || '',
+          email: info.email || '',
+          website: info.website || '',
+          logo: info.logo || null
+        });
+        setLogoPreview(info.logo || null);
+      } catch (error) {
+        console.error('Error loading business information:', error);
+      } finally {
+        setLoadingBusinessInfo(false);
+      }
+    };
+
+    loadBusinessInfo();
+  }, []);
+
+  // Sync logoPreview with businessInfo.logo when business info changes
+  React.useEffect(() => {
+    if (businessInfo.logo !== logoPreview) {
+      setLogoPreview(businessInfo.logo || null);
     }
-  }, [settings.business_logo]);
+  }, [businessInfo.logo]);
 
   const handleSave = async () => {
-    const success = await saveSettings(settings);
-    
-    if (success) {
-      // Force refresh the context after saving
-      window.dispatchEvent(new CustomEvent('settingsUpdated', { detail: { type: 'general' } }));
+    try {
+      // Save business information
+      await businessInfoService.updateBusinessInfo(businessInfo);
+
+      // Save general settings
+      const success = await saveSettings(settings);
+
+      if (success) {
+        // Force refresh the context after saving
+        window.dispatchEvent(new CustomEvent('settingsUpdated', { detail: { type: 'general' } }));
+      }
+
+      return success;
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      return false;
     }
-    
-    return success;
   };
 
   const handleReset = async () => {
-    const success = await resetSettings();
-    if (success) {
-      // Settings reset successfully
+    try {
+      // Reset business information to defaults
+      const defaultBusinessInfo = {
+        name: 'My Store',
+        address: '123 Main Street, City, Country',
+        phone: '+255 123 456 789',
+        email: 'info@mystore.com',
+        website: 'www.mystore.com',
+        logo: null
+      };
+      setBusinessInfo(defaultBusinessInfo);
+      setLogoPreview(null);
+
+      // Reset general settings
+      const success = await resetSettings();
+
+      if (success) {
+        // Force refresh the context after resetting
+        window.dispatchEvent(new CustomEvent('settingsUpdated', { detail: { type: 'general' } }));
+      }
+
+      return success;
+    } catch (error) {
+      console.error('Error resetting settings:', error);
+      return false;
     }
   };
 
@@ -92,10 +160,10 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
 
   // Apply font size on component mount
   React.useEffect(() => {
-    if (settings.font_size) {
+    if (settings?.font_size) {
       applyFontSize(settings.font_size);
     }
-  }, [settings.font_size]);
+  }, [settings?.font_size]);
 
   // Handle logo file selection
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,7 +190,7 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
       reader.onloadend = () => {
         const base64String = reader.result as string;
         setLogoPreview(base64String);
-        handleSettingChange('business_logo', base64String);
+        setBusinessInfo(prev => ({ ...prev, logo: base64String }));
         toast.success('Logo uploaded successfully! Remember to save settings.');
       };
       reader.onerror = () => {
@@ -139,7 +207,7 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
   // Remove logo
   const handleRemoveLogo = () => {
     setLogoPreview(null);
-    handleSettingChange('business_logo', null);
+    setBusinessInfo(prev => ({ ...prev, logo: null }));
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -231,44 +299,51 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
 
           {/* Business Fields - Right Side */}
           <div className="lg:col-span-9">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {loadingBusinessInfo ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <span className="ml-2 text-gray-600">Loading business information...</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <TextInput
+              label={t('general.businessName')}
+              value={businessInfo.name}
+              onChange={(value) => setBusinessInfo(prev => ({ ...prev, name: value }))}
+              placeholder="My Store"
+            />
+
+            <TextInput
+              label={t('general.businessPhone')}
+              value={businessInfo.phone}
+              onChange={(value) => setBusinessInfo(prev => ({ ...prev, phone: value }))}
+              placeholder="+255 123 456 789"
+            />
+
+            <TextInput
+              label={t('general.businessEmail')}
+              value={businessInfo.email}
+              onChange={(value) => setBusinessInfo(prev => ({ ...prev, email: value }))}
+              placeholder="info@mystore.com"
+            />
+
+            <TextInput
+              label={t('general.businessWebsite')}
+              value={businessInfo.website}
+              onChange={(value) => setBusinessInfo(prev => ({ ...prev, website: value }))}
+              placeholder="www.mystore.com"
+            />
+
+            <div className="sm:col-span-2">
               <TextInput
-                label={t('general.businessName')}
-                value={settings.business_name || ''}
-                onChange={(value) => handleSettingChange('business_name', value)}
-                placeholder="My Store"
+                label={t('general.businessAddress')}
+                value={businessInfo.address}
+                onChange={(value) => setBusinessInfo(prev => ({ ...prev, address: value }))}
+                placeholder="123 Main Street, City, Country"
               />
-              
-              <TextInput
-                label={t('general.businessPhone')}
-                value={settings.business_phone || ''}
-                onChange={(value) => handleSettingChange('business_phone', value)}
-                placeholder="+255 123 456 789"
-              />
-              
-              <TextInput
-                label={t('general.businessEmail')}
-                value={settings.business_email || ''}
-                onChange={(value) => handleSettingChange('business_email', value)}
-                placeholder="info@mystore.com"
-              />
-              
-              <TextInput
-                label={t('general.businessWebsite')}
-                value={settings.business_website || ''}
-                onChange={(value) => handleSettingChange('business_website', value)}
-                placeholder="www.mystore.com"
-              />
-              
-              <div className="sm:col-span-2">
-                <TextInput
-                  label={t('general.businessAddress')}
-                  value={settings.business_address || ''}
-                  onChange={(value) => handleSettingChange('business_address', value)}
-                  placeholder="123 Main Street, City, Country"
-                />
-              </div>
             </div>
+          </div>
+        )}
           </div>
         </div>
       </SettingsSection>
@@ -398,7 +473,7 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Select
             label="Products Per Row"
-            value={settings.products_per_row.toString()}
+            value={(settings.products_per_row || 4).toString()}
             onChange={(value) => handleSettingChange('products_per_row', parseInt(value))}
             options={[
               { value: '2', label: '2 Products' },
@@ -424,7 +499,7 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
         <div className="mt-4">
           <Select
             label="Products Per Page"
-            value={settings.products_per_page.toString()}
+            value={(settings.products_per_page || 20).toString()}
             onChange={(value) => handleSettingChange('products_per_page', parseInt(value))}
             options={[
               { value: '12', label: '12 Products' },
@@ -541,18 +616,17 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
             onChange={(checked) => handleSettingChange('enable_tax', checked)}
             helpText="Calculate na ongeza tax automatically kwa sales."
           />
-          
-          {settings.enable_tax && (
-            <NumberInput
-              label="Tax Rate (%)"
-              value={settings.tax_rate}
-              onChange={(value) => handleSettingChange('tax_rate', value)}
-              min={0}
-              max={50}
-              step={0.1}
-              helpText="Percent ya tax kwa sales (mfano: 18 kwa 18% VAT)."
-            />
-          )}
+
+          <NumberInput
+            label="Tax Rate (%)"
+            value={settings.tax_rate}
+            onChange={(value) => handleSettingChange('tax_rate', value)}
+            min={0}
+            max={50}
+            step={0.1}
+            helpText="Percent ya tax kwa sales (mfano: 18 kwa 18% VAT)."
+            disabled={!settings.enable_tax}
+          />
         </div>
       </SettingsSection>
 

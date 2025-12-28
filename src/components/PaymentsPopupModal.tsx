@@ -680,7 +680,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/30 backdrop-blur-sm p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();

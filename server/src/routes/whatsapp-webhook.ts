@@ -389,17 +389,33 @@ async function handleIncomingMessage(data: any) {
     // Also log to customer_communications if customer found
     if (customer) {
       try {
+        // Get current communications and add new one
+        const { data: currentCustomer } = await supabase
+          .from('lats_customers')
+          .select('communications')
+          .eq('id', customer.id)
+          .single();
+
+        const currentComms = Array.isArray(currentCustomer?.communications)
+          ? currentCustomer.communications
+          : [];
+
+        const newComm = {
+          id: Date.now().toString(),
+          type: 'whatsapp',
+          message: messageText.substring(0, 5000),
+          phone_number: cleanPhone,
+          status: 'received',
+          sent_at: timestamp,
+          created_at: new Date().toISOString()
+        };
+
+        const updatedComms = [newComm, ...currentComms];
+
         await supabase
-          .from('customer_communications')
-          .insert({
-            customer_id: customer.id,
-            type: 'whatsapp',
-            message: messageText.substring(0, 5000),
-            phone_number: cleanPhone,
-            status: 'received',
-            sent_at: timestamp,
-            created_at: new Date().toISOString()
-          });
+          .from('lats_customers')
+          .update({ communications: updatedComms })
+          .eq('id', customer.id);
 
         console.log(`✅ Message linked to customer: ${customer.name}`);
       } catch (err: any) {

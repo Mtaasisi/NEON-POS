@@ -1,59 +1,60 @@
 /**
- * Role-based Widget Permissions Configuration
- * 
- * This file defines which widgets and quick actions are available for each user role.
- * Admins have access to all widgets, while technician and customer-care have restricted access.
+ * Permission-based Widget & UI Visibility Configuration
+ *
+ * This file defines which widgets, UI elements, and features are visible based on user permissions.
+ * Uses the granular permission system instead of just role-based access.
+ * Widgets and features are completely hidden (not just disabled) when permissions are restricted.
  */
 
 export type UserRole = 'admin' | 'technician' | 'customer-care' | 'manager' | 'sales' | 'user' | 'store-keeper';
 
-export interface RoleWidgetPermissions {
+export interface PermissionBasedWidgetVisibility {
   // Charts
-  revenueTrendChart: boolean;
-  deviceStatusChart: boolean;
-  appointmentsTrendChart: boolean;
-  stockLevelChart: boolean;
-  performanceMetricsChart: boolean;
-  customerActivityChart: boolean;
-  salesFunnelChart: boolean;
-  purchaseOrderChart: boolean;
-  paymentMethodsChart: boolean;
-  salesByCategoryChart: boolean;
-  profitMarginChart: boolean;
-  
+  revenueTrendChart: string[]; // Required permissions
+  deviceStatusChart: string[];
+  appointmentsTrendChart: string[];
+  stockLevelChart: string[];
+  performanceMetricsChart: string[];
+  customerActivityChart: string[];
+  salesFunnelChart: string[];
+  purchaseOrderChart: string[];
+  paymentMethodsChart: string[];
+  salesByCategoryChart: string[];
+  profitMarginChart: string[];
+
   // Widgets
-  appointmentWidget: boolean;
-  employeeWidget: boolean;
-  notificationWidget: boolean;
-  financialWidget: boolean;
-  analyticsWidget: boolean;
-  serviceWidget: boolean;
-  reminderWidget: boolean;
-  customerInsightsWidget: boolean;
-  systemHealthWidget: boolean;
-  inventoryWidget: boolean;
-  activityFeedWidget: boolean;
-  purchaseOrderWidget: boolean;
-  chatWidget: boolean;
-  salesWidget: boolean;
-  topProductsWidget: boolean;
-  expensesWidget: boolean;
-  staffPerformanceWidget: boolean;
+  appointmentWidget: string[];
+  employeeWidget: string[];
+  notificationWidget: string[];
+  financialWidget: string[];
+  analyticsWidget: string[];
+  serviceWidget: string[];
+  reminderWidget: string[];
+  customerInsightsWidget: string[];
+  systemHealthWidget: string[];
+  inventoryWidget: string[];
+  activityFeedWidget: string[];
+  purchaseOrderWidget: string[];
+  chatWidget: string[];
+  salesWidget: string[];
+  topProductsWidget: string[];
+  expensesWidget: string[];
+  staffPerformanceWidget: string[];
   // New feature widgets
-  tradeInWidget: boolean;
-  installmentsWidget: boolean;
-  loyaltyWidget: boolean;
-  smsWidget: boolean;
-  sparePartsWidget: boolean;
-  storageRoomsWidget: boolean;
-  stockTransfersWidget: boolean;
-  specialOrdersWidget: boolean;
-  backupWidget: boolean;
-  repairWidget: boolean;
+  tradeInWidget: string[];
+  installmentsWidget: string[];
+  loyaltyWidget: string[];
+  smsWidget: string[];
+  sparePartsWidget: string[];
+  storageRoomsWidget: string[];
+  stockTransfersWidget: string[];
+  specialOrdersWidget: string[];
+  backupWidget: string[];
+  repairWidget: string[];
   // AI-powered widgets
-  aiInsightsWidget: boolean;
-  predictiveAnalyticsWidget: boolean;
-  alertSystemWidget: boolean;
+  aiInsightsWidget: string[];
+  predictiveAnalyticsWidget: string[];
+  alertSystemWidget: string[];
 }
 
 export interface RoleQuickActionPermissions {
@@ -105,6 +106,59 @@ export interface RoleQuickActionPermissions {
   mobile: boolean;
   myAttendance: boolean;
 }
+
+/**
+ * Permission-based widget visibility configuration
+ * Maps widgets to the permissions required to view them
+ */
+export const PERMISSION_WIDGET_VISIBILITY: PermissionBasedWidgetVisibility = {
+  // Charts
+  revenueTrendChart: ['view_reports', 'financial_reports'],
+  deviceStatusChart: ['view_devices'],
+  appointmentsTrendChart: ['appointments'],
+  stockLevelChart: ['view_inventory'],
+  performanceMetricsChart: ['view_reports'],
+  customerActivityChart: ['view_customers'],
+  salesFunnelChart: ['view_reports', 'process_sales'],
+  purchaseOrderChart: ['view_purchase_orders'],
+  paymentMethodsChart: ['view_payments'],
+  salesByCategoryChart: ['view_reports', 'process_sales'],
+  profitMarginChart: ['financial_reports'],
+
+  // Widgets
+  appointmentWidget: ['appointments'],
+  employeeWidget: ['employee_management'],
+  notificationWidget: ['view_dashboard'], // Basic dashboard access
+  financialWidget: ['financial_reports'],
+  analyticsWidget: ['view_reports'],
+  serviceWidget: ['view_devices'],
+  reminderWidget: ['view_dashboard'], // Basic dashboard access
+  customerInsightsWidget: ['view_customers'],
+  systemHealthWidget: ['view_settings'],
+  inventoryWidget: ['view_inventory'],
+  activityFeedWidget: ['view_dashboard'], // Basic dashboard access
+  purchaseOrderWidget: ['view_purchase_orders'],
+  chatWidget: ['whatsapp_integration'],
+  salesWidget: ['process_sales'],
+  topProductsWidget: ['view_inventory'],
+  expensesWidget: ['financial_reports'],
+  staffPerformanceWidget: ['employee_management'],
+  // New feature widgets
+  tradeInWidget: ['view_devices'], // Trade-ins are device related
+  installmentsWidget: ['financial_reports'],
+  loyaltyWidget: ['loyalty_program'],
+  smsWidget: ['sms_features'],
+  sparePartsWidget: ['spare_parts'],
+  storageRoomsWidget: ['view_inventory'],
+  stockTransfersWidget: ['view_inventory'],
+  specialOrdersWidget: ['view_inventory'],
+  backupWidget: ['backup_data'],
+  repairWidget: ['view_devices'],
+  // AI-powered widgets
+  aiInsightsWidget: ['view_reports'], // AI insights require report access
+  predictiveAnalyticsWidget: ['view_reports'], // Predictive analytics requires report access
+  alertSystemWidget: ['view_dashboard'], // Basic dashboard access
+};
 
 /**
  * Widget permissions for Admin role
@@ -596,7 +650,7 @@ export function getDashboardTitleForRole(role: string): string {
  */
 export function getDashboardDescriptionForRole(role: string, userName?: string): string {
   const greeting = userName ? `Welcome back, ${userName}` : 'Welcome back';
-  
+
   switch (role) {
     case 'admin':
       return `${greeting} - Full system access`;
@@ -613,5 +667,117 @@ export function getDashboardDescriptionForRole(role: string, userName?: string):
     default:
       return greeting;
   }
+}
+
+/**
+ * Check if a widget is visible based on user permissions
+ * @param widget - The widget to check
+ * @param userPermissions - Array of user permissions
+ * @returns true if widget should be visible
+ */
+export function isWidgetVisibleForPermissions(
+  widget: keyof PermissionBasedWidgetVisibility,
+  userPermissions: string[]
+): boolean {
+  const requiredPermissions = PERMISSION_WIDGET_VISIBILITY[widget];
+
+  // If no permissions required, widget is visible
+  if (!requiredPermissions || requiredPermissions.length === 0) {
+    return true;
+  }
+
+  // If user has 'all' permission, they can see everything
+  if (userPermissions.includes('all')) {
+    return true;
+  }
+
+  // Check if user has ANY of the required permissions
+  return requiredPermissions.some(permission => userPermissions.includes(permission));
+}
+
+/**
+ * Get all visible widgets for a user based on their permissions
+ * @param userPermissions - Array of user permissions
+ * @returns Array of visible widget keys
+ */
+export function getVisibleWidgetsForPermissions(userPermissions: string[]): (keyof PermissionBasedWidgetVisibility)[] {
+  const allWidgets = Object.keys(PERMISSION_WIDGET_VISIBILITY) as (keyof PermissionBasedWidgetVisibility)[];
+
+  return allWidgets.filter(widget => isWidgetVisibleForPermissions(widget, userPermissions));
+}
+
+/**
+ * Get permission-based quick action visibility
+ * @param action - The quick action to check
+ * @param userPermissions - Array of user permissions
+ * @returns true if action should be visible
+ */
+export function isQuickActionVisibleForPermissions(
+  action: keyof RoleQuickActionPermissions,
+  userPermissions: string[]
+): boolean {
+  // If user has 'all' permission, they can see everything
+  if (userPermissions.includes('all')) {
+    return true;
+  }
+
+  // Map quick actions to required permissions
+  const actionPermissionMap: Record<keyof RoleQuickActionPermissions, string[]> = {
+    // Core Business Features
+    devices: ['view_devices'],
+    addDevice: ['add_devices'],
+    customers: ['view_customers'],
+    inventory: ['view_inventory'],
+    appointments: ['appointments'],
+    purchaseOrders: ['view_purchase_orders'],
+    payments: ['view_payments'],
+    adGenerator: ['view_dashboard'], // Basic access
+    pos: ['access_pos'],
+    reports: ['view_reports'],
+    employees: ['employee_management'],
+    whatsapp: ['whatsapp_integration'],
+    settings: ['view_settings'],
+    search: ['view_dashboard'], // Basic access
+    loyalty: ['loyalty_program'],
+    backup: ['backup_data'],
+
+    // SMS & Communication Features
+    sms: ['sms_features'],
+    bulkSms: ['sms_features'],
+    smsLogs: ['sms_features'],
+    smsSettings: ['manage_integrations'],
+
+    // Import/Export & Data Management
+    excelImport: ['manage_settings'],
+    excelTemplates: ['manage_settings'],
+    productExport: ['view_inventory'],
+    customerImport: ['edit_customers'],
+
+    // Advanced System Features
+    userManagement: ['manage_users'],
+    databaseSetup: ['database_setup'],
+    integrationSettings: ['manage_integrations'],
+    integrationsTest: ['manage_integrations'],
+    aiTraining: ['view_reports'], // AI features require reports
+    bluetoothPrinter: ['view_dashboard'], // Basic access
+
+    // Business Management
+    categoryManagement: ['manage_settings'],
+    supplierManagement: ['view_purchase_orders'],
+    storeLocations: ['manage_settings'],
+
+    // Advanced Analytics & Reports
+    reminders: ['view_dashboard'], // Basic access
+    mobile: ['view_dashboard'], // Basic access
+    myAttendance: ['view_dashboard'] // Basic access
+  };
+
+  const requiredPermissions = actionPermissionMap[action] || [];
+  if (requiredPermissions.length === 0) {
+    return true; // No specific permissions required
+  }
+
+  // Check if user has ANY of the required permissions
+  return requiredPermissions.some(permission => userPermissions.includes(permission));
 }
 

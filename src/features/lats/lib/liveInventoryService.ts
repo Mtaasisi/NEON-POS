@@ -5,10 +5,12 @@ export interface LiveInventoryMetrics {
   totalValue: number;
   retailValue: number;
   totalStock: number;
+  totalStockQuantity: number;
   totalProducts: number;
   activeProducts: number;
   lowStockItems: number;
   outOfStockItems: number;
+  productsWithStock: number;
   reorderAlerts: number;
   lastUpdated: string;
 }
@@ -70,7 +72,7 @@ export class LiveInventoryService {
       // Build variants query (still needed as variants aren't always in product response)
       let variantsQuery = supabase
         .from('lats_product_variants')
-        .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity, branch_id, is_shared');
+        .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity, branch_id, is_shared, variant_type, parent_variant_id, name');
       
       // Get branch settings to check share_inventory flag
       let branchSettings: any = null;
@@ -163,10 +165,12 @@ export class LiveInventoryService {
       let totalValue = 0;
       let retailValue = 0;
       let totalStock = 0;
+      let totalStockQuantity = 0;
       let totalProducts = productsWithVariants?.length || 0;
       let activeProducts = 0;
       let lowStockItems = 0;
       let outOfStockItems = 0;
+      let productsWithStock = 0;
       let reorderAlerts = 0;
 
       productsWithVariants?.forEach((product) => {
@@ -177,11 +181,23 @@ export class LiveInventoryService {
           activeProducts++;
         }
 
-        // Calculate total stock for this product
+        // Calculate total stock for this product (exclude IMEI child variants)
         let productStock = 0;
         if (variants.length > 0) {
-          productStock = variants.reduce((sum: number, variant: any) => {
-            return sum + (variant.quantity || 0);
+          // Filter out IMEI child variants before calculating stock
+          const regularVariants = variants.filter((variant: any) => {
+            const isImeiChild = variant.parent_variant_id ||
+                               variant.parentVariantId ||
+                               variant.variant_type === 'imei_child' ||
+                               variant.variantType === 'imei_child' ||
+                               (variant.name && variant.name.toLowerCase().includes('imei:'));
+            return !isImeiChild;
+          });
+
+          productStock = regularVariants.reduce((sum: number, variant: any) => {
+            const quantity = variant.quantity || 0;
+            const reserved = variant.reserved_quantity || variant.reservedQuantity || 0;
+            return sum + Math.max(0, quantity - reserved);
           }, 0);
         } else {
           // Product has no variants - use product-level stock
@@ -189,33 +205,45 @@ export class LiveInventoryService {
         }
 
         totalStock += productStock;
+        totalStockQuantity += productStock; // Available stock quantity
 
-        // Calculate total value for this product (using cost price)
+        // Calculate total value for this product (using cost price, exclude IMEI children)
         let productValue = 0;
         if (variants.length > 0) {
-          // Product has variants - calculate from variants
-          productValue = variants.reduce((sum: number, variant: any) => {
+          // Filter out IMEI child variants before calculating value
+          const regularVariants = variants.filter((variant: any) => {
+            const isImeiChild = variant.parent_variant_id ||
+                               variant.parentVariantId ||
+                               variant.variant_type === 'imei_child' ||
+                               variant.variantType === 'imei_child' ||
+                               (variant.name && variant.name.toLowerCase().includes('imei:'));
+            return !isImeiChild;
+          });
+
+          productValue = regularVariants.reduce((sum: number, variant: any) => {
             const costPrice = variant.cost_price || 0;
             const quantity = variant.quantity || 0;
-            const variantValue = costPrice * quantity;
-            
+            const reserved = variant.reserved_quantity || variant.reservedQuantity || 0;
+            const availableQty = Math.max(0, quantity - reserved);
+            const variantValue = costPrice * availableQty;
+
             // Debug logging for each variant (only in development mode)
             if (import.meta.env.MODE === 'development' && variantValue > 0) {
-              console.log(`💰 [LiveInventoryService] ${product.name} - ${variant.name || 'Default'}: ${quantity} × ${costPrice} = ${variantValue}`);
+              console.log(`💰 [LiveInventoryService] ${product.name} - ${variant.name || 'Default'}: ${availableQty} × ${costPrice} = ${variantValue}`);
             }
-            
+
             return sum + variantValue;
           }, 0);
 
           // Debug logging for product total if multiple variants (only in development mode)
-          if (import.meta.env.MODE === 'development' && variants.length > 1) {
-            console.log(`📊 [LiveInventoryService] ${product.name} - Total from ${variants.length} variants: ${productValue}`);
+          if (import.meta.env.MODE === 'development' && regularVariants.length > 1) {
+            console.log(`📊 [LiveInventoryService] ${product.name} - Total from ${regularVariants.length} regular variants: ${productValue}`);
           }
         } else {
           // Product has no variants - use product-level stock and cost
           const productCost = product.cost_price || 0;
           productValue = productStock * productCost;
-          
+
           if (import.meta.env.MODE === 'development' && productValue > 0) {
             console.log(`💰 [LiveInventoryService] ${product.name} - Product-level: ${productStock} × ${productCost} = ${productValue}`);
           }
@@ -223,27 +251,38 @@ export class LiveInventoryService {
 
         totalValue += productValue;
 
-        // Calculate retail value for this product
+        // Calculate retail value for this product (exclude IMEI children)
         let productRetailValue = 0;
         if (variants.length > 0) {
-          // Product has variants - calculate from variants
-          productRetailValue = variants.reduce((sum: number, variant: any) => {
+          // Filter out IMEI child variants before calculating retail value
+          const regularVariants = variants.filter((variant: any) => {
+            const isImeiChild = variant.parent_variant_id ||
+                               variant.parentVariantId ||
+                               variant.variant_type === 'imei_child' ||
+                               variant.variantType === 'imei_child' ||
+                               (variant.name && variant.name.toLowerCase().includes('imei:'));
+            return !isImeiChild;
+          });
+
+          productRetailValue = regularVariants.reduce((sum: number, variant: any) => {
             const sellingPrice = variant.selling_price || 0;
             const quantity = variant.quantity || 0;
-            const variantRetailValue = sellingPrice * quantity;
-            
+            const reserved = variant.reserved_quantity || variant.reservedQuantity || 0;
+            const availableQty = Math.max(0, quantity - reserved);
+            const variantRetailValue = sellingPrice * availableQty;
+
             // Debug logging for each variant retail value (only in development mode)
             if (import.meta.env.MODE === 'development' && variantRetailValue > 0) {
-              console.log(`💰 [LiveInventoryService] ${product.name} - ${variant.name || 'Default'} (Retail): ${quantity} × ${sellingPrice} = ${variantRetailValue}`);
+              console.log(`💰 [LiveInventoryService] ${product.name} - ${variant.name || 'Default'} (Retail): ${availableQty} × ${sellingPrice} = ${variantRetailValue}`);
             }
-            
+
             return sum + variantRetailValue;
           }, 0);
         } else {
           // Product has no variants - use product-level stock and selling price
           const productSellingPrice = product.selling_price || product.unit_price || 0;
           productRetailValue = productStock * productSellingPrice;
-          
+
           if (import.meta.env.MODE === 'development' && productRetailValue > 0) {
             console.log(`💰 [LiveInventoryService] ${product.name} - Product-level (Retail): ${productStock} × ${productSellingPrice} = ${productRetailValue}`);
           }
@@ -256,6 +295,9 @@ export class LiveInventoryService {
           outOfStockItems++;
         } else if (productStock <= 10) {
           lowStockItems++;
+          productsWithStock++; // Products with low stock still have stock
+        } else {
+          productsWithStock++; // Products with sufficient stock have stock
         }
 
         // Check reorder alerts
@@ -269,10 +311,12 @@ export class LiveInventoryService {
         totalValue,
         retailValue,
         totalStock,
+        totalStockQuantity,
         totalProducts,
         activeProducts,
         lowStockItems,
         outOfStockItems,
+        productsWithStock,
         reorderAlerts,
         lastUpdated: new Date().toISOString()
       };
@@ -313,7 +357,7 @@ export class LiveInventoryService {
       // Fetch all variants with pricing data for active products
       const { data: variants, error: variantsError } = await supabase
         .from('lats_product_variants')
-        .select('id, quantity, cost_price, unit_price, product_id');
+        .select('id, quantity, cost_price, unit_price, product_id, variant_type, parent_variant_id, name');
 
       if (variantsError) {
         console.error('❌ [LiveInventoryService] Error fetching variants:', variantsError);
@@ -342,12 +386,22 @@ export class LiveInventoryService {
       let retailValue = 0;
 
       activeVariants?.forEach((variant: any) => {
+        // Skip IMEI child variants
+        const isImeiChild = variant.parent_variant_id ||
+                           variant.parentVariantId ||
+                           variant.variant_type === 'imei_child' ||
+                           variant.variantType === 'imei_child' ||
+                           (variant.name && variant.name.toLowerCase().includes('imei:'));
+        if (isImeiChild) return;
+
         const quantity = variant.quantity || 0;
+        const reserved = variant.reserved_quantity || variant.reservedQuantity || 0;
+        const availableQty = Math.max(0, quantity - reserved);
         const costPrice = variant.cost_price || 0;
         const sellingPrice = variant.selling_price || 0;
 
-        costValue += costPrice * quantity;
-        retailValue += sellingPrice * quantity;
+        costValue += costPrice * availableQty;
+        retailValue += sellingPrice * availableQty;
       });
 
       const potentialProfit = retailValue - costValue;
@@ -390,7 +444,7 @@ export class LiveInventoryService {
           .eq('category_id', categoryId),
         supabase
           .from('lats_product_variants')
-          .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity')
+          .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity, variant_type, parent_variant_id, name')
       ]);
 
       if (productsResult.status === 'rejected') {
@@ -430,21 +484,35 @@ export class LiveInventoryService {
       productsWithVariants?.forEach((product) => {
         const variants = product.lats_product_variants || [];
         const isActive = product.is_active;
-        
+
         if (isActive) {
           activeProducts++;
         }
 
-        const productStock = variants.reduce((sum: number, variant: any) => {
-          return sum + (variant.quantity || 0);
+        // Filter out IMEI child variants
+        const regularVariants = variants.filter((variant: any) => {
+          const isImeiChild = variant.parent_variant_id ||
+                             variant.parentVariantId ||
+                             variant.variant_type === 'imei_child' ||
+                             variant.variantType === 'imei_child' ||
+                             (variant.name && variant.name.toLowerCase().includes('imei:'));
+          return !isImeiChild;
+        });
+
+        const productStock = regularVariants.reduce((sum: number, variant: any) => {
+          const quantity = variant.quantity || 0;
+          const reserved = variant.reserved_quantity || variant.reservedQuantity || 0;
+          return sum + Math.max(0, quantity - reserved);
         }, 0);
 
         totalStock += productStock;
 
-        const productValue = variants.reduce((sum: number, variant: any) => {
+        const productValue = regularVariants.reduce((sum: number, variant: any) => {
           const costPrice = variant.cost_price || 0;
           const quantity = variant.quantity || 0;
-          return sum + (costPrice * quantity);
+          const reserved = variant.reserved_quantity || variant.reservedQuantity || 0;
+          const availableQty = Math.max(0, quantity - reserved);
+          return sum + (costPrice * availableQty);
         }, 0);
 
         totalValue += productValue;
@@ -464,10 +532,12 @@ export class LiveInventoryService {
       return {
         totalValue,
         totalStock,
+        totalStockQuantity,
         totalProducts,
         activeProducts,
         lowStockItems,
         outOfStockItems,
+        productsWithStock,
         reorderAlerts,
         lastUpdated: new Date().toISOString()
       };
@@ -493,7 +563,7 @@ export class LiveInventoryService {
           .eq('supplier_id', supplierId),
         supabase
           .from('lats_product_variants')
-          .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity')
+          .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity, variant_type, parent_variant_id, name')
       ]);
 
       if (productsResult.status === 'rejected') {
@@ -533,21 +603,35 @@ export class LiveInventoryService {
       productsWithVariants?.forEach((product) => {
         const variants = product.lats_product_variants || [];
         const isActive = product.is_active;
-        
+
         if (isActive) {
           activeProducts++;
         }
 
-        const productStock = variants.reduce((sum: number, variant: any) => {
-          return sum + (variant.quantity || 0);
+        // Filter out IMEI child variants
+        const regularVariants = variants.filter((variant: any) => {
+          const isImeiChild = variant.parent_variant_id ||
+                             variant.parentVariantId ||
+                             variant.variant_type === 'imei_child' ||
+                             variant.variantType === 'imei_child' ||
+                             (variant.name && variant.name.toLowerCase().includes('imei:'));
+          return !isImeiChild;
+        });
+
+        const productStock = regularVariants.reduce((sum: number, variant: any) => {
+          const quantity = variant.quantity || 0;
+          const reserved = variant.reserved_quantity || variant.reservedQuantity || 0;
+          return sum + Math.max(0, quantity - reserved);
         }, 0);
 
         totalStock += productStock;
 
-        const productValue = variants.reduce((sum: number, variant: any) => {
+        const productValue = regularVariants.reduce((sum: number, variant: any) => {
           const costPrice = variant.cost_price || 0;
           const quantity = variant.quantity || 0;
-          return sum + (costPrice * quantity);
+          const reserved = variant.reserved_quantity || variant.reservedQuantity || 0;
+          const availableQty = Math.max(0, quantity - reserved);
+          return sum + (costPrice * availableQty);
         }, 0);
 
         totalValue += productValue;
@@ -567,10 +651,12 @@ export class LiveInventoryService {
       return {
         totalValue,
         totalStock,
+        totalStockQuantity,
         totalProducts,
         activeProducts,
         lowStockItems,
         outOfStockItems,
+        productsWithStock,
         reorderAlerts,
         lastUpdated: new Date().toISOString()
       };

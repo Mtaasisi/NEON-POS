@@ -278,13 +278,129 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
   // Ensure all stock values are within valid range [0, 100]
   const sanitizedStockData = validStockData.map(item => ({
     ...item,
-    stock: Math.max(0, Math.min(100, item.stock)),
-    actualQuantity: Math.max(0, item.actualQuantity),
-    minQuantity: Math.max(0, item.minQuantity)
+    stock: Math.max(0, Math.min(100, Number(item.stock) || 0)),
+    actualQuantity: Math.max(0, Number(item.actualQuantity) || 0),
+    minQuantity: Math.max(0, Number(item.minQuantity) || 0)
   }));
+
+  // Final safety check: ensure no NaN values exist anywhere in the data
+  const finalSafeData = sanitizedStockData.filter(item => {
+    const stockValid = typeof item.stock === 'number' && !isNaN(item.stock) && isFinite(item.stock);
+    const qtyValid = typeof item.actualQuantity === 'number' && !isNaN(item.actualQuantity) && isFinite(item.actualQuantity);
+    const minValid = typeof item.minQuantity === 'number' && !isNaN(item.minQuantity) && isFinite(item.minQuantity);
+    const nameValid = typeof item.name === 'string' && item.name.trim().length > 0;
+
+    if (!stockValid || !qtyValid || !minValid || !nameValid) {
+      console.warn('🚨 [StockLevelChart] Filtering out item with invalid values:', item);
+      return false;
+    }
+    return true;
+  });
+
+  // Additional safety: ensure all numeric values are strictly valid numbers
+  const ultraSafeData = finalSafeData.map(item => ({
+    name: String(item.name || 'Unknown').trim() || 'Unknown',
+    stock: Math.max(0, Math.min(100, Number(item.stock) || 0)),
+    status: item.status || 'good',
+    actualQuantity: Math.max(0, Number(item.actualQuantity) || 0),
+    minQuantity: Math.max(0, Number(item.minQuantity) || 0)
+  })).filter(item => {
+    // Double-check that all values are still valid after conversion
+    return !isNaN(item.stock) && !isNaN(item.actualQuantity) && !isNaN(item.minQuantity) &&
+           isFinite(item.stock) && isFinite(item.actualQuantity) && isFinite(item.minQuantity);
+  });
   
-  console.log('📊 Rendering chart with data:', sanitizedStockData);
-  console.log('📊 Data length:', sanitizedStockData.length);
+  console.log('📊 Rendering chart with data:', ultraSafeData);
+  console.log('📊 Data length:', ultraSafeData.length);
+
+  // Chart error handler
+  const renderChartWithErrorBoundary = () => {
+    try {
+      // Final validation before rendering
+      if (!Array.isArray(ultraSafeData) || ultraSafeData.length === 0) {
+        console.log('📊 No data available for chart');
+        return (
+          <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+            <Package className="w-12 h-12 mb-2 opacity-50" />
+            <p className="text-sm">No stock data available</p>
+            <p className="text-xs mt-1">Add products with variants to see stock levels</p>
+          </div>
+        );
+      }
+
+      // Validate that all data points have required properties
+      const hasValidData = ultraSafeData.every(item =>
+        item &&
+        typeof item.name === 'string' &&
+        typeof item.stock === 'number' &&
+        !isNaN(item.stock) &&
+        isFinite(item.stock) &&
+        item.stock >= 0 &&
+        item.stock <= 100
+      );
+
+      if (!hasValidData) {
+        console.warn('🚨 Invalid data structure detected, skipping chart render');
+        return (
+          <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+            <Package className="w-12 h-12 mb-2 opacity-50" />
+            <p className="text-sm">Unable to display chart</p>
+            <p className="text-xs mt-1">Data validation failed</p>
+          </div>
+        );
+      }
+
+      return (
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={ultraSafeData}
+            layout="horizontal"
+            margin={{ left: 0, right: 10 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+            <XAxis
+              type="number"
+              domain={[0, 100]}
+              allowDataOverflow={false}
+              stroke="#9ca3af"
+              tick={{ fill: '#6b7280', fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(value) => {
+                const num = Number(value);
+                if (isNaN(num) || !isFinite(num)) return '0%';
+                return `${Math.max(0, Math.min(100, num))}%`;
+              }}
+            />
+            <YAxis
+              type="category"
+              dataKey="name"
+              stroke="#9ca3af"
+              tick={{ fill: '#6b7280', fontSize: 10 }}
+              tickLine={false}
+              axisLine={false}
+              width={120}
+            />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+            <Bar dataKey="stock" radius={[0, 4, 4, 0]} maxBarSize={20} fill="#10b981">
+              {ultraSafeData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={getBarColor(entry.status)} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      );
+    } catch (error) {
+      console.error('🚨 Chart rendering error:', error);
+      return (
+        <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+          <Package className="w-12 h-12 mb-2 opacity-50" />
+          <p className="text-sm">Unable to display chart</p>
+          <p className="text-xs mt-1">Chart data validation failed</p>
+        </div>
+      );
+    }
+  };
 
   return (
     <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
@@ -295,9 +411,9 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
             <Package className="w-5 h-5 text-gray-700" />
             <h3 className="text-sm font-medium text-gray-900">Stock Levels</h3>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{sanitizedStockData.length}</p>
+          <p className="text-3xl font-bold text-gray-900">{ultraSafeData.length}</p>
           <p className="text-xs text-gray-500 mt-1">
-            {sanitizedStockData.length === 10 ? 'Top 10 products' : `Product${sanitizedStockData.length !== 1 ? 's' : ''} tracked`}
+            {ultraSafeData.length === 10 ? 'Top 10 products' : `Product${ultraSafeData.length !== 1 ? 's' : ''} tracked`}
           </p>
         </div>
         {lowStockCount > 0 && (
@@ -313,7 +429,7 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
       </div>
 
       {/* No Data Message */}
-      {sanitizedStockData.length === 0 ? (
+      {ultraSafeData.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-48 text-gray-400">
           <Package className="w-12 h-12 mb-2 opacity-50" />
           <p className="text-sm">No inventory data available</p>
@@ -323,47 +439,14 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
         <>
           {/* Chart */}
           <div className="flex-grow -mx-2 min-h-48">
-        {sanitizedStockData.length > 0 && (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart 
-              data={sanitizedStockData} 
-              layout="horizontal" 
-              margin={{ left: 0, right: 10 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
-              <XAxis 
-                type="number" 
-                domain={[0, 100]}
-                allowDataOverflow={false}
-                stroke="#9ca3af" 
-                tick={{ fill: '#6b7280', fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(value) => {
-                  const num = Number(value);
-                  if (isNaN(num) || !isFinite(num)) return '0%';
-                  return `${Math.max(0, Math.min(100, num))}%`;
-                }}
-              />
-              <YAxis 
-                type="category"
-                dataKey="name" 
-                stroke="#9ca3af" 
-                tick={{ fill: '#6b7280', fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-                width={120}
-              />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
-              <Bar dataKey="stock" radius={[0, 4, 4, 0]} maxBarSize={20} fill="#10b981">
-                {sanitizedStockData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={getBarColor(entry.status)} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
+            {ultraSafeData.length > 0 ? renderChartWithErrorBoundary() : (
+              <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+                <Package className="w-12 h-12 mb-2 opacity-50" />
+                <p className="text-sm">Loading stock data...</p>
+                <p className="text-xs mt-1">Please wait while we analyze your inventory</p>
+              </div>
+            )}
+          </div>
 
           {/* Legend */}
           <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t border-gray-100">

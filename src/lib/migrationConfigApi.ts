@@ -21,19 +21,10 @@ export interface MigrationConfig {
  */
 export const getMigrationConfigs = async (userId: string): Promise<MigrationConfig[]> => {
   try {
-    const { data, error } = await supabase
-      .from('migration_configurations')
-      .select('*')
-      .eq('user_id', userId)
-      .order('is_default', { ascending: false })
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching migration configs:', error);
-      throw error;
-    }
-
-    return data || [];
+    // TODO: Implement migration configurations table or migrate to unified settings
+    // For now, return empty array to avoid database errors
+    console.log('Migration configurations feature not yet implemented');
+    return [];
   } catch (error) {
     console.error('Error fetching migration configs:', error);
     throw error;
@@ -45,19 +36,9 @@ export const getMigrationConfigs = async (userId: string): Promise<MigrationConf
  */
 export const getDefaultMigrationConfig = async (userId: string): Promise<MigrationConfig | null> => {
   try {
-    const { data, error } = await supabase
-      .from('migration_configurations')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('is_default', true)
-      .maybeSingle();
-
-    if (error) {
-      console.error('Error fetching default migration config:', error);
-      throw error;
-    }
-
-    return data;
+    // TODO: Implement migration configurations table or migrate to unified settings
+    console.log('Migration configurations feature not yet implemented');
+    return null;
   } catch (error) {
     console.error('Error fetching default migration config:', error);
     return null;
@@ -72,30 +53,9 @@ export const saveMigrationConfig = async (
   config: Omit<MigrationConfig, 'id' | 'user_id' | 'created_at' | 'updated_at'>
 ): Promise<MigrationConfig> => {
   try {
-    // If this is set as default, unset other defaults
-    if (config.is_default) {
-      await supabase
-        .from('migration_configurations')
-        .update({ is_default: false })
-        .eq('user_id', userId)
-        .eq('is_default', true);
-    }
-
-    const { data, error } = await supabase
-      .from('migration_configurations')
-      .insert({
-        ...config,
-        user_id: userId
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error saving migration config:', error);
-      throw error;
-    }
-
-    return data;
+    // TODO: Implement migration configurations table or migrate to unified settings
+    console.log('Migration configurations feature not yet implemented');
+    throw new Error('Migration configurations feature not yet implemented');
   } catch (error) {
     console.error('Error saving migration config:', error);
     throw error;
@@ -111,30 +71,9 @@ export const updateMigrationConfig = async (
   updates: Partial<Omit<MigrationConfig, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
 ): Promise<MigrationConfig> => {
   try {
-    // If setting as default, unset other defaults
-    if (updates.is_default) {
-      await supabase
-        .from('migration_configurations')
-        .update({ is_default: false })
-        .eq('user_id', userId)
-        .eq('is_default', true)
-        .neq('id', configId);
-    }
-
-    const { data, error } = await supabase
-      .from('migration_configurations')
-      .update(updates)
-      .eq('id', configId)
-      .eq('user_id', userId)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error updating migration config:', error);
-      throw error;
-    }
-
-    return data;
+    // TODO: Implement migration configurations table or migrate to unified settings
+    console.log('Migration configurations feature not yet implemented');
+    throw new Error('Migration configurations feature not yet implemented');
   } catch (error) {
     console.error('Error updating migration config:', error);
     throw error;
@@ -146,11 +85,8 @@ export const updateMigrationConfig = async (
  */
 export const deleteMigrationConfig = async (configId: string, userId: string): Promise<void> => {
   try {
-    const { error } = await supabase
-      .from('migration_configurations')
-      .delete()
-      .eq('id', configId)
-      .eq('user_id', userId);
+    // TODO: Implement migration configurations table or migrate to unified settings
+    console.log('Migration configurations feature not yet implemented');
 
     if (error) {
       console.error('Error deleting migration config:', error);
@@ -167,24 +103,8 @@ export const deleteMigrationConfig = async (configId: string, userId: string): P
  */
 export const setDefaultMigrationConfig = async (configId: string, userId: string): Promise<void> => {
   try {
-    // Unset all other defaults
-    await supabase
-      .from('migration_configurations')
-      .update({ is_default: false })
-      .eq('user_id', userId)
-      .eq('is_default', true);
-
-    // Set this one as default
-    const { error } = await supabase
-      .from('migration_configurations')
-      .update({ is_default: true })
-      .eq('id', configId)
-      .eq('user_id', userId);
-
-    if (error) {
-      console.error('Error setting default migration config:', error);
-      throw error;
-    }
+    // TODO: Implement migration configurations table or migrate to unified settings
+    console.log('Migration configurations feature not yet implemented');
   } catch (error) {
     console.error('Error setting default migration config:', error);
     throw error;

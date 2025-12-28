@@ -57,7 +57,7 @@ export class ScheduledMessagesService {
   private supabase: SupabaseClient;
   private isRunning = false;
   private checkInterval = 60000; // Check every 1 minute
-  private intervalId?: NodeJS.Timeout;
+  private intervalId?: ReturnType<typeof setInterval>;
 
   constructor(supabaseUrl: string, supabaseKey: string) {
     this.supabase = createClient(supabaseUrl, supabaseKey);

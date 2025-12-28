@@ -8,14 +8,10 @@
 
 /* Prevent blue overscroll flash */
 html, body, #root {
-  /* Background removed - using SVG background instead */
+  /* Ensure no solid black behind wallpapers so body background shows through */
+  background-color: transparent;
 }
 
-/* Force SVG background on all body elements */
-body, body.theme-light, body.theme-dark, body.theme-dark-cards {
-  background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyMCIgaGVpZ2h0PSIxMDgwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJiZy1ncmFkaWVudCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiMxZTNhOGE7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMjUlIiBzdHlsZT0ic3RvcC1jb2xvcjojM2I4MmY2O3N0b3Atb3BhY2l0eToxIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjUwJSIgc3R5bGU9InN0b3AtY29sb3I6IzA2YjZkNDtzdG9wLW9wYWNpdHk6MSIgLz4KICAgICAgPHN0b3Agb2Zmc2V0PSI3NSUiIHN0eWxlPSJzdG9wLWNvbG9yOiMxMGI5ODE7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6Izg0Y2MxNjtzdG9wLW9wYWNpdHk6MSIgLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjYmctZ3JhZGllbnQpIi8+Cjwvc3ZnPg==') no-repeat center center fixed !important;
-  background-size: cover !important;
-}
 body {
   overscroll-behavior-y: contain;
 }
@@ -116,6 +112,11 @@ body {
   --lats-font-size-lg: 1.125rem;
   --lats-font-size-xl: 1.25rem;
   --lats-font-size-2xl: 1.5rem;
+  /* Overlay opacity variables (can be controlled by settings) */
+  --overlay-light: 0.05;
+  --overlay-light-secondary: 0.02;
+  --overlay-dark: 0.06;
+  --overlay-dark-secondary: 0.02;
 }
 
 /* Font Size Classes - Applied by settings */
@@ -148,8 +149,6 @@ html.font-large {
 
 /* Theme Variables */
 .theme-light {
-  background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyMCIgaGVpZ2h0PSIxMDgwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJiZy1ncmFkaWVudCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiMxZTNhOGE7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMjUlIiBzdHlsZT0ic3RvcC1jb2xvcjojM2I4MmY2O3N0b3Atb3BhY2l0eToxIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjUwJSIgc3R5bGU9InN0b3AtY29sb3I6IzA2YjZkNDtzdG9wLW9wYWNpdHk6MSIgLz4KICAgICAgPHN0b3Agb2Zmc2V0PSI3NSUiIHN0eWxlPSJzdG9wLWNvbG9yOiMxMGI5ODE7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6Izg0Y2MxNjtzdG9wLW9wYWNpdHk6MSIgLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjYmctZ3JhZGllbnQpIi8+Cjwvc3ZnPg==') no-repeat center center fixed !important;
-  background-size: cover !important;
   --bg-primary: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyMCIgaGVpZ2h0PSIxMDgwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJiZy1ncmFkaWVudCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiMxZTNhOGE7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMjUlIiBzdHlsZT0ic3RvcC1jb2xvcjojM2I4MmY2O3N0b3Atb3BhY2l0eToxIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjUwJSIgc3R5bGU9InN0b3AtY29sb3I6IzA2YjZkNDtzdG9wLW9wYWNpdHk6MSIgLz4KICAgICAgPHN0b3Agb2Zmc2V0PSI3NSUiIHN0eWxlPSJzdG9wLWNvbG9yOiMxMGI5ODE7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6Izg0Y2MxNjtzdG9wLW9wYWNpdHk6MSIgLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjYmctZ3JhZGllbnQpIi8+Cjwvc3ZnPg==') no-repeat center center fixed;
   --bg-secondary: #ffffff;
   --text-primary: #1e293b;
@@ -537,8 +536,6 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyMCIgaGVpZ2h0PSIxMDgwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJiZy1ncmFkaWVudCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiMxZTNhOGE7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMjUlIiBzdHlsZT0ic3RvcC1jb2xvcjojM2I4MmY2O3N0b3Atb3BhY2l0eToxIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjUwJSIgc3R5bGU9InN0b3AtY29sb3I6IzA2YjZkNDtzdG9wLW9wYWNpdHk6MSIgLz4KICAgICAgPHN0b3Agb2Zmc2V0PSI3NSUiIHN0eWxlPSJzdG9wLWNvbG9yOiMxMGI5ODE7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6Izg0Y2MxNjtzdG9wLW9wYWNpdHk6MSIgLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjYmctZ3JhZGllbnQpIi8+Cjwvc3ZnPg==') no-repeat center center fixed !important;
-  background-size: cover !important;
   color: var(--text-primary, #1e293b);
   min-height: 100vh;
   width: 100vw;
@@ -546,16 +543,6 @@ body {
   transition: background 0.5s ease, color 0.3s ease;
 }
 
-/* Dark Theme Background Wallpapers */
-.theme-dark {
-  background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyMCIgaGVpZ2h0PSIxMDgwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJiZy1ncmFkaWVudCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiMxZTNhOGE7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMjUlIiBzdHlsZT0ic3RvcC1jb2xvcjojM2I4MmY2O3N0b3Atb3BhY2l0eToxIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjUwJSIgc3R5bGU9InN0b3AtY29sb3I6IzA2YjZkNDtzdG9wLW9wYWNpdHk6MSIgLz4KICAgICAgPHN0b3Agb2Zmc2V0PSI3NSUiIHN0eWxlPSJzdG9wLWNvbG9yOiMxMGI5ODE7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6Izg0Y2MxNjtzdG9wLW9wYWNpdHk6MSIgLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjYmctZ3JhZGllbnQpIi8+Cjwvc3ZnPg==') no-repeat center center fixed !important;
-  background-size: cover !important;
-}
-
-.theme-dark-cards {
-  background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyMCIgaGVpZ2h0PSIxMDgwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJiZy1ncmFkaWVudCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiMxZTNhOGE7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMjUlIiBzdHlsZT0ic3RvcC1jb2xvcjojM2I4MmY2O3N0b3Atb3BhY2l0eToxIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjUwJSIgc3R5bGU9InN0b3AtY29sb3I6IzA2YjZkNDtzdG9wLW9wYWNpdHk6MSIgLz4KICAgICAgPHN0b3Agb2Zmc2V0PSI3NSUiIHN0eWxlPSJzdG9wLWNvbG9yOiMxMGI5ODE7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6Izg0Y2MxNjtzdG9wLW9wYWNpdHk6MSIgLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjYmctZ3JhZGllbnQpIi8+Cjwvc3ZnPg==') no-repeat center center fixed !important;
-  background-size: cover !important;
-}
 
 body::before {
   content: '';
@@ -564,21 +551,25 @@ body::before {
   left: 0;
   right: 0;
   bottom: 0;
+  /* Subtle, low-opacity overlay so wallpapers remain visible (controlled by CSS vars) */
   background: radial-gradient(circle at 50% 20%, 
-    rgba(255, 255, 255, 0.3) 0%, 
-    rgba(255, 255, 255, 0.1) 30%, 
+    rgba(255, 255, 255, var(--overlay-light)) 0%,
+    rgba(255, 255, 255, var(--overlay-light-secondary)) 30%,
     transparent 70%
   );
   pointer-events: none;
-  animation: highlight-pulse 4s ease-in-out infinite;
+  /* remove pulsing to keep background appearance stable */
+  animation: none;
+  z-index: 0;
 }
 
 /* Dark theme overlay with subtle highlights */
 .theme-dark body::before,
 .theme-dark-cards body::before {
+  /* Reduced dark overlay so wallpapers are still visible in dark themes (controlled by CSS vars) */
   background: radial-gradient(circle at 50% 20%, 
-    rgba(59, 130, 246, 0.1) 0%, 
-    rgba(99, 102, 241, 0.05) 30%, 
+    rgba(0, 0, 0, var(--overlay-dark)) 0%,
+    rgba(0, 0, 0, var(--overlay-dark-secondary)) 30%,
     transparent 70%
   );
 }
@@ -602,8 +593,9 @@ body::before {
     radial-gradient(1px 1px at 15% 90%, rgba(255, 255, 255, 0.25), transparent);
   background-size: 200% 200%;
   pointer-events: none;
-  opacity: 0.4;
-  animation: drift 20s ease-in-out infinite;
+  /* Make particle overlay very subtle in dark mode */
+  opacity: 0.06;
+  animation: drift 40s ease-in-out infinite;
   z-index: 1;
 }
 
@@ -1024,7 +1016,77 @@ body {
   100% { background-position: 0% 50%; }
 }
 
-/* 9. GLASS MORPHISM OVERLAY */
+/* 9. DEFAULT WALLPAPER */
+.default-wallpaper {
+  background: radial-gradient(ellipse at center, #e0f7fa 0%, #b3e5fc 40%, #039be5 80%, #01579b 100%);
+}
+
+/* 11. MINIMAL WALLPAPER */
+.minimal {
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+}
+
+/* 12. PURPLE DREAM WALLPAPER */
+.purple-dream {
+  background: linear-gradient(135deg, #a855f7 0%, #ec4899 25%, #f97316 50%, #eab308 75%, #22c55e 100%);
+}
+
+/* 13. NEON CITY WALLPAPER */
+.neon-city {
+  background: linear-gradient(135deg, #ff0080 0%, #00ff80 25%, #8000ff 50%, #ff8000 75%, #0080ff 100%);
+}
+
+/* 14. PASTEL PARADISE WALLPAPER */
+.pastel-paradise {
+  background: linear-gradient(135deg, #fce7f3 0%, #e0e7ff 25%, #fef3c7 50%, #d1fae5 75%, #fce7f3 100%);
+}
+
+/* 15. FIRE AND ICE WALLPAPER */
+.fire-and-ice {
+  background: linear-gradient(135deg, #dc2626 0%, #ea580c 25%, #f59e0b 50%, #06b6d4 75%, #2563eb 100%);
+}
+
+/* 16. EMERALD GLOW WALLPAPER */
+.emerald-glow {
+  background: linear-gradient(135deg, #065f46 0%, #047857 25%, #059669 50%, #10b981 75%, #34d399 100%);
+}
+
+/* 17. ROYAL PURPLE WALLPAPER */
+.royal-purple {
+  background: linear-gradient(135deg, #581c87 0%, #7c3aed 25%, #a855f7 50%, #c084fc 75%, #e9d5ff 100%);
+}
+
+/* 18. CORAL SUNSET WALLPAPER */
+.coral-sunset {
+  background: linear-gradient(135deg, #dc2626 0%, #ea580c 25%, #f97316 50%, #fb923c 75%, #fed7aa 100%);
+}
+
+/* 19. MIDNIGHT BLUE WALLPAPER */
+.midnight-blue {
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 25%, #2563eb 50%, #3b82f6 75%, #60a5fa 100%);
+}
+
+/* 20. GOLDEN HOUR WALLPAPER */
+.golden-hour {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 25%, #b45309 50%, #92400e 75%, #78350f 100%);
+}
+
+/* 19. SPRING BLOOM WALLPAPER */
+.spring-bloom {
+  background: linear-gradient(135deg, #84cc16 0%, #22c55e 25%, #06b6d4 50%, #3b82f6 75%, #8b5cf6 100%);
+}
+
+/* 20. CYBERPUNK WALLPAPER */
+.cyberpunk {
+  background: linear-gradient(135deg, #ef4444 0%, #f97316 25%, #eab308 50%, #22c55e 75%, #3b82f6 100%);
+}
+
+/* 21. ARCTIC BLUE WALLPAPER */
+.arctic-blue {
+  background: linear-gradient(135deg, #e0f2fe 0%, #b3e5fc 25%, #81d4fa 50%, #4fc3f7 75%, #29b6f6 100%);
+}
+
+/* 22. GLASS MORPHISM OVERLAY */
 .glass-overlay {
   background: 
     radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),

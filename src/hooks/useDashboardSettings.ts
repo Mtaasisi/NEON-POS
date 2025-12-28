@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { loadUserSettings } from '../lib/userSettingsApi';
-import { 
-  getRoleWidgetPermissions, 
+import {
+  getRoleWidgetPermissions,
   getRoleQuickActionPermissions,
   isWidgetAllowedForRole,
-  isQuickActionAllowedForRole
+  isQuickActionAllowedForRole,
+  isWidgetVisibleForPermissions,
+  isQuickActionVisibleForPermissions
 } from '../config/roleBasedWidgets';
 
 export type WidgetSize = 'small' | 'medium' | 'large'; // 1, 2, or 3 columns
@@ -307,23 +309,23 @@ export function useDashboardSettings() {
   }, []);
 
   const isQuickActionEnabled = (action: keyof DashboardSettings['quickActions']): boolean => {
-    // Check role-based permissions first
-    if (!currentUser?.role) return false;
-    
-    const roleAllowed = isQuickActionAllowedForRole(action, currentUser.role);
-    if (!roleAllowed) return false;
-    
+    // Check permission-based visibility first
+    if (!currentUser?.permissions) return false;
+
+    const permissionAllowed = isQuickActionVisibleForPermissions(action, currentUser.permissions);
+    if (!permissionAllowed) return false;
+
     // Then check user's custom settings
     return dashboardSettings.quickActions[action];
   };
 
   const isWidgetEnabled = (widget: keyof DashboardSettings['widgets']): boolean => {
-    // Check role-based permissions first
-    if (!currentUser?.role) return false;
-    
-    const roleAllowed = isWidgetAllowedForRole(widget, currentUser.role);
-    if (!roleAllowed) return false;
-    
+    // Check permission-based visibility first
+    if (!currentUser?.permissions) return false;
+
+    const permissionAllowed = isWidgetVisibleForPermissions(widget, currentUser.permissions);
+    if (!permissionAllowed) return false;
+
     // Then check user's custom settings
     return dashboardSettings.widgets[widget];
   };

@@ -5,7 +5,7 @@
  * to verify child variants with IMEI are displayed
  */
 
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
 test.describe('POS Variant Selection Modal - Child Variants', () => {
   const BASE_URL = 'http://localhost:5173';

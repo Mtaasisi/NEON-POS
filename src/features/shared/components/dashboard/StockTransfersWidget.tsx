@@ -40,9 +40,9 @@ export const StockTransfersWidget: React.FC<StockTransfersWidgetProps> = ({ clas
       setIsLoading(true);
       const currentBranchId = getCurrentBranchId();
       
-      let query = supabase
-        .from('lats_stock_transfers')
-        .select('id, status, created_at, completed_at');
+      // ✅ FIX: lats_stock_transfers table was consolidated - returning empty stock transfers
+      console.log('ℹ️ lats_stock_transfers table was consolidated - returning empty stock transfers');
+      const query = { data: [], error: null };
 
       // Note: lats_stock_transfers may not have branch_id column
       // if (currentBranchId) {

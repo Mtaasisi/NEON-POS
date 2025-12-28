@@ -32,14 +32,19 @@ router.get('/', async (req, res) => {
     console.log(`🔍 [QUERY] Fetching settings for user_id: ${userId || 'default'}`);
     
     const result = await pool.query(
-      `SELECT * FROM whatsapp_antiban_settings 
-       WHERE user_id IS NOT DISTINCT FROM $1
-       ORDER BY updated_at DESC 
+      `SELECT setting_value_json as settings, updated_at
+       FROM settings
+       WHERE scope = 'user'
+         AND category = 'whatsapp'
+         AND setting_key = 'antiban_settings'
+         AND (user_id IS NOT DISTINCT FROM $1 OR user_id IS NULL)
+       ORDER BY updated_at DESC
        LIMIT 1`,
       [userId]
     );
-    
-    const settings = result.rows[0];
+
+    const settingsRow = result.rows[0];
+    const settings = settingsRow ? (typeof settingsRow.settings === 'string' ? JSON.parse(settingsRow.settings) : settingsRow.settings) : null;
     
     if (!settings) {
       console.log('⚠️ [WARNING] No settings found, returning defaults');
@@ -61,26 +66,13 @@ router.get('/', async (req, res) => {
         varyMessageLength: true
       });
     }
-    
+
     console.log('✅ [SUCCESS] Settings retrieved');
-    
-    // Transform database fields to camelCase for frontend
+
+    // Settings are already in the correct format from JSON
     res.json({
-      usePersonalization: settings.use_personalization,
-      randomDelay: settings.random_delay,
-      minDelay: settings.min_delay,
-      maxDelay: settings.max_delay,
-      usePresence: settings.use_presence,
-      batchSize: settings.batch_size,
-      batchDelay: settings.batch_delay,
-      maxPerHour: settings.max_per_hour,
-      dailyLimit: settings.daily_limit,
-      skipRecentlyContacted: settings.skip_recently_contacted,
-      respectQuietHours: settings.respect_quiet_hours,
-      useInvisibleChars: settings.use_invisible_chars,
-      useEmojiVariation: settings.use_emoji_variation,
-      varyMessageLength: settings.vary_length,
-      updatedAt: settings.updated_at
+      ...settings,
+      updatedAt: settingsRow.updated_at
     });
   } catch (error) {
     console.error('❌ [ERROR] Failed to fetch settings:', error);
@@ -120,57 +112,40 @@ router.post('/', async (req, res) => {
     console.log(`💾 [SAVE] Saving settings for user_id: ${userId || 'default'}`);
     console.log(`📊 [DATA] Delays: ${minDelay}-${maxDelay}s, Batch: ${batchSize}, Limits: ${maxPerHour}/hr, ${dailyLimit}/day`);
     
+    // Prepare settings object for JSON storage
+    const settingsData = {
+      usePersonalization,
+      randomDelay,
+      minDelay,
+      maxDelay,
+      usePresence,
+      batchSize,
+      batchDelay,
+      maxPerHour,
+      dailyLimit,
+      skipRecentlyContacted,
+      respectQuietHours,
+      useInvisibleChars,
+      useEmojiVariation,
+      varyMessageLength
+    };
+
     // Use INSERT ... ON CONFLICT for upsert behavior (PostgreSQL)
     await pool.query(
-      `INSERT INTO whatsapp_antiban_settings (
+      `INSERT INTO settings (
+        scope,
+        category,
+        setting_key,
+        setting_value_json,
         user_id,
-        use_personalization,
-        random_delay,
-        min_delay,
-        max_delay,
-        use_presence,
-        batch_size,
-        batch_delay,
-        max_per_hour,
-        daily_limit,
-        skip_recently_contacted,
-        respect_quiet_hours,
-        use_invisible_chars,
-        use_emoji_variation,
-        vary_length
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-      ON CONFLICT (user_id) DO UPDATE SET
-        use_personalization = EXCLUDED.use_personalization,
-        random_delay = EXCLUDED.random_delay,
-        min_delay = EXCLUDED.min_delay,
-        max_delay = EXCLUDED.max_delay,
-        use_presence = EXCLUDED.use_presence,
-        batch_size = EXCLUDED.batch_size,
-        batch_delay = EXCLUDED.batch_delay,
-        max_per_hour = EXCLUDED.max_per_hour,
-        daily_limit = EXCLUDED.daily_limit,
-        skip_recently_contacted = EXCLUDED.skip_recently_contacted,
-        respect_quiet_hours = EXCLUDED.respect_quiet_hours,
-        use_invisible_chars = EXCLUDED.use_invisible_chars,
-        use_emoji_variation = EXCLUDED.use_emoji_variation,
-        vary_length = EXCLUDED.vary_length,
-        updated_at = CURRENT_TIMESTAMP`,
+        updated_at
+      ) VALUES ('user', 'whatsapp', 'antiban_settings', $1, $2, NOW())
+      ON CONFLICT (scope, category, setting_key, user_id) DO UPDATE SET
+        setting_value_json = $1,
+        updated_at = NOW()`,
       [
-        userId,
-        usePersonalization,
-        randomDelay,
-        minDelay,
-        maxDelay,
-        usePresence,
-        batchSize,
-        batchDelay,
-        maxPerHour,
-        dailyLimit,
-        skipRecentlyContacted,
-        respectQuietHours,
-        useInvisibleChars,
-        useEmojiVariation,
-        varyMessageLength
+        JSON.stringify(settingsData),
+        userId
       ]
     );
     
@@ -201,7 +176,11 @@ router.delete('/', async (req, res) => {
     console.log(`🔄 [RESET] Resetting settings for user_id: ${userId || 'default'}`);
     
     await pool.query(
-      'DELETE FROM whatsapp_antiban_settings WHERE user_id IS NOT DISTINCT FROM $1',
+      `DELETE FROM settings
+       WHERE scope = 'user'
+         AND category = 'whatsapp'
+         AND setting_key = 'antiban_settings'
+         AND (user_id IS NOT DISTINCT FROM $1 OR user_id IS NULL)`,
       [userId]
     );
     

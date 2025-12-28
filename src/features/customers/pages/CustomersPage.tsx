@@ -67,7 +67,7 @@ const getInitialPrefs = () => {
 };
 
 const CustomersPage = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, hasPermission } = useAuth();
   const { confirm } = useDialog();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -174,6 +174,23 @@ const CustomersPage = () => {
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [appointmentModalMode, setAppointmentModalMode] = useState<'create' | 'edit'>('create');
+
+  // Permission checks
+  const userPermissions = currentUser?.permissions || [];
+  const hasAllPermissions = userPermissions.includes('all');
+  const canViewCustomers = hasAllPermissions || userPermissions.includes('view_customers');
+  const canAddCustomers = hasAllPermissions || userPermissions.includes('add_customers');
+  const canEditCustomers = hasAllPermissions || userPermissions.includes('edit_customers');
+  const canDeleteCustomers = hasAllPermissions || userPermissions.includes('delete_customers');
+  const canViewCustomerHistory = hasAllPermissions || userPermissions.includes('view_customer_history');
+
+  // Permission check - redirect if no customer access
+  useEffect(() => {
+    if (!canViewCustomers) {
+      toast.error('You do not have permission to access customer management');
+      navigate('/dashboard');
+    }
+  }, [canViewCustomers, navigate]);
 
   // Debounce search query for better performance
   useEffect(() => {
@@ -1495,31 +1512,31 @@ const CustomersPage = () => {
           <div className="flex gap-3 flex-wrap">
             {activeTab === 'customers' ? (
               <>
-                <button
-                  onClick={() => setShowAddCustomerModal(true)}
-                  className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 group relative"
-                  title="Add new customer (Ctrl/Cmd + N)"
-                >
-                  <UserPlus size={18} />
-                  <span>New Customer</span>
-                  <span className="hidden group-hover:inline-block absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                    Ctrl/Cmd + N
-                  </span>
-                </button>
-                {['admin', 'customer-care'].includes(currentUser?.role || '') && (
-                  <>
-                    <button
-                      onClick={() => setShowImportExportModal(true)}
-                      className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700 group relative"
-                      title="Import/Export customers (Ctrl/Cmd + I)"
-                    >
-                      <Upload size={18} />
-                      <span>Import/Export</span>
-                      <span className="hidden group-hover:inline-block absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                        Ctrl/Cmd + I
-                      </span>
-                    </button>
-                  </>
+                {canAddCustomers && (
+                  <button
+                    onClick={() => setShowAddCustomerModal(true)}
+                    className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 group relative"
+                    title="Add new customer (Ctrl/Cmd + N)"
+                  >
+                    <UserPlus size={18} />
+                    <span>New Customer</span>
+                    <span className="hidden group-hover:inline-block absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                      Ctrl/Cmd + N
+                    </span>
+                  </button>
+                )}
+                {canAddCustomers && (
+                  <button
+                    onClick={() => setShowImportExportModal(true)}
+                    className="flex items-center gap-2 px-6 py-3 font-semibold text-sm rounded-xl transition-all duration-200 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700 group relative"
+                    title="Import/Export customers (Ctrl/Cmd + I)"
+                  >
+                    <Upload size={18} />
+                    <span>Import/Export</span>
+                    <span className="hidden group-hover:inline-block absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                      Ctrl/Cmd + I
+                    </span>
+                  </button>
                 )}
               </>
             ) : (

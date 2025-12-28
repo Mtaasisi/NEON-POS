@@ -1,6 +1,6 @@
 {
   "name": "dukani-pro",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "type": "module",
   "scripts": {
     "dev": "vite --mode development",
@@ -76,6 +76,7 @@
     "backup:schema:custom": "node backup-schema-only.mjs",
     "backup:full": "node backup-full-database.mjs",
     "backup:database": "node backup-full-database.mjs",
+    "backup:versioned": "node scripts/backup-with-version.mjs",
     "restore:full": "node restore-full-database.mjs",
     "restore:database": "node restore-full-database.mjs"
   },
@@ -99,7 +100,7 @@
     "autoprefixer": "^10.4.14",
     "browser-image-compression": "^2.0.2",
     "crypto-js": "^4.2.0",
-    "csurf": "^1.11.0",
+    "csurf": "^1.2.2",
     "csv-parser": "^3.0.0",
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.9",
@@ -113,7 +114,7 @@
     "idb": "^7.1.1",
     "isomorphic-dompurify": "^2.33.0",
     "jsonwebtoken": "^9.0.2",
-    "jspdf": "^2.5.1",
+    "jspdf": "^3.0.4",
     "jszip": "^3.10.1",
     "lucide-react": "^0.263.1",
     "multer": "^2.0.2",
@@ -136,19 +137,24 @@
     "recharts": "^2.7.2",
     "sonner": "^2.0.7",
     "speakeasy": "^2.0.0",
+    "sql.js": "^1.13.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "tailwind-merge": "^1.14.0",
     "tailwindcss": "^3.3.0",
     "terser": "^5.19.2",
     "uuid": "^9.0.0",
+    "vite-plugin-commonjs": "^0.10.4",
     "xlsx": "^0.18.5",
     "zod": "^3.22.2",
     "zustand": "^4.4.1",
     "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
+    "@babel/preset-react": "^7.28.5",
+    "@babel/preset-typescript": "^7.28.5",
     "@playwright/test": "^1.56.1",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
     "@types/react-signature-canvas": "^1.0.7",
@@ -161,6 +167,6 @@
     "playwright": "^1.56.1",
     "puppeteer": "^24.24.0",
     "typescript": "^5.0.2",
-    "vite": "^4.4.5"
+    "vite": "^7.3.0"
   }
 }

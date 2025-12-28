@@ -83,7 +83,7 @@ const BirthdayMessageSender: React.FC<BirthdayMessageSenderProps> = ({
               
               if (isNotOnWhatsApp) {
                 // Fallback to SMS
-                const { default: smsService } = await import('../../../services/smsService');
+                const { smsService } = await import('../../../services/smsService');
                 const smsResult = await smsService.sendSMS(phone, message);
                 if (smsResult.success) {
                   successCount++;

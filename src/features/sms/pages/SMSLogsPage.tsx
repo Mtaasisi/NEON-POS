@@ -148,14 +148,36 @@ const SMSLogsPage: React.FC = () => {
 
       console.log('📥 SMS logs from sms_logs table:', smsLogsData?.length || 0);
 
-      // Fetch from customer_communications table (SMS type)
-      const { data: commData, error: commError } = await supabase
-        .from('customer_communications')
-        .select('*')
-        .eq('type', 'sms')
-        .order('created_at', { ascending: false });
+      // Fetch SMS logs from consolidated customer communications (SMS type)
+      const { data: customersData, error: commError } = await supabase
+        .from('lats_customers')
+        .select('id, name, phone, communications')
+        .not('communications', 'is', null);
 
-      console.log('📥 SMS logs from customer_communications table:', commData?.length || 0);
+      let commData: any[] = [];
+      if (!commError && customersData) {
+        // Extract SMS communications from all customers
+        for (const customer of customersData) {
+          if (Array.isArray(customer.communications)) {
+            const smsComms = customer.communications
+              .filter((comm: any) => comm.type === 'sms')
+              .map((comm: any) => ({
+                ...comm,
+                customer_id: customer.id,
+                customer_name: customer.name,
+                customer_phone: customer.phone
+              }));
+            commData.push(...smsComms);
+          }
+        }
+        // Sort by created_at
+        commData.sort((a: any, b: any) =>
+          new Date(b.created_at || b.sent_at || 0).getTime() -
+          new Date(a.created_at || a.sent_at || 0).getTime()
+        );
+      }
+
+      console.log('📥 SMS logs from consolidated customer communications:', commData?.length || 0);
 
       // Check for errors
       if (smsLogsError && commError) {

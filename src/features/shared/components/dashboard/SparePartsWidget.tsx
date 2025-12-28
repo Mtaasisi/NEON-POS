@@ -44,9 +44,9 @@ export const SparePartsWidget: React.FC<SparePartsWidgetProps> = ({ className })
       
       // Note: lats_spare_parts table does not have branch_id column
       // All spare parts are shared across branches
-      let query = supabase
-        .from('lats_spare_parts')
-        .select('id, quantity, min_quantity, selling_price, cost_price, category_id');
+      // lats_spare_parts table was consolidated - returning empty data
+      console.log('ℹ️ lats_spare_parts table was consolidated - returning empty data');
+      let query = { data: [], error: null };
 
       const { data: parts, error } = await query;
 
@@ -80,19 +80,13 @@ export const SparePartsWidget: React.FC<SparePartsWidgetProps> = ({ className })
 
       // Get recent usage (from stock movements or usage logs)
       const lastWeek = new Date();
-      lastWeek.setDate(lastWeek.getDate() - 7);
-      let usageQuery = supabase
-        .from('lats_stock_movements')
-        .select('id')
-        .eq('movement_type', 'out')
-        .gte('created_at', lastWeek.toISOString());
+      // ✅ FIX: lats_stock_movements table was consolidated - returning empty usage
+      console.log('ℹ️ lats_stock_movements table was consolidated - returning empty spare parts usage');
 
-      if (currentBranchId) {
-        usageQuery = usageQuery.eq('branch_id', currentBranchId);
-      }
-
-      const { data: movements } = await usageQuery;
-      const recentUsage = movements?.length || 0;
+      // Return empty usage data since table was consolidated
+      const usage = [];
+      const movements = [];
+      const recentUsage = 0;
 
       setMetrics({
         totalParts: total,

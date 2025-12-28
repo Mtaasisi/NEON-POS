@@ -101,12 +101,17 @@ class InventoryNotificationService {
   private async getNotificationRecipients(): Promise<NotificationRecipient[]> {
     try {
       // Try to get from new WhatsApp automation settings first
-      const { data: automationSettings } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('category', 'whatsapp_automation')
-        .eq('setting_key', 'notification_phones')
-        .single();
+      // ✅ FIX: admin_settings table was consolidated, use unified settings service
+      let unifiedSettingsService;
+      try {
+        const imported = await import('../lib/unifiedSettingsService');
+        unifiedSettingsService = imported.unifiedSettingsService;
+      } catch (importError) {
+        console.warn('Failed to import unifiedSettingsService:', importError);
+        unifiedSettingsService = null;
+      }
+      const automationSettingsValue = unifiedSettingsService ? await unifiedSettingsService.getSetting('system', 'whatsapp_automation', 'notification_phones') : null;
+      const automationSettings = automationSettingsValue ? { setting_value: automationSettingsValue } : null;
 
       if (automationSettings?.setting_value) {
         try {
@@ -120,12 +125,9 @@ class InventoryNotificationService {
       }
 
       // Fallback: Try old inventory settings
-      const { data: inventorySettings } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('category', 'inventory')
-        .eq('setting_key', 'low_stock_notification_phones')
-        .single();
+      // ✅ FIX: admin_settings table was consolidated, use unified settings service
+      const inventorySettingsValue = unifiedSettingsService ? await unifiedSettingsService.getSetting('system', 'inventory', 'low_stock_notification_phones') : null;
+      const inventorySettings = inventorySettingsValue ? { setting_value: inventorySettingsValue } : null;
 
       if (inventorySettings?.setting_value) {
         try {
@@ -220,11 +222,17 @@ class InventoryNotificationService {
   async sendLowStockNotification(variantId: string): Promise<{ success: boolean; sent?: number; error?: string }> {
     try {
       // Check automation settings first (new system)
-      const { data: automationData } = await supabase
-        .from('admin_settings')
-        .select('setting_key, setting_value')
-        .eq('category', 'whatsapp_automation')
-        .in('setting_key', ['inventory_low_stock_notifications', 'inventory_out_of_stock_notifications']);
+      // ✅ FIX: admin_settings table was consolidated, use unified settings service
+      const { unifiedSettingsService } = await import('../lib/unifiedSettingsService');
+      const lowStockValue = unifiedSettingsService ? await unifiedSettingsService.getSetting('system', 'whatsapp_automation', 'inventory_low_stock_notifications') : null;
+      const outOfStockValue = unifiedSettingsService ? await unifiedSettingsService.getSetting('system', 'whatsapp_automation', 'inventory_out_of_stock_notifications') : null;
+      const automationData = [];
+      if (lowStockValue !== null && lowStockValue !== undefined) {
+        automationData.push({ setting_key: 'inventory_low_stock_notifications', setting_value: lowStockValue });
+      }
+      if (outOfStockValue !== null && outOfStockValue !== undefined) {
+        automationData.push({ setting_key: 'inventory_out_of_stock_notifications', setting_value: outOfStockValue });
+      }
 
       const automationMap = new Map(
         (automationData || []).map(a => [a.setting_key, a.setting_value === 'true'])

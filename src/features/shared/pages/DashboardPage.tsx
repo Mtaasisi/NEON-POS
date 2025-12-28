@@ -9,7 +9,7 @@ import { useDateRange } from '../../../context/DateRangeContext';
 import { DateRangeSelector } from '../../../components/DateRangeSelector';
 import { DashboardBranchFilter } from '../../../components/DashboardBranchFilter';
 import { DashboardBranchProvider, useDashboardBranch } from '../../../context/DashboardBranchContext';
-import {
+import { 
   Smartphone, Users, Package, Plus,
   DollarSign, Calendar,
   Zap, RefreshCw, FileText,
@@ -18,7 +18,7 @@ import {
   MessageSquare, Download, Upload,
   UserCheck, Database, Target, Bot,
   Printer, Tag, Building, MapPin, Clock,
-  Truck
+  Truck, LayoutDashboard
 } from 'lucide-react';
 import {
   NotificationWidget,
@@ -65,8 +65,9 @@ import {
   AlertSystemWidget
 } from '../components/dashboard';
 import { dashboardService, DashboardStats } from '../../../services/dashboardService';
-import { getDashboardTitleForRole, getDashboardDescriptionForRole } from '../../../config/roleBasedWidgets';
+import { getDashboardTitleForRole, getDashboardDescriptionForRole, isWidgetVisibleForPermissions, getVisibleWidgetsForPermissions } from '../../../config/roleBasedWidgets';
 import { useRealtimeDashboard } from '../../../hooks/useRealtimeDashboard';
+import GlassCard from '../components/ui/GlassCard';
 
 const DashboardPageContent: React.FC = () => {
   const { currentUser } = useAuth();
@@ -77,8 +78,10 @@ const DashboardPageContent: React.FC = () => {
 
   // Dashboard settings hook
   const {
+    dashboardSettings,
     isQuickActionEnabled,
     isWidgetEnabled,
+    getEnabledWidgets,
     getWidgetSize,
     getWidgetRowSpanClass,
     loading: settingsLoading
@@ -104,6 +107,11 @@ const DashboardPageContent: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
 
+  // Debug flag to help inspect missing widgets (use ?debugDashboard=1 in the URL)
+  const showDebugPanel = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debugDashboard') === '1';
+  // Force show all widgets override (use ?showAllWidgets=1)
+  const forceShowAll = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('showAllWidgets') === '1';
+
   // Widget order state - loads from localStorage (set in settings)
   const [widgetOrder, setWidgetOrder] = useState<string[]>([]);
   const committedOrderRef = useRef<string[]>([]);
@@ -114,8 +122,8 @@ const DashboardPageContent: React.FC = () => {
       const savedOrder = localStorage.getItem('dashboard_widget_order');
       if (savedOrder) {
         const parsedOrder = JSON.parse(savedOrder);
-        // Filter to only include enabled widgets
-        const filteredOrder = parsedOrder.filter((widget: string) => isWidgetEnabled(widget as any));
+        // Filter to only include enabled widgets (unless forceShowAll)
+        const filteredOrder = forceShowAll ? parsedOrder : parsedOrder.filter((widget: string) => isWidgetEnabled(widget as any));
         setWidgetOrder(filteredOrder);
         committedOrderRef.current = filteredOrder;
         console.log('📂 Loaded saved widget order:', filteredOrder);
@@ -138,7 +146,7 @@ const DashboardPageContent: React.FC = () => {
           // AI-powered widgets
           'aiInsightsWidget', 'predictiveAnalyticsWidget', 'alertSystemWidget'
         ];
-        const filteredOrder = DEFAULT_WIDGET_ORDER.filter((widget: string) => isWidgetEnabled(widget as any));
+        const filteredOrder = forceShowAll ? DEFAULT_WIDGET_ORDER : DEFAULT_WIDGET_ORDER.filter((widget: string) => isWidgetEnabled(widget as any));
         setWidgetOrder(filteredOrder);
         committedOrderRef.current = filteredOrder;
         console.log('📂 Using default widget order (no saved order found)');
@@ -621,62 +629,112 @@ const DashboardPageContent: React.FC = () => {
     <PageErrorWrapper pageName="Dashboard" showDetails={true}>
       <div className="p-4 sm:p-6 h-full overflow-y-auto">
         <div className="max-w-7xl mx-auto space-y-6">
-                  {/* Header */}
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                {getDashboardTitleForRole(currentUser?.role || 'user')}
-              </h1>
-              <p className="text-gray-600 mt-1">
-                {getDashboardDescriptionForRole(currentUser?.role || 'user', currentUser?.name || currentUser?.email)}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {/* Branch Filter - Show for users with manage_users or all permission */}
-              {(currentUser?.permissions?.includes('all') || currentUser?.permissions?.includes('manage_users') || currentUser?.role === 'admin') && (
-                <DashboardBranchFilter
-                  onBranchChange={handleBranchChange}
-                  defaultToCurrent={true}
-                />
-              )}
-              
-              {/* Date Range Selector */}
-              <DateRangeSelector
-                value={dateRange}
-                onChange={setDateRange}
-              />
-              
-              <button
-                onClick={() => handleNavigation('/devices/new')}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
-              >
-                <Plus size={18} />
-                Add Device
-              </button>
-              {/* Real-time Connection Status */}
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100">
-                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                <span className="text-xs text-gray-600">
-                  {isConnected ? 'Live' : 'Offline'}
-                </span>
-                {lastUpdate && (
-                  <span className="text-xs text-gray-500 ml-2">
-                    {new Date(lastUpdate).toLocaleTimeString()}
-                  </span>
-                )}
+          {/* Header */}
+          <GlassCard className="p-6 mb-6">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex items-center gap-6">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center shadow-lg bg-[#039be5]">
+                <LayoutDashboard className="w-8 h-8 text-white" />
               </div>
-
-              <button
-                onClick={refresh}
-                disabled={isLoading}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm disabled:opacity-50"
-              >
-                <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
-                Refresh
-              </button>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  {getDashboardTitleForRole(currentUser?.role || 'user')}
+                </h1>
+                <p className="text-gray-600 mt-1">
+                  {getDashboardDescriptionForRole(currentUser?.role || 'user', currentUser?.name || currentUser?.email)}
+                </p>
+              </div>
             </div>
-        </div>
+
+              <div className="flex flex-wrap gap-2">
+                <div className="relative">
+                  {/* Branch Filter - preserve permission check */}
+                  {(currentUser?.permissions?.includes('all') || currentUser?.permissions?.includes('manage_users') || currentUser?.role === 'admin') && (
+                    <DashboardBranchFilter
+                      onBranchChange={handleBranchChange}
+                      defaultToCurrent={true}
+                    />
+                  )}
+                </div>
+
+                <div className="relative">
+                  {/* Date Range Selector (styled as button-like) */}
+                  <DateRangeSelector
+                    value={dateRange}
+                    onChange={setDateRange}
+                  />
+                </div>
+
+                <button
+                  onClick={refresh}
+                  disabled={isLoading}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm disabled:opacity-50"
+                >
+                  <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+                  Refresh
+                </button>
+              </div>
+            </div>
+          </GlassCard>
+          {showDebugPanel && (
+            <GlassCard className="p-4 mb-6 bg-yellow-50 border-yellow-200">
+              <h3 className="text-sm font-semibold text-yellow-800 mb-2">Dashboard Debug</h3>
+              <div className="text-xs text-gray-700 max-h-60 overflow-auto">
+                <pre className="mb-3">{JSON.stringify({
+                  role: currentUser?.role,
+                  dashboardSettings: dashboardSettings || null,
+                  enabledWidgets: getEnabledWidgets ? getEnabledWidgets() : null,
+                }, null, 2)}</pre>
+
+                {/* Compute mismatches */}
+                {(() => {
+                  const rolePerms = currentUser?.role ? getRoleWidgetPermissions(currentUser.role) : null;
+                  const userWidgets = dashboardSettings?.widgets || {};
+                  const enabledInApp = getEnabledWidgets ? getEnabledWidgets() : [];
+                  const savedOrderRaw = (() => {
+                    try {
+                      const s = localStorage.getItem('dashboard_widget_order');
+                      return s ? JSON.parse(s) : null;
+                    } catch {
+                      return null;
+                    }
+                  })();
+
+                  const roleAllowedButDisabledByUser = [];
+                  const userEnabledButRoleDisallowed = [];
+                  if (rolePerms) {
+                    for (const key of Object.keys(rolePerms)) {
+                      const k = key as keyof typeof rolePerms;
+                      const roleAllowed = !!rolePerms[k];
+                      const userEnabled = !!userWidgets[k];
+                      if (roleAllowed && !userEnabled) roleAllowedButDisabledByUser.push(k);
+                      if (!roleAllowed && userEnabled) userEnabledButRoleDisallowed.push(k);
+                    }
+                  }
+
+                  const inOrderButNoComponent = [];
+                  if (Array.isArray(savedOrderRaw)) {
+                    for (const w of savedOrderRaw) {
+                      if (!enabledInApp.includes(w)) inOrderButNoComponent.push(w);
+                    }
+                  }
+
+                  const componentsNotInOrder = enabledInApp.filter((w: string) => !(Array.isArray(savedOrderRaw) ? savedOrderRaw.includes(w) : true));
+
+                  return (
+                    <pre className="text-xs text-gray-700">
+{JSON.stringify({
+  roleAllowedButDisabledByUser,
+  userEnabledButRoleDisallowed,
+  inOrderButNoComponent,
+  componentsNotInOrder
+}, null, 2)}
+                    </pre>
+                  );
+                })()}
+              </div>
+            </GlassCard>
+          )}
 
         {/* Quick Actions */}
         {!isLoading && !settingsLoading && quickActions.length > 0 && (
@@ -745,7 +803,7 @@ const DashboardPageContent: React.FC = () => {
 
           // Filter to only enabled chart widgets that have components
           const enabledCharts = baseOrder.filter(widget =>
-            isWidgetEnabled(widget as any) && CHART_COMPONENTS[widget]
+            (forceShowAll || isWidgetEnabled(widget as any)) && CHART_COMPONENTS[widget]
           );
 
           console.log('📊 Rendering charts in custom order:', enabledCharts);
@@ -866,7 +924,7 @@ const DashboardPageContent: React.FC = () => {
 
           // Filter to only enabled widgets that have components
           const enabledWidgets = baseOrder.filter(widget =>
-            isWidgetEnabled(widget as any) && WIDGET_COMPONENTS[widget]
+            (forceShowAll || isWidgetEnabled(widget as any)) && WIDGET_COMPONENTS[widget]
           );
 
           console.log('🎯 Rendering widgets in custom order:', enabledWidgets);

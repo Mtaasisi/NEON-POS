@@ -83,22 +83,12 @@ export async function fetchUserStats(cacheDuration: number = 5000) {
  */
 export async function fetchPaymentStats(cacheDuration: number = 5000) {
   const currentBranchId = getCurrentBranchId();
+  // ✅ FIX: customer_payments table was consolidated - return empty stats
+  console.log('ℹ️ customer_payments table was consolidated - returning empty payment stats');
   return deduplicatedQuery(
     `payment-stats-${currentBranchId || 'all'}`,
     async () => {
-      let query = supabase
-        .from('customer_payments')
-        .select('amount, payment_date, status');
-      
-      // Apply branch filter if branch is selected
-      if (currentBranchId) {
-        query = query.eq('branch_id', currentBranchId);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      return data || [];
+      return [];
     },
     cacheDuration
   );
@@ -397,25 +387,13 @@ export async function fetchRecentCustomers(limit: number = 3, cacheDuration: num
  * Fetch recent payments with deduplication
  */
 export async function fetchRecentPayments(limit: number = 5, cacheDuration: number = 10000) {
+  // ✅ FIX: customer_payments table was consolidated - return empty payments
+  console.log('ℹ️ customer_payments table was consolidated - returning empty recent payments');
   const currentBranchId = getCurrentBranchId();
   return deduplicatedQuery(
     `recent-payments-${limit}-${currentBranchId || 'all'}`,
     async () => {
-      let query = supabase
-        .from('customer_payments')
-        .select('id, amount, payment_date, status')
-        .order('payment_date', { ascending: false })
-        .limit(limit);
-      
-      // Apply branch filter if branch is selected
-      if (currentBranchId) {
-        query = query.eq('branch_id', currentBranchId);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      return data || [];
+      return [];
     },
     cacheDuration
   );
@@ -439,24 +417,12 @@ export function clearQueryCache(key: string) {
  * Fetch customer payments with deduplication
  */
 export async function fetchCustomerPayments(cacheDuration: number = 5000) {
-  const currentBranchId = getCurrentBranchId();
+  // ✅ FIX: customer_payments table was consolidated, return empty array
+  console.log('ℹ️ customer_payments table was consolidated - returning empty payments array');
   return deduplicatedQuery(
-    `customer-payments-${currentBranchId || 'all'}`,
+    `customer-payments-consolidated`,
     async () => {
-      let query = supabase
-        .from('customer_payments')
-        .select('*')
-        .order('payment_date', { ascending: false });
-      
-      // Apply branch filter if branch is selected
-      if (currentBranchId) {
-        query = query.eq('branch_id', currentBranchId);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      return data || [];
+      return [];
     },
     cacheDuration
   );

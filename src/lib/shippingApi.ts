@@ -370,14 +370,26 @@ export const shippingSettingsApi = {
   // Get shipping settings
   get: async (): Promise<ShippingSettings | null> => {
     try {
-      const { data, error } = await supabase
-        .from('lats_shipping_settings')
-        .select('*')
-        .limit(1)
-        .single();
+      // Import unified settings service dynamically
+      const { unifiedSettingsService } = await import('./unifiedSettingsService');
 
-      if (error && error.code !== 'PGRST116') throw error; // Ignore "not found" errors
-      return data || null;
+      // Get shipping settings from unified table
+      const settings = await unifiedSettingsService.getSettingsByCategory('system', 'shipping');
+
+      if (!settings || Object.keys(settings).length === 0) {
+        return null;
+      }
+
+      // Convert unified settings to shipping settings object
+      const shippingSettings: any = {};
+
+      Object.entries(settings).forEach(([key, setting]) => {
+        if (setting && typeof setting === 'object' && 'value' in setting) {
+          shippingSettings[key] = setting.value;
+        }
+      });
+
+      return shippingSettings as ShippingSettings;
     } catch (error) {
       console.error('Error fetching shipping settings:', error);
       return null;
@@ -387,31 +399,21 @@ export const shippingSettingsApi = {
   // Save or update shipping settings
   save: async (settings: ShippingSettings): Promise<ShippingSettings> => {
     try {
-      // Check if settings exist
-      const existing = await shippingSettingsApi.get();
+      // Import unified settings service dynamically
+      const { unifiedSettingsService } = await import('./unifiedSettingsService');
 
-      if (existing) {
-        // Update existing
-        const { data, error } = await supabase
-          .from('lats_shipping_settings')
-          .update(settings)
-          .eq('id', existing.id)
-          .select()
-          .single();
+      // Save each setting individually using unified settings service
+      const updatePromises = Object.entries(settings).map(async ([key, value]) => {
+        if (key === 'id') return; // Skip id field
+        const settingType = typeof value === 'boolean' ? 'boolean' :
+                           typeof value === 'number' ? 'number' : 'string';
+        return unifiedSettingsService.setSetting('system', 'shipping', key, value, settingType);
+      });
 
-        if (error) throw error;
-        return data;
-      } else {
-        // Create new
-        const { data, error } = await supabase
-          .from('lats_shipping_settings')
-          .insert(settings)
-          .select()
-          .single();
+      await Promise.all(updatePromises);
 
-        if (error) throw error;
-        return data;
-      }
+      // Return the settings object (unified settings doesn't return structured data)
+      return settings;
     } catch (error) {
       console.error('Error saving shipping settings:', error);
       throw error;

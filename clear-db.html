@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Local Database</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .button {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px 10px 0;
+        }
+        .button:hover {
+            background: #c82333;
+        }
+        .button.secondary {
+            background: #6c757d;
+        }
+        .button.secondary:hover {
+            background: #545b62;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗑️ Clear Local Database</h1>
+
+        <div class="warning">
+            <strong>⚠️ Warning:</strong> This will permanently delete all local data including:
+            <ul>
+                <li>Local SQL.js database</li>
+                <li>Browser localStorage</li>
+                <li>IndexedDB databases</li>
+                <li>Offline cached data</li>
+            </ul>
+            The page will reload automatically after clearing.
+        </div>
+
+        <p>This tool is useful when you encounter database schema mismatches between local and remote databases.</p>
+
+        <button class="button" onclick="clearDatabases()">Clear All Local Data</button>
+        <button class="button secondary" onclick="window.close()">Cancel</button>
+
+        <div id="status" style="margin-top: 20px; display: none;">
+            <p>🧹 Clearing local databases...</p>
+        </div>
+    </div>
+
+    <script>
+        async function clearDatabases() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.style.display = 'block';
+            statusDiv.innerHTML = '<p>🧹 Clearing local databases...</p>';
+
+            try {
+                // Clear localStorage
+                localStorage.clear();
+                statusDiv.innerHTML = '<p>✅ Cleared localStorage</p>';
+
+                // Clear IndexedDB databases
+                const databases = await indexedDB.databases();
+                for (const db of databases) {
+                    if (db.name) {
+                        indexedDB.deleteDatabase(db.name);
+                    }
+                }
+                statusDiv.innerHTML = '<p>✅ Cleared IndexedDB databases</p>';
+
+                // Wait a moment then reload
+                setTimeout(() => {
+                    statusDiv.innerHTML = '<p>🔄 Reloading page...</p>';
+                    location.reload();
+                }, 1000);
+
+            } catch (error) {
+                statusDiv.innerHTML = '<p style="color: red;">❌ Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

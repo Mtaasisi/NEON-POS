@@ -5,6 +5,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { sql } from '../db/connection.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
@@ -13,10 +14,11 @@ export interface AuthRequest extends Request {
     id: string;
     email: string;
     role: string;
+    branchId: string;
   };
 }
 
-export const authenticateToken = (
+export const authenticateToken = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
@@ -33,10 +35,28 @@ export const authenticateToken = (
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
+
+    // Fetch user data including branch_id
+    const users = await sql`
+      SELECT id, email, role, branch_id
+      FROM auth_users
+      WHERE id = ${decoded.id}
+      LIMIT 1
+    `;
+
+    if (users.length === 0) {
+      return res.status(401).json({
+        error: 'Authentication failed',
+        message: 'User not found',
+      });
+    }
+
+    const user = users[0];
     req.user = {
-      id: decoded.id,
-      email: decoded.email,
-      role: decoded.role,
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      branchId: user.branch_id,
     };
     next();
   } catch (error) {
@@ -47,7 +67,7 @@ export const authenticateToken = (
   }
 };
 
-export const optionalAuth = (
+export const optionalAuth = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
@@ -61,11 +81,24 @@ export const optionalAuth = (
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
-    req.user = {
-      id: decoded.id,
-      email: decoded.email,
-      role: decoded.role,
-    };
+
+    // Fetch user data including branch_id
+    const users = await sql`
+      SELECT id, email, role, branch_id
+      FROM auth_users
+      WHERE id = ${decoded.id}
+      LIMIT 1
+    `;
+
+    if (users.length > 0) {
+      const user = users[0];
+      req.user = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        branchId: user.branch_id,
+      };
+    }
   } catch (error) {
     // Invalid token, but continue anyway
   }

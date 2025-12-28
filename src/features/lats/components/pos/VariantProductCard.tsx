@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Package, ChevronDown, ChevronUp, ChevronRight, Tag, Hash, Plus, Minus, Search, AlertCircle, Image, Eye, Edit, Trash2, CheckCircle, Calculator, Printer, ArrowRightLeft, Copy, QrCode, ShoppingCart, Calendar, DollarSign, MessageCircle, FileText, CreditCard, RotateCcw, X } from 'lucide-react';
+import { Package, ChevronDown, ChevronUp, ChevronRight, Tag, Hash, Plus, Minus, Search, AlertCircle, Image, Eye, Edit, Trash2, CheckCircle, Calculator, ArrowRightLeft, Copy, QrCode, ShoppingCart, Calendar, DollarSign, MessageCircle, FileText, CreditCard, RotateCcw, X } from 'lucide-react';
 import GlassCard from '../../../shared/components/ui/GlassCard';
 import SimpleImageDisplay from '../../../../components/SimpleImageDisplay';
 import { format } from '../../lib/format';
@@ -32,7 +32,6 @@ interface VariantProductCardProps {
   onAdjustStock?: (product: ProductSearchResult) => void;
   onDuplicate?: (product: ProductSearchResult) => void;
   onTransfer?: (product: ProductSearchResult) => void;
-  onPrintLabel?: (product: ProductSearchResult) => void;
   variant?: 'default' | 'compact' | 'detailed';
   showStockInfo?: boolean;
   showCategory?: boolean;
@@ -60,7 +59,6 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
   onAdjustStock,
   onDuplicate,
   onTransfer,
-  onPrintLabel,
   variant = 'default',
   showStockInfo = true,
   showCategory = true,
@@ -1177,7 +1175,7 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                             </div>
                             <div>
                               <div className="text-lg sm:text-xl md:text-2xl text-gray-700 mt-0.5 sm:mt-1 font-bold">
-                                {currencySymbol} {format.currency(variant.sellingPrice || variant.price || 0)}
+                                {format.currency(variant.sellingPrice || variant.price || 0)}
                               </div>
                               {variant.costPrice > 0 && (
                                 <div className="text-xs sm:text-sm text-gray-500 mt-1">
@@ -1223,7 +1221,7 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                                         <div className="flex items-center gap-3 ml-2">
                                           {child.sellingPrice > 0 && (
                                             <span className="text-sm font-semibold text-green-700">
-                                              {currencySymbol} {format.currency(child.sellingPrice)}
+                                              {format.currency(child.sellingPrice)}
                                             </span>
                                           )}
                                           <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
@@ -1292,18 +1290,6 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                   >
                     <Calculator className="w-4 h-4" />
                     Adjust Stock
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (onPrintLabel) {
-                        onPrintLabel(product);
-                      }
-                    }}
-                    className="flex items-center justify-center gap-2 px-4 py-3 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 bg-gray-600 hover:bg-gray-700 action-button"
-                  >
-                    <Printer className="w-4 h-4" />
-                    Print
                   </button>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

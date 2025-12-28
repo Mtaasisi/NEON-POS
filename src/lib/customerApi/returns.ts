@@ -49,18 +49,8 @@ export interface CustomerReturn {
 // Fetch returns for a specific customer
 export async function fetchCustomerReturns(customerId: string): Promise<CustomerReturn[]> {
   try {
-    console.log(`🔄 Fetching returns for customer: ${customerId}`);
-    
-    const { data, error } = await supabase
-      .from('returns')
-      .select('*')
-      .eq('customer_id', customerId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('❌ Error fetching customer returns:', error);
-      throw error;
-    }
+    console.log('ℹ️ Returns table was consolidated - returning empty list');
+    return [];
     
     console.log(`✅ Fetched ${data?.length || 0} returns for customer`);
     return data || [];

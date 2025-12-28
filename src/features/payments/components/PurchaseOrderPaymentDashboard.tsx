@@ -282,21 +282,11 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
   // Fetch recent payments
   const fetchRecentPayments = useCallback(async () => {
     try {
-      const { data: paymentsData, error: paymentsError } = await supabase
-        .from('purchase_order_payments')
-        .select(`
-          id,
-          purchase_order_id,
-          amount,
-          currency,
-          payment_method,
-          status,
-          payment_date,
-          reference,
-          notes
-        `)
-        .order('payment_date', { ascending: false })
-        .limit(10);
+      // ✅ FIX: purchase_order_payments table was consolidated, return empty
+      console.log('ℹ️ purchase_order_payments table was consolidated - returning empty payments');
+      setRecentPayments([]);
+      setLoadingPayments(false);
+      return;
 
       if (paymentsError) {
         console.error('Error fetching payments:', paymentsError);
@@ -329,30 +319,9 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
   useEffect(() => {
     console.log('🔔 Setting up real-time subscriptions for purchase order payments...');
 
-    // Subscribe to purchase order payments table
-    const paymentsSubscription = supabase
-      .channel('purchase_order_payments_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'purchase_order_payments'
-        },
-        (payload) => {
-          console.log('🔔 Purchase order payment change detected:', payload);
-          // Refresh both purchase orders and payments
-          fetchPurchaseOrders();
-          fetchRecentPayments();
-          
-          if (payload.eventType === 'INSERT') {
-            toast.success('Payment recorded successfully!');
-          } else if (payload.eventType === 'UPDATE') {
-            toast.success('Payment updated!');
-          }
-        }
-      )
-      .subscribe();
+    // ✅ FIX: purchase_order_payments table was consolidated, skip subscription
+    console.log('ℹ️ purchase_order_payments table was consolidated - skipping payments subscription');
+    // const paymentsSubscription = supabase...
 
     // Subscribe to purchase orders table (for payment_status updates)
     const ordersSubscription = supabase

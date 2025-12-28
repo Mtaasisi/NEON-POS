@@ -14,6 +14,8 @@ import { GeneralSettingsProvider } from './context/GeneralSettingsContext';
 import { PaymentMethodsProvider } from './context/PaymentMethodsContext';
 import { ErrorProvider } from './context/ErrorContext';
 import { GlobalSearchProvider } from './context/GlobalSearchContext';
+import { DatabaseProvider } from './context/DatabaseContext';
+import { ConfigProvider } from './context/ConfigContext';
 import ErrorManager from './components/ErrorManager';
 import { Toaster } from 'react-hot-toast';
 // Load branch debugging tools (makes them available in console)
@@ -29,6 +31,20 @@ import './utils/emergencyCleanup';
 // import BackgroundSelector from './features/settings/components/BackgroundSelector';
 import GlobalLoadingProgress from './features/shared/components/ui/GlobalLoadingProgress';
 import DynamicPageLoader from './features/shared/components/ui/DynamicPageLoader';
+import DatabaseTestPage from './pages/DatabaseTestPage';
+
+// Simple loading component for AppLayout fallback
+const AppLayoutLoader: React.FC = () => (
+  <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+    <div className="animate-pulse">
+      <div className="text-center">
+        <div className="w-16 h-16 bg-blue-200 rounded-full mx-auto mb-4"></div>
+        <div className="h-6 w-48 bg-gray-200 rounded mx-auto mb-2"></div>
+        <div className="h-4 w-32 bg-gray-200 rounded mx-auto"></div>
+      </div>
+    </div>
+  </div>
+);
 // Enhanced lazy component wrapper to handle primitive conversion errors
 const createSafeLazyComponent = (importFunction: () => Promise<any>, componentName: string = 'Unknown') => {
   return lazy(() => {
@@ -87,16 +103,18 @@ import InlineLoader from './components/ui/InlineLoader';
 const AdminSettingsPage = lazy(() => import('./features/admin/pages/AdminSettingsPage'));
 const IntegrationsTestPage = lazy(() => import('./features/admin/pages/IntegrationsTestPage'));
 const ErrorLogsPage = lazy(() => import('./features/admin/pages/ErrorLogsPage'));
+const SalesManagementPage = lazy(() => import('./features/admin/pages/SalesManagementPage'));
+const DeliveryManagementPage = lazy(() => import('./features/admin/pages/DeliveryManagementPage'));
 const UserManagementPage = lazy(() => import('./features/users/pages/UserManagementPage'));
 const EnhancedSupplierManagementPage = lazy(() => import('./features/settings/pages/EnhancedSupplierManagementPage'));
 import { SuppliersProvider } from './context/SuppliersContext';
 const SMSControlCenterPage = lazy(() => import('./features/sms/pages/SMSControlCenterPage'));
 const WhatsAppInboxPage = lazy(() => import('./features/whatsapp/pages/WhatsAppInboxPage'));
 const EnhancedPaymentManagementPage = lazy(() => import('./features/payments/pages/EnhancedPaymentManagementPage'));
-const ExpensesPage = lazy(() => import('./features/payments/pages/ExpensesPage'));
+// const ExpensesPage = lazy(() => import('./features/payments/pages/ExpensesPage')); // Not used
 const EmployeeManagementPage = lazy(() => import('./features/employees/pages/EmployeeManagementPage'));
-const EmployeeAttendancePage = lazy(() => import('./features/employees/pages/EmployeeAttendancePage'));
-const AttendanceManagementPage = lazy(() => import('./features/employees/pages/AttendanceManagementPage'));
+// const EmployeeAttendancePage = lazy(() => import('./features/employees/pages/EmployeeAttendancePage')); // Not used
+// const AttendanceManagementPage = lazy(() => import('./features/employees/pages/AttendanceManagementPage')); // Not used
 const MyAttendancePage = lazy(() => import('./features/employees/pages/MyAttendancePage'));
 
 
@@ -175,11 +193,14 @@ const BluetoothPrinterPage = lazy(() => import('./pages/BluetoothPrinterPage'));
 
 // Dashboard page - unified for all roles
 const DashboardPage = lazy(() => import('./features/shared/pages/DashboardPage'));
+// Temporary admin dashboard test route (renders the AdminDashboard component directly for UI testing)
+const AdminDashboardTest = lazy(() => import('./features/admin/components/AdminDashboard'));
 const BulkSMSPage = lazy(() => import('./features/sms/pages/BulkSMSPage'));
 const SMSLogsPage = lazy(() => import('./features/sms/pages/SMSLogsPage'));
 const SMSSettingsPage = lazy(() => import('./features/sms/pages/SMSSettingsPage'));
 const ScheduledMessagesPage = lazy(() => import('./features/sms/pages/ScheduledMessagesPage'));
 const IntegrationSettingsPage = lazy(() => import('./features/settings/pages/IntegrationSettingsPage'));
+const PermissionsAccessControlPage = lazy(() => import('./features/settings/pages/PermissionsAccessControlPage'));
 const UserSettingsPage = lazy(() => import('./features/shared/pages/UserSettingsPage'));
 
 import { initializeDatabaseCheck } from './lib/databaseUtils';
@@ -188,6 +209,7 @@ import { initializeCache } from './lib/offlineCache';
 import { getPendingActions, clearPendingActions } from './lib/offlineSync';
 import PreloadIndicator from './components/PreloadIndicator';
 import BackgroundDataLoader from './components/BackgroundDataLoader';
+import FloatingOfflineToggle from './components/FloatingOfflineToggle';
 import ProductPreloader from './components/ProductPreloader';
 import InstallmentPreloader from './components/InstallmentPreloader';
 import { POSSettingsDatabaseSetup } from './components/POSSettingsDatabaseSetup';
@@ -681,11 +703,11 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           </Suspense>
         } />
         
-        <Route 
-          path="/" 
+        <Route
+          path="/"
           element={
             <ProtectedRoute>
-              <Suspense fallback={<DynamicPageLoader />}>
+              <Suspense fallback={<AppLayoutLoader />}>
                 <AppLayout />
               </Suspense>
             </ProtectedRoute>
@@ -703,6 +725,14 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             <RoleProtectedRoute allowedRoles={['admin']}>
               <Suspense fallback={<DynamicPageLoader />}>
                 <DashboardPage />
+              </Suspense>
+            </RoleProtectedRoute>
+          } />
+          {/* Temporary route to render AdminDashboard directly for visual testing */}
+          <Route path="/admin/test-dashboard" element={
+            <RoleProtectedRoute allowedRoles={['admin']}>
+              <Suspense fallback={<DynamicPageLoader />}>
+                <AdminDashboardTest />
               </Suspense>
             </RoleProtectedRoute>
           } />
@@ -830,6 +860,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           } />
           
           <Route path="/admin-settings" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><AdminSettingsPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/permissions" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><PermissionsAccessControlPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/integration-settings" element={
             <RoleProtectedRoute allowedRoles={['admin']}>
               <Suspense fallback={<DynamicPageLoader />}>
@@ -912,6 +943,8 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
 
           <Route path="/lats/sales-reports" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><SalesReportsPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/admin/reports" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Suspense fallback={<DynamicPageLoader />}><ReportsPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/admin/sales" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><SalesManagementPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/admin/deliveries" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><DeliveryManagementPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/lats/loyalty" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><LoyaltyManagementPage /></Suspense></RoleProtectedRoute>} />
 
           <Route path="/lats/purchase-orders" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><PurchaseOrdersPage /></Suspense></RoleProtectedRoute>} />
@@ -1102,7 +1135,13 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             <PNGGenerationTest />
           </Suspense>
         } />
-        
+
+        <Route path="/database-test" element={
+          <Suspense fallback={<DynamicPageLoader />}>
+            <DatabaseTestPage />
+          </Suspense>
+        } />
+
         <Route path="*" element={<DefaultRedirect />} />
       </Routes>
     </>
@@ -1210,6 +1249,16 @@ function App() {
       // Default to medium if no preference saved
       applyFontSize('medium');
     }
+  }, []);
+
+  // Apply saved wallpaper/background on app load
+  useEffect(() => {
+    // Import background utils and apply saved wallpaper
+    import('./lib/backgroundUtils').then(({ applySavedWallpaper }) => {
+      applySavedWallpaper();
+    }).catch(error => {
+      console.warn('Failed to apply saved wallpaper on app load:', error);
+    });
   }, []);
 
   // Global error handler for unhandled promise rejections
@@ -1371,9 +1420,11 @@ function App() {
     <div id="app-root">
       <GlobalErrorBoundary>
         <BrowserRouter basename={basename} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <ThemeProvider>
-            <AuthProvider>
-              <GlobalSearchProvider>
+          <ConfigProvider>
+            <ThemeProvider>
+              <DatabaseProvider>
+              <AuthProvider>
+                <GlobalSearchProvider>
                 <BranchProvider>
                   <DateRangeProvider>
                     <ErrorProvider>
@@ -1399,6 +1450,7 @@ function App() {
                                         <InstallmentPreloader />
                                         <PreloadIndicator />
                                         <ErrorManager />
+                                        <FloatingOfflineToggle />
                                       </MobileOnlyRedirect>
                                     </StorageLocationPickerProvider>
                                   </POSSettingsDatabaseSetup>
@@ -1414,9 +1466,11 @@ function App() {
                   </ErrorProvider>
                 </DateRangeProvider>
               </BranchProvider>
-            </GlobalSearchProvider>
-          </AuthProvider>
-        </ThemeProvider>
+                </GlobalSearchProvider>
+              </AuthProvider>
+            </DatabaseProvider>
+          </ThemeProvider>
+        </ConfigProvider>
         <Toaster
           position="top-right"
           toastOptions={{

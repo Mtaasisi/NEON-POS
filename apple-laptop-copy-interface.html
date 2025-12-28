@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Laptop Sales Copy Generator - Dukani Pro</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f7;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #1d1d1f;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #424245;
+        }
+        select, input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d2d2d7;
+            border-radius: 8px;
+            font-size: 16px;
+            background: #fff;
+        }
+        select:focus, input:focus {
+            outline: none;
+            border-color: #0071e3;
+            box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
+        }
+        button {
+            background: #0071e3;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #0051a8;
+        }
+        button:disabled {
+            background: #d2d2d7;
+            cursor: not-allowed;
+        }
+        .output {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f5f5f7;
+            border-radius: 8px;
+            border-left: 4px solid #0071e3;
+            white-space: pre-wrap;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .copy-btn {
+            background: #34c759;
+            margin-top: 10px;
+        }
+        .copy-btn:hover {
+            background: #28a745;
+        }
+        .model-info {
+            background: #e8f4fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #0071e3;
+        }
+        .model-specs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            font-size: 14px;
+        }
+        .spec-item {
+            background: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #e8f4fd;
+        }
+        .hidden {
+            display: none;
+        }
+        .option-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .option-btn {
+            padding: 10px 12px;
+            border: 2px solid #d2d2d7;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            color: #424245;
+            text-align: center;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .option-btn:hover {
+            border-color: #0071e3;
+            background: #f5f9ff;
+        }
+        .option-btn.active {
+            background: #0071e3;
+            border-color: #0071e3;
+            color: white;
+        }
+        .option-btn.disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        .selected-specs {
+            margin-top: 15px;
+            padding: 12px;
+            background: #e8f4fd;
+            border-radius: 8px;
+            border: 1px solid #0071e3;
+            font-size: 14px;
+        }
+        .placeholder-text {
+            color: #86868b;
+            font-style: italic;
+            font-size: 14px;
+            text-align: center;
+            width: 100%;
+            display: block;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍎 Apple Laptop Sales Copy Generator</h1>
+        <p style="text-align: center; color: #6e6e73; margin-bottom: 30px;">
+            Generate professional sales descriptions for your Dukani Pro inventory<br>
+            <small style="color: #86868b;">Offline-ready with accurate Apple configurations database</small>
+        </p>
+
+        <form id="copyForm">
+            <div class="form-group">
+                <label for="modelSelect">Apple Model Number:</label>
+                <select id="modelSelect" required>
+                    <option value="">Select a model...</option>
+                    <optgroup label="MacBook Air">
+                        <option value="A2681">A2681 - MacBook Air 15" M2 (2023)</option>
+                        <option value="A2442">A2442 - MacBook Air 13" M2 (2022)</option>
+                        <option value="A2259">A2259 - MacBook Air 13" M1 (2020)</option>
+                        <option value="A2337">A2337 - MacBook Air 13" M1 (2020-2022)</option>
+                        <option value="A2159">A2159 - MacBook Air 13" Intel (2019-2020)</option>
+                        <option value="A1932">A1932 - MacBook Air 13" Intel (2018-2019)</option>
+                    </optgroup>
+                    <optgroup label="MacBook Pro">
+                        <option value="A2485_16">A2485 - MacBook Pro 16" M2 Pro/Max (2023)</option>
+                        <option value="A2141_16">A2141 - MacBook Pro 16" M1 Pro/Max (2021)</option>
+                        <option value="A2251">A2251 - MacBook Pro 14" M1 Pro/Max (2021)</option>
+                        <option value="A2485">A2485 - MacBook Pro 14" M2 Pro/Max (2023)</option>
+                        <option value="A2141-i5-2.0">A2141 - MacBook Pro 13" i5 2.0GHz CTO (2020)</option>
+                        <option value="A2141-i7-1.7">A2141 - MacBook Pro 13" i7 1.7GHz (2020)</option>
+                        <option value="A2141-i5-1.4">A2141 - MacBook Pro 13" i5 1.4GHz (2020)</option>
+                        <option value="A2229">A2229 - MacBook Pro 16" Intel (2019)</option>
+                    </optgroup>
+                    <optgroup label="MacBook">
+                        <option value="A1706">A1706 - MacBook 12" Intel (2017-2019)</option>
+                    </optgroup>
+                </select>
+                <small style="color: #86868b; display: block; margin-top: 5px;">
+                    💡 For all 18+ models, use: <code>node apple-laptop-copy-generator.mjs list</code>
+                </small>
+            </div>
+
+            <div id="modelInfo" class="model-info hidden">
+                <h3>Model Information:</h3>
+                <div id="modelSpecs" class="model-specs"></div>
+            </div>
+
+            <div class="form-group">
+                <label>RAM Options:</label>
+                <div id="ramButtons" class="option-buttons">
+                    <span class="placeholder-text">Select a model first</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Storage Options:</label>
+                <div id="storageButtons" class="option-buttons">
+                    <span class="placeholder-text">Select a model first</span>
+                </div>
+            </div>
+
+            <div id="selectedSpecs" class="selected-specs" style="display: none;">
+                <strong>Selected: </strong><span id="selectedRam">No RAM selected</span> | <span id="selectedStorage">No storage selected</span>
+            </div>
+
+            <div class="form-group">
+                <label for="condition">Condition:</label>
+                <input type="text" id="condition" value="Used, clean as new" required>
+            </div>
+
+            <div class="form-group">
+                <label for="extras">Extras/Accessories (optional):</label>
+                <input type="text" id="extras" placeholder="e.g., Charger, Original box">
+            </div>
+
+            <div class="form-group">
+                <label for="price">Price:</label>
+                <input type="text" id="price" placeholder="e.g., 1,300,000 TSH" required>
+            </div>
+
+            <button type="submit">Generate Sales Copy</button>
+        </form>
+
+        <div id="output" class="output hidden">
+            <h3>Generated Sales Copy:</h3>
+            <div id="copyContent"></div>
+            <button class="copy-btn" onclick="copyToClipboard()">Copy to Clipboard</button>
+        </div>
+    </div>
+
+    <script>
+        // Load the database (embedded for offline use)
+        let database = null;
+
+        // Function to load database
+        async function loadDatabase() {
+            try {
+                const response = await fetch('./apple-laptops-database.json');
+                database = await response.json();
+                console.log('Database loaded successfully');
+                return true;
+            } catch (error) {
+                console.error('Failed to load database via fetch, trying embedded data:', error);
+
+                // Fallback: Try to load from embedded data if fetch fails
+                try {
+                    // We'll add embedded database as fallback
+                    database = getEmbeddedDatabase();
+                    console.log('Database loaded from embedded data');
+                    return true;
+                } catch (embedError) {
+                    console.error('Failed to load embedded database:', embedError);
+                    alert('Failed to load laptop database. Please use the command line tool instead: node apple-laptop-copy-generator.mjs');
+                    return false;
+                }
+            }
+        }
+
+        // Initialize database on page load
+        window.addEventListener('load', async () => {
+            await loadDatabase();
+            // Initialize with no buttons shown
+            updateRamButtons([]);
+            updateStorageButtons([]);
+        });
+
+        // Embedded database fallback
+        function getEmbeddedDatabase() {
+            return {
+                "metadata": {
+                    "version": "2.1",
+                    "last_updated": "2025-01-24",
+                    "source": "Accurate Apple configurations from official specifications",
+                    "description": "Precise embedded database with real Apple model configurations - 13 accurate models"
+                },
+                "models": {
+                    "A2259": {
+                        "family": "MacBook Air",
+                        "generation": "13-inch, 2020 (Apple M1)",
+                        "year": "2020",
+                        "display": {"size": "13.3-inch", "type": "Retina display", "resolution": "2560 x 1600"},
+                        "processors": ["Apple M1 chip (8-core CPU, 8-core GPU)"],
+                        "memory": ["8GB", "16GB"],
+                        "storage": ["256GB", "512GB", "1TB", "2TB"],
+                        "graphics": "Integrated Apple M1 GPU",
+                        "battery": "Up to 18 hours",
+                        "ports": ["Two Thunderbolt / USB 4 ports", "3.5mm headphone jack"],
+                        "connectivity": ["Wi-Fi 6", "Bluetooth 5.0"],
+                        "camera": "720p FaceTime HD",
+                        "audio": "Stereo speakers with Dolby Atmos",
+                        "keyboard": "Magic Keyboard with Touch ID",
+                        "weight": "2.75 pounds",
+                        "colors": ["Space Gray", "Silver", "Gold"]
+                    },
+                    "A2681": {
+                        "family": "MacBook Air",
+                        "generation": "15-inch, 2023 (Apple M2)",
+                        "year": "2023",
+                        "display": {"size": "15.3-inch", "type": "Liquid Retina display", "resolution": "2880 x 1864"},
+                        "processors": ["Apple M2 chip (8-core CPU, 10-core GPU)"],
+                        "memory": ["8GB", "16GB", "24GB"],
+                        "storage": ["256GB", "512GB", "1TB", "2TB"],
+                        "graphics": "Integrated Apple M2 GPU",
+                        "battery": "Up to 18 hours",
+                        "ports": ["Two Thunderbolt / USB 4 ports", "3.5mm headphone jack", "MagSafe 3 charging port"],
+                        "connectivity": ["Wi-Fi 6E", "Bluetooth 5.3"],
+                        "camera": "1080p FaceTime HD",
+                        "audio": "Six-speaker system with Dolby Atmos",
+                        "keyboard": "Magic Keyboard with Touch ID",
+                        "weight": "3.3 pounds",
+                        "colors": ["Space Gray", "Silver", "Gold", "Midnight", "Starlight"]
+                    },
+                    "A2485": {
+                        "family": "MacBook Pro",
+                        "generation": "14-inch, 2023 (Apple M2 Pro/Max)",
+                        "year": "2023",
+                        "display": {"size": "14.2-inch", "type": "Liquid Retina XDR display", "resolution": "3024 x 1964"},
+                        "processors": ["Apple M2 Pro (12-core CPU, 19-core GPU)", "Apple M2 Max (12-core CPU, 38-core GPU)"],
+                        "memory": ["16GB", "32GB", "64GB", "96GB"],
+                        "storage": ["512GB", "1TB", "2TB", "4TB", "8TB"],
+                        "graphics": "Integrated Apple M2 Pro/Max GPU",
+                        "battery": "Up to 18 hours",
+                        "ports": ["Three Thunderbolt 4 ports", "HDMI port", "SDXC card slot", "3.5mm headphone jack", "MagSafe 3 charging port"],
+                        "connectivity": ["Wi-Fi 6E", "Bluetooth 5.3"],
+                        "camera": "1080p FaceTime HD",
+                        "audio": "Six-speaker system with Dolby Atmos",
+                        "keyboard": "Magic Keyboard with Touch ID",
+                        "weight": "3.5 pounds",
+                        "colors": ["Space Gray", "Silver"]
+                    },
+                    "A2229": {
+                        "family": "MacBook Pro",
+                        "generation": "16-inch, 2019 (Intel)",
+                        "year": "2019",
+                        "display": {"size": "16-inch", "type": "Retina display", "resolution": "3072 x 1920"},
+                        "processors": ["Intel Core i7 (2.6 GHz, 6 cores)", "Intel Core i9 (2.4 GHz, 8 cores)"],
+                        "memory": ["16GB", "32GB", "64GB"],
+                        "storage": ["512GB", "1TB", "2TB", "4TB", "8TB"],
+                        "graphics": "AMD Radeon Pro 5300M (4GB)",
+                        "battery": "Up to 11 hours",
+                        "ports": ["Four Thunderbolt 3 ports", "3.5mm headphone jack"],
+                        "connectivity": ["802.11ac Wi-Fi", "Bluetooth 5.0"],
+                        "camera": "720p FaceTime HD",
+                        "audio": "Six-speaker system with Dolby Atmos",
+                        "keyboard": "Magic Keyboard",
+                        "weight": "4.3 pounds",
+                        "colors": ["Space Gray", "Silver"]
+                    },
+                    "A2442": {
+                        "family": "MacBook Air",
+                        "generation": "13-inch, 2022 (Apple M2)",
+                        "year": "2022",
+                        "display": {"size": "13.6-inch", "type": "Liquid Retina display", "resolution": "2560 x 1664"},
+                        "processors": ["Apple M2 chip (8-core CPU, 8-core GPU)"],
+                        "memory": ["8GB", "16GB", "24GB"],
+                        "storage": ["256GB", "512GB", "1TB", "2TB"],
+                        "graphics": "Integrated Apple M2 GPU",
+                        "battery": "Up to 18 hours",
+                        "ports": ["Two Thunderbolt / USB 4 ports", "3.5mm headphone jack", "MagSafe 3 charging port"],
+                        "connectivity": ["Wi-Fi 6E", "Bluetooth 5.0"],
+                        "camera": "1080p FaceTime HD",
+                        "audio": "Four-speaker system with Dolby Atmos",
+                        "keyboard": "Magic Keyboard with Touch ID",
+                        "weight": "2.7 pounds",
+                        "colors": ["Space Gray", "Silver", "Gold", "Midnight", "Starlight"]
+                    },
+                    "A2337": {
+                        "family": "MacBook Air",
+                        "generation": "13-inch, 2020-2022 (Apple M1)",
+                        "year": "2020-2022",
+                        "display": {"size": "13.3-inch", "type": "Retina display", "resolution": "2560 x 1600"},
+                        "processors": ["Apple M1 chip (8-core CPU, 7-core GPU)"],
+                        "memory": ["8GB", "16GB"],
+                        "storage": ["256GB", "512GB", "1TB", "2TB"],
+                        "graphics": "Integrated Apple M1 GPU",
+                        "battery": "Up to 18 hours",
+                        "ports": ["Two Thunderbolt / USB 4 ports", "3.5mm headphone jack"],
+                        "connectivity": ["Wi-Fi 6", "Bluetooth 5.0"],
+                        "camera": "720p FaceTime HD",
+                        "audio": "Stereo speakers with Dolby Atmos",
+                        "keyboard": "Magic Keyboard with Touch ID",
+                        "weight": "2.75 pounds",
+                        "colors": ["Space Gray", "Silver", "Gold"]
+                    },
+                    "A2159": {
+                        "family": "MacBook Air",
+                        "generation": "13-inch, 2019-2020 (Intel)",
+                        "year": "2019-2020",
+                        "display": {"size": "13.3-inch", "type": "Retina display", "resolution": "2560 x 1600"},
+                        "processors": ["Intel Core i5 (1.6 GHz, 4 cores)", "Intel Core i7 (1.8 GHz, 4 cores)"],
+                        "memory": ["8GB", "16GB"],
+                        "storage": ["128GB", "256GB", "512GB", "1TB"],
+                        "graphics": "Intel UHD Graphics 617",
+                        "battery": "Up to 12 hours",
+                        "ports": ["Two Thunderbolt 3 (USB-C) ports", "3.5mm headphone jack"],
+                        "connectivity": ["802.11ac Wi-Fi", "Bluetooth 4.2"],
+                        "camera": "720p FaceTime HD",
+                        "audio": "Stereo speakers with Dolby Atmos",
+                        "keyboard": "Butterfly mechanism (later Magic Keyboard)",
+                        "weight": "2.75 pounds",
+                        "colors": ["Space Gray", "Silver", "Gold"]
+                    },
+                    "A1932": {
+                        "family": "MacBook Air",
+                        "generation": "13-inch, 2018-2019 (Intel)",
+                        "year": "2018-2019",
+                        "display": {"size": "13.3-inch", "type": "Retina display", "resolution": "2560 x 1600"},
+                        "processors": ["Intel Core i5 (1.6 GHz, 4 cores)", "Intel Core i7 (1.8 GHz, 4 cores)"],
+                        "memory": ["8GB", "16GB"],
+                        "storage": ["128GB", "256GB", "512GB", "1TB"],
+                        "graphics": "Intel UHD Graphics 617",
+                        "battery": "Up to 12 hours",
+                        "ports": ["Two Thunderbolt 3 (USB-C) ports", "3.5mm headphone jack"],
+                        "connectivity": ["802.11ac Wi-Fi", "Bluetooth 4.2"],
+                        "camera": "720p FaceTime HD",
+                        "audio": "Stereo speakers",
+                        "keyboard": "Butterfly mechanism",
+                        "weight": "2.75 pounds",
+                        "colors": ["Space Gray", "Silver", "Gold"]
+                    },
+                    "A2485_16": {
+                        "family": "MacBook Pro",
+                        "generation": "16-inch, 2023 (Apple M2 Pro/Max)",
+                        "year": "2023",
+                        "display": {"size": "16.2-inch", "type": "Liquid Retina XDR display", "resolution": "3456 x 2234"},
+                        "processors": ["Apple M2 Pro (12-core CPU, 19-core GPU)", "Apple M2 Max (12-core CPU, 30-core GPU)", "Apple M2 Max (12-core CPU, 38-core GPU)"],
+                        "memory": ["16GB", "32GB", "64GB", "96GB"],
+                        "storage": ["512GB", "1TB", "2TB", "4TB", "8TB"],
+                        "graphics": "Integrated Apple M2 Pro/Max GPU",
+                        "battery": "Up to 22 hours",
+                        "ports": ["Three Thunderbolt 4 ports", "HDMI port", "SDXC card slot", "3.5mm headphone jack", "MagSafe 3 charging port"],
+                        "connectivity": ["Wi-Fi 6E", "Bluetooth 5.3"],
+                        "camera": "1080p FaceTime HD",
+                        "audio": "Six-speaker system with Dolby Atmos",
+                        "keyboard": "Magic Keyboard with Touch ID",
+                        "weight": "4.7 pounds",
+                        "colors": ["Space Gray", "Silver"]
+                    },
+                    "A2141_16": {
+                        "family": "MacBook Pro",
+                        "generation": "16-inch, 2021 (Apple M1 Pro/Max)",
+                        "year": "2021",
+                        "display": {"size": "16.2-inch", "type": "Liquid Retina XDR display", "resolution": "3456 x 2234"},
+                        "processors": ["Apple M1 Pro (10-core CPU, 16-core GPU)", "Apple M1 Max (10-core CPU, 24-core GPU)", "Apple M1 Max (10-core CPU, 32-core GPU)"],
+                        "memory": ["16GB", "32GB", "64GB"],
+                        "storage": ["512GB", "1TB", "2TB", "4TB", "8TB"],
+                        "graphics": "Integrated Apple M1 Pro/Max GPU",
+                        "battery": "Up to 21 hours",
+                        "ports": ["Three Thunderbolt 4 ports", "HDMI port", "SDXC card slot", "3.5mm headphone jack", "MagSafe 3 charging port"],
+                        "connectivity": ["Wi-Fi 6", "Bluetooth 5.0"],
+                        "camera": "1080p FaceTime HD",
+                        "audio": "Six-speaker system with Dolby Atmos",
+                        "keyboard": "Magic Keyboard with Touch ID",
+                        "weight": "4.7 pounds",
+                        "colors": ["Space Gray", "Silver"]
+                    },
+                    "A2251": {
+                        "family": "MacBook Pro",
+                        "generation": "14-inch, 2021 (Apple M1 Pro/Max)",
+                        "year": "2021",
+                        "display": {"size": "14.2-inch", "type": "Liquid Retina XDR display", "resolution": "3024 x 1964"},
+                        "processors": ["Apple M1 Pro (8-core CPU, 14-core GPU)", "Apple M1 Pro (10-core CPU, 16-core GPU)", "Apple M1 Max (10-core CPU, 24-core GPU)", "Apple M1 Max (10-core CPU, 32-core GPU)"],
+                        "memory": ["16GB", "32GB", "64GB"],
+                        "storage": ["512GB", "1TB", "2TB", "4TB", "8TB"],
+                        "graphics": "Integrated Apple M1 Pro/Max GPU",
+                        "battery": "Up to 17 hours",
+                        "ports": ["Three Thunderbolt 4 ports", "HDMI port", "SDXC card slot", "3.5mm headphone jack", "MagSafe 3 charging port"],
+                        "connectivity": ["Wi-Fi 6", "Bluetooth 5.0"],
+                        "camera": "1080p FaceTime HD",
+                        "audio": "Six-speaker system with Dolby Atmos",
+                        "keyboard": "Magic Keyboard with Touch ID",
+                        "weight": "3.5 pounds",
+                        "colors": ["Space Gray", "Silver"]
+                    },
+                    "A2141-i5-1.4": {
+                        "family": "MacBook Pro",
+                        "generation": "13-inch, 2020 (Intel Core i5 1.4GHz)",
+                        "year": "2020",
+                        "model_number": "A2141",
+                        "processor_config": "Intel Core i5-1038NG7 (1.4GHz quad-core)",
+                        "display": {"size": "13.3-inch", "type": "Retina display", "resolution": "2560 x 1600"},
+                        "processors": ["Intel Core i5 (1.4GHz quad-core, Turbo Boost up to 3.8GHz)"],
+                        "memory": ["8GB", "16GB"],
+                        "storage": ["256GB", "512GB", "1TB", "2TB", "4TB"],
+                        "graphics": "Intel Iris Plus Graphics",
+                        "battery": "Up to 10 hours",
+                        "ports": ["Two Thunderbolt 3 (USB-C) ports", "3.5mm headphone jack"],
+                        "connectivity": ["Wi-Fi 6", "Bluetooth 5.0"],
+                        "camera": "720p FaceTime HD",
+                        "audio": "Stereo speakers with Dolby Atmos",
+                        "keyboard": "Magic Keyboard with Touch ID",
+                        "touchbar": true,
+                        "weight": "3.1 pounds",
+                        "colors": ["Space Gray", "Silver"],
+                        "original_price_usd": 1299
+                    },
+                    "A2141-i7-1.7": {
+                        "family": "MacBook Pro",
+                        "generation": "13-inch, 2020 (Intel Core i7 1.7GHz)",
+                        "year": "2020",
+                        "model_number": "A2141",
+                        "processor_config": "Intel Core i7-1068NG7 (1.7GHz quad-core)",
+                        "display": {"size": "13.3-inch", "type": "Retina display", "resolution": "2560 x 1600"},
+                        "processors": ["Intel Core i7 (1.7GHz quad-core, Turbo Boost up to 4.1GHz)"],
+                        "memory": ["16GB"],
+                        "storage": ["512GB", "1TB", "2TB", "4TB"],
+                        "graphics": "Intel Iris Plus Graphics",
+                        "battery": "Up to 10 hours",
+                        "ports": ["Two Thunderbolt 3 (USB-C) ports", "3.5mm headphone jack"],
+                        "connectivity": ["Wi-Fi 6", "Bluetooth 5.0"],
+                        "camera": "720p FaceTime HD",
+                        "audio": "Stereo speakers with Dolby Atmos",
+                        "keyboard": "Magic Keyboard with Touch ID",
+                        "touchbar": true,
+                        "weight": "3.1 pounds",
+                        "colors": ["Space Gray", "Silver"],
+                        "original_price_usd": 1799
+                    },
+                    "A2141-i5-2.0": {
+                        "family": "MacBook Pro",
+                        "generation": "13-inch, 2020 (Intel Core i5 2.0GHz CTO)",
+                        "year": "2020",
+                        "model_number": "A2141",
+                        "processor_config": "Intel Core i5-1038NG7 (2.0GHz quad-core)",
+                        "display": {"size": "13.3-inch", "type": "Retina display", "resolution": "2560 x 1600"},
+                        "processors": ["Intel Core i5 (2.0GHz quad-core, Turbo Boost up to 3.8GHz)"],
+                        "memory": ["16GB", "32GB"],
+                        "storage": ["1TB", "2TB", "4TB"],
+                        "graphics": "Intel Iris Plus Graphics",
+                        "battery": "Up to 10 hours",
+                        "ports": ["Two Thunderbolt 3 (USB-C) ports", "3.5mm headphone jack"],
+                        "connectivity": ["Wi-Fi 6", "Bluetooth 5.0"],
+                        "camera": "720p FaceTime HD",
+                        "audio": "Stereo speakers with Dolby Atmos",
+                        "keyboard": "Magic Keyboard with Touch ID",
+                        "touchbar": true,
+                        "weight": "3.1 pounds",
+                        "colors": ["Space Gray", "Silver"],
+                        "original_price_usd": 1999
+                    },
+                    "A1706": {
+                        "family": "MacBook",
+                        "generation": "12-inch, 2017-2019 (Intel)",
+                        "year": "2017-2019",
+                        "display": {"size": "12-inch", "type": "Retina display", "resolution": "2304 x 1440"},
+                        "processors": ["Intel Core i5 (1.4 GHz, dual-core)", "Intel Core i7 (1.4 GHz, dual-core)"],
+                        "memory": ["8GB", "16GB"],
+                        "storage": ["256GB", "512GB"],
+                        "graphics": "Intel UHD Graphics 615",
+                        "battery": "Up to 10 hours",
+                        "ports": ["One USB-C port", "3.5mm headphone jack"],
+                        "connectivity": ["802.11ac Wi-Fi", "Bluetooth 4.2"],
+                        "camera": "720p FaceTime HD",
+                        "audio": "Stereo speakers",
+                        "keyboard": "Butterfly mechanism",
+                        "weight": "2.03 pounds",
+                        "colors": ["Space Gray", "Silver", "Gold", "Rose Gold"]
+                    }
+                },
+                "model_lookup": {
+                    "by_family": {
+                        "MacBook Air": ["A2681", "A2442", "A2259", "A2337", "A2159", "A1932"],
+                        "MacBook Pro": ["A2485_16", "A2141_16", "A2251", "A2485", "A2141-i5-2.0", "A2141-i7-1.7", "A2141-i5-1.4", "A2229"],
+                        "MacBook": ["A1706"]
+                    }
+                }
+            };
+        }
+
+        // Handle model selection
+        document.getElementById('modelSelect').addEventListener('change', function() {
+            const modelNumber = this.value;
+            const modelInfo = document.getElementById('modelInfo');
+            const modelSpecs = document.getElementById('modelSpecs');
+
+            if (modelNumber && database) {
+                const model = database.models[modelNumber];
+                if (model) {
+                    modelSpecs.innerHTML = `
+                        <div class="spec-item"><strong>Family:</strong> ${model.family}</div>
+                        <div class="spec-item"><strong>Generation:</strong> ${model.generation}</div>
+                        <div class="spec-item"><strong>Year:</strong> ${model.year}</div>
+                        <div class="spec-item"><strong>Display:</strong> ${model.display.size} ${model.display.type}</div>
+                        <div class="spec-item"><strong>Processor:</strong> ${model.processors[0]}</div>
+                        <div class="spec-item"><strong>Battery:</strong> ${model.battery}</div>
+                        <div class="spec-item"><strong>Weight:</strong> ${model.weight}</div>
+                    `;
+                    modelInfo.classList.remove('hidden');
+
+                    // Update RAM and Storage buttons based on model specs
+                    updateRamButtons(model.memory);
+                    updateStorageButtons(model.storage);
+                }
+            } else {
+                modelInfo.classList.add('hidden');
+                // Reset buttons when no model selected
+                updateRamButtons([]);
+                updateStorageButtons([]);
+            }
+        });
+
+        // RAM and Storage button handlers (using event delegation for dynamic buttons)
+        let selectedRam = '';
+        let selectedStorage = '';
+
+        document.getElementById('ramButtons').addEventListener('click', function(e) {
+            if (e.target.classList.contains('option-btn')) {
+                // Remove active class from all RAM buttons
+                document.querySelectorAll('#ramButtons .option-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                // Add active class to clicked button
+                e.target.classList.add('active');
+                selectedRam = e.target.dataset.ram;
+                updateSelectedSpecs();
+            }
+        });
+
+        document.getElementById('storageButtons').addEventListener('click', function(e) {
+            if (e.target.classList.contains('option-btn')) {
+                // Remove active class from all storage buttons
+                document.querySelectorAll('#storageButtons .option-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                // Add active class to clicked button
+                e.target.classList.add('active');
+                selectedStorage = e.target.dataset.storage;
+                updateSelectedSpecs();
+            }
+        });
+
+        function updateRamButtons(validRamOptions) {
+            const ramButtonsContainer = document.getElementById('ramButtons');
+            const allRamButtons = ['8GB', '16GB', '24GB', '32GB', '64GB', '96GB'];
+
+            // Clear existing buttons
+            ramButtonsContainer.innerHTML = '';
+
+            // Create buttons only for valid options
+            allRamButtons.forEach(ramValue => {
+                if (validRamOptions && validRamOptions.includes(ramValue)) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'option-btn';
+                    button.dataset.ram = ramValue;
+                    button.textContent = ramValue;
+                    if (selectedRam === ramValue) {
+                        button.classList.add('active');
+                    }
+                    ramButtonsContainer.appendChild(button);
+                }
+            });
+
+            // Clear selection if current selection is not valid
+            if (selectedRam && (!validRamOptions || !validRamOptions.includes(selectedRam))) {
+                selectedRam = '';
+            }
+            updateSelectedSpecs();
+        }
+
+        function updateStorageButtons(validStorageOptions) {
+            const storageButtonsContainer = document.getElementById('storageButtons');
+            const allStorageButtons = ['128GB', '256GB', '512GB', '1TB', '2TB', '4TB', '8TB'];
+
+            // Clear existing buttons
+            storageButtonsContainer.innerHTML = '';
+
+            // Create buttons only for valid options
+            allStorageButtons.forEach(storageValue => {
+                if (validStorageOptions && validStorageOptions.includes(storageValue)) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'option-btn';
+                    button.dataset.storage = storageValue;
+                    button.textContent = storageValue;
+                    if (selectedStorage === storageValue) {
+                        button.classList.add('active');
+                    }
+                    storageButtonsContainer.appendChild(button);
+                }
+            });
+
+            // Clear selection if current selection is not valid
+            if (selectedStorage && (!validStorageOptions || !validStorageOptions.includes(selectedStorage))) {
+                selectedStorage = '';
+            }
+            updateSelectedSpecs();
+        }
+
+        function updateSelectedSpecs() {
+            const selectedSpecsDiv = document.getElementById('selectedSpecs');
+            const selectedRamSpan = document.getElementById('selectedRam');
+            const selectedStorageSpan = document.getElementById('selectedStorage');
+
+            selectedRamSpan.textContent = selectedRam || 'No RAM selected';
+            selectedStorageSpan.textContent = selectedStorage || 'No storage selected';
+
+            if (selectedRam || selectedStorage) {
+                selectedSpecsDiv.style.display = 'block';
+            } else {
+                selectedSpecsDiv.style.display = 'none';
+            }
+        }
+
+        // Handle form submission
+        document.getElementById('copyForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            if (!database) {
+                alert('Database not loaded yet. Please wait and try again.');
+                return;
+            }
+
+            const modelNumber = document.getElementById('modelSelect').value;
+            if (!modelNumber) {
+                alert('Please select a model first.');
+                return;
+            }
+
+            if (!selectedRam) {
+                alert('Please select a RAM option.');
+                return;
+            }
+
+            if (!selectedStorage) {
+                alert('Please select a storage option.');
+                return;
+            }
+
+            const condition = document.getElementById('condition').value.trim();
+            const extras = document.getElementById('extras').value.trim();
+            const price = document.getElementById('price').value.trim();
+
+            if (!condition || !price) {
+                alert('Please fill in condition and price.');
+                return;
+            }
+
+            try {
+                const copy = generateSalesCopy(modelNumber, {
+                    ram: selectedRam,
+                    storage: selectedStorage,
+                    condition: condition,
+                    extras: extras ? extras.split(',').map(e => e.trim()) : [],
+                    price: price
+                });
+
+                document.getElementById('copyContent').textContent = copy;
+                document.getElementById('output').classList.remove('hidden');
+                document.getElementById('output').scrollIntoView({ behavior: 'smooth' });
+            } catch (error) {
+                alert('Error generating copy: ' + error.message);
+            }
+        });
+
+        function generateSalesCopy(modelNumber, userSpecs = {}) {
+            const model = database.models[modelNumber];
+            if (!model) {
+                throw new Error(`Model ${modelNumber} not found in database`);
+            }
+
+            // Extract user-provided specs
+            const userRAM = userSpecs.ram;
+            const userStorage = userSpecs.storage;
+            const userCondition = userSpecs.condition || 'Used – Clean as New';
+            const userExtras = userSpecs.extras || [];
+            const userPrice = userSpecs.price;
+
+            // Get model display name
+            const modelDisplayName = getModelDisplayName(model, modelNumber);
+
+            // Build the copy in the requested format
+            let copy = `🔥 ${model.family.toUpperCase()} ${model.display.size.split('"')[0]}" (${getProcessorDisplayName(model.processors[0])}) 💻
+
+📌 Quick Overview
+
+• Model: ${model.family} ${modelNumber}
+• Year: ${model.year}
+• Condition: ${userCondition}
+• Operating System: macOS (Latest supported)
+
+⸻
+
+⚙️ Performance (Fast & Smooth)
+
+• Processor: ${getProcessorDisplayName(model.processors[0])}`;
+
+            if (userRAM) {
+                copy += `\n• Memory: ${userRAM} RAM (Smooth multitasking)`;
+            }
+
+            if (userStorage) {
+                copy += `\n• Storage: ${userStorage} SSD (Very fast boot & apps)`;
+            }
+
+            // Display section
+            copy += `
+
+⸻
+
+🖥 Display & Graphics
+
+• ${model.display.size} ${model.display.type} (Sharp & clear)`;
+
+            // Add display features if available
+            if (model.display.features && model.display.features.length > 0) {
+                model.display.features.forEach(feature => {
+                    copy += `\n• ${feature}`;
+                });
+            }
+
+            copy += `\n• ${getGraphicsDisplayName(model.graphics)}`;
+
+            // Battery section
+            copy += `
+
+⸻
+
+🔋 Battery & Daily Use
+
+• Battery condition: Good
+• ${getBatteryDescription(model.battery)}`;
+
+            // Ports & Connectivity
+            copy += `
+
+⸻
+
+🔌 Ports & Connectivity
+
+${formatPorts(model.ports)}
+• Wi-Fi & Bluetooth`;
+
+            // Keyboard, Camera & Sound
+            copy += `
+
+⸻
+
+⌨️ Keyboard, Camera & Sound
+
+• ${model.keyboard.includes('Magic') ? 'Magic Keyboard' : model.keyboard} (Comfortable typing)`;
+
+            // Add Touch Bar for MacBook Pro models
+            if (model.family === 'MacBook Pro' && model.display.size.includes('13')) {
+                copy += `\n• Touch Bar (Smart controls above keyboard)`;
+            }
+
+            if (model.keyboard.includes('Touch ID')) {
+                copy += `\n• Touch ID (Fingerprint unlock)`;
+            }
+
+            copy += `\n• ${model.camera.replace('FaceTime HD', 'FaceTime HD Camera')}`;
+            copy += `\n• ${getAudioDescription(model.audio)}`;
+
+            // Included accessories
+            if (userExtras && userExtras.length > 0) {
+                copy += `
+
+⸻
+
+📦 Included
+
+${userExtras.map(extra => `• ${extra} ${extra.toLowerCase().includes('charger') ? '🔌' : ''}`).join('\n')}`;
+            }
+
+            // Best for section
+            copy += `
+
+⸻
+
+✅ BEST FOR (Beginner Friendly)
+
+${getBestForSection(model).map(item => `✔ ${item}`).join('\n')}`;
+
+            // Price
+            if (userPrice) {
+                copy += `
+
+⸻
+
+💰 PRICE: ${userPrice}`;
+            }
+
+            // Contact info
+            copy += `
+
+📞 0712378850 OR 0769601663 Call / WhatsApp to order
+📍 Available in Dar es Salaam (Mwenge) & Arusha (Triple A)`;
+
+            return copy;
+        }
+
+        function getModelDisplayName(model, modelNumber) {
+            // Extract screen size and key features
+            const screenSize = model.display.size.split('"')[0];
+            const processor = getProcessorDisplayName(model.processors[0]);
+            return `${model.family} ${screenSize}" (${processor})`;
+        }
+
+        function getProcessorDisplayName(processor) {
+            if (processor.includes('Apple M1')) {
+                return 'Apple M1 Chip';
+            } else if (processor.includes('Apple M2')) {
+                return 'Apple M2 Chip';
+            } else if (processor.includes('Intel Core i5')) {
+                return 'Intel Core i5';
+            } else if (processor.includes('Intel Core i7')) {
+                return 'Intel Core i7';
+            } else if (processor.includes('Intel Core i9')) {
+                return 'Intel Core i9';
+            }
+            return processor.split('(')[0].trim();
+        }
+
+        function getGraphicsDisplayName(graphics) {
+            if (graphics.includes('Apple M1') || graphics.includes('Apple M2')) {
+                return 'Integrated Apple GPU';
+            } else if (graphics.includes('Intel Iris')) {
+                return 'Intel Iris Plus Graphics';
+            } else if (graphics.includes('Intel UHD')) {
+                return 'Intel UHD Graphics';
+            } else if (graphics.includes('AMD Radeon')) {
+                return 'AMD Radeon Graphics';
+            }
+            return graphics;
+        }
+
+        function getBatteryDescription(battery) {
+            // Convert battery life to user-friendly description
+            if (battery.includes('18 hours') || battery.includes('20 hours') || battery.includes('21 hours') || battery.includes('22 hours')) {
+                return 'Excellent battery life for all-day work';
+            } else if (battery.includes('12 hours') || battery.includes('11 hours')) {
+                return 'Good battery life for daily tasks';
+            } else {
+                return 'Reliable battery life for daily work';
+            }
+        }
+
+        function formatPorts(ports) {
+            const portMap = {
+                'Two Thunderbolt / USB 4 ports': '2 × Thunderbolt 4 (USB-C)',
+                'Two Thunderbolt 3 (USB-C) ports': '2 × Thunderbolt 3 (USB-C)',
+                'Four Thunderbolt 3 ports': '4 × Thunderbolt 3 (USB-C)',
+                'Three Thunderbolt 4 ports': '3 × Thunderbolt 4 (USB-C)',
+                'One USB-C port': '1 × USB-C',
+            };
+
+            let formattedPorts = [];
+            ports.forEach(port => {
+                if (portMap[port]) {
+                    formattedPorts.push(`• ${portMap[port]}`);
+                } else if (port.includes('MagSafe')) {
+                    formattedPorts.push(`• MagSafe Charging Port`);
+                } else if (port.includes('HDMI')) {
+                    formattedPorts.push(`• HDMI Port`);
+                } else if (port.includes('SDXC')) {
+                    formattedPorts.push(`• SD Card Slot`);
+                } else if (port.includes('3.5mm')) {
+                    formattedPorts.push(`• 3.5mm Headphone Jack`);
+                } else {
+                    formattedPorts.push(`• ${port}`);
+                }
+            });
+
+            return formattedPorts.join('\n');
+        }
+
+        function getAudioDescription(audio) {
+            if (audio.includes('Six-speaker')) {
+                return 'Six-speaker system with Dolby Atmos';
+            } else if (audio.includes('Four-speaker')) {
+                return 'Four-speaker system with Dolby Atmos';
+            } else if (audio.includes('Stereo speakers')) {
+                return 'Stereo Speakers';
+            }
+            return audio;
+        }
+
+        function getBestForSection(model) {
+            const bestFor = [];
+
+            if (model.family === 'MacBook Air') {
+                bestFor.push('Students and educators');
+                bestFor.push('Remote workers and freelancers');
+                if (model.display.size.includes('15')) {
+                    bestFor.push('Content creators (video editing, design)');
+                } else {
+                    bestFor.push('Content creators (blogging, photo editing basics)');
+                }
+                bestFor.push('Anyone needing a reliable, fast laptop for daily use');
+            } else if (model.family === 'MacBook Pro') {
+                if (model.display.size.includes('14') || model.display.size.includes('16')) {
+                    bestFor.push('Professional content creators');
+                    bestFor.push('Video editors and 3D artists');
+                    bestFor.push('Software developers');
+                    bestFor.push('Creative professionals');
+                } else {
+                    bestFor.push('Students and educators');
+                    bestFor.push('Business professionals');
+                    bestFor.push('Content creators');
+                    bestFor.push('Power users');
+                }
+            } else if (model.family === 'MacBook') {
+                bestFor.push('Students and basic users');
+                bestFor.push('Web browsing and light productivity');
+                bestFor.push('Users transitioning from Windows to macOS');
+                bestFor.push('Ultra-portable computing needs');
+            }
+
+            bestFor.push('Users transitioning from Windows to macOS');
+            return bestFor;
+        }
+
+        function copyToClipboard() {
+            const content = document.getElementById('copyContent').textContent;
+            navigator.clipboard.writeText(content).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.style.background = '#28a745';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+    </script>
+</body>
+</html>

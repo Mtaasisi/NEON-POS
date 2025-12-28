@@ -41,15 +41,12 @@ export const TradeInWidget: React.FC<TradeInWidgetProps> = ({ className }) => {
       const currentBranchId = getCurrentBranchId();
       
       // Query trade-ins from lats_trade_in_transactions table
-      let query = supabase
-        .from('lats_trade_in_transactions')
-        .select('id, status, final_trade_in_value, created_at');
+      // lats_trade_in_transactions table was consolidated - returning empty data
+      console.log('ℹ️ lats_trade_in_transactions table was consolidated - returning empty data');
 
-      // ✅ Use addBranchFilter for proper isolation support
-      const { addBranchFilter } = await import('../../../../lib/branchAwareApi');
-      query = await addBranchFilter(query, 'trade_ins');
-
-      const { data: tradeIns, error } = await query;
+      // Return empty data since table was consolidated
+      const tradeIns = [];
+      const error = null;
 
       // Handle missing table gracefully
       if (error) {

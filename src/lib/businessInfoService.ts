@@ -1,4 +1,6 @@
 import { supabase } from './supabaseClient';
+import { unifiedSettingsService } from './unifiedSettingsService';
+import { formatTanzaniaPhoneNumber } from './phoneUtils';
 
 export interface BusinessInfo {
   name: string;
@@ -18,7 +20,50 @@ class BusinessInfoService {
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   /**
-   * Get business information from lats_pos_general_settings
+   * Convert legacy phone string to new array format for MultiPhoneInput
+   */
+  private convertPhoneToArrayFormat(phone: string): string {
+    if (!phone || phone.trim() === '') return '';
+
+    // Check if it's already in array format
+    try {
+      const parsed = JSON.parse(phone);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Ensure all entries have proper format
+        const formatted = parsed.map((item: any) => {
+          if (typeof item === 'string') {
+            // Convert old single string format to array
+            return {
+              phone: formatTanzaniaPhoneNumber(item),
+              whatsapp: false
+            };
+          } else if (typeof item === 'object' && item.phone) {
+            // Already in correct format, just format the phone
+            return {
+              phone: formatTanzaniaPhoneNumber(item.phone),
+              whatsapp: item.whatsapp || false
+            };
+          }
+          return null;
+        }).filter(Boolean);
+
+        return JSON.stringify(formatted);
+      }
+    } catch {
+      // Not JSON, treat as legacy single phone string
+    }
+
+    // Legacy single phone string - convert to array format
+    const formattedPhone = formatTanzaniaPhoneNumber(phone);
+    if (formattedPhone) {
+      return JSON.stringify([{ phone: formattedPhone, whatsapp: false }]);
+    }
+
+    return '';
+  }
+
+  /**
+   * Get business information from unified_app_settings
    * Single source of truth for all business information across the app
    */
   async getBusinessInfo(): Promise<BusinessInfo> {
@@ -30,95 +75,26 @@ class BusinessInfoService {
 
     try {
       // Try to get current user first
-      let user = null;
+      let userId = null;
       try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        user = authUser;
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id;
       } catch (authErr) {
         // Not authenticated, continue with global settings
       }
 
-      let data = null;
-      let error = null;
+      // Get business info from unified settings
+      const businessInfo = await unifiedSettingsService.getBusinessInfo(userId);
 
-      // First, try to get user-specific settings
-      if (user) {
-        const { data: userData, error: userError } = await supabase
-          .from('lats_pos_general_settings')
-          .select('business_name, business_address, business_phone, business_email, business_website, business_logo')
-          .eq('user_id', user.id)
-          .limit(1)
-          .maybeSingle();
-
-        if (!userError && userData) {
-          data = userData;
-        } else {
-          error = userError;
-        }
+      // Convert phone to new array format if needed
+      if (businessInfo.phone) {
+        businessInfo.phone = this.convertPhoneToArrayFormat(businessInfo.phone);
       }
 
-      // If no user-specific settings, try global settings (user_id = NULL)
-      if (!data) {
-        const { data: globalData, error: globalError } = await supabase
-          .from('lats_pos_general_settings')
-          .select('business_name, business_address, business_phone, business_email, business_website, business_logo')
-          .is('user_id', null)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      this.cachedInfo = businessInfo;
+      this.cacheTimestamp = Date.now();
 
-        if (!globalError && globalData) {
-          data = globalData;
-        } else {
-          error = globalError;
-        }
-      }
-
-      // If still no data, try any record (fallback)
-      if (!data) {
-        const { data: anyData, error: anyError } = await supabase
-          .from('lats_pos_general_settings')
-          .select('business_name, business_address, business_phone, business_email, business_website, business_logo')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (!anyError && anyData) {
-          data = anyData;
-        } else {
-          error = anyError;
-        }
-      }
-
-      if (data) {
-        this.cachedInfo = {
-          name: data.business_name || 'inauzwa',
-          address: data.business_address || 'Dar es Salaam, Tanzania',
-          phone: data.business_phone || '+255 123 456 789',
-          email: data.business_email || undefined,
-          website: data.business_website || undefined,
-          logo: data.business_logo || null
-        };
-        this.cacheTimestamp = now;
-        
-        // Log successful fetch (development only)
-        if (process.env.NODE_ENV === 'development') {
-          console.log('✅ Business info loaded from database:', {
-            name: this.cachedInfo.name,
-            phone: this.cachedInfo.phone,
-            email: this.cachedInfo.email,
-            website: this.cachedInfo.website,
-            address: this.cachedInfo.address,
-            hasLogo: !!this.cachedInfo.logo,
-            logoType: this.cachedInfo.logo ? (this.cachedInfo.logo.startsWith('data:') ? 'base64' : 'url') : 'none',
-            logoLength: this.cachedInfo.logo ? this.cachedInfo.logo.length : 0
-          });
-        }
-        
-        return this.cachedInfo;
-      } else if (error) {
-        console.warn('⚠️ Error loading business info from lats_pos_general_settings:', error);
-      }
+      return businessInfo;
     } catch (err) {
       console.warn('⚠️ Could not load business info from lats_pos_general_settings:', err);
     }
@@ -150,89 +126,30 @@ class BusinessInfoService {
    */
   async updateBusinessInfo(info: Partial<BusinessInfo>): Promise<boolean> {
     try {
-      const updateData: any = {
-        business_name: info.name,
-        business_address: info.address,
-        business_phone: info.phone,
-        business_email: info.email,
-        business_website: info.website,
-        business_logo: info.logo
-      };
-
       // Try to get current user first
-      let user = null;
+      let userId = null;
       try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        user = authUser;
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id;
       } catch (authErr) {
         // Not authenticated, continue with global settings
       }
 
-      let existing = null;
-
-      // First, try to get user-specific settings
-      if (user) {
-        const { data: userData } = await supabase
-          .from('lats_pos_general_settings')
-          .select('id')
-          .eq('user_id', user.id)
-          .limit(1)
-          .maybeSingle();
-        
-        if (userData) {
-          existing = userData;
-        }
+      // Convert phone to new array format if provided
+      const updateInfo = { ...info };
+      if (updateInfo.phone) {
+        updateInfo.phone = this.convertPhoneToArrayFormat(updateInfo.phone);
       }
 
-      // If no user-specific settings, try global settings (user_id = NULL)
-      if (!existing) {
-        const { data: globalData } = await supabase
-          .from('lats_pos_general_settings')
-          .select('id')
-          .is('user_id', null)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        
-        if (globalData) {
-          existing = globalData;
-        }
-      }
+      // Use unified settings service to update business info
+      const success = await unifiedSettingsService.updateBusinessInfo(updateInfo, userId);
 
-      // If still no record, create one
-      if (!existing) {
-        const { data: newRecord, error: insertError } = await supabase
-          .from('lats_pos_general_settings')
-          .insert({
-            ...updateData,
-            user_id: user?.id || null
-          })
-          .select('id')
-          .single();
-
-        if (insertError) {
-          console.error('Error creating business info record:', insertError);
-          return false;
-        }
-
-        // Clear cache to force refresh
+      if (success) {
+        // Clear local cache
         this.clearCache();
-        return true;
       }
 
-      // Update existing record
-      const { error } = await supabase
-        .from('lats_pos_general_settings')
-        .update(updateData)
-        .eq('id', existing.id);
-
-      if (error) throw error;
-
-      // Clear cache to force refresh
-      this.clearCache();
-      
-
-      return true;
+      return success;
     } catch (err) {
       console.error('Failed to update business info:', err);
       return false;

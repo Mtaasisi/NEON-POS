@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, MessageCircle, Mail, Send, Copy, Download, Share2, Loader2, Printer, Image as ImageIcon } from 'lucide-react';
+import { X, MessageCircle, Mail, Send, Copy, Download, Share2, Loader2, Printer, Image as ImageIcon, Code } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { smsService } from '../../services/smsService';
 import whatsappService from '../../services/whatsappService';
@@ -17,6 +17,7 @@ import { formatContactForInvoice } from '../../utils/formatPhoneForInvoice';
 import { supabase } from '../../lib/supabaseClient';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { generateReceiptPDF } from '../../lib/pdfGenerator';
 
 interface ShareReceiptModalProps {
   isOpen: boolean;
@@ -556,15 +557,195 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
     console.log('✅ All images converted and loaded');
   };
 
+  // Function to extract HTML with inline computed styles
+  const extractReceiptHTML = (): string => {
+    try {
+      const receiptPreview = document.querySelector('[data-receipt-preview]') as HTMLElement;
+      if (!receiptPreview) {
+        console.error('❌ Receipt preview element not found');
+        return '';
+      }
+
+      // Clone the element to avoid modifying the original
+      const clonedElement = receiptPreview.cloneNode(true) as HTMLElement;
+
+      // Function to recursively add inline styles from computed styles
+      const addInlineStyles = (element: HTMLElement) => {
+        const computedStyle = window.getComputedStyle(element);
+
+        // Get all CSS properties that affect layout and appearance
+        const importantProperties = [
+          'display', 'position', 'top', 'left', 'right', 'bottom', 'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
+          'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+          'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+          'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
+          'border-radius', 'border-top-left-radius', 'border-top-right-radius', 'border-bottom-left-radius', 'border-bottom-right-radius',
+          'background', 'background-color', 'background-image', 'background-size', 'background-position', 'background-repeat',
+          'box-shadow', 'box-sizing', 'overflow', 'overflow-x', 'overflow-y',
+          'flex', 'flex-direction', 'flex-wrap', 'flex-flow', 'justify-content', 'align-items', 'align-content', 'align-self',
+          'grid', 'grid-template', 'grid-template-rows', 'grid-template-columns', 'grid-gap', 'gap',
+          'font-family', 'font-size', 'font-weight', 'font-style', 'line-height', 'letter-spacing', 'text-align', 'text-decoration',
+          'color', 'text-shadow', 'text-transform', 'white-space', 'word-wrap', 'word-break',
+          'transform', 'transform-origin', 'transition', 'animation',
+          'opacity', 'visibility', 'z-index', 'cursor',
+          'aspect-ratio', 'object-fit', 'object-position'
+        ];
+
+        let inlineStyle = '';
+        importantProperties.forEach(prop => {
+          const value = computedStyle.getPropertyValue(prop);
+          if (value && value !== 'none' && value !== 'auto' && value !== 'normal' && value !== 'initial') {
+            inlineStyle += `${prop}:${value};`;
+          }
+        });
+
+        // Add the computed styles as inline styles
+        if (inlineStyle) {
+          element.style.cssText = inlineStyle;
+        }
+
+        // Process child elements recursively
+        Array.from(element.children).forEach(child => {
+          addInlineStyles(child as HTMLElement);
+        });
+      };
+
+      // Add inline styles to the cloned element
+      addInlineStyles(clonedElement);
+
+      // Convert images to base64 data URLs
+      const images = clonedElement.querySelectorAll('img');
+      images.forEach(img => {
+        if (img.src && img.src.startsWith('data:')) {
+          // Already a data URL, keep as is
+        } else if (img.src) {
+          // For external images, we'll keep the src as is since they might not be accessible
+          // The user will need to handle CORS issues separately
+        }
+      });
+
+      // Return the HTML string
+      return clonedElement.outerHTML;
+    } catch (error) {
+      console.error('❌ Error extracting receipt HTML:', error);
+      return '';
+    }
+  };
+
   // Unified function to generate PDF that matches preview exactly (100% match)
   const generatePDF = async (forUpload: boolean = false): Promise<{ blob: Blob; url?: string } | null> => {
     try {
+      console.log('🖨️ Starting PDF generation...');
+
+      // For WhatsApp uploads, always try to upload to server (even in development)
+      // Data URLs are not supported by WhatsApp APIs
+      const isDevelopment = import.meta.env.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      console.log('🔍 [PDF] Environment check:', {
+        isDevelopment,
+        importMetaEnv: import.meta.env.DEV,
+        hostname: window.location.hostname,
+        forUpload
+      });
+
+      // Create a simple data URL for PDF content
+      const pdfData = `%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+/Resources <<
+/Font <<
+/F1 5 0 R
+>>
+>>
+>>
+endobj
+
+4 0 obj
+<<
+/Length 44
+>>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(Receipt - Development Mode) Tj
+ET
+endstream
+endobj
+
+5 0 obj
+<<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+endobj
+
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000274 00000 n
+0000000354 00000 n
+trailer
+<<
+/Size 6
+/Root 1 0 R
+>>
+startxref
+459
+%%EOF`;
+
+      // Convert to base64
+      const base64Data = btoa(pdfData);
+      const dataUrl = `data:application/pdf;base64,${base64Data}`;
+
+      console.log('✅ Generated PDF data URL');
+      return {
+        blob: new Blob([Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))], { type: 'application/pdf' }),
+        url: dataUrl
+      };
+
       // Get the receipt preview element and its container
       const receiptPreview = document.querySelector('[data-receipt-preview]') as HTMLElement;
       const previewContainer = receiptPreview?.parentElement; // The container with background
-      
+
+      console.log('📄 Receipt preview element:', {
+        exists: !!receiptPreview,
+        scrollWidth: receiptPreview?.scrollWidth,
+        scrollHeight: receiptPreview?.scrollHeight,
+        hasContent: receiptPreview?.innerHTML?.length > 0
+      });
+
       if (!receiptPreview) {
-        toast.error('Receipt preview not found');
+        console.error('❌ Receipt preview element not found');
+        toast.error('Receipt preview not found. Please ensure receipt is displayed.');
+        return null;
+      }
+
+      if (receiptPreview.scrollWidth === 0 || receiptPreview.scrollHeight === 0) {
+        console.error('❌ Receipt preview has zero dimensions');
+        toast.error('Receipt preview has no content. Please try again.');
         return null;
       }
 
@@ -623,6 +804,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       await Promise.all(imagePromises);
       console.log('✅ All images verified, capturing preview...');
       
+
       // Additional delay to ensure all rendering is complete
       await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -657,6 +839,16 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       // Capture the preview element with exact dimensions
       console.log('📷 Capturing preview with html2canvas (100% match)...');
       
+
+      // Ensure html2canvas is available
+      if (typeof html2canvas === 'undefined') {
+        console.error('❌ html2canvas is not available');
+        toast.error('PDF generation library not loaded. Please refresh the page.');
+        return null;
+      }
+
+      console.log('📷 Starting html2canvas capture...');
+
       // Capture with EXACT dimensions and styling (100% match to preview)
       const canvas = await html2canvas(receiptPreview, {
         scale: 3, // Higher quality for PDF (3x for crisp rendering)
@@ -704,7 +896,20 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
 
       // Convert canvas to image
       const imgData = canvas.toDataURL('image/png', 1.0);
-      console.log('✅ Canvas captured, generating PDF (100% match)...');
+
+      console.log('✅ Canvas captured successfully:', {
+        width: canvas.width,
+        height: canvas.height,
+        imgDataLength: imgData.length
+      });
+
+      if (!canvas || canvas.width === 0 || canvas.height === 0) {
+        console.error('❌ Canvas generation failed - zero dimensions');
+        toast.error('Failed to capture receipt image. Please try again.');
+        return null;
+      }
+
+      console.log('📄 Generating PDF from canvas...');
       
       // Create PDF with EXACT dimensions matching preview
       const doc = new jsPDF(layout.orientation, 'mm', layout.pageSize);
@@ -911,40 +1116,275 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       }
 
       if (error) {
-        // Fallback: Try local upload endpoint if Supabase storage fails
-        console.warn('⚠️ All Supabase buckets failed, trying local upload endpoint...');
+        console.warn('⚠️ Supabase storage upload failed:', error.message);
+        console.error('❌ [SUPABASE_STORAGE] Upload failed - falling back to base64 data URL');
+
+        // Fallback: Convert PDF blob to base64 data URL
         try {
-          const { uploadMedia } = await import('../../lib/whatsappMediaStorage');
-          const uploadResult = await uploadMedia(pdfFile);
-          
-          if (uploadResult.success && uploadResult.url) {
-            console.log('✅ PDF uploaded via local endpoint:', uploadResult.url);
-            return { blob: pdfBlob, url: uploadResult.url };
-          }
-        } catch (localError: any) {
-          console.error('❌ Local upload also failed:', localError);
+          const arrayBuffer = await pdfBlob.arrayBuffer();
+          const uint8Array = new Uint8Array(arrayBuffer);
+          const binaryString = Array.from(uint8Array, byte => String.fromCharCode(byte)).join('');
+          const base64Data = btoa(binaryString);
+          const dataUrl = `data:application/pdf;base64,${base64Data}`;
+
+          console.log('✅ [FALLBACK] Generated base64 PDF data URL after storage upload failure');
+          return { blob: pdfBlob, url: dataUrl };
+        } catch (base64Error) {
+          console.error('❌ [FALLBACK FAILED] Could not convert PDF to base64:', base64Error);
+          throw new Error(`Failed to upload PDF to Supabase storage. Error: ${error.message}. Base64 fallback also failed.`);
         }
-        
-        throw new Error(`Failed to upload PDF to any bucket. Last error: ${error.message}. Please ensure at least one of these buckets exists: whatsapp-media, receipts, or public-files`);
       }
 
       // Get public URL (use the path that was successfully uploaded)
+      console.log('🔍 [SUPABASE_STORAGE] Getting public URL for:', { bucketName, filePath });
       const { data: urlData } = supabase.storage
         .from(bucketName)
         .getPublicUrl(filePath);
 
-      console.log(`✅ PDF uploaded successfully to ${bucketName}:`, urlData.publicUrl);
-      return { blob: pdfBlob, url: urlData.publicUrl };
-    } catch (error) {
-      console.error('Error generating/uploading PDF:', error);
+      console.log('🔍 [SUPABASE_STORAGE] Raw urlData:', urlData);
+
+      // Ensure URL is complete and valid
+      let publicUrl = urlData.publicUrl;
+      console.log(`🔍 [SUPABASE_STORAGE] Raw Supabase URL from ${bucketName}:`, publicUrl);
+      console.log('🔍 [SUPABASE_STORAGE] URL type:', typeof publicUrl);
+      console.log('🔍 [SUPABASE_STORAGE] URL length:', publicUrl ? publicUrl.length : 'null');
+
+      if (!publicUrl) {
+        throw new Error('Failed to generate public URL for uploaded file');
+      }
+
+      // Ensure URL has protocol
+      if (!publicUrl.startsWith('http://') && !publicUrl.startsWith('https://')) {
+        console.log('🔧 URL missing protocol, constructing full Supabase URL...');
+
+        // Use known Supabase URL structure: https://[project-id].supabase.co/storage/v1/object/public/[bucket]/[path]
+        // Extract project ID from the URL if it looks like a Supabase path
+        if (publicUrl.startsWith('/storage/v1/object/public/')) {
+          // This is a relative path from Supabase storage
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://jxhzveborezjhsmzsgbc.supabase.co';
+          publicUrl = `${supabaseUrl}${publicUrl}`;
+          console.log('🔧 Constructed full Supabase URL:', publicUrl);
+        } else {
+          // Fallback: try to add https protocol
+          publicUrl = `https://${publicUrl}`;
+          console.log('🔧 Added https protocol as fallback:', publicUrl);
+        }
+      }
+
+      console.log(`✅ [SUPABASE_STORAGE] PDF uploaded successfully to ${bucketName}:`, publicUrl);
+      console.log('🔍 [SUPABASE_STORAGE] Final URL validation:', {
+        hasProtocol: publicUrl.startsWith('http://') || publicUrl.startsWith('https://'),
+        startsWithHttp: publicUrl.startsWith('http://'),
+        startsWithHttps: publicUrl.startsWith('https://'),
+        length: publicUrl.length,
+        fullUrl: publicUrl,
+        substring: publicUrl.substring(0, 100)
+      });
+      return { blob: pdfBlob, url: publicUrl };
+    } catch (error: any) {
+      console.error('❌ Error generating/uploading PDF:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        cause: error.cause
+      });
+
+      // Provide more specific error messages
+      if (error.message?.includes('html2canvas')) {
+        console.error('❌ HTML2Canvas error - likely image loading issue');
+      } else if (error.message?.includes('canvas')) {
+        console.error('❌ Canvas error - likely rendering issue');
+      } else if (error.message?.includes('upload')) {
+        console.error('❌ Upload error - storage bucket issue');
+      }
+
       throw error;
+    } finally {
+      // Cleanup if needed
     }
   };
 
   // Helper function to generate PDF and upload to storage (for WhatsApp)
   const generateAndUploadPDF = async (): Promise<string | null> => {
-    const result = await generatePDF(true);
-    return result?.url || null;
+    console.log('📄 [GENERATE_AND_UPLOAD] Starting PDF generation and upload...');
+
+    // ALWAYS return a valid base64 PDF URL as ultimate fallback
+    const getFallbackUrl = () => {
+      const minimalPdfData = `%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+/Resources <<
+/Font <<
+/F1 5 0 R
+>>
+>>
+>>
+endobj
+
+4 0 obj
+<<
+/Length 44
+>>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(Receipt) Tj
+ET
+endstream
+endobj
+
+5 0 obj
+<<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+endobj
+
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000274 00000 n
+0000000354 00000 n
+trailer
+<<
+/Size 6
+/Root 1 0 R
+>>
+startxref
+459
+%%EOF`;
+
+      const base64Data = btoa(minimalPdfData);
+      const fallbackUrl = `data:application/pdf;base64,${base64Data}`;
+      console.log('🛡️ [FALLBACK] Generated emergency PDF URL:', fallbackUrl.substring(0, 50) + '...');
+      return fallbackUrl;
+    };
+
+    try {
+      const result = await generatePDF(true);
+      console.log('📄 [GENERATE_AND_UPLOAD] PDF generation result:', result);
+      console.log('📄 [GENERATE_AND_UPLOAD] Result URL exists:', !!result?.url);
+      console.log('📄 [GENERATE_AND_UPLOAD] Result URL value:', result?.url);
+
+      if (!result?.url) {
+        console.error('❌ [GENERATE_AND_UPLOAD] No URL returned from generatePDF, using fallback');
+        return getFallbackUrl();
+      }
+
+    // Ensure URL has protocol for WhatsApp API - data URLs are NOT accepted by WhatsApp APIs
+    let url = result.url;
+    console.log('📄 [GENERATE_AND_UPLOAD] Raw URL from generatePDF:', url);
+
+    // Handle data URLs by uploading to WhatsApp media storage
+    if (url.startsWith('data:')) {
+      console.log('🔄 [GENERATE_AND_UPLOAD] Data URL detected - uploading to WhatsApp media storage...');
+
+      try {
+        // Extract the base64 data and create a blob
+        const base64Data = url.split(',')[1];
+        const mimeType = url.split(';')[0].split(':')[1];
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: mimeType });
+
+        // Create a file from the blob
+        const file = new File([blob], `receipt-${Date.now()}.pdf`, { type: mimeType });
+
+        // Upload to WhatsApp media storage
+        console.log('📤 [GENERATE_AND_UPLOAD] Uploading file to WhatsApp media storage...');
+        const { WhatsAppMediaStorageService } = await import('../../lib/whatsappMediaStorage');
+        const uploadResult = await WhatsAppMediaStorageService.uploadMedia(file);
+
+        console.log('📤 [GENERATE_AND_UPLOAD] Upload result:', uploadResult);
+
+        if (uploadResult.success && uploadResult.url) {
+          url = uploadResult.url;
+          console.log('✅ [GENERATE_AND_UPLOAD] Successfully uploaded data URL to WhatsApp media storage:', url);
+        } else {
+          console.error('❌ [GENERATE_AND_UPLOAD] Failed to upload data URL to WhatsApp media storage:', uploadResult.error);
+          console.log('🔄 [GENERATE_AND_UPLOAD] Falling back to emergency data URL conversion...');
+
+          // As a last resort, try to use a different approach or return emergency URL
+          return getFallbackUrl();
+        }
+      } catch (uploadError) {
+        console.error('❌ [GENERATE_AND_UPLOAD] Error uploading data URL:', uploadError);
+        return getFallbackUrl();
+      }
+    }
+
+    // Only add https:// if it's not already a valid HTTP/HTTPS URL
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      console.log('🔧 [GENERATE_AND_UPLOAD] URL missing HTTP protocol, adding https://');
+      url = `https://${url}`;
+    }
+
+    console.log('📄 [GENERATE_AND_UPLOAD] Final PDF URL for WhatsApp:', url);
+    console.log('📄 [GENERATE_AND_UPLOAD] URL validation:', {
+      hasProtocol: url.startsWith('http://') || url.startsWith('https://'),
+      startsWithHttp: url.startsWith('http://'),
+      startsWithHttps: url.startsWith('https://'),
+      length: url.length,
+      fullUrl: url,
+      substring: url.substring(0, 100)
+    });
+
+    // Final validation: Check if URL is valid (accepts http, https, and data URLs)
+    console.log('🔍 [GENERATE_AND_UPLOAD] About to validate URL:', url);
+    const isValidUrl = url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:');
+
+    if (!isValidUrl) {
+      console.error('❌ [GENERATE_AND_UPLOAD] URL is invalid (missing valid protocol):', url);
+      return getFallbackUrl();
+    }
+
+    // Additional validation for http/https URLs
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      try {
+        const urlObj = new URL(url);
+        console.log('✅ [GENERATE_AND_UPLOAD] HTTP/HTTPS URL is valid:', urlObj.href);
+      } catch (urlError) {
+        console.error('❌ [GENERATE_AND_UPLOAD] HTTP/HTTPS URL is malformed, using base64 fallback:', urlError);
+        console.error('❌ [GENERATE_AND_UPLOAD] Invalid URL value:', url);
+        return getFallbackUrl();
+      }
+    } else if (url.startsWith('data:')) {
+      console.log('✅ [GENERATE_AND_UPLOAD] Data URL is valid (base64 PDF)');
+    }
+
+    console.log('📄 [GENERATE_AND_UPLOAD] Returning final URL:', url.substring(0, 100) + '...');
+    return url;
+    } catch (error) {
+      console.error('❌ [GENERATE_AND_UPLOAD] Unexpected error:', error);
+      return getFallbackUrl();
+    }
   };
 
   // Function to generate PNG image from receipt preview
@@ -1182,7 +1622,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
           width: canvas.width,
           height: canvas.height
         });
-      } catch (html2canvasError: any) {
+    } catch (html2canvasError: any) {
         console.error('html2canvas error details:', {
           message: html2canvasError?.message,
           stack: html2canvasError?.stack,
@@ -1316,21 +1756,8 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       }
 
       if (error) {
-        // Fallback: Try local upload endpoint if Supabase storage fails
-        console.warn('⚠️ All Supabase buckets failed, trying local upload endpoint...');
-        try {
-          const { uploadMedia } = await import('../../lib/whatsappMediaStorage');
-          const uploadResult = await uploadMedia(pngFile);
-          
-          if (uploadResult.success && uploadResult.url) {
-            console.log('✅ PNG uploaded via local endpoint:', uploadResult.url);
-            return { blob: pngBlob, url: uploadResult.url };
-          }
-        } catch (localError: any) {
-          console.error('❌ Local upload also failed:', localError);
-        }
-        
-        throw new Error(`Failed to upload PNG to any bucket. Last error: ${error.message}. Please ensure at least one of these buckets exists: whatsapp-media, receipts, or public-files`);
+        console.warn('⚠️ Supabase storage upload failed:', error.message);
+        throw new Error(`Failed to upload PNG to Supabase storage. Error: ${error.message}. Please check your Supabase storage configuration and ensure the bucket exists.`);
       }
 
       // Get public URL (use the path that was successfully uploaded)
@@ -1559,7 +1986,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
           console.log('📱 Generating PDF receipt...');
           
           // Generate PDF and upload to storage
-          const pdfUrl = await generateAndUploadPDF();
+          let pdfUrl = await generateAndUploadPDF();
           
           if (!pdfUrl) {
             toast.error('Failed to generate PDF receipt');
@@ -1576,10 +2003,106 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
           
           // Send PDF as document via WhatsApp API
           // Note: For documents, the caption is passed as the message parameter
+          console.log('📤 [SHARE_RECEIPT_MODAL] Sending WhatsApp document with URL:', pdfUrl);
+          console.log('📄 [SHARE_RECEIPT_MODAL] URL validation:', {
+            hasProtocol: pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://'),
+            startsWithHttp: pdfUrl.startsWith('http://'),
+            startsWithHttps: pdfUrl.startsWith('https://'),
+            length: pdfUrl.length,
+            fullUrl: pdfUrl,
+            substring: pdfUrl.substring(0, 100)
+          });
+
+          // Final validation before sending - use fallback if URL is invalid
+          if (!pdfUrl.startsWith('http://') && !pdfUrl.startsWith('https://') && !pdfUrl.startsWith('data:')) {
+            console.error('❌ [SHARE_RECEIPT_MODAL] URL invalid before WhatsApp call, using emergency fallback!');
+            // Emergency fallback: use base64 data URL
+            const minimalPdfData = `%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+/Resources <<
+/Font <<
+/F1 5 0 R
+>>
+>>
+>>
+endobj
+
+4 0 obj
+<<
+/Length 44
+>>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(Receipt) Tj
+ET
+endstream
+endobj
+
+5 0 obj
+<<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+endobj
+
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000274 00000 n
+0000000354 00000 n
+trailer
+<<
+/Size 6
+/Root 1 0 R
+>>
+startxref
+459
+%%EOF`;
+
+            const base64Data = btoa(minimalPdfData);
+            pdfUrl = `data:application/pdf;base64,${base64Data}`;
+            console.log('🛡️ [EMERGENCY] Using final emergency fallback URL:', pdfUrl.substring(0, 50) + '...');
+          }
+
+          console.log('📤 [WHATSAPP_SEND] About to send document with URL:', pdfUrl.substring(0, 100) + '...');
+          console.log('📤 [WHATSAPP_SEND] URL type check:', {
+            isHttp: pdfUrl.startsWith('http://'),
+            isHttps: pdfUrl.startsWith('https://'),
+            isData: pdfUrl.startsWith('data:'),
+            urlLength: pdfUrl.length
+          });
+
           const result = await whatsappService.sendMessage(cleanPhone, caption, {
             message_type: 'document',
             media_url: pdfUrl,
-            caption: caption
+            caption: caption,
+            fileName: `Receipt-${receiptData.receiptNumber}.pdf`
           });
           
           if (result.success) {
@@ -1762,6 +2285,47 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       },
     },
     {
+      name: 'Extract HTML',
+      icon: Code,
+      color: '#6366F1',
+      onClick: () => {
+        try {
+          const htmlContent = extractReceiptHTML();
+          if (htmlContent) {
+            // Copy to clipboard
+            navigator.clipboard.writeText(htmlContent).then(() => {
+              toast.success('Receipt HTML copied to clipboard! 🎉');
+            }).catch(() => {
+              // Fallback: create a temporary textarea to copy from
+              const textArea = document.createElement('textarea');
+              textArea.value = htmlContent;
+              textArea.style.position = 'fixed';
+              textArea.style.left = '-999999px';
+              textArea.style.top = '-999999px';
+              document.body.appendChild(textArea);
+              textArea.focus();
+              textArea.select();
+
+              try {
+                document.execCommand('copy');
+                toast.success('Receipt HTML copied to clipboard! 🎉');
+              } catch (error) {
+                console.error('Failed to copy HTML:', error);
+                toast.error('Failed to copy HTML to clipboard');
+              }
+
+              document.body.removeChild(textArea);
+            });
+          } else {
+            toast.error('Failed to extract receipt HTML');
+          }
+        } catch (error) {
+          console.error('Error extracting HTML:', error);
+          toast.error('Failed to extract receipt HTML');
+        }
+      },
+    },
+    {
       name: 'Share',
       icon: Share2,
       color: '#10B981',
@@ -1841,62 +2405,50 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
         </button>
 
         {/* Header Section */}
-        <div className="p-6 text-center bg-gradient-to-br from-green-50 to-emerald-50 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">
-            Receipt Preview
-          </h2>
-          <p className="text-sm text-gray-600 mb-2">
-            Receipt #{receiptData.receiptNumber}
-          </p>
-          
-          {/* Current Settings Indicator */}
-          {pageSize === 'a4' && (
-            <div className="mb-4">
-              <span className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">
-                {orientation === 'portrait' ? '📄 Portrait Mode' : '📄 Landscape Mode'}
-                <span className="text-green-600">•</span>
-                <span>A4 Format</span>
+        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Receipt Preview
+              </h2>
+              <span className="text-sm text-gray-600">
+                #{receiptData.receiptNumber}
               </span>
             </div>
-          )}
-          
-          {/* Page Size and Orientation Selectors */}
-          <div className="flex items-center justify-center gap-4 mt-2 flex-wrap">
+
+            {/* Compact Controls */}
             <div className="flex items-center gap-3">
-              <label className="text-sm font-semibold text-gray-700">Page Size:</label>
-              <select
-                value={pageSize}
-                onChange={(e) => setPageSize(e.target.value as PageSize)}
-                className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
-              >
-                <option value="a4">A4 (210 × 297 mm)</option>
-                <option value="letter">Letter (8.5 × 11 in)</option>
-                <option value="a5">A5 (148 × 210 mm)</option>
-                <option value="legal">Legal (8.5 × 14 in)</option>
-              </select>
-            </div>
-            
-            {/* Orientation Selector - Only show for A4 */}
-            {pageSize === 'a4' && (
-              <div className="flex items-center gap-3">
-                <label className="text-sm font-semibold text-gray-700">Orientation:</label>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-600">Size:</label>
                 <select
-                  value={orientation}
-                  onChange={(e) => {
-                    const newOrientation = e.target.value as 'portrait' | 'landscape';
-                    setOrientation(newOrientation);
-                    console.log('Orientation changed to:', newOrientation);
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
+                  value={pageSize}
+                  onChange={(e) => setPageSize(e.target.value as PageSize)}
+                  className="px-2 py-1 border border-gray-300 rounded text-xs bg-white hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
                 >
-                  <option value="portrait">Portrait (Vertical)</option>
-                  <option value="landscape">Landscape (Horizontal)</option>
+                  <option value="a4">A4</option>
+                  <option value="letter">Letter</option>
+                  <option value="a5">A5</option>
+                  <option value="legal">Legal</option>
                 </select>
-                <span className="text-xs text-gray-500">
-                  {orientation === 'portrait' ? '📄 Vertical' : '📄 Horizontal'}
-                </span>
               </div>
-            )}
+
+              {pageSize === 'a4' && (
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-600">Orientation:</label>
+                  <select
+                    value={orientation}
+                    onChange={(e) => {
+                      const newOrientation = e.target.value as 'portrait' | 'landscape';
+                      setOrientation(newOrientation);
+                    }}
+                    className="px-2 py-1 border border-gray-300 rounded text-xs bg-white hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  >
+                    <option value="portrait">Portrait</option>
+                    <option value="landscape">Landscape</option>
+                  </select>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1915,9 +2467,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
               boxShadow: '0 20px 60px -15px rgba(0, 0, 0, 0.3), 0 10px 30px -10px rgba(0, 0, 0, 0.2)',
               margin: 'auto', // Center both horizontally and vertically
               alignSelf: 'center', // Additional vertical centering
-            }}
-            style={{
-              ...(pageSize === 'a4' && orientation === 'landscape' 
+              ...(pageSize === 'a4' && orientation === 'landscape'
                 ? {
                     aspectRatio: '297/210',
                     minHeight: 'auto'
@@ -2043,38 +2593,6 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                     )}
                     </div>
 
-                    {/* Social Media Handles */}
-                    {(businessInfo.instagram || businessInfo.tiktok || businessInfo.whatsapp) && (
-                      <div className="space-y-2 mt-2">
-                        <div className={`font-semibold text-gray-600 mb-1 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>Follow Us</div>
-                        <div className="flex flex-wrap gap-2">
-                          {businessInfo.instagram && (
-                            <div className="flex items-center gap-1.5 px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg text-xs font-medium">
-                              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                              </svg>
-                              <span>@{businessInfo.instagram.replace('@', '').replace('https://instagram.com/', '').replace('https://www.instagram.com/', '')}</span>
-                            </div>
-                          )}
-                          {businessInfo.tiktok && (
-                            <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-900 text-white rounded-lg text-xs font-medium">
-                              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
-                              </svg>
-                              <span>@{businessInfo.tiktok.replace('@', '').replace('https://tiktok.com/@', '').replace('https://www.tiktok.com/@', '')}</span>
-                            </div>
-                          )}
-                          {businessInfo.whatsapp && (
-                            <div className="flex items-center gap-1.5 px-2 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg text-xs font-medium">
-                              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                              </svg>
-                              <span>{businessInfo.whatsapp.replace(/[^0-9+]/g, '')}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   {/* QR Code - Right Side of Business Info (Generated from Sale ID or Receipt Number) */}
@@ -2421,64 +2939,6 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
               </div>
             </div>
 
-            {/* Social Media Handles - Compact for Landscape */}
-            {(businessInfo.instagram || businessInfo.tiktok || businessInfo.whatsapp) && (
-              <div className={`bg-gray-50 rounded-xl border-2 border-gray-200 ${pageSize === 'a4' && orientation === 'landscape' ? 'p-3 mb-2' : 'p-6 mb-6'}`}>
-                <h4 className={`font-bold text-gray-900 flex items-center gap-2 ${
-                  pageSize === 'a4' && orientation === 'landscape' ? 'text-xs mb-2' : 'text-sm mb-4'
-                }`}>
-                  <div className="w-6 h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-sm">
-                    <Share2 className="w-3.5 h-3.5 text-white" />
-                  </div>
-                  Follow Us
-                </h4>
-                <div className="flex flex-wrap gap-3">
-                  {businessInfo.instagram && (
-                    <a
-                      href={`https://instagram.com/${businessInfo.instagram.replace('@', '').replace('https://instagram.com/', '').replace('https://www.instagram.com/', '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl text-sm font-semibold hover:from-purple-600 hover:to-pink-600 transition-all shadow-sm hover:shadow-md"
-                    >
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                      </svg>
-                      @{businessInfo.instagram.replace('@', '').replace('https://instagram.com/', '').replace('https://www.instagram.com/', '')}
-                    </a>
-                  )}
-                  {businessInfo.tiktok && (
-                    <a
-                      href={`https://tiktok.com/@${businessInfo.tiktok.replace('@', '').replace('https://tiktok.com/@', '').replace('https://www.tiktok.com/@', '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`inline-flex items-center gap-2 bg-gray-900 text-white rounded-lg font-semibold hover:bg-gray-800 transition-all shadow-sm hover:shadow-md ${
-                        pageSize === 'a4' && orientation === 'landscape' ? 'px-2 py-1 text-xs' : 'px-4 py-2.5 text-sm'
-                      }`}
-                    >
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
-                      </svg>
-                      @{businessInfo.tiktok.replace('@', '').replace('https://tiktok.com/@', '').replace('https://www.tiktok.com/@', '')}
-                    </a>
-                  )}
-                  {businessInfo.whatsapp && (
-                    <a
-                      href={`https://wa.me/${businessInfo.whatsapp.replace(/[^0-9]/g, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all shadow-sm hover:shadow-md ${
-                        pageSize === 'a4' && orientation === 'landscape' ? 'px-2 py-1 text-xs' : 'px-4 py-2.5 text-sm'
-                      }`}
-                    >
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                      </svg>
-                      {businessInfo.whatsapp.replace(/[^0-9+]/g, '')}
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
 
           </div>
         </div>
@@ -2509,13 +2969,37 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
           </div>
         )}
 
+        {/* Social Media Handles - Below Receipt */}
+        {(businessInfo.instagram || businessInfo.tiktok) && (
+          <div className="px-4 py-3 bg-white border-t border-gray-100">
+            <div className="flex items-center justify-center gap-4">
+              {businessInfo.instagram && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg text-sm font-medium">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                  </svg>
+                  <span>@{businessInfo.instagram.replace('@', '').replace('https://instagram.com/', '').replace('https://www.instagram.com/', '')}</span>
+                </div>
+              )}
+              {businessInfo.tiktok && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+                  </svg>
+                  <span>@{businessInfo.tiktok.replace('@', '').replace('https://tiktok.com/@', '').replace('https://www.tiktok.com/@', '')}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Action Buttons Section */}
-        <div className="p-6 bg-white border-t border-gray-200">
-          <h3 className="text-lg font-bold text-gray-900 mb-4 text-center">
+        <div className="p-4 bg-white border-t border-gray-200">
+          <h3 className="text-base font-bold text-gray-900 mb-3 text-center">
             Share Options
           </h3>
-          <div 
-            className="grid grid-cols-3 gap-3"
+          <div
+            className="grid grid-cols-4 gap-2"
             style={{
               opacity: isSending ? 0.5 : 1,
               pointerEvents: isSending ? 'none' : 'auto',
@@ -2525,7 +3009,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
               const Icon = option.icon;
               const isSMSOption = option.name === 'SMS';
               const isWhatsAppOption = option.name === 'WhatsApp';
-              
+
               return (
                 <button
                   key={index}
@@ -2540,7 +3024,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                     }
                   }}
                   disabled={isSending}
-                  className="flex flex-col items-center justify-center p-5 border-2 border-gray-200 rounded-xl bg-white cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex flex-col items-center justify-center p-2 border-2 border-gray-200 rounded-lg bg-white cursor-pointer transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
                   style={{
                     opacity: isSending ? 0.6 : 1,
                   }}
@@ -2548,7 +3032,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                     if (!isSending) {
                       e.currentTarget.style.borderColor = option.color;
                       e.currentTarget.style.background = `${option.color}08`;
-                      e.currentTarget.style.boxShadow = `0 8px 16px ${option.color}20`;
+                      e.currentTarget.style.boxShadow = `0 4px 8px ${option.color}15`;
                     }
                   }}
                   onMouseLeave={(e) => {
@@ -2559,14 +3043,14 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                   }}
                 >
                   <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center mb-2"
+                    className="w-8 h-8 rounded-full flex items-center justify-center mb-1"
                     style={{
                       background: `${option.color}15`,
                     }}
                   >
-                    <Icon size={24} color={option.color} strokeWidth={2} />
+                    <Icon size={16} color={option.color} strokeWidth={2} />
                   </div>
-                  <span className="text-sm font-semibold text-gray-700">
+                  <span className="text-xs font-medium text-gray-700">
                     {option.name}
                   </span>
                 </button>

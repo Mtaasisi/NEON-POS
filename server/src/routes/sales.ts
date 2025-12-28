@@ -32,6 +32,7 @@ router.post('/', authenticateToken, validate(createSaleSchema), async (req: Auth
   try {
     const { customerId, items, paymentMethod, totalAmount, discountAmount, taxAmount } = req.body;
     const userId = req.user!.id;
+    const branchId = req.user!.branchId;
 
     // Validate total amount matches items
     const calculatedTotal = items.reduce((sum: number, item: any) => 
@@ -49,6 +50,7 @@ router.post('/', authenticateToken, validate(createSaleSchema), async (req: Auth
         INSERT INTO lats_sales (
           user_id,
           customer_id,
+          branch_id,
           total_amount,
           discount_amount,
           tax_amount,
@@ -57,6 +59,7 @@ router.post('/', authenticateToken, validate(createSaleSchema), async (req: Auth
         ) VALUES (
           ${userId},
           ${customerId || null},
+          ${branchId},
           ${totalAmount},
           ${discountAmount},
           ${taxAmount},

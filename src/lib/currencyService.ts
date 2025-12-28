@@ -93,20 +93,14 @@ class CurrencyService {
 
     try {
       // Get currencies from all payment-related tables
+      // Both customer_payments and purchase_order_payments were consolidated
+      console.log('ℹ️ Payment tables were consolidated - using default currencies');
       const [paymentsResult, poPaymentsResult] = await Promise.allSettled([
-        // From customer payments
-        supabase
-          .from('customer_payments')
-          .select('currency')
-          .not('currency', 'is', null),
-        
-        // From purchase order payments
-        supabase
-          .from('purchase_order_payments')
-          .select('currency')
-          .not('currency', 'is', null)
-        
-        // Note: finance_accounts table doesn't have a currency column, so we skip it
+        // Return empty result for customer payments
+        Promise.resolve({ status: 'fulfilled', value: { data: [], error: null } }),
+
+        // Return empty result for purchase order payments
+        Promise.resolve({ status: 'fulfilled', value: { data: [], error: null } })
       ]);
 
       const currencies = new Set<string>();
@@ -178,15 +172,9 @@ class CurrencyService {
       }
 
       // Get statistics from purchase order payments with proper error handling
-      try {
-        const { data: poPaymentsData, error: poPaymentsError } = await supabase
-          .from('purchase_order_payments')
-          .select('currency, amount')
-          .not('currency', 'is', null);
-
-        if (poPaymentsError) {
-          // Silently skip - table might not exist or have RLS issues
-        } else if (poPaymentsData && poPaymentsData.length > 0) {
+      // purchase_order_payments table was consolidated, skip query
+      console.log('ℹ️ Purchase order payments table was consolidated - skipping currency stats');
+      const poPaymentsData: any[] = [];
           poPaymentsData.forEach((payment: any) => {
             const currency = payment.currency || 'TZS';
             if (!statistics[currency]) {

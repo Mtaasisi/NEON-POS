@@ -10,7 +10,7 @@ import { MultiPhoneInput } from '../../../components/ui/MultiPhoneInput';
 /**
  * Business Information Settings
  * Copy of POS Settings Business Information section
- * Fetches from lats_pos_general_settings table
+ * Fetches from unified settings service
  */
 const UnifiedBrandingSettings: React.FC = () => {
   const { registerSaveHandler, unregisterSaveHandler, setHasChanges } = useSettingsSave();
@@ -40,129 +40,25 @@ const UnifiedBrandingSettings: React.FC = () => {
   const fetchBusinessInfo = async () => {
     try {
       setLoading(true);
-      
-      // Try to get current user first
-      let user = null;
-      try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        user = authUser;
-      } catch (authErr) {
-        // Not authenticated, continue with global settings
-      }
 
-      let baseData = null;
-      let baseError = null;
+      // Get business info using the unified business info service
+      const businessInfoData = await businessInfoService.getBusinessInfo();
 
-      // First, try to get user-specific settings
-      if (user) {
-        const { data: userData, error: userError } = await supabase
-          .from('lats_pos_general_settings')
-          .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
-          .eq('user_id', user.id)
-          .limit(1)
-          .maybeSingle();
-
-        if (!userError && userData) {
-          baseData = [userData];
-        } else {
-          baseError = userError;
-        }
-      }
-
-      // If no user-specific settings, try global settings (user_id = NULL)
-      if (!baseData || baseData.length === 0) {
-        const { data: globalData, error: globalError } = await supabase
-          .from('lats_pos_general_settings')
-          .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
-          .is('user_id', null)
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (!globalError && globalData && globalData.length > 0) {
-          baseData = globalData;
-        } else {
-          baseError = globalError;
-        }
-      }
-
-      // If still no data, try any record (fallback)
-      if (!baseData || baseData.length === 0) {
-        const { data: anyData, error: anyError } = await supabase
-          .from('lats_pos_general_settings')
-          .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (!anyError && anyData && anyData.length > 0) {
-          baseData = anyData;
-        } else {
-          baseError = anyError;
-        }
-      }
-
-      // Handle case where no record exists
-      if (baseError && !baseData) {
-        // If table doesn't exist or other error, try to continue with defaults
-        console.warn('Error fetching settings:', baseError);
-        baseData = null;
-      }
-
-      // If no record exists, create a default one
-      if (!baseData || baseData.length === 0) {
-        console.log('📝 No settings record found, creating default...');
-        const { data: newRecord, error: createError } = await supabase
-          .from('lats_pos_general_settings')
-          .insert({
-            business_name: 'My Store',
-            business_phone: '',
-            business_email: '',
-            business_website: '',
-            business_address: '',
-            business_logo: null
-          })
-          .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
-          .single();
-        
-        if (createError) {
-          console.error('Error creating default settings:', createError);
-          // Use defaults in UI even if creation fails
-          setSettingsId(null);
-          setFormData({
-            businessName: '',
-            businessPhone: '',
-            businessEmail: '',
-            businessWebsite: '',
-            businessAddress: '',
-            businessLogo: null,
-            businessInstagram: '',
-            businessTiktok: '',
-            businessWhatsapp: ''
-          });
-          setLogoPreview(null);
-          return;
-        }
-        baseData = newRecord;
-      } else {
-        // Get first record
-        baseData = baseData[0];
-      }
-
-      // Set data (social media fields will be empty since columns don't exist)
-      setSettingsId(baseData.id);
+      // Set form data for editing
+      setSettingsId('unified-business-info'); // Use a placeholder ID since unified settings don't have individual IDs
       const formDataToSet = {
-        businessName: baseData.business_name || '',
-        businessPhone: baseData.business_phone || '',
-        businessEmail: baseData.business_email || '',
-        businessWebsite: baseData.business_website || '',
-        businessAddress: baseData.business_address || '',
-        businessLogo: baseData.business_logo || null,
-        businessInstagram: '',
-        businessTiktok: '',
-        businessWhatsapp: ''
+        businessName: businessInfoData.name || '',
+        businessPhone: businessInfoData.phone || '',
+        businessEmail: businessInfoData.email || '',
+        businessWebsite: businessInfoData.website || '',
+        businessAddress: businessInfoData.address || '',
+        businessLogo: businessInfoData.logo || null,
+        businessInstagram: businessInfoData.instagram || '',
+        businessTiktok: businessInfoData.tiktok || '',
+        businessWhatsapp: businessInfoData.whatsapp || ''
       };
-      setLogoPreview(baseData.business_logo || null);
-      
       setFormData(formDataToSet);
+      setLogoPreview(businessInfoData.logo || null);
     } catch (error: any) {
       console.error('Error fetching business info:', error);
       toast.error(`Failed to load business information: ${error.message || 'Unknown error'}`);
@@ -224,68 +120,32 @@ const UnifiedBrandingSettings: React.FC = () => {
   const handleSave = async () => {
     try {
       setSaving(true);
-      
-      // First, prepare basic data without social media columns
-      const basicUpdateData = {
-        business_name: formData.businessName || null,
-        business_phone: formData.businessPhone || null,
-        business_email: formData.businessEmail || null,
-        business_website: formData.businessWebsite || null,
-        business_address: formData.businessAddress || null,
-        business_logo: formData.businessLogo || null,
-        updated_at: new Date().toISOString()
-      };
-      
-      // Try to save basic data first
-      console.log('💾 Saving basic business info...');
-      
-      let data, error;
-      
-      if (settingsId) {
-        // Update existing record
-        // @ts-ignore - Neon query builder implements thenable interface
-        const result = await supabase
-          .from('lats_pos_general_settings')
-          .update(basicUpdateData)
-          .eq('id', settingsId)
-          .select();
-        data = result.data;
-        error = result.error;
-      } else {
-        // Create new record if none exists
-        console.log('📝 Creating new business info record...');
-        // @ts-ignore - Neon query builder implements thenable interface
-        const result = await supabase
-          .from('lats_pos_general_settings')
-          .insert(basicUpdateData)
-          .select()
-          .single();
-        data = result.data ? [result.data] : null;
-        error = result.error;
-        
-        if (!error && result.data) {
-          setSettingsId(result.data.id);
-        }
-      }
 
-      if (error) {
-        throw error;
-      }
-      
-      // Note: Social media columns (business_instagram, business_tiktok, business_whatsapp) 
-      // do not exist in the database, so we skip saving them to avoid errors.
-      // The UI still allows users to enter these values, but they are not persisted.
-      
-      console.log('✅ Successfully saved business info:', {
-        saved: data?.[0]
-      });
+      // Prepare business info data for the unified service
+      const businessInfoData = {
+        name: formData.businessName || '',
+        phone: formData.businessPhone || '',
+        email: formData.businessEmail || '',
+        website: formData.businessWebsite || '',
+        address: formData.businessAddress || '',
+        logo: formData.businessLogo || null,
+        instagram: formData.businessInstagram || '',
+        tiktok: formData.businessTiktok || '',
+        whatsapp: formData.businessWhatsapp || ''
+      };
+
+      // Save using the unified business info service
+      console.log('💾 Saving business info...');
+      await businessInfoService.updateBusinessInfo(businessInfoData);
+
+      console.log('✅ Successfully saved business info');
 
       // Clear business info cache to force all components to refresh
       businessInfoService.clearCache();
-      
+
       // Notify other components to refresh
       window.dispatchEvent(new CustomEvent('settingsUpdated', { detail: { type: 'general' } }));
-      
+
       toast.success('Business information updated successfully - All components will refresh');
     } catch (error: any) {
       console.error('Error updating business info:', error);

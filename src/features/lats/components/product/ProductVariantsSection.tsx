@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, Plus, Trash2, Package, Move, Check, DollarSign, ChevronDown, ChevronUp, Minus } from 'lucide-react';
+import { Layers, Plus, Trash2, Package, Move, Check, DollarSign, Minus, Hash } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { specificationCategories, getSpecificationsByCategory } from '../../../../data/specificationCategories';
 import ChildrenVariantsTracker from '../shared/ChildrenVariantsTracker';
@@ -30,6 +30,10 @@ interface ProductVariantsSectionProps {
   setDraggedVariantIndex: React.Dispatch<React.SetStateAction<number | null>>;
   onVariantSpecificationsClick: (index: number) => void;
   baseSku: string;
+  selectedVariants?: Set<number>;
+  setSelectedVariants?: React.Dispatch<React.SetStateAction<Set<number>>>;
+  keyboardSelectionIndex?: number;
+  setKeyboardSelectionIndex?: React.Dispatch<React.SetStateAction<number>>;
 }
 
 const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
@@ -44,7 +48,11 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
   draggedVariantIndex,
   setDraggedVariantIndex,
   onVariantSpecificationsClick,
-  baseSku
+  baseSku,
+  selectedVariants = new Set(),
+  setSelectedVariants = () => {},
+  keyboardSelectionIndex = -1,
+  setKeyboardSelectionIndex = () => {}
 }) => {
   const addVariant = () => {
     // Get the last variant to duplicate its specifications
@@ -357,47 +365,10 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
 
 
   return (
-    <div className="mb-6">
-      {/* Product Variants Card */}
-      <div className="border-2 rounded-2xl bg-white shadow-sm border-gray-200 mb-6">
-        {/* Header */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Layers className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">Product Variants</h3>
-                {variants.length > 0 && (
-                  <p className="text-xs text-gray-600 mt-1">{variants.length} variant{variants.length !== 1 ? 's' : ''} added</p>
-                )}
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-3">
-              {variants.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setIsReorderingVariants(!isReorderingVariants)}
-                  className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors ${
-                    isReorderingVariants 
-                      ? 'bg-blue-500 text-white' 
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                  }`}
-                  title="Toggle reorder mode"
-                >
-                  <Move size={14} className="inline mr-1" />
-                  {isReorderingVariants ? 'Done' : 'Reorder'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-        
-        {/* Variants List */}
-        {showVariants && (
-          <div className="p-6 space-y-4">
+    <>
+      {/* Variants List */}
+      {showVariants && (
+        <div className="p-6 space-y-4">
             {variants.length === 0 ? (
               <div className="text-center py-8">
                 <Layers className="w-12 h-12 text-gray-400 mx-auto mb-3" />
@@ -406,92 +377,177 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
             ) : (
               variants.map((variant, index) => {
                 const isExpanded = expandedVariantIndex === index;
-                const isComplete = variant.name && variant.price > 0;
+                // Price is now optional for variant completion
+                const isComplete = variant.name && (variant.stockQuantity || 0) > 0;
                 const profit = variant.price - variant.costPrice;
                 const isProfitable = profit > 0;
 
                 return (
                   <div
                     key={index}
-                    className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 ${
-                      isExpanded 
-                        ? 'border-blue-500 shadow-xl' 
-                        : isComplete
-                          ? 'border-green-200 hover:border-green-300 hover:shadow-md'
-                          : 'border-orange-300 hover:border-orange-400 hover:shadow-md'
-                    }`}
+                    className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 hover:shadow-lg relative ${
+                      isExpanded
+                        ? 'border-blue-500 shadow-xl bg-blue-50/30'
+                        : keyboardSelectionIndex === index
+                          ? 'border-blue-400 shadow-lg bg-blue-50/20 ring-2 ring-blue-300'
+                          : selectedVariants.has(index)
+                            ? 'border-purple-400 shadow-lg bg-purple-50/20'
+                            : isComplete
+                              ? 'border-green-200 hover:border-green-300 hover:shadow-md'
+                              : 'border-orange-300 hover:border-orange-400 hover:shadow-md border-gray-200'
+                    } ${isReorderingVariants ? 'cursor-grabbing shadow-lg border-blue-300' : 'cursor-pointer'}`}
                     draggable={isReorderingVariants}
                     onDragStart={(e) => handleDragStart(e, index)}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, index)}
                     onDragEnd={() => setDraggedVariantIndex(null)}
-                    style={{ cursor: isReorderingVariants ? 'grabbing' : 'default' }}
                   >
                     {/* Variant Header - Clickable */}
-                    <div 
+                    <div
                       className="flex items-start justify-between p-6 cursor-pointer"
-                      onClick={() => setExpandedVariantIndex(isExpanded ? null : index)}
+                      onClick={(e) => {
+                        // If shift+click or ctrl+click, toggle selection instead of expanding
+                        if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                          e.stopPropagation();
+                          const newSelected = new Set(selectedVariants);
+                          if (newSelected.has(index)) {
+                            newSelected.delete(index);
+                          } else {
+                            newSelected.add(index);
+                          }
+                          setSelectedVariants(newSelected);
+                        } else {
+                          setExpandedVariantIndex(isExpanded ? null : index);
+                        }
+                      }}
                     >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
+                      {/* Left Section: Variant Info and Details */}
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        {/* Bulk Selection Checkbox */}
+                        {variants.length > 1 && (
+                          <div className="flex-shrink-0 mt-1">
+                            <input
+                              type="checkbox"
+                              checked={selectedVariants.has(index)}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                const newSelected = new Set(selectedVariants);
+                                if (e.target.checked) {
+                                  newSelected.add(index);
+                                } else {
+                                  newSelected.delete(index);
+                                }
+                                setSelectedVariants(newSelected);
+                              }}
+                              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        )}
+                        {/* Variant Icon/Placeholder Area */}
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 relative">
+                          <Layers className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 text-gray-400" />
+                          {/* Reordering indicator overlay */}
                           {isReorderingVariants && (
-                            <div className="w-6 h-6 flex items-center justify-center text-gray-400">
-                              <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                              <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24" className="text-white">
                                 <path d="M8 6h8v2H8V6zm0 5h8v2H8v-2zm0 5h8v2H8v-2z"/>
                               </svg>
                             </div>
                           )}
-                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
-                            isExpanded ? 'bg-blue-500' : 'bg-gray-200'
-                          }`}>
-                            <svg 
-                              className={`w-4 h-4 text-white transition-transform duration-200 ${
-                                isExpanded ? 'rotate-180' : ''
-                              }`} 
-                              fill="none" 
-                              stroke="currentColor" 
-                              viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h4 className="text-lg font-bold text-gray-900">
-                                {variant.name || `Variant ${index + 1}`}
-                              </h4>
-                              {/* Status Badge */}
-                              {isComplete ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-green-500 text-white shadow-sm">
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                  Done
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-orange-500 text-white shadow-sm animate-pulse">
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
-                                  Pending
-                                </span>
-                              )}
+                        </div>
+
+                        {/* Variant Details */}
+                        <div className="flex-1 min-w-0">
+                          {/* Name and Status Row */}
+                          <div className="flex items-center gap-3 mb-4 flex-wrap">
+                            <h3 className="text-2xl font-bold text-gray-900 truncate">
+                              {variant.name || `Variant ${index + 1}`}
+                            </h3>
+                            {/* Status Badge */}
+                            <div className={`inline-flex items-center justify-center p-1.5 sm:p-2 rounded-full border-2 border-white shadow-lg z-30 min-w-[3.5rem] sm:min-w-[4rem] min-h-[2rem] sm:min-h-[2.5rem] transition-all duration-300 ${
+                              isComplete
+                                ? 'bg-gradient-to-r from-green-500 to-emerald-500'
+                                : 'bg-gradient-to-r from-orange-500 to-red-500'
+                            }`}>
+                              <span className="text-xs sm:text-sm font-bold text-white whitespace-nowrap px-1">
+                                {isComplete ? 'Complete' : 'Setup'}
+                              </span>
                             </div>
-                            {variant.price > 0 && (
-                              <p className="text-sm text-gray-600 mt-1">Price: {formatPrice(variant.price)} TZS</p>
+                          </div>
+
+                          {/* Information Tags Row */}
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {/* Stock Quantity */}
+                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0">
+                              <Package className="w-5 h-5" />
+                              <span className="text-base font-semibold">
+                                {variant.stockQuantity || 0} in stock
+                              </span>
+                            </div>
+
+                            {/* Minimum Stock Level */}
+                            {(variant.minStockLevel || 0) > 0 && (
+                              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 flex-shrink-0">
+                                <Hash className="w-5 h-5" />
+                                <span className="text-base font-semibold">
+                                  Min: {variant.minStockLevel || 0}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Stock Status */}
+                            <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border flex-shrink-0 ${
+                              (variant.stockQuantity || 0) <= 0
+                                ? 'bg-red-50 text-red-700 border-red-200'
+                                : (variant.stockQuantity || 0) <= (variant.minStockLevel || 5)
+                                ? 'bg-orange-50 text-orange-700 border-orange-200'
+                                : 'bg-green-50 text-green-700 border-green-200'
+                            }`}>
+                              <span className="text-base font-semibold">
+                                {(variant.stockQuantity || 0) <= 0 ? 'Out of Stock' :
+                                 (variant.stockQuantity || 0) <= (variant.minStockLevel || 5) ? 'Low Stock' :
+                                 'In Stock'}
+                              </span>
+                            </div>
+
+                            {/* Profit Margin */}
+                            {isComplete && variant.costPrice > 0 && (
+                              <div className="inline-flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-50 border border-gray-200">
+                                <div className="flex items-center gap-2">
+                                  <DollarSign className={`w-5 h-5 ${isProfitable ? 'text-green-600' : 'text-red-600'}`} />
+                                  <span className={`text-base font-semibold ${isProfitable ? 'text-green-700' : 'text-red-700'}`}>
+                                    {Math.round(((variant.price - variant.costPrice) / variant.costPrice) * 100)}%
+                                  </span>
+                                  <span className={`text-sm font-medium ${isProfitable ? 'text-green-600' : 'text-red-600'}`}>
+                                    margin
+                                  </span>
+                                </div>
+                              </div>
                             )}
                           </div>
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-2">
-                        {/* Profit Badge */}
-                        {isComplete && variant.costPrice > 0 && (
-                          <div className={`px-4 py-2 rounded-xl text-base font-bold shadow-sm ${
-                            isProfitable ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'
-                          }`}>
-                            {isProfitable ? `+${formatPrice(profit)} TZS` : 'Loss'}
+
+                      {/* Right Section: Pricing and Actions */}
+                      <div className="ml-4 flex-shrink-0">
+                        <div className="flex flex-col items-end gap-3">
+
+                          {/* Price Display */}
+                        {variant.price > 0 && (
+                          <div className="flex flex-col items-end">
+                            <span className="text-3xl font-bold text-gray-900 leading-tight">
+                              TSh {formatPrice(variant.price)}
+                            </span>
+                            {variant.costPrice > 0 && (
+                              <span className="text-sm text-gray-500 mt-0.5 font-medium">
+                                (Cost: TSh&nbsp;{formatPrice(variant.costPrice)})
+                              </span>
+                            )}
                           </div>
                         )}
+
+                        {/* Delete Button */}
                         {!isReorderingVariants && (
                           <button
                             type="button"
@@ -500,23 +556,23 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                               removeVariant(index);
                             }}
                             disabled={variants.length === 1}
-                            className={`p-2 rounded-xl transition-colors ${
+                            className={`p-2 rounded-lg transition-colors ${
                               variants.length === 1
                                 ? 'text-gray-300 cursor-not-allowed'
                                 : 'text-red-500 hover:text-red-700 hover:bg-red-50'
                             }`}
                             aria-label="Remove variant"
-                            title={variants.length === 1 ? 'Cannot delete the last variant. At least one variant is required.' : 'Remove variant'}
                           >
-                            <Trash2 size={18} />
+                            <Trash2 size={20} />
                           </button>
                         )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
 
                     {/* Expanded Content - Only show when variant is expanded */}
-                    {isExpanded && (
-                      <div className="px-6 pb-6">
+                    {isExpanded ? (
+                      <div className="px-6 pb-6 border-t border-gray-100 bg-gradient-to-b from-gray-50/50 to-transparent">
                         {/* Variant Name */}
                         <div className="mb-4">
                           <label className="block text-xs font-medium text-gray-700 mb-2">Variant Name *</label>
@@ -532,60 +588,28 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                           />
                         </div>
 
-                {/* SKU Field - Hidden/Automatic */}
-                {/* <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">SKU</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={variant.sku}
-                      onChange={(e) => updateVariant(index, 'sku', e.target.value)}
-                      className="w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-purple-500 text-gray-900 font-mono"
-                      placeholder="Enter variant SKU"
-                      autoComplete="off"
-                      autoCorrect="off"
-                      spellCheck={false}
-                    />
-                    <svg className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-600" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
-                  </div>
-                </div> */}
+                        {/* SKU Field - Hidden/Automatic */}
+                        {/* <div className="mt-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">SKU</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={variant.sku}
+                              onChange={(e) => updateVariant(index, 'sku', e.target.value)}
+                              className="w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-purple-500 text-gray-900 font-mono"
+                              placeholder="Enter variant SKU"
+                              autoComplete="off"
+                              autoCorrect="off"
+                              spellCheck={false}
+                            />
+                            <svg className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-600" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                            </svg>
+                          </div>
+                        </div> */}
 
-                        {/* Pricing and Stock Fields */}
+                        {/* Stock and Pricing Fields */}
                         <div className="grid grid-cols-2 gap-4 mb-4">
-                          {/* Cost Price */}
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-2">Cost Price</label>
-                            <input
-                              type="text"
-                              value={variant.costPrice ? formatPrice(variant.costPrice) : ''}
-                              onChange={(e) => {
-                                const value = e.target.value.replace(/,/g, '');
-                                updateVariant(index, 'costPrice', parseFloat(value) || 0);
-                              }}
-                              className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-gray-900 text-lg font-bold"
-                              placeholder="0"
-                              min="0"
-                            />
-                          </div>
-
-                          {/* Selling Price */}
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-2">Selling Price *</label>
-                            <input
-                              type="text"
-                              value={variant.price ? formatPrice(variant.price) : ''}
-                              onChange={(e) => {
-                                const value = e.target.value.replace(/,/g, '');
-                                updateVariant(index, 'price', parseFloat(value) || 0);
-                              }}
-                              className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-lg font-bold"
-                              placeholder="0"
-                              min="0"
-                            />
-                          </div>
-
                           {/* Stock Quantity */}
                           <div>
                             <label className="block text-xs font-medium text-gray-700 mb-2">Stock Qty</label>
@@ -645,6 +669,56 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                               >
                                 <Plus className="w-5 h-5" />
                               </button>
+                            </div>
+                          </div>
+
+                          {/* Cost Price */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-2">Cost Price</label>
+                            <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 focus-within:border-orange-500 transition-colors relative">
+                              <span className={`absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold transition-all duration-200 ${
+                                variant.costPrice ? 'text-lg opacity-100 -top-1' : 'text-xl opacity-80'
+                              }`}>
+                                TSh
+                              </span>
+                              <input
+                                type="text"
+                                value={variant.costPrice ? formatPrice(variant.costPrice) : ''}
+                                onChange={(e) => {
+                                  const value = e.target.value.replace(/,/g, '');
+                                  updateVariant(index, 'costPrice', parseFloat(value) || 0);
+                                }}
+                                className={`w-full text-left text-lg font-bold text-gray-900 bg-transparent border-none outline-none transition-all duration-200 ${
+                                  variant.costPrice ? 'pl-16' : 'pl-20'
+                                }`}
+                                placeholder=""
+                                min="0"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Selling Price */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-2">Selling Price *</label>
+                            <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 focus-within:border-orange-500 transition-colors relative">
+                              <span className={`absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold transition-all duration-200 ${
+                                variant.price ? 'text-lg opacity-100 -top-1' : 'text-xl opacity-80'
+                              }`}>
+                                TSh
+                              </span>
+                              <input
+                                type="text"
+                                value={variant.price ? formatPrice(variant.price) : ''}
+                                onChange={(e) => {
+                                  const value = e.target.value.replace(/,/g, '');
+                                  updateVariant(index, 'price', parseFloat(value) || 0);
+                                }}
+                                className={`w-full text-left text-lg font-bold text-gray-900 bg-transparent border-none outline-none transition-all duration-200 ${
+                                  variant.price ? 'pl-16' : 'pl-20'
+                                }`}
+                                placeholder=""
+                                min="0"
+                              />
                             </div>
                           </div>
                         </div>
@@ -712,8 +786,8 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                           </button>
                         </div>
                       </div>
-                    )}
-                  </div>
+                    ) : null}
+                    </div>
                 );
               })
             )}
@@ -731,8 +805,7 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
             Add New Variant
           </button>
         </div>
-      </div>
-    </div>
+    </>
   );
 };
 

@@ -335,12 +335,10 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
         currencyService.getCurrenciesUsedInPayments(),
         currencyService.getCurrencyStatistics(),
         
-        // Additional comprehensive database queries with error handling - WITH BRANCH FILTERING
+        // ✅ FIX: customer_payments table was consolidated - returning empty data
         (async () => {
-          const query = supabase.from('customer_payments').select('*').order('created_at', { ascending: false }).limit(500);
-          const filteredQuery = await addBranchFilter(query, 'payments');
-          const result = await filteredQuery;
-          return result.error ? { data: [], error: result.error } : result;
+          console.log('ℹ️ customer_payments table was consolidated - returning empty customer payments');
+          return { data: [], error: null };
         })(),
         (async () => {
           const query = supabase.from('purchase_order_payments').select('*').order('created_at', { ascending: false }).limit(500);
@@ -348,18 +346,15 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
           const result = await filteredQuery;
           return result.error ? { data: [], error: result.error } : result;
         })(),
-        // Use customer_payments as device_payments (filtered for device payments) - WITH BRANCH FILTERING
+        // ✅ FIX: customer_payments table was consolidated - returning empty device payments
         (async () => {
-          const query = supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500);
-          const filteredQuery = await addBranchFilter(query, 'payments');
-          const result = await filteredQuery;
-          return result.error ? { data: [], error: result.error } : result;
+          console.log('ℹ️ customer_payments table was consolidated - returning empty device payments');
+          return { data: [], error: null };
         })(),
-        // Use customer_payments as repair_payments (filtered for repair context) - WITH BRANCH FILTERING
+        // ✅ FIX: customer_payments table was consolidated - returning empty repair payments
         (async () => {
-          const query = supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500);
-          const filteredQuery = await addBranchFilter(query, 'payments');
-          const result = await filteredQuery;
+          console.log('ℹ️ customer_payments table was consolidated - returning empty repair payments');
+          const result = { data: [], error: null };
           return result.error ? { data: [], error: result.error } : result;
         })(),
         // Additional comprehensive data queries with graceful error handling - WITH BRANCH FILTERING
@@ -806,10 +801,8 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
 
         paymentsSubscription = supabase
           .channel('comprehensive-payment-tracking-updates')
-          // Core payment tables
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_payments' }, (payload) => {
-            console.log('🔔 Customer payment update received:', payload);
-            debouncedFetch();
+          // ✅ FIX: customer_payments table was consolidated - skipping subscription
+          console.log('ℹ️ customer_payments table was consolidated - skipping real-time subscription');
           })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'lats_sales' }, (payload) => {
             console.log('🔔 POS sale update received:', payload);

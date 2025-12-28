@@ -16,7 +16,7 @@ import {
   Package, Grid, List, Star, CheckCircle, XCircle,
   Download, Edit, Eye, Trash2, DollarSign, TrendingUp,
   AlertTriangle, Calculator, Printer, QrCode, X, MoreVertical, ArrowRightLeft, Copy,
-  CheckSquare, XSquare, Files, ShoppingCart, Plus, Search, ChevronDown, ChevronUp, ChevronRight, Filter
+  CheckSquare, XSquare, Files, ShoppingCart, Plus, Search, ChevronDown, ChevronUp, ChevronRight, Filter, Tag
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { validateProductsBatch } from '../../lib/productUtils';
@@ -66,7 +66,7 @@ interface EnhancedInventoryTabProps {
 // Helper function to convert old image format to new format
 const convertToProductImages = (imageUrls: string[]): ProductImage[] => {
   if (!imageUrls || imageUrls.length === 0) return [];
-  
+
   return imageUrls.map((imageUrl, index) => ({
     id: `temp-${index}`,
     url: imageUrl,
@@ -76,6 +76,25 @@ const convertToProductImages = (imageUrls: string[]): ProductImage[] => {
     isPrimary: index === 0,
     uploadedAt: new Date().toISOString()
   }));
+};
+
+// Helper function to get condition indicator
+const getConditionIndicator = (condition: string = 'new', qualityGrade?: string) => {
+  const conditionConfig = {
+    new: { color: 'bg-green-500', text: 'New', bgColor: 'bg-green-50', textColor: 'text-green-700' },
+    used: { color: 'bg-blue-500', text: 'Used', bgColor: 'bg-blue-50', textColor: 'text-blue-700' },
+    refurbished: { color: 'bg-purple-500', text: 'Refurbished', bgColor: 'bg-purple-50', textColor: 'text-purple-700' }
+  };
+
+  const config = conditionConfig[condition as keyof typeof conditionConfig] || conditionConfig.new;
+
+  // Add quality grade if available
+  const gradeText = qualityGrade ? ` (${qualityGrade})` : '';
+
+  return {
+    ...config,
+    fullText: config.text + gradeText
+  };
 };
 
 const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
@@ -146,6 +165,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [selectedProductForLabel, setSelectedProductForLabel] = useState<any>(null);
   const [showProductDetailModal, setShowProductDetailModal] = useState(false);
+  const [autoOpenCondition, setAutoOpenCondition] = useState(false);
   const [selectedProductForDetail, setSelectedProductForDetail] = useState<any>(null);
   const [bulkActionProgress, setBulkActionProgress] = useState({ current: 0, total: 0, action: '' });
   const [showQRModal, setShowQRModal] = useState(false);
@@ -493,100 +513,6 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
 
       {/* Scrollable Products Display - Matching PurchaseOrdersPage */}
       <div className="flex-1 overflow-y-auto px-6 py-6 border-t border-gray-100">
-        {/* Bulk Actions - Inside scrollable area */}
-        {selectedProducts.length > 0 && (
-          <div className="mb-4">
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-5 shadow-md">
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                {/* Selection Info */}
-                <div className="flex items-center gap-3">
-                  <div className="bg-blue-600 text-white rounded-full p-2">
-                    <CheckCircle className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-blue-900">
-                      {selectedProducts.length} product{selectedProducts.length !== 1 ? 's' : ''} selected
-                    </div>
-                    <div className="text-xs text-blue-700">
-                      Choose an action below
-                    </div>
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-2 flex-wrap">
-                  {/* Export */}
-                  <button
-                    onClick={() => handleBulkAction('export')}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
-                    title="Export selected products to CSV"
-                  >
-                    <Download size={16} />
-                    <span className="hidden sm:inline">Export</span>
-                  </button>
-
-                  {/* Feature */}
-                  <button
-                    onClick={() => handleBulkAction('feature')}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-yellow-500 text-white rounded-lg text-sm font-medium hover:bg-yellow-600 active:scale-95 transition-all shadow-md hover:shadow-lg"
-                    title="Toggle featured status"
-                  >
-                    <Star size={16} />
-                    <span className="hidden sm:inline">Feature</span>
-                  </button>
-
-                  {/* Print Labels */}
-                  <button
-                    onClick={() => {
-                      const firstProduct = products.find(p => selectedProducts.includes(p.id));
-                      if (firstProduct) {
-                        setSelectedProductForLabel({
-                          id: firstProduct.id,
-                          name: firstProduct.name,
-                          sku: firstProduct.variants?.[0]?.sku || firstProduct.id,
-                          barcode: firstProduct.variants?.[0]?.sku || firstProduct.id,
-                          price: firstProduct.variants?.[0]?.sellingPrice || 0,
-                          size: firstProduct.variants?.[0]?.attributes?.size || '',
-                          color: firstProduct.variants?.[0]?.attributes?.color || '',
-                          brand: firstProduct.brand?.name || '',
-                          category: categories.find(c => c.id === firstProduct.categoryId)?.name || ''
-                        });
-                        setShowLabelModal(true);
-                      } else {
-                        toast.error('Please select at least one product');
-                      }
-                    }}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
-                    title="Print product labels"
-                  >
-                    <Printer size={16} />
-                    <span className="hidden sm:inline">Labels</span>
-                  </button>
-
-                  {/* Delete All */}
-                  <button
-                    onClick={() => setShowDeleteConfirmation(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
-                    title="Delete all selected products"
-                  >
-                    <Trash2 size={16} />
-                    <span className="hidden sm:inline">Delete</span>
-                  </button>
-
-                  {/* Clear Selection */}
-                  <button
-                    onClick={() => setSelectedProducts([])}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-gray-600 text-white rounded-lg text-sm font-medium hover:bg-gray-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
-                    title="Clear selection"
-                  >
-                    <XCircle size={16} />
-                    <span className="hidden sm:inline">Clear</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
         {/* Products Display */}
         {viewMode === 'list' ? (
           <div className="space-y-3">
@@ -702,7 +628,8 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                   return !isImeiChild;
                 })
                 .reduce((sum: any, variant: any) => sum + (variant.quantity || 0), 0) : 0;
-              const totalStock = hasVariants ? variantStock : (product.stockQuantity || product.stock_quantity || 0);
+              // Always calculate stock from variants only (products don't have stock)
+              const totalStock = variantStock;
               const reservedStock = product.variants?.reduce((sum: any, variant: any) => sum + (variant.reservedQuantity || variant.reserved_quantity || 0), 0) || 0;
               const availableStock = totalStock - reservedStock;
               const stockStatus = availableStock <= 0 ? 'out-of-stock' : availableStock <= 10 ? 'low-stock' : 'in-stock';
@@ -753,14 +680,58 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                         </div>
                       </div>
 
-                      {/* Category and Price */}
+                      {/* Category, Condition and Price */}
                       <div className="flex items-center justify-between">
-                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500 text-white shadow-sm inline-block max-w-[120px] truncate" title={category?.name || 'Uncategorized'}>
-                          {category?.name || 'Uncategorized'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500 text-white shadow-sm inline-block max-w-[100px] truncate" title={category?.name || 'Uncategorized'}>
+                            {category?.name || 'Uncategorized'}
+                          </span>
+                          {(() => {
+                            const conditionIndicator = getConditionIndicator(product.condition, product.qualityGrade);
+                            return (
+                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold ${conditionIndicator.bgColor} ${conditionIndicator.textColor} border border-opacity-20`}>
+                                <div className={`w-1.5 h-1.5 rounded-full ${conditionIndicator.color}`}></div>
+                                {conditionIndicator.text}
+                              </span>
+                            );
+                          })()}
+                        </div>
                         <span className="text-sm font-bold text-gray-900">
                           {displayPrice > 0 ? formatMoney(displayPrice) : 'No price'}
                         </span>
+                      </div>
+
+                      {/* Quick Actions */}
+                      <div className="flex items-center gap-1 pt-2">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('🟢 Condition button clicked for product:', product.name, product.id);
+                            // Open product modal with condition assessment
+                            setSelectedProductForDetail(product);
+                            setAutoOpenCondition(true);
+                            setShowProductDetailModal(true);
+                            console.log('🟢 Set modal states: autoOpen=true, showModal=true');
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition-colors font-medium text-xs"
+                          title="Assess product condition"
+                        >
+                          <Tag size={10} />
+                          <span>Condition</span>
+                        </button>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedProductForHistory(product.id);
+                            setShowStockAdjustModal(true);
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors font-medium text-xs"
+                        >
+                          <Calculator size={10} />
+                          <span>Stock</span>
+                        </button>
                       </div>
 
                       {/* Actions */}
@@ -804,12 +775,42 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                // Open product modal with condition assessment
+                                setSelectedProductForDetail(product);
+                                setAutoOpenCondition(true);
+                                setShowProductDetailModal(true);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium text-xs"
+                              title="Assess product condition"
+                            >
+                              <Tag size={14} />
+                              <span>Condition</span>
+                            </button>
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 productModals.openEditModal(product.id);
                               }}
                               className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-xs"
                             >
                               <Edit size={14} />
                               <span>Edit</span>
+                            </button>
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Open product modal with condition assessment
+                                setSelectedProductForDetail(product);
+                                setAutoOpenCondition(true);
+                                setShowProductDetailModal(true);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium text-xs"
+                              title="Assess product condition"
+                            >
+                              <Tag size={14} />
+                              <span>Condition</span>
                             </button>
 
                             <button
@@ -985,6 +986,17 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                               {category?.name || (product.categoryId ? 'Loading...' : 'Uncategorized')}
                             </span>
 
+                            {/* Condition Badge */}
+                            {(() => {
+                              const conditionIndicator = getConditionIndicator(product.condition, product.qualityGrade);
+                              return (
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-semibold shadow-sm ${conditionIndicator.bgColor} ${conditionIndicator.textColor} border border-opacity-20`}>
+                                  <div className={`w-2 h-2 rounded-full ${conditionIndicator.color}`}></div>
+                                  {conditionIndicator.fullText}
+                                </span>
+                              );
+                            })()}
+
                             {/* Price */}
                             <div className="flex items-center gap-2">
                               <span className="text-lg font-bold text-gray-900">
@@ -1019,6 +1031,36 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                                 </span>
                               ) : null;
                             })()}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Open product modal with condition assessment
+                                setSelectedProductForDetail(product);
+                                setAutoOpenCondition(true);
+                                setShowProductDetailModal(true);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium text-xs"
+                              title="Assess product condition"
+                            >
+                              <Tag size={12} />
+                              <span>Condition</span>
+                            </button>
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedProductForHistory(product.id);
+                                setShowStockAdjustModal(true);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-xs"
+                            >
+                              <Calculator size={12} />
+                              <span>Stock</span>
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1073,6 +1115,22 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                           >
                             <Calculator size={16} />
                             <span>Adjust Stock</span>
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Open product modal with condition assessment
+                              setSelectedProductForDetail(product);
+                              setAutoOpenCondition(true);
+                              setShowProductDetailModal(true);
+                              console.log('🟢 Desktop Condition button clicked for product:', product.name, product.id);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium text-sm shadow-sm"
+                            title="Assess product condition"
+                          >
+                            <Tag size={16} />
+                            <span>Condition</span>
                           </button>
 
                           <button
@@ -1200,11 +1258,75 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
 
               {/* Right: Action Buttons */}
               <div className="flex items-center gap-2">
+                {/* Bulk Action Buttons - Show when products are selected */}
+                {selectedProducts.length > 0 && (
+                  <div className="flex gap-2 flex-wrap mr-4">
+                    {/* Export */}
+                    <button
+                      onClick={() => handleBulkAction('export')}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-white text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-300 hover:border-blue-600 rounded-lg transition-all duration-200"
+                      title="Export selected products to CSV"
+                    >
+                      <Download size={14} />
+                      <span className="hidden sm:inline">Export</span>
+                    </button>
+
+                    {/* Feature */}
+                    <button
+                      onClick={() => handleBulkAction('feature')}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-white text-yellow-600 hover:bg-yellow-500 hover:text-white border border-yellow-300 hover:border-yellow-500 rounded-lg transition-all duration-200"
+                      title="Toggle featured status"
+                    >
+                      <Star size={14} />
+                      <span className="hidden sm:inline">Feature</span>
+                    </button>
+
+                    {/* Print Labels */}
+                    <button
+                      onClick={() => {
+                        const firstProduct = products.find(p => selectedProducts.includes(p.id));
+                        if (firstProduct) {
+                          setSelectedProductForLabel({
+                            id: firstProduct.id,
+                            name: firstProduct.name,
+                            sku: firstProduct.variants?.[0]?.sku || firstProduct.id,
+                            barcode: firstProduct.variants?.[0]?.sku || firstProduct.id,
+                            price: firstProduct.variants?.[0]?.sellingPrice || 0,
+                            size: firstProduct.variants?.[0]?.attributes?.size || '',
+                            color: firstProduct.variants?.[0]?.attributes?.color || '',
+                            brand: firstProduct.brand?.name || '',
+                            category: categories.find(c => c.id === firstProduct.categoryId)?.name || ''
+                          });
+                          setShowLabelModal(true);
+                        } else {
+                          toast.error('Please select at least one product');
+                        }
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-white text-purple-600 hover:bg-purple-600 hover:text-white border border-purple-300 hover:border-purple-600 rounded-lg transition-all duration-200"
+                      title="Print product labels"
+                    >
+                      <Printer size={14} />
+                      <span className="hidden sm:inline">Labels</span>
+                    </button>
+
+                    {/* Delete */}
+                    <button
+                      onClick={() => setShowDeleteConfirmation(true)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-white text-red-600 hover:bg-red-600 hover:text-white border border-red-300 hover:border-red-600 rounded-lg transition-all duration-200"
+                      title="Delete all selected products"
+                    >
+                      <Trash2 size={14} />
+                      <span className="hidden sm:inline">Delete</span>
+                    </button>
+
+                  </div>
+                )}
+
                 {/* Selection Mode Toggle */}
                 {!isSelectionMode ? (
                   <button
                     onClick={() => setIsSelectionMode(true)}
-                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300 rounded-lg transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-white text-gray-600 hover:bg-gray-600 hover:text-white border border-gray-300 hover:border-gray-600 rounded-lg transition-all duration-200"
                   >
                     <CheckCircle className="w-4 h-4" />
                     <span className="hidden sm:inline">Select</span>
@@ -1213,7 +1335,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={toggleSelectAll}
-                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors"
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-white text-gray-700 hover:bg-gray-600 hover:text-white border border-gray-300 hover:border-gray-600 rounded-lg transition-all duration-200"
                     >
                       {selectedProducts.length === products.length && products.length > 0 ? (
                         <>
@@ -1232,7 +1354,8 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                         setIsSelectionMode(false);
                         setSelectedProducts([]);
                       }}
-                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-white text-red-600 hover:bg-red-50 border border-red-300 rounded-lg transition-colors"
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-white text-red-600 hover:bg-red-600 hover:text-white border border-red-300 hover:border-red-600 rounded-lg transition-all duration-200"
+                      title="Cancel selection and clear all selected products"
                     >
                       <XCircle className="w-4 h-4" />
                       <span className="hidden sm:inline">Cancel</span>
@@ -1380,15 +1503,20 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
         <ProductModal
           isOpen={showProductDetailModal}
           onClose={() => {
+            console.log('🔍 ProductModal onClose called');
             setShowProductDetailModal(false);
             setSelectedProductForDetail(null);
+            setAutoOpenCondition(false);
           }}
           product={selectedProductForDetail}
           onEdit={(product) => {
+            console.log('🔍 ProductModal onEdit called');
             setShowProductDetailModal(false);
             setSelectedProductForDetail(null);
+            setAutoOpenCondition(false);
             productModals.openEditModal(product.id);
           }}
+          autoOpenCondition={autoOpenCondition}
         />
       )}
 

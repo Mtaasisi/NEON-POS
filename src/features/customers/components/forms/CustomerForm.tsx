@@ -108,6 +108,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
   const [checkingPhone, setCheckingPhone] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [offlineSuccess, setOfflineSuccess] = useState(false);
   
   // Ref for auto-focus
@@ -669,132 +670,6 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
           </div>
         )}
       </div>
-      {/* Birthday */}
-      <div className="md:col-span-2">
-        <label className="block text-gray-700 mb-2 font-medium">Birthday</label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="relative">
-            <input
-              type="text"
-              name="birthMonth"
-              value={formData.birthMonth || ''}
-              onChange={handleInputChange}
-              onFocus={() => setShowMonthDropdown(true)}
-              onBlur={() => setTimeout(() => setShowMonthDropdown(false), 200)}
-              className={`w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 ${
-                validationErrors.birthMonth 
-                  ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200' 
-                  : 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200'
-              }`}
-              placeholder="Type or select month"
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-              aria-label="Birth month"
-              role="combobox"
-              aria-expanded={showMonthDropdown}
-              aria-autocomplete="list"
-            />
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-lg">🎂</span>
-            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-            {/* Month Dropdown */}
-            {showMonthDropdown && (
-              <div 
-                data-dropdown="month" 
-                className="absolute top-full left-0 right-0 mt-1 bg-white/95 backdrop-blur-md border-2 border-gray-300 rounded-lg shadow-xl z-[9999] max-h-60 overflow-y-auto p-2"
-                role="listbox"
-                aria-label="Month options"
-              >
-                <div className="grid grid-cols-2 gap-1">
-                  {filteredMonths.map((month) => (
-                      <div
-                        key={month}
-                        className="px-3 py-2 hover:bg-orange-50 cursor-pointer rounded text-sm"
-                        onClick={() => {
-                          setFormData(prev => ({ ...prev, birthMonth: month }));
-                          setShowMonthDropdown(false);
-                        }}
-                      >
-                        {month}
-                      </div>
-                    ))}
-                </div>
-                {filteredMonths.length === 0 && (
-                  <div className="px-4 py-3 text-gray-500">
-                    No matching months found
-                  </div>
-                )}
-              </div>
-            )}
-            {validationErrors.birthMonth && (
-              <div className="mt-1 text-sm text-red-600 flex items-center gap-2">
-                <AlertTriangle size={16} className="text-red-500" />
-                {validationErrors.birthMonth}
-              </div>
-            )}
-          </div>
-          <div className="relative">
-            <input
-              type="text"
-              name="birthDay"
-              value={formData.birthDay || ''}
-              onChange={handleInputChange}
-              onFocus={() => setShowDayDropdown(true)}
-              onBlur={() => setTimeout(() => setShowDayDropdown(false), 200)}
-              className={`w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 ${
-                validationErrors.birthDay 
-                  ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200' 
-                  : 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200'
-              }`}
-              placeholder="Type or select day"
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-              aria-label="Birth day"
-              role="combobox"
-              aria-expanded={showDayDropdown}
-              aria-autocomplete="list"
-            />
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-lg">🎉</span>
-            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-            {/* Day Dropdown */}
-            {showDayDropdown && (
-              <div 
-                data-dropdown="day" 
-                className="absolute top-full left-0 right-0 mt-1 bg-white/95 backdrop-blur-md border-2 border-gray-300 rounded-lg shadow-xl z-[9999] max-h-60 overflow-y-auto p-2"
-                role="listbox"
-                aria-label="Day options"
-              >
-                <div className="grid grid-cols-7 gap-1">
-                  {filteredDays.map((day) => (
-                      <div
-                        key={day}
-                        className="px-2 py-2 hover:bg-orange-50 cursor-pointer rounded text-sm text-center"
-                        onClick={() => {
-                          setFormData(prev => ({ ...prev, birthDay: day }));
-                          setShowDayDropdown(false);
-                        }}
-                      >
-                        {day}
-                      </div>
-                    ))}
-                </div>
-                {filteredDays.length === 0 && (
-                  <div className="px-4 py-3 text-gray-500">
-                    No matching days found
-                  </div>
-                )}
-              </div>
-            )}
-            {validationErrors.birthDay && (
-              <div className="mt-1 text-sm text-red-600 flex items-center gap-2">
-                <AlertTriangle size={16} className="text-red-500" />
-                {validationErrors.birthDay}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
       {/* Referral Source */}
       <div className="md:col-span-2">
         <label className="block text-sm font-medium text-gray-700 mb-2">How did you hear about us?</label>
@@ -879,6 +754,157 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
             aria-label="Additional notes"
           />
         </div>
+      )}
+      {/* Show Advanced Button */}
+      <div className="md:col-span-2 flex justify-end">
+        {!showAdvanced ? (
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(true)}
+            className="text-orange-600 hover:underline text-sm mt-2"
+          >
+            + Advanced Options
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(false)}
+            className="text-gray-500 hover:underline text-sm mt-2"
+          >
+            Hide Advanced Options
+          </button>
+        )}
+      </div>
+      {/* Advanced Options */}
+      {showAdvanced && (
+        <>
+          {/* Birthday */}
+          <div className="md:col-span-2">
+            <label className="block text-gray-700 mb-2 font-medium">Birthday</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="relative">
+                <input
+                  type="text"
+                  name="birthMonth"
+                  value={formData.birthMonth || ''}
+                  onChange={handleInputChange}
+                  onFocus={() => setShowMonthDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowMonthDropdown(false), 200)}
+                  className={`w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 ${
+                    validationErrors.birthMonth
+                      ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200'
+                      : 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200'
+                  }`}
+                  placeholder="Type or select month"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  aria-label="Birth month"
+                  role="combobox"
+                  aria-expanded={showMonthDropdown}
+                  aria-autocomplete="list"
+                />
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-lg">🎂</span>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                {/* Month Dropdown */}
+                {showMonthDropdown && (
+                  <div
+                    data-dropdown="month"
+                    className="absolute top-full left-0 right-0 mt-1 bg-white/95 backdrop-blur-md border-2 border-gray-300 rounded-lg shadow-xl z-[9999] max-h-60 overflow-y-auto p-2"
+                    role="listbox"
+                    aria-label="Month options"
+                  >
+                    <div className="grid grid-cols-2 gap-1">
+                      {filteredMonths.map((month) => (
+                          <div
+                            key={month}
+                            className="px-3 py-2 hover:bg-orange-50 cursor-pointer rounded text-sm"
+                            onClick={() => {
+                              setFormData(prev => ({ ...prev, birthMonth: month }));
+                              setShowMonthDropdown(false);
+                            }}
+                          >
+                            {month}
+                          </div>
+                        ))}
+                    </div>
+                    {filteredMonths.length === 0 && (
+                      <div className="px-4 py-3 text-gray-500">
+                        No matching months found
+                      </div>
+                    )}
+                  </div>
+                )}
+                {validationErrors.birthMonth && (
+                  <div className="mt-1 text-sm text-red-600 flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-red-500" />
+                    {validationErrors.birthMonth}
+                  </div>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  name="birthDay"
+                  value={formData.birthDay || ''}
+                  onChange={handleInputChange}
+                  onFocus={() => setShowDayDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowDayDropdown(false), 200)}
+                  className={`w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 ${
+                    validationErrors.birthDay
+                      ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200'
+                      : 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200'
+                  }`}
+                  placeholder="Type or select day"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  aria-label="Birth day"
+                  role="combobox"
+                  aria-expanded={showDayDropdown}
+                  aria-autocomplete="list"
+                />
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-lg">🎉</span>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                {/* Day Dropdown */}
+                {showDayDropdown && (
+                  <div
+                    data-dropdown="day"
+                    className="absolute top-full left-0 right-0 mt-1 bg-white/95 backdrop-blur-md border-2 border-gray-300 rounded-lg shadow-xl z-[9999] max-h-60 overflow-y-auto p-2"
+                    role="listbox"
+                    aria-label="Day options"
+                  >
+                    <div className="grid grid-cols-7 gap-1">
+                      {filteredDays.map((day) => (
+                          <div
+                            key={day}
+                            className="px-2 py-2 hover:bg-orange-50 cursor-pointer rounded text-sm text-center"
+                            onClick={() => {
+                              setFormData(prev => ({ ...prev, birthDay: day }));
+                              setShowDayDropdown(false);
+                            }}
+                          >
+                            {day}
+                          </div>
+                        ))}
+                    </div>
+                    {filteredDays.length === 0 && (
+                      <div className="px-4 py-3 text-gray-500">
+                        No matching days found
+                      </div>
+                    )}
+                  </div>
+                )}
+                {validationErrors.birthDay && (
+                  <div className="mt-1 text-sm text-red-600 flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-red-500" />
+                    {validationErrors.birthDay}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
     </>

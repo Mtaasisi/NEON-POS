@@ -75,10 +75,10 @@ const IntegrationsManagement: React.FC = () => {
       integration_name: template.integration_name,
       integration_type: template.integration_type,
       provider_name: template.provider_name,
-      is_enabled: false,
-      is_active: false,
-      is_test_mode: true,
-      environment: 'test',
+      is_enabled: true,  // Enable by default
+      is_active: true,   // Enable by default
+      is_test_mode: template.integration_name.includes('TEST') || template.integration_name.includes('DEV'),
+      environment: 'production',  // Default to production
       credentials: {},
       config: {},
       description: template.description,

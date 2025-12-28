@@ -1,4 +1,6 @@
 // Application configuration settings
+// Import feature toggle service for dynamic feature configuration
+import { featureToggleService } from '../services/featureToggleService';
 
 export const APP_CONFIG = {
   // WebSocket Configuration
@@ -72,6 +74,14 @@ export const APP_CONFIG = {
     logLevel: 'info', // 'debug', 'info', 'warn', 'error'
   },
 
+  // Offline/Database Configuration
+  offline: {
+    enabled: import.meta.env.VITE_OFFLINE_MODE === 'true',
+    autoSync: import.meta.env.VITE_AUTO_SYNC !== 'false',
+    syncInterval: 5 * 60 * 1000, // 5 minutes
+    maxRetries: 3,
+  },
+
   // HTTP Configuration
   http: {
     maxHeaderSize: 8192, // 8KB max header size to prevent 431 errors
@@ -92,16 +102,47 @@ export const APP_CONFIG = {
       enabled: true, // Always enable fallback responses
     }
   },
+
+  // Feature Toggles Configuration
+  features: {
+    // Core Features
+    loyaltyProgram: true,
+    inventoryManagement: true,
+    customerPortal: true,
+    whatsappIntegration: true,
+    paymentProcessing: true,
+
+    // Advanced Features
+    aiAssistant: false,
+    advancedAnalytics: false,
+    bulkOperations: false,
+    multiBranch: true,
+    barcodeScanning: false,
+
+    // Experimental Features
+    arTryOn: false,
+    voiceCommands: false,
+    predictivePricing: false,
+    blockchainTracking: false,
+
+    // Beta Features
+    subscriptionBilling: false,
+    marketplaceIntegration: false,
+    advancedWorkflow: false,
+  },
 };
 
 // Environment-specific configurations
 export const getConfig = () => {
   const env = import.meta.env.MODE || 'development';
-  
+
+  // For now, return static config. Feature toggles will be loaded asynchronously
+  const baseConfig = APP_CONFIG;
+
   switch (env) {
     case 'production':
       return {
-        ...APP_CONFIG,
+        ...baseConfig,
         development: {
           ...APP_CONFIG.development,
           debugMode: false,
@@ -114,10 +155,11 @@ export const getConfig = () => {
             maxRetries: 2, // Fewer retries in production
           },
         },
+        offline: APP_CONFIG.offline, // Include offline config
       };
     case 'test':
       return {
-        ...APP_CONFIG,
+        ...baseConfig,
         realtime: {
           ...APP_CONFIG.realtime,
           enabled: false, // Disable real-time in tests
@@ -126,10 +168,12 @@ export const getConfig = () => {
           ...APP_CONFIG.audio,
           enabled: false, // Disable audio in tests
         },
+        offline: APP_CONFIG.offline, // Include offline config
       };
     default:
-      return APP_CONFIG;
+      return baseConfig;
   }
 };
 
-export default getConfig();
+// Export the config function
+export default getConfig;

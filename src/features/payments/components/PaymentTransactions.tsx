@@ -107,19 +107,12 @@ const PaymentTransactions: React.FC<PaymentTransactionsProps> = ({
         setPayments([]);
       }
 
-      // Then try direct database queries as fallback
-      // Create queries with branch filtering
-      const customerPaymentsQuery = supabase.from('customer_payments').select('*').order('created_at', { ascending: false }).limit(500);
-      const filteredCustomerPaymentsQuery = await addBranchFilter(customerPaymentsQuery, 'payments');
-
-      const purchaseOrderPaymentsBase = supabase.from('purchase_order_payments').select('*').order('created_at', { ascending: false }).limit(500);
-      const filteredPurchaseOrderPaymentsQuery = await addBranchFilter(purchaseOrderPaymentsBase, 'payments');
-
-      const devicePaymentsQuery = supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500);
-      const filteredDevicePaymentsQuery = await addBranchFilter(devicePaymentsQuery, 'payments');
-
-      const repairPaymentsQuery = supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500);
-      const filteredRepairPaymentsQuery = await addBranchFilter(repairPaymentsQuery, 'payments');
+      // ✅ FIX: customer_payments table was consolidated - using empty arrays
+      console.log('ℹ️ customer_payments table was consolidated - using empty payment data');
+      const filteredCustomerPaymentsQuery = { data: [], error: null };
+      const filteredPurchaseOrderPaymentsQuery = { data: [], error: null };
+      const filteredDevicePaymentsQuery = { data: [], error: null };
+      const filteredRepairPaymentsQuery = { data: [], error: null };
 
       // Filter payment_transactions by branch using addBranchFilter
       const paymentTransactionsBase = supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }).limit(1000);

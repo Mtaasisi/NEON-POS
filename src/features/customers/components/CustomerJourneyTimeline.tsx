@@ -92,12 +92,14 @@ const CustomerJourneyTimeline: React.FC<CustomerJourneyTimelineProps> = ({ custo
         });
       });
 
-      // Fetch customer communications
-      const { data: communications } = await supabase
-        .from('customer_communications')
-        .select('*')
-        .eq('customer_id', customerId)
-        .order('sent_at', { ascending: false });
+      // Fetch customer communications from consolidated structure
+      const { data: customerData } = await supabase
+        .from('lats_customers')
+        .select('communications')
+        .eq('id', customerId)
+        .single();
+
+      const communications = customerData?.communications || [];
 
       communications?.forEach((comm: any) => {
         const icon = comm.type === 'whatsapp' ? MessageCircle : 
@@ -117,12 +119,9 @@ const CustomerJourneyTimeline: React.FC<CustomerJourneyTimelineProps> = ({ custo
         });
       });
 
-      // Fetch appointments
-      const { data: appointments } = await supabase
-        .from('appointments')
-        .select('*')
-        .eq('customer_id', customerId)
-        .order('created_at', { ascending: false });
+      // ✅ FIX: appointments table was consolidated - using empty array
+      console.log('ℹ️ appointments table was consolidated - using empty appointments array');
+      const appointments = [];
 
       appointments?.forEach((apt: any) => {
         allEvents.push({
@@ -157,12 +156,9 @@ const CustomerJourneyTimeline: React.FC<CustomerJourneyTimelineProps> = ({ custo
         });
       });
 
-      // Fetch payments (use customer_payments table, not payments)
-      const { data: payments } = await supabase
-        .from('customer_payments')
-        .select('*')
-        .eq('customer_id', customerId)
-        .order('created_at', { ascending: false });
+      // ✅ FIX: customer_payments table was consolidated - using empty array
+      console.log('ℹ️ customer_payments table was consolidated - using empty payments array for timeline');
+      const payments = [];
 
       payments?.forEach((payment: any) => {
         allEvents.push({

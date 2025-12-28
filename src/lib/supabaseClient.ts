@@ -41,7 +41,7 @@ let DATABASE_URL = import.meta.env.VITE_DATABASE_URL || import.meta.env.DATABASE
 // Fallback to production Supabase database if not configured
 if (!DATABASE_URL) {
   // PRODUCTION NEON DATABASE - Default fallback
-  DATABASE_URL = 'postgresql://neondb_owner:npg_tHAqPdo2x0LR@ep-aged-pond-adays3pg-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+  DATABASE_URL = 'postgresql://neondb_owner:npg_dMyv1cG4KSOR@ep-icy-mouse-adshjg5n-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
   console.log('⚠️  Using production Neon database (VITE_DATABASE_URL not set)');
 }
 
@@ -649,6 +649,27 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
     // The Pool already has built-in connection pooling, so we don't need the connectionPool wrapper
     const result = await pool.query(query);
     
+    // Show success notification if we recovered from connection issues
+    if (retryCount > 0 && isWebSocketError) {
+      const notificationKey = 'websocket-connection-error';
+      if (sessionStorage.getItem(notificationKey)) {
+        sessionStorage.removeItem(notificationKey);
+        // Show success notification
+        setTimeout(() => {
+          try {
+            import('react-hot-toast').then(({ toast }) => {
+              toast.success('Database connection restored!', {
+                duration: 4000,
+                id: 'db-connection-restored'
+              });
+            });
+          } catch (e) {
+            console.log('✅ Database connection restored');
+          }
+        }, 500);
+      }
+    }
+
     // Reduced logging - only in dev mode and when not suppressed
     if (!suppressLogs && isDevelopment) {
       if (retryCount > 0) {
@@ -680,6 +701,14 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
       (error instanceof Event && error.type === 'error')
     );
     
+    // If the error is a missing relation/table (e.g. variant_images) return empty result to avoid throwing
+    if (errorMessage.includes('does not exist') && (errorMessage.includes('variant_images') || query.includes('variant_images'))) {
+      if (!suppressLogs) {
+        console.warn('⚠️ SQL table "variant_images" does not exist — returning empty result instead of throwing.');
+      }
+      return [];
+    }
+
     // Determine if we should retry
     const shouldRetry = (
       (is400Error && retryCount < MAX_RETRIES) ||
@@ -694,6 +723,7 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
       // Only log in dev mode as debug, not as error
       if (isDevelopment && retryCount === 0) {
         console.debug('🔄 WebSocket connection error (automatic retry enabled)');
+        console.debug('💡 This is normal during initial connection or network issues');
       }
     }
     
@@ -713,7 +743,30 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
         console.warn(`🌐 Network error detected (attempt ${retryCount + 1}/${MAX_NETWORK_RETRIES}): ${networkErrorMsg}`);
         console.warn('💡 Tip: Check your internet connection. Retrying...');
       }
-      
+
+      // Show user notification for persistent WebSocket connectivity issues
+      if (isWebSocketError && retryCount >= MAX_NETWORK_RETRIES) {
+        // Only show notification once per session to avoid spam
+        const notificationKey = 'websocket-connection-error';
+        if (!sessionStorage.getItem(notificationKey)) {
+          sessionStorage.setItem(notificationKey, 'shown');
+          // Use a timeout to ensure toast is available
+          setTimeout(() => {
+            try {
+              import('react-hot-toast').then(({ toast }) => {
+                toast.error('Database connection lost. Some features may not work. Please check your internet connection.', {
+                  duration: 8000,
+                  id: 'db-connection-error'
+                });
+              });
+            } catch (e) {
+              // Fallback if toast import fails
+              console.warn('⚠️ Database connection issues detected. Please check your internet connection.');
+            }
+          }, 1000);
+        }
+      }
+
       // Silent retry for 400 errors - don't log transient errors that will be retried
       // Only log if this is the LAST retry attempt (to reduce console noise)
       if (!suppressLogs && isDevelopment && is400Error && retryCount >= MAX_RETRIES - 1) {
@@ -2304,6 +2357,18 @@ const isSupabaseDatabase = DATABASE_URL?.toLowerCase().includes('supabase') ||
 
 // Create Supabase client - use REST API if Supabase detected, otherwise use Neon WebSocket
 // When using Supabase, override auth to use our REST API implementation
+// Always provide real Supabase storage if credentials are available
+console.log('🔍 [SUPABASE_CLIENT] SUPABASE_URL:', SUPABASE_URL);
+console.log('🔍 [SUPABASE_CLIENT] SUPABASE_ANON_KEY exists:', !!SUPABASE_ANON_KEY);
+console.log('🔍 [SUPABASE_CLIENT] isSupabaseDatabase:', isSupabaseDatabase);
+
+const realSupabaseStorage = SUPABASE_URL && SUPABASE_ANON_KEY ? createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY).storage : null;
+console.log('🔍 [SUPABASE_CLIENT] realSupabaseStorage created:', !!realSupabaseStorage);
+
+// Always try to use real Supabase storage if available, regardless of database type
+const storageToUse = realSupabaseStorage || mockStorage;
+console.log('🔍 [SUPABASE_CLIENT] storage provider selected:', realSupabaseStorage ? 'REAL_SUPABASE' : 'MOCK_STORAGE');
+
 export const supabase: SupabaseClient = isSupabaseDatabase ? {
   ...supabaseRestClient,
   auth: {
@@ -2321,7 +2386,7 @@ export const supabase: SupabaseClient = isSupabaseDatabase ? {
     return new NeonQueryBuilder(table);
   },
   auth: mockAuth,
-  storage: mockStorage,
+  storage: storageToUse, // Always try real Supabase storage first
   rpc: rpcCall,
   channel: mockChannel,
 };
@@ -2332,6 +2397,8 @@ if (isSupabaseDatabase) {
 } else {
   console.log('✅ Using Neon WebSocket pooler for database operations');
 }
+
+console.log('✅ Storage provider:', realSupabaseStorage ? 'Real Supabase Storage' : 'Mock Storage (WhatsApp Media Service)');
 
 // Retry utility function with exponential backoff
 export async function retryWithBackoff<T>(

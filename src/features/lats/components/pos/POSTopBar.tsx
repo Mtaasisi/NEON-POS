@@ -1,16 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../../context/AuthContext';
-import { rbacManager, type UserRole } from '../../lib/rbac';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
 import { useGlobalSearchModal } from '../../../../context/GlobalSearchContext';
 import {
-  ShoppingCart,
   CreditCard,
   Trash2,
   DollarSign,
   BarChart3,
-  LogOut,
   User,
   FileText,
   RefreshCw,
@@ -20,27 +17,21 @@ import {
   Home,
   Settings,
   Monitor,
-  Smartphone,
   Calendar,
   Search,
+  MoreHorizontal,
+  ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface POSTopBarProps {
   cartItemsCount: number;
-  totalAmount: number;
   onProcessPayment: () => void;
   onClearCart: () => void;
   onPreviewInvoice?: () => void;
-  onScanQrCode: () => void;
-  onAddCustomer: () => void;
-  onViewReceipts: () => void;
   onViewSales: () => void;
-  onOpenPaymentTracking: () => void;
-  onOpenDrafts: () => void;
   isProcessingPayment: boolean;
   hasSelectedCustomer: boolean;
-  draftCount?: number;
   todaysSales?: number;
   isDailyClosed?: boolean;
   onCloseDay?: () => void;
@@ -48,7 +39,6 @@ interface POSTopBarProps {
   // Bottom bar actions
   onViewAnalytics?: () => void;
   onCustomers?: () => void;
-  onReports?: () => void;
   onRefreshData?: () => void;
   onSettings?: () => void;
   onOpenInstallments?: () => void;
@@ -57,19 +47,12 @@ interface POSTopBarProps {
 
 const POSTopBar: React.FC<POSTopBarProps> = ({
   cartItemsCount,
-  totalAmount,
   onProcessPayment,
   onClearCart,
   onPreviewInvoice,
-  onScanQrCode,
-  onAddCustomer,
-  onViewReceipts,
   onViewSales,
-  onOpenPaymentTracking,
-  onOpenDrafts,
   isProcessingPayment,
   hasSelectedCustomer,
-  draftCount = 0,
   todaysSales = 0,
   isDailyClosed = false,
   onCloseDay,
@@ -77,13 +60,12 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
   // Bottom bar actions
   onViewAnalytics,
   onCustomers,
-  onReports,
   onRefreshData,
   onSettings,
   onOpenInstallments,
   onOpenExpense,
 }) => {
-  const { currentUser, logout } = useAuth();
+  const { currentUser } = useAuth();
   const { playPaymentSound, playDeleteSound, playClickSound } = usePOSClickSounds();
   const { openSearch } = useGlobalSearchModal();
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -109,16 +91,7 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
   const navigate = useNavigate();
   
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [viewMode, setViewMode] = useState<'mobile' | 'desktop'>(() => {
-    // Get saved preference from localStorage
-    const saved = localStorage.getItem('pos_view_mode');
-    return (saved === 'mobile' || saved === 'desktop') ? saved : 'desktop';
-  });
 
-  // Permission checks for current user
-  const userRole = currentUser?.role as UserRole;
-  const canViewReports = rbacManager.can(userRole, 'reports', 'view');
-  const canAccessSettings = rbacManager.can(userRole, 'settings', 'view');
 
   // Handle fullscreen change events
   React.useEffect(() => {
@@ -139,11 +112,6 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
     };
   }, []);
 
-  // Apply view mode to document body for CSS targeting
-  React.useEffect(() => {
-    document.body.setAttribute('data-view-mode', viewMode);
-    console.log(`📱 View mode set to: ${viewMode}`);
-  }, [viewMode]);
 
   // Format money
   const formatMoney = (amount: number) => {
@@ -155,10 +123,6 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
     }).format(amount);
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
 
   const handleExitToDashboard = () => {
     navigate('/dashboard');
@@ -200,42 +164,65 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
     }
   };
 
-  const toggleViewMode = () => {
-    const newMode = viewMode === 'desktop' ? 'mobile' : 'desktop';
-    setViewMode(newMode);
-    localStorage.setItem('pos_view_mode', newMode);
-    playClickSound();
-    toast.success(`Switched to ${newMode} view`, {
-      icon: newMode === 'mobile' ? '📱' : '🖥️',
-      duration: 2000,
-    });
-    
-    // Trigger custom event to notify other components
-    window.dispatchEvent(new Event('viewModeChanged'));
-    
-    // Trigger a window resize event to help responsive components update
-    window.dispatchEvent(new Event('resize'));
-  };
+
+  // Dropdown states
+  const [showQuickActions, setShowQuickActions] = useState(false);
+
+  // Refs for dropdowns
+  const quickActionsRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (quickActionsRef.current && !quickActionsRef.current.contains(event.target as Node)) {
+        setShowQuickActions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
-    <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm">
-      <div className="px-4 sm:px-6 py-2.5 sm:py-3">
-        {/* Single Row Layout */}
-        <div className="flex items-center justify-between gap-4">
-          {/* Left: Title + Quick Actions */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-xl font-bold text-gray-900">POS</h1>
+    <header className="bg-white border-b border-gray-200 shadow-sm">
+      <div
+        className="px-4 sm:px-6 py-3"
+        style={{
+          paddingLeft: '24px',
+          paddingRight: '24px',
+          paddingTop: '12px',
+          paddingBottom: '12px'
+        }}
+      >
+        <div className="flex items-center justify-between">
+          {/* Left Section: Title + Status */}
+          <div className="flex items-center space-x-4">
+            {/* Back Button */}
+            <button
+              onClick={() => {
+                playClickSound();
+                navigate('/dashboard');
+              }}
+              className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+              title="Back to Dashboard"
+            >
+              <ArrowLeft size={20} className="text-gray-600" />
+            </button>
+
+            <div>
+              <div className="flex items-center space-x-3">
+                <h1 className="text-lg sm:text-xl font-bold text-gray-900">POS</h1>
               {isDailyClosed && (
                 <div className="flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium">
                   <Lock size={12} />
                   <span className="hidden lg:inline">Closed</span>
                 </div>
               )}
+              </div>
             </div>
           </div>
 
-          {/* Center: Time + Sales + Search */}
+          {/* Center: Time Display */}
           <div className="hidden lg:flex items-center gap-3">
             <div className="px-3 py-2 bg-gray-50 rounded-lg border border-gray-200 min-h-[44px] flex items-center">
               <div className="text-center">
@@ -254,200 +241,275 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
               </div>
             </div>
             
+            {/* Sales Summary - Text Style */}
             <button
               onClick={() => {
                 playClickSound();
                 onViewSales();
               }}
-              className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
-              title="View Sales Report"
+              className="flex items-center justify-center gap-3 px-4 py-2 rounded-lg hover:bg-gray-100 transition-all duration-200 min-h-[44px]"
+              title="Today's Sales"
             >
-              <DollarSign size={18} />
-              <span className="text-sm font-medium">{formatMoney(todaysSales)}</span>
+              <DollarSign size={20} className="text-gray-600" />
+              <span className="text-lg sm:text-xl font-bold text-gray-900">{formatMoney(todaysSales)}</span>
             </button>
-
-            {/* Global Search Button */}
-            <button
-              onClick={() => {
-                playClickSound();
-                openSearch();
-              }}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all duration-200 shadow-sm hover:shadow-md min-h-[44px]"
-              title="Global Search (⌘K)"
-            >
-              <Search size={18} />
-              <span className="text-sm font-medium hidden xl:inline">Search</span>
-            </button>
-
-            {/* Quick Expense Button - Admins only */}
-            {onOpenExpense && currentUser?.role === 'admin' && (
-              <button
-                onClick={() => {
-                  playClickSound();
-                  onOpenExpense();
-                }}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-200 shadow-sm hover:shadow-md min-h-[44px]"
-                title="Quick Expense (⚡ Fast Entry)"
-              >
-                <DollarSign size={18} />
-                <span className="text-sm font-medium hidden xl:inline">Expense</span>
-              </button>
-            )}
           </div>
 
-          {/* Right: Action Buttons + System Controls */}
-          <div className="flex items-center gap-2">
+          {/* Right: Action Buttons */}
+          <div className="flex items-center space-x-2">
             {/* Cart Actions - Show when cart has items */}
               {cartItemsCount > 0 && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
                 {onPreviewInvoice && (
                   <button
-                    onClick={onPreviewInvoice}
+                    onClick={() => {
+                      playClickSound();
+                      onPreviewInvoice();
+                    }}
                     disabled={!hasSelectedCustomer}
-                    className="flex items-center justify-center gap-2 px-4 py-3 min-w-[100px] rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-400 text-white transition-all duration-300 shadow-sm hover:shadow-md"
-                    title={!hasSelectedCustomer ? "Please select a customer first" : "Preview invoice with current prices"}
+                    className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+                    title={!hasSelectedCustomer ? "Please select a customer first" : "Preview invoice"}
                   >
-                    <FileText size={18} />
-                    <span className="hidden md:inline text-sm font-medium">Invoice</span>
-                    <span className="md:hidden text-xs font-medium">Inv</span>
+                    <div className="w-6 h-6 rounded bg-blue-100 flex items-center justify-center">
+                      <FileText size={16} className="text-blue-600" />
+                    </div>
                   </button>
                 )}
                 
                 <button
                   onClick={handleProcessPayment}
                   disabled={isProcessingPayment || !hasSelectedCustomer}
-                  className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-400 text-white transition-all duration-300 shadow-sm hover:shadow-md"
-                  title={!hasSelectedCustomer ? "Please select a customer first" : isProcessingPayment ? "Processing payment..." : "Process payment"}
+                  className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+                  title={!hasSelectedCustomer ? "Please select a customer first" : "Process payment"}
                 >
-                  <CreditCard size={18} />
-                  <span className="hidden md:inline text-sm font-medium">{isProcessingPayment ? 'Processing...' : 'Pay'}</span>
-                  <span className="md:hidden text-xs font-medium">{isProcessingPayment ? '...' : 'Pay'}</span>
+                  <div className="w-6 h-6 rounded bg-green-100 flex items-center justify-center">
+                    <CreditCard size={16} className="text-green-600" />
+                  </div>
                 </button>
 
                 <button
                   onClick={handleClearCart}
-                  className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
-                  title="Clear Cart"
+                  className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+                  title="Clear cart"
                 >
-                  <Trash2 size={18} />
-                  <span className="hidden md:inline text-sm font-medium">Clear</span>
+                  <div className="w-6 h-6 rounded bg-orange-100 flex items-center justify-center">
+                    <Trash2 size={16} className="text-orange-600" />
+                  </div>
                 </button>
               </div>
             )}
 
-            {/* Primary Actions */}
-            <div className="hidden md:flex items-center gap-2">
+            {/* Analytics Button */}
+            {onViewAnalytics && (
+              <button
+                onClick={() => {
+                  playClickSound();
+                  onViewAnalytics();
+                }}
+                className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+                title="Sales Analytics"
+              >
+                <div className="w-6 h-6 rounded bg-blue-100 flex items-center justify-center">
+                  <BarChart3 size={16} className="text-blue-600" />
+                </div>
+              </button>
+            )}
+
+            {/* Customers Button */}
+            {onCustomers && (
+              <button
+                onClick={() => {
+                  playClickSound();
+                  onCustomers();
+                }}
+                className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+                title="Customers"
+              >
+                <div className="w-6 h-6 rounded bg-purple-100 flex items-center justify-center">
+                  <User size={16} className="text-purple-600" />
+                </div>
+              </button>
+            )}
+
+
+            {/* Installments Button */}
               {onOpenInstallments && (
                 <button
                   onClick={() => {
                     playClickSound();
                     onOpenInstallments();
                   }}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white transition-all duration-200 shadow-sm hover:shadow-md font-medium"
-                  title="Installment Plans"
-                >
-                  <Calendar size={18} />
-                  <span className="hidden lg:inline">Installments</span>
+                className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+                title="Installments"
+              >
+                <div className="w-6 h-6 rounded bg-indigo-100 flex items-center justify-center">
+                  <Calendar size={16} className="text-indigo-600" />
+                </div>
+              </button>
+            )}
+
+            {/* Expense Button - Admins only */}
+            {onOpenExpense && currentUser?.role === 'admin' && (
+              <button
+                onClick={() => {
+                  playClickSound();
+                  onOpenExpense();
+                }}
+                className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+                title="Quick Expense"
+              >
+                <div className="w-6 h-6 rounded bg-red-100 flex items-center justify-center">
+                  <DollarSign size={16} className="text-red-600" />
+                </div>
                 </button>
               )}
 
+            {/* Close Day Button */}
               {onCloseDay && canCloseDay && !isDailyClosed && (
                 <button
                   onClick={() => {
                     playClickSound();
                     onCloseDay();
                   }}
-                  className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
+                className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
                   title="Close Daily Sales"
                 >
-                  <Lock size={18} />
-                  <span className="text-sm font-medium">Close Day</span>
+                <div className="w-6 h-6 rounded bg-red-100 flex items-center justify-center">
+                  <Lock size={16} className="text-red-600" />
+                </div>
                 </button>
               )}
-            </div>
 
-            {/* Global Search Button - Mobile/Tablet */}
-            <button
-              onClick={() => {
-                playClickSound();
-                openSearch();
-              }}
-              className="lg:hidden flex items-center justify-center p-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all duration-200 shadow-sm min-h-[40px] min-w-[40px]"
-              title="Global Search"
-            >
-              <Search size={18} />
-            </button>
-
-            {/* Divider */}
-            <div className="hidden md:block h-8 w-px bg-gray-300 mx-1"></div>
-
-            {/* System Controls */}
-            <div className="flex items-center gap-1.5">
+            {/* Quick Actions Dropdown */}
+            <div className="relative" ref={quickActionsRef}>
               <button
                 onClick={() => {
                   playClickSound();
-                  handleExitToDashboard();
+                  setShowQuickActions(!showQuickActions);
                 }}
-                className="p-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all duration-200 shadow-sm min-h-[40px] min-w-[40px] flex items-center justify-center"
-                title="Exit to Dashboard"
+                className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+                title="More Actions"
               >
-                <Home size={18} />
+                <div className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center">
+                  <MoreHorizontal size={16} className="text-gray-600" />
+                </div>
               </button>
 
-              {onSettings && currentUser?.role === 'admin' && (
+              {showQuickActions && (
+                <div className="absolute top-full mt-2 right-0 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      openSearch();
+                      setShowQuickActions(false);
+                    }}
+                    className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+                  >
+                    <Search size={16} />
+                    <span className="text-sm">Global Search</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      // Note: onViewReceipts not available in props, could add later if needed
+                      setShowQuickActions(false);
+                    }}
+                    className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+                  >
+                    <FileText size={16} />
+                    <span className="text-sm">Receipts</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      // Note: onScanQrCode not available in props, could add later if needed
+                      setShowQuickActions(false);
+                    }}
+                    className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+                  >
+                    <Monitor size={16} />
+                    <span className="text-sm">Scan QR Code</span>
+                  </button>
+
                 <button
                   onClick={() => {
                     playClickSound();
-                    onSettings();
+                      // Note: onAddCustomer not available in props, could add later if needed
+                      setShowQuickActions(false);
                   }}
-                  className="hidden md:flex p-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200 shadow-sm min-h-[40px] min-w-[40px] items-center justify-center"
-                  title="POS Settings"
+                    className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700"
                 >
-                  <Settings size={18} />
+                    <User size={16} />
+                    <span className="text-sm">Add Customer</span>
                 </button>
+                </div>
               )}
+            </div>
 
+
+
+            {/* Refresh Button */}
               {onRefreshData && (
                 <button
                   onClick={() => {
                     playClickSound();
                     onRefreshData();
                   }}
-                  className="hidden md:flex p-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200 shadow-sm min-h-[40px] min-w-[40px] items-center justify-center"
+                className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
                   title="Refresh Data"
                 >
-                  <RefreshCw size={18} />
+                <div className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center">
+                  <RefreshCw size={16} className="text-gray-600" />
+                </div>
                 </button>
               )}
 
+            {/* Settings Button */}
+            {onSettings && currentUser?.role === 'admin' && (
               <button
-                onClick={toggleViewMode}
-                className={`hidden lg:flex p-2.5 rounded-lg transition-all duration-200 shadow-sm min-h-[40px] min-w-[40px] items-center justify-center ${
-                  viewMode === 'mobile' 
-                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-                title={viewMode === 'mobile' ? "Switch to Desktop View" : "Switch to Mobile View"}
+                onClick={() => {
+                  playClickSound();
+                  onSettings();
+                }}
+                className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+                title="POS Settings"
               >
-                {viewMode === 'mobile' ? (
-                  <Smartphone size={18} />
-                ) : (
-                  <Monitor size={18} />
-                )}
+                <div className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center">
+                  <Settings size={16} className="text-gray-600" />
+                </div>
               </button>
+            )}
 
+            {/* Fullscreen Button */}
               <button
                 onClick={toggleFullscreen}
-                className="hidden lg:flex p-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200 shadow-sm min-h-[40px] min-w-[40px] items-center justify-center"
+              className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
                 title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
               >
+              <div className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center">
                 {isFullscreen ? (
-                  <Minimize2 size={18} />
+                  <Minimize2 size={16} className="text-gray-600" />
                 ) : (
-                  <Maximize2 size={18} />
+                  <Maximize2 size={16} className="text-gray-600" />
                 )}
+              </div>
               </button>
+
+            {/* Exit to Dashboard Button */}
+            <button
+              onClick={() => {
+                playClickSound();
+                handleExitToDashboard();
+              }}
+              className="p-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+              title="Exit to Dashboard"
+            >
+              <div className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center">
+                <Home size={16} className="text-gray-600" />
             </div>
+            </button>
           </div>
         </div>
       </div>

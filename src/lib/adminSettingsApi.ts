@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { unifiedSettingsService } from './unifiedSettingsService';
 
 export interface AdminSetting {
   id: string;
@@ -6,10 +6,11 @@ export interface AdminSetting {
   setting_key: string;
   setting_value: string;
   setting_type: string;
-  description: string;
+  description?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  branch_id?: string;
 }
 
 export interface AdminSettingsLog {
@@ -25,25 +26,30 @@ export interface AdminSettingsLog {
 }
 
 /**
- * Get all admin settings
+ * Get all admin settings from unified settings table
  */
 export const getAdminSettings = async (): Promise<AdminSetting[]> => {
   try {
-    const { data, error } = await supabase
-      .from('admin_settings')
-      .select('*')
-      .eq('is_active', true)
-      .order('category', { ascending: true })
-      .order('setting_key', { ascending: true });
+    // Get all system-scoped settings (admin settings)
+    const allSystemSettings = await unifiedSettingsService.getSettingsByCategory('system', 'system');
 
-    if (error) {
-      console.error('Error fetching admin settings:', error);
-      throw error;
-    }
+    // Convert to AdminSetting format
+    const adminSettings: AdminSetting[] = Object.entries(allSystemSettings).map(([key, value]) => ({
+      id: `system-${key}`, // Generate ID
+      category: 'system',
+      setting_key: key,
+      setting_value: value.value?.toString() || '',
+      setting_type: value.type,
+      description: undefined, // Not stored in unified format
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      branch_id: undefined
+    }));
 
-    return data || [];
+    return adminSettings;
   } catch (error) {
-    console.error('Error fetching admin settings:', error);
+    console.error('Error fetching admin settings from unified table:', error);
     throw error;
   }
 };
@@ -53,21 +59,26 @@ export const getAdminSettings = async (): Promise<AdminSetting[]> => {
  */
 export const getAdminSettingsByCategory = async (category: string): Promise<AdminSetting[]> => {
   try {
-    const { data, error } = await supabase
-      .from('admin_settings')
-      .select('*')
-      .eq('category', category)
-      .eq('is_active', true)
-      .order('setting_key', { ascending: true });
+    // Get settings by category from unified table
+    const categorySettings = await unifiedSettingsService.getSettingsByCategory('system', category);
 
-    if (error) {
-      console.error(`Error fetching admin settings for category ${category}:`, error);
-      throw error;
-    }
+    // Convert to AdminSetting format
+    const adminSettings: AdminSetting[] = Object.entries(categorySettings).map(([key, value]) => ({
+      id: `system-${category}-${key}`, // Generate ID
+      category: category,
+      setting_key: key,
+      setting_value: value.value?.toString() || '',
+      setting_type: value.type,
+      description: undefined,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      branch_id: undefined
+    }));
 
-    return data || [];
+    return adminSettings;
   } catch (error) {
-    console.error(`Error fetching admin settings for category ${category}:`, error);
+    console.error(`Error fetching admin settings for category ${category} from unified table:`, error);
     throw error;
   }
 };
@@ -77,24 +88,25 @@ export const getAdminSettingsByCategory = async (category: string): Promise<Admi
  */
 export const getAdminSetting = async (category: string, key: string): Promise<AdminSetting | null> => {
   try {
-    const { data, error } = await supabase
-      .from('admin_settings')
-      .select('*')
-      .eq('category', category)
-      .eq('setting_key', key)
-      .eq('is_active', true)
-      .single();
+    // ✅ FIX: admin_settings table was consolidated, use unified settings service
+    const { unifiedSettingsService } = await import('./unifiedSettingsService');
+    const settingValue = await unifiedSettingsService.getSetting('system', category, key);
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        // No rows returned
-        return null;
-      }
-      console.error(`Error fetching admin setting ${category}.${key}:`, error);
-      throw error;
+    if (settingValue === null || settingValue === undefined) {
+      return null;
     }
 
-    return data;
+    // Convert unified setting format to AdminSetting format
+    return {
+      id: `unified-${category}-${key}`,
+      category,
+      setting_key: key,
+      setting_value: settingValue,
+      setting_type: typeof settingValue,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
   } catch (error) {
     console.error(`Error fetching admin setting ${category}.${key}:`, error);
     throw error;

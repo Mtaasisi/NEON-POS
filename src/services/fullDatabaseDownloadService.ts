@@ -731,18 +731,8 @@ class FullDatabaseDownloadService {
       }
 
       if (error) {
-        // Fallback to legacy suppliers table
-        console.warn('⚠️ [Download] lats_suppliers not found, trying legacy suppliers table');
-        const { data: legacyData, error: legacyError } = await supabase
-          .from('suppliers')
-          .select('*')
-          .order('name', { ascending: true });
-        
-        if (legacyError) {
-          console.warn('⚠️ [Download] Legacy suppliers table also failed:', legacyError);
-          return [];
-        }
-        return legacyData || [];
+        console.error('❌ [Download] Failed to download suppliers:', error);
+        return [];
       }
       
       return data || [];
@@ -928,30 +918,10 @@ class FullDatabaseDownloadService {
    */
   private async downloadInstallmentPlans(): Promise<any[]> {
     try {
-      const currentBranchId = localStorage.getItem('current_branch_id');
-      
-      let query = supabase
-        .from('customer_installment_plans')
-        .select('*')
-        .in('status', ['active', 'pending'])
-        .order('created_at', { ascending: false })
-        .limit(1000); // Limit to most recent 1000 active plans
-
-      // Filter by branch if available
-      if (currentBranchId) {
-        query = query.eq('branch_id', currentBranchId);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.warn('⚠️ [Download] Failed to download installment plans:', error);
-        return [];
-      }
-      
-      return data || [];
+      console.log('ℹ️ Customer installment plans table was consolidated - returning empty array');
+      return [];
     } catch (error) {
-      console.warn('⚠️ [Download] Failed to download installment plans:', error);
+      console.error('Error in downloadInstallmentPlans:', error);
       return [];
     }
   }
@@ -1014,15 +984,12 @@ class FullDatabaseDownloadService {
     try {
       const settings: any = {};
 
-      // Download general POS settings (lats_pos_general_settings)
+      // Download general POS settings from unified settings table
       try {
-        const { data: generalSettings, error: generalError } = await supabase
-          .from('lats_pos_general_settings')
-          .select('*')
-          .limit(1)
-          .maybeSingle(); // Use maybeSingle() instead of single() to handle no rows gracefully
+        const { unifiedSettingsService } = await import('../lib/unifiedSettingsService');
+        const generalSettings = await unifiedSettingsService.getSettingsByCategory('user', 'ui'); // Get UI settings which contain general POS settings
 
-        if (!generalError && generalSettings) {
+        if (generalSettings && Object.keys(generalSettings).length > 0) {
           settings.general = generalSettings;
         }
       } catch (error: any) {
@@ -1051,15 +1018,11 @@ class FullDatabaseDownloadService {
         }
       }
 
-      // Download dynamic pricing settings if table exists
+      // Download dynamic pricing settings from unified table
       try {
-        const { data: pricingSettings, error: pricingError } = await supabase
-          .from('lats_pos_dynamic_pricing_settings')
-          .select('*')
-          .limit(1)
-          .maybeSingle();
+        const pricingSettings = await unifiedSettingsService.getSettingsByCategory('user', 'dynamic_pricing');
 
-        if (!pricingError && pricingSettings) {
+        if (pricingSettings && Object.keys(pricingSettings).length > 0) {
           settings.pricing = pricingSettings;
         }
       } catch (error: any) {

@@ -61,6 +61,7 @@ import {
   Rows,
   ArrowUpDown
 } from 'lucide-react';
+import { ROLE_WIDGET_PERMISSIONS, ROLE_QUICK_ACTION_PERMISSIONS } from '../../../config/roleBasedWidgets';
 
 type WidgetSize = 'small' | 'medium' | 'large';
 type WidgetRowSpan = 'single' | 'double';
@@ -158,6 +159,7 @@ const DashboardCustomizationSettings: React.FC = () => {
   const { autoArrangeWidgets } = useSmartGridLayout();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savedSettingsRaw, setSavedSettingsRaw] = useState<UserSettings | null>(null);
   const [rolePermissions, setRolePermissions] = useState<{
     widgets: RoleWidgetPermissions;
     quickActions: RoleQuickActionPermissions;
@@ -507,6 +509,35 @@ const DashboardCustomizationSettings: React.FC = () => {
     { key: 'staffPerformanceWidget' as const, label: 'Staff Performance Widget', icon: Users, category: 'Widgets' }
   ];
 
+  // Ensure any widgets/quick-actions defined in role permissions but missing from the above lists are included
+  (() => {
+    const existingWidgetKeys = new Set(widgetItems.map(w => w.key));
+    const adminWidgetKeys = Object.keys(ROLE_WIDGET_PERMISSIONS.admin);
+    for (const key of adminWidgetKeys) {
+      if (!existingWidgetKeys.has(key)) {
+        widgetItems.push({
+          key: key as any,
+          label: key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()),
+          icon: Package,
+          category: 'Widgets'
+        });
+      }
+    }
+
+    const existingActionKeys = new Set(quickActionItems.map(a => a.key));
+    const adminActionKeys = Object.keys(ROLE_QUICK_ACTION_PERMISSIONS.admin);
+    for (const key of adminActionKeys) {
+      if (!existingActionKeys.has(key)) {
+        quickActionItems.push({
+          key: key as any,
+          label: key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()),
+          icon: Smartphone,
+          description: key.replace(/([A-Z])/g, ' $1')
+        });
+      }
+    }
+  })();
+
   if (loading || !rolePermissions) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -637,8 +668,75 @@ const DashboardCustomizationSettings: React.FC = () => {
             <RotateCcw size={18} />
             Reset to Defaults
           </button>
+          <button
+            onClick={async () => {
+              if (!currentUser?.id) return;
+              try {
+                setLoading(true);
+                const raw = await loadUserSettings(currentUser.id);
+                setSavedSettingsRaw(raw);
+                toast.success('Loaded saved settings (inspect below)');
+              } catch (err) {
+                console.error('Failed to load saved settings:', err);
+                toast.error('Failed to load saved settings');
+              } finally {
+                setLoading(false);
+              }
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-sm"
+          >
+            Inspect Saved Settings
+          </button>
         </div>
       </div>
+      {savedSettingsRaw && (
+        <div className="bg-gray-50 rounded-md p-4 border border-gray-200 mt-4">
+          <h4 className="text-sm font-semibold mb-2">Stored user settings (preview)</h4>
+          <div className="mb-3 text-xs text-gray-700">
+            <div className="mb-2 font-medium">Quick Actions</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+              {quickActionItems.map(item => {
+                const isEnabled = !!savedSettingsRaw.dashboard?.quickActions?.[item.key as keyof DashboardSettings['quickActions']];
+                const Icon = item.icon;
+                return (
+                  <div key={item.key} className={`p-3 rounded-xl border ${isEnabled ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-md flex items-center justify-center ${isEnabled ? 'bg-indigo-600' : 'bg-gray-300'}`}>
+                        <Icon className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">{item.label}</div>
+                        <div className="text-xs text-gray-500">{isEnabled ? 'Enabled' : 'Disabled'}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mb-2 font-medium">Widgets</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {widgetItems.map(item => {
+                const isEnabled = !!savedSettingsRaw.dashboard?.widgets?.[item.key as keyof DashboardSettings['widgets']];
+                const Icon = item.icon;
+                return (
+                  <div key={item.key} className={`p-3 rounded-xl border ${isEnabled ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-md flex items-center justify-center ${isEnabled ? 'bg-green-600' : 'bg-gray-300'}`}>
+                        <Icon className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">{item.label}</div>
+                        <div className="text-xs text-gray-500">{isEnabled ? 'Enabled' : 'Disabled'}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions Section */}
       {allowedQuickActions.length > 0 && (

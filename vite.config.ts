@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import commonjs from 'vite-plugin-commonjs';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
@@ -63,12 +64,12 @@ export default defineConfig(({ command, mode }) => {
         secure: false,
         rewrite: (path) => path,
         ws: true, // Enable WebSocket proxying
-        configure: (proxy, options) => {
-          proxy.on('error', (err, req, res) => {
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
             console.log('❌ Proxy error:', err.message);
             // Don't crash the dev server on proxy errors
           });
-          proxy.on('proxyReq', (proxyReq, req, res) => {
+          proxy.on('proxyReq', (_proxyReq, _req, _res) => {
             // Silently handle proxy requests
           });
         },
@@ -91,8 +92,10 @@ export default defineConfig(({ command, mode }) => {
     base: process.env.CAPACITOR_BUILD === 'true' ? './' : (command === 'serve' ? '/' : (env.VITE_BASE_PATH || '/')),
     plugins: [
       react({
-        jsxRuntime: 'automatic'
+        jsxRuntime: 'automatic',
+        parserPlugins: ['typescript', 'jsx'], // Specify parser plugins
       }),
+      commonjs(),
     ],
     optimizeDeps: {
       exclude: ['lucide-react'],
@@ -103,6 +106,10 @@ export default defineConfig(({ command, mode }) => {
       // Add esbuild options for better dependency handling
       esbuildOptions: {
         target: 'es2020',
+        loader: {
+          '.ts': 'tsx',
+          '.tsx': 'tsx',
+        },
       },
     },
     build: {
@@ -154,24 +161,23 @@ export default defineConfig(({ command, mode }) => {
     // Add define to prevent issues with module resolution
     define: {
       __DEV__: process.env.NODE_ENV === 'development',
+      __HMR_CONFIG_NAME__: JSON.stringify('client'),
     },
     // Expose env variables properly
     envPrefix: 'VITE_',
     // Add better error handling for development
     clearScreen: false,
     logLevel: 'info',
-    // Add esbuild configuration for better performance
-    esbuild: {
-      target: 'es2020',
-      supported: {
-        'bigint': true
-      },
-      legalComments: 'none',
-      charset: 'utf8',
-      sourcemap: false, // Disable source maps to avoid CORS issues
-      // Temporarily disable TypeScript checking to resolve compilation errors
-      logLevel: 'silent',
-    },
+    // Temporarily disable esbuild for build compatibility
+    // esbuild: {
+    //   target: 'es2020',
+    //   supported: {
+    //     'bigint': true
+    //   },
+    //   legalComments: 'none',
+    //   charset: 'utf8',
+    //   sourcemap: false, // Disable source maps to avoid CORS issues
+    // },
     // Development-specific configuration
     ...(command === 'serve' && {
       css: {
